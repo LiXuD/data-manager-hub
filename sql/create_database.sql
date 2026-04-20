@@ -1,26 +1,14 @@
 -- =====================================================
 -- 数据管理平台 - 数据库创建脚本
 -- PostgreSQL 本地环境 (localhost:5342)
+-- 用户: postgres
 -- =====================================================
-
--- 0. 创建数据库用户 (如果不存在)
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'dpadmin') THEN
-        CREATE ROLE dpadmin WITH LOGIN PASSWORD 'dpadmin123';
-        ALTER ROLE dpadmin CREATEDB;
-        RAISE NOTICE '用户 dpadmin 已创建';
-    ELSE
-        RAISE NOTICE '用户 dpadmin 已存在';
-    END IF;
-END
-$$;
 
 -- 1. 创建数据库
 DROP DATABASE IF EXISTS dataplatform;
 CREATE DATABASE dataplatform
     WITH 
-    OWNER = dpadmin
+    OWNER = postgres
     ENCODING = 'UTF8'
     LC_COLLATE = 'zh_CN.UTF-8'
     LC_CTYPE = 'zh_CN.UTF-8'
@@ -28,11 +16,11 @@ CREATE DATABASE dataplatform
     CONNECTION LIMIT = -1;
 
 -- 2. 连接数据库
-\c dataplatform dpadmin;
+\c dataplatform postgres;
 
 -- 授权
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dpadmin;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dpadmin;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres;
 
 -- =====================================================
 -- DDL 脚本

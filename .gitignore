@@ -38,9 +38,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Environment
+# Environment (敏感信息不提交)
+.env
 .env.local
 .env.*.local
+*.env
 
 # -------- IDE --------
 .idea/
