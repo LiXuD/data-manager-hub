@@ -10,10 +10,9 @@ CREATE DATABASE dataplatform
     WITH 
     OWNER = postgres
     ENCODING = 'UTF8'
-    LC_COLLATE = 'zh_CN.UTF-8'
-    LC_CTYPE = 'zh_CN.UTF-8'
     TABLESPACE = pg_default
-    CONNECTION LIMIT = -1;
+    CONNECTION LIMIT = -1
+    TEMPLATE template0;
 
 -- 2. 连接数据库
 \c dataplatform postgres;
