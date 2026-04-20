@@ -72,6 +72,12 @@ spring:
             - Path=/api/v1/tenant/**
           filters:
             - StripPrefix=2
+        - id: user-service
+          uri: http://localhost:8087
+          predicates:
+            - Path=/api/v1/user/**
+          filters:
+            - StripPrefix=2
 
 sa-token:
   token-name: Authorization
