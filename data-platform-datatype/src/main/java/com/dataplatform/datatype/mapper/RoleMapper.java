@@ -1,9 +1,9 @@
 package com.dataplatform.datatype.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.dataplatform.datatype.entity.DataTypeInfo;
+import com.dataplatform.datatype.entity.DataType;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
-public interface DataTypeMapper extends BaseMapper<DataTypeInfo> {
+public interface DataTypeMapper extends BaseMapper<DataType> {
 }
