@@ -1,39 +1,41 @@
-version: '3.8'
+# =====================================================
+# 数据管理平台 - Docker Compose 配置
+# 
+# 注意: 本地已安装 PostgreSQL 5432 和 Redis，不再需要 Docker 启动
+# 如需使用 Docker，请确保端口不冲突
+# =====================================================
 
-services:
-  # PostgreSQL 数据库
-  postgres:
-    image: postgres:15-alpine
-    container_name: data-platform-postgres
-    environment:
-      POSTGRES_DB: dataplatform
-      POSTGRES_USER: dpadmin
-      POSTGRES_PASSWORD: dpadmin123
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dpadmin"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+# 本地数据库配置 (仅供参考)
+# PostgreSQL: localhost:5432/dataplatform
+# Redis: localhost:6379
 
-  # Redis 缓存
-  redis:
-    image: redis:7-alpine
-    container_name: data-platform-redis
-    command: redis-server --requirepass redis_password
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  postgres_data:
-  redis_data:
+# 如果仍需使用 Docker 环境，取消注释以下配置
+# version: '3.8'
+# 
+# services:
+#   # PostgreSQL 数据库
+#   postgres:
+#     image: postgres:15-alpine
+#     container_name: data-platform-postgres
+#     environment:
+#       POSTGRES_DB: dataplatform
+#       POSTGRES_USER: postgres
+#       POSTGRES_PASSWORD: 123456
+#     ports:
+#       - "5433:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+# 
+#   # Redis 缓存
+#   redis:
+#     image: redis:7-alpine
+#     container_name: data-platform-redis
+#     command: redis-server --requirepass redis_password
+#     ports:
+#       - "6379:6379"
+#     volumes:
+#       - redis_data:/data
+#
+# volumes:
+#   postgres_data:
+#   redis_data:

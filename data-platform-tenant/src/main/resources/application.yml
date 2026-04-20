@@ -6,7 +6,7 @@ spring:
     name: data-platform-tenant
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5342/dataplatform
+    url: jdbc:postgresql://localhost:5432/dataplatform
     username: postgres
     password: 123456
   data:
