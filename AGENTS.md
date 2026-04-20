@@ -4,15 +4,7 @@
 
 - **项目名称**: 数据管理平台 (Data Management Platform)
 - **项目路径**: `/Users/lixd/.openclaw/workspace/data-platform/`
-- **设计文档**: `/Users/lixd/.openclaw/2026-04-17-data-management-platform-design.md`
-
----
-
-## 设计文档
-
-| 文档 | 路径 | 说明 |
-|------|------|------|
-| 完整设计 | `2026-04-17-data-management-platform-design.md` | 2710行，包含56个API、15张表 |
+- **设计文档**: `/Users/lixd/.openclaw/workspace/data-platform/docs/design-2026-04-17.md`
 
 ---
 
@@ -20,28 +12,51 @@
 
 | 阶段 | 状态 | 完成时间 |
 |------|------|----------|
-| 阶段1: DDL + CRUD | ✅ 100% | 2026-04-19 |
+| 阶段1: 基础架构 | ✅ 100% | 2026-04-19 |
 | 阶段2: 核心业务 | ✅ 100% | 2026-04-19 |
 | 阶段3: 监控告警 | ✅ 100% | 2026-04-19 |
+| 阶段4: 前端完善 | 🔄 进行中 | 2026-04-20 |
 
 ---
 
-## 阶段详情
+## 今日开发 (2026-04-20)
 
-### 阶段1: 基础架构 (完成)
+### 完成项
 
-- [x] DDL脚本 - 15张数据库表 + 索引 + 初始数据
-- [x] Vendor模块CRUD - Entity/Mapper/Service/Controller
-- [x] Caller模块CRUD - Entity/Mapper/Service/Controller + API Key管理
+1. **数据库改为本地 PostgreSQL**
+   - 端口: 5432
+   - 数据库: dataplatform
+   - 用户: postgres / 密码: 123456
+   - 新增 updated_by 字段到所有表
 
-### 阶段2: 核心业务 (完成)
+2. **前端页面布局重构**
+   - App.vue: 完整管理后台布局（侧边栏+顶部导航）
+   - router/index.ts: 添加登录路由和路由守卫
+   - views/layout/: 布局组件
+   - views/login/: 登录页面
 
-- [x] Call模块 - 调用记录服务 + 数据查询服务
-- [x] Billing模块 - 计费服务 + 账单统计
+3. **新增页面**
+   - /user: 用户管理（完整 CRUD）
+   - /role: 角色管理（占位）
+   - /datatype: 数据类型（占位）
+   - /call: 调用记录（占位）
 
-### 阶段3: 监控告警 (完成)
+4. **新增 User 后端模块**
+   - 端口: 8087
+   - 路径: data-platform-user/
+   - 包含: Entity/Mapper/Service/Controller
 
-- [x] Monitor模块 - 告警规则 + 告警记录 + 统计
+5. **Gateway 路由配置**
+   - 新增 /api/v1/user/** → localhost:8087
+
+### 待处理
+
+- [ ] User 模块在 IDEA 中启动
+- [ ] Gateway 和其他服务重启
+- [ ] 前端页面测试和完善
+- [ ] 角色管理页面完善
+- [ ] 数据类型页面完善
+- [ ] 调用记录页面完善
 
 ---
 
@@ -50,45 +65,39 @@
 ```
 data-platform/
 ├── sql/
-│   └── init.sql                    # DDL脚本 (15表)
+│   └── create_database.sql         # DDL脚本 (15表)
 ├── pom.xml                         # 父POM
-├── data-platform-common/           # 公共模块 (4个Java文件)
-├── data-platform-gateway/          # 网关 (1个Java文件)
-├── data-platform-vendor/           # 厂商管理 (15个Java文件)
-├── data-platform-caller/           # 调用方管理 (16个Java文件)
-├── data-platform-call/             # 调用服务 (13个Java文件)
-├── data-platform-billing/          # 计费服务 (10个Java文件)
-├── data-platform-monitor/          # 监控告警 (9个Java文件)
-└── data-platform-web/              # 前端(待开发)
+├── data-platform-common/           # 公共模块
+├── data-platform-gateway/          # 网关 (8888)
+├── data-platform-vendor/           # 厂商管理 (8081)
+├── data-platform-caller/           # 调用方管理 (8082)
+├── data-platform-call/             # 调用服务 (8083)
+├── data-platform-billing/          # 计费服务 (8084)
+├── data-platform-monitor/          # 监控告警 (8085)
+├── data-platform-tenant/           # 租户管理 (8086)
+├── data-platform-user/             # 用户管理 (8087)
+└── data-platform-web/              # 前端 (3000)
 ```
 
 ---
 
-## 代码统计
+## 服务端口
 
-| 类型 | 数量 |
-|------|------|
-| Java文件 | 68个 |
-| SQL文件 | 1个 |
-| 微服务模块 | 7个 |
-
----
-
-## API清单 (设计文档56个)
-
-详见设计文档 11.3 章节，主要包括：
-
-- **Vendor**: 厂商CRUD、配置管理
-- **Caller**: 调用方CRUD、API Key管理
-- **Call**: 数据查询、调用记录
-- **Billing**: 账单查询、统计
-- **Monitor**: 告警规则、告警记录
+| 服务 | 端口 | 状态 |
+|------|------|------|
+| Gateway | 8888 | ✅ |
+| Vendor | 8081 | ✅ |
+| Caller | 8082 | ✅ |
+| Call | 8083 | ✅ |
+| Billing | 8084 | ✅ |
+| Monitor | 8085 | ✅ |
+| Tenant | 8086 | ✅ |
+| User | 8087 | 🔄 待启动 |
+| 前端 | 3000 | ✅ |
 
 ---
 
-## 数据库表 (设计文档11.5)
-
-15张表：
+## 数据库表 (15张)
 
 1. `tenant_info` - 租户信息
 2. `vendor_info` - 厂商信息
@@ -108,39 +117,46 @@ data-platform/
 
 ---
 
+## 前端路由
+
+| 路径 | 页面 | 状态 |
+|------|------|------|
+| /login | 登录页 | ✅ |
+| /dashboard | 数据概览 | ✅ |
+| /tenant | 租户管理 | ✅ |
+| /user | 用户管理 | ✅ |
+| /role | 角色管理 | 占位 |
+| /vendor | 厂商管理 | ✅ |
+| /caller | 调用方管理 | ✅ |
+| /datatype | 数据类型 | 占位 |
+| /call | 调用记录 | 占位 |
+| /billing | 计费管理 | ✅ |
+| /monitor | 监控告警 | ✅ |
+
+---
+
 ## 技术栈
 
 - **后端**: Java 21 + Spring Boot 3.4 + MyBatis-Plus 3.5
-- **注册/配置中心**: Nacos 2.3
-- **数据库**: PostgreSQL 16
+- **数据库**: PostgreSQL 16 (localhost:5432)
 - **缓存**: Redis
-- **消息队列**: Kafka
 - **前端**: Vue3 + TypeScript + Element Plus + Vite
 
-### 后端 (68个Java文件)
-- [x] Vendor模块CRUD
-- [x] Caller模块CRUD
-- [x] Call调用记录服务
-- [x] Billing计费服务
-- [x] Monitor监控告警
+---
 
-### 前端 (6个Vue页面)
-- [x] Dashboard首页
-- [x] Vendor厂商管理
-- [x] Caller调用方管理
-- [x] Billing账单管理
-- [x] Monitor监控告警
-- [x] Tenant租户管理
+## Git 提交记录
+
+| 日期 | 提交 | 说明 |
+|------|------|------|
+| 2026-04-19 | init | 初始项目结构 |
+| 2026-04-19 | feat: 完善DDL和基础模块 | 15张表+7个模块 |
+| 2026-04-20 | feat: 完善前端页面布局 | 登录页+侧边栏导航 |
+| 2026-04-20 | fix: 修复前端布局问题 | 布局结构修复 |
+| 2026-04-20 | fix: 数据库添加updated_by | 字段修复 |
+| 2026-04-20 | feat: 添加用户管理等页面 | 新增页面 |
+| 2026-04-20 | fix: 修复v-model绑定问题 | TypeScript修复 |
+| 2026-04-20 | feat: 新增user模块 | 8087端口 |
 
 ---
 
-## 后续任务
-
-- [ ] 安装Maven编译验证
-- [ ] npm install && npm run dev 启动前端
-- [ ] 启动后端服务进行集成测试
-- [ ] 部署到测试环境
-
----
-
-*最后更新: 2026-04-19 07:02*
+*最后更新: 2026-04-20 16:44*
