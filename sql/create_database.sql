@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS tenant_info (
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     deleted BOOLEAN NOT NULL DEFAULT false
 );
 
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS vendor_info (
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     deleted BOOLEAN NOT NULL DEFAULT false
 );
 
@@ -81,6 +83,7 @@ CREATE TABLE IF NOT EXISTS data_type (
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     deleted BOOLEAN NOT NULL DEFAULT false
 );
 
@@ -107,6 +110,7 @@ CREATE TABLE IF NOT EXISTS vendor_config (
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     deleted BOOLEAN NOT NULL DEFAULT false,
     CONSTRAINT fk_vendor_config_vendor FOREIGN KEY (vendor_id) REFERENCES vendor_info(id),
     CONSTRAINT fk_vendor_config_datatype FOREIGN KEY (data_type_id) REFERENCES data_type(id),
@@ -130,6 +134,7 @@ CREATE TABLE IF NOT EXISTS caller_info (
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     deleted BOOLEAN NOT NULL DEFAULT false,
     CONSTRAINT fk_caller_tenant FOREIGN KEY (tenant_id) REFERENCES tenant_info(id)
 );
@@ -149,6 +154,7 @@ CREATE TABLE IF NOT EXISTS api_key (
     last_used_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     deleted BOOLEAN NOT NULL DEFAULT false,
     CONSTRAINT fk_apikey_caller FOREIGN KEY (caller_id) REFERENCES caller_info(id)
 );
@@ -222,6 +228,7 @@ CREATE TABLE IF NOT EXISTS billing_daily (
     profit DECIMAL(12, 4) DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     CONSTRAINT fk_billing_caller FOREIGN KEY (caller_id) REFERENCES caller_info(id),
     UNIQUE(caller_id, billing_date)
 );
@@ -242,6 +249,7 @@ CREATE TABLE IF NOT EXISTS user_info (
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     deleted BOOLEAN NOT NULL DEFAULT false
 );
 
@@ -258,6 +266,7 @@ CREATE TABLE IF NOT EXISTS role_info (
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     deleted BOOLEAN NOT NULL DEFAULT false
 );
 
@@ -294,6 +303,7 @@ CREATE TABLE IF NOT EXISTS alert_rule (
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     deleted BOOLEAN NOT NULL DEFAULT false
 );
 
@@ -333,6 +343,7 @@ CREATE TABLE IF NOT EXISTS circuit_breaker (
     closed_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     CONSTRAINT fk_cb_vendor FOREIGN KEY (vendor_id) REFERENCES vendor_info(id),
     CONSTRAINT fk_cb_datatype FOREIGN KEY (data_type_id) REFERENCES data_type(id)
 );
