@@ -436,3 +436,23 @@ CREATE INDEX idx_operation_log_module ON operation_log(module);
 CREATE INDEX idx_alert_record_status ON alert_record(status);
 CREATE INDEX idx_alert_record_created ON alert_record(created_at);
 CREATE INDEX idx_vendor_config_vendor ON vendor_config_extended(vendor_id);
+
+-- 灰度规则表
+CREATE TABLE IF NOT EXISTS gray_rule (
+    id BIGSERIAL PRIMARY KEY,
+    rule_name VARCHAR(100) NOT NULL,
+    service_name VARCHAR(100) NOT NULL,
+    version VARCHAR(50),
+    weight INTEGER DEFAULT 10,
+    condition_type VARCHAR(50) DEFAULT 'random',
+    condition_value VARCHAR(200),
+    description VARCHAR(500),
+    status VARCHAR(20) DEFAULT 'active',
+    start_time TIMESTAMP,
+    end_time TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_gray_rule_service ON gray_rule(service_name);
+CREATE INDEX idx_gray_rule_status ON gray_rule(status);

@@ -96,6 +96,18 @@ spring:
             - Path=/api/v1/log/**
           filters:
             - StripPrefix=2
+        - id: config-service
+          uri: http://localhost:8091
+          predicates:
+            - Path=/api/v1/config/**
+          filters:
+            - StripPrefix=2
+        - id: graylog-service
+          uri: http://localhost:8092
+          predicates:
+            - Path=/api/v1/graylog/**
+          filters:
+            - StripPrefix=2
 
 sa-token:
   token-name: Authorization

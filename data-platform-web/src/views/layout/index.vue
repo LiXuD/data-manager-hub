@@ -36,6 +36,8 @@ const menuItems = [
   { path: '/call', title: '调用记录', icon: Connection },
   { path: '/billing', title: '计费管理', icon: Wallet },
   { path: '/monitor', title: '监控告警', icon: AlarmClock },
+  { path: '/config', title: '配置中心', icon: Setting },
+  { path: '/graylog', title: '灰度发布', icon: Sunny },
   { path: '/audit', title: '操作日志', icon: Document }
 ]
 
