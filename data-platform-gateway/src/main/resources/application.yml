@@ -90,6 +90,12 @@ spring:
             - Path=/api/v1/data-type/**
           filters:
             - StripPrefix=2
+        - id: log-service
+          uri: http://localhost:8090
+          predicates:
+            - Path=/api/v1/log/**
+          filters:
+            - StripPrefix=2
 
 sa-token:
   token-name: Authorization

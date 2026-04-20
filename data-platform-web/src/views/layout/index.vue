@@ -35,7 +35,8 @@ const menuItems = [
   },
   { path: '/call', title: '调用记录', icon: Connection },
   { path: '/billing', title: '计费管理', icon: Wallet },
-  { path: '/monitor', title: '监控告警', icon: AlarmClock }
+  { path: '/monitor', title: '监控告警', icon: AlarmClock },
+  { path: '/audit', title: '操作日志', icon: Document }
 ]
 
 const handleMenuSelect = (path: string) => {

@@ -367,3 +367,72 @@ VALUES
 
 -- 提交
 COMMIT;
+
+-- 计费规则表
+CREATE TABLE IF NOT EXISTS billing_rule (
+    id BIGSERIAL PRIMARY KEY,
+    vendor_id BIGINT,
+    vendor_name VARCHAR(100),
+    data_type VARCHAR(50),
+    unit_price DECIMAL(10, 4) NOT NULL DEFAULT 0,
+    tier_min INTEGER DEFAULT 0,
+    tier_max INTEGER,
+    discount DECIMAL(3, 2) DEFAULT 1.00,
+    status VARCHAR(20) DEFAULT 'active',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT
+);
+
+-- 操作日志表（数据溯源用）
+CREATE TABLE IF NOT EXISTS operation_log (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT,
+    username VARCHAR(50),
+    module VARCHAR(50),
+    operation VARCHAR(50),
+    method VARCHAR(200),
+    params TEXT,
+    result TEXT,
+    ip VARCHAR(50),
+    location VARCHAR(100),
+    duration INTEGER,
+    status VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 告警记录表
+CREATE TABLE IF NOT EXISTS alert_record (
+    id BIGSERIAL PRIMARY KEY,
+    rule_id BIGINT,
+    rule_name VARCHAR(100),
+    metric VARCHAR(50),
+    current_value DECIMAL(20, 2),
+    threshold DECIMAL(20, 2),
+    level VARCHAR(20),
+    message TEXT,
+    status VARCHAR(20) DEFAULT 'pending',
+    resolved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 厂商配置表（配置中心用）
+CREATE TABLE IF NOT EXISTS vendor_config_extended (
+    id BIGSERIAL PRIMARY KEY,
+    vendor_id BIGINT NOT NULL,
+    config_key VARCHAR(100) NOT NULL,
+    config_value TEXT,
+    config_type VARCHAR(20) DEFAULT 'string',
+    description VARCHAR(200),
+    is_encrypted BOOLEAN DEFAULT false,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_operation_log_created ON operation_log(created_at);
+CREATE INDEX idx_operation_log_module ON operation_log(module);
+CREATE INDEX idx_alert_record_status ON alert_record(status);
+CREATE INDEX idx_alert_record_created ON alert_record(created_at);
+CREATE INDEX idx_vendor_config_vendor ON vendor_config_extended(vendor_id);
