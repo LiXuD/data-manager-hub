@@ -3,6 +3,19 @@
 -- PostgreSQL 本地环境 (localhost:5342)
 -- =====================================================
 
+-- 0. 创建数据库用户 (如果不存在)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'dpadmin') THEN
+        CREATE ROLE dpadmin WITH LOGIN PASSWORD 'dpadmin123';
+        ALTER ROLE dpadmin CREATEDB;
+        RAISE NOTICE '用户 dpadmin 已创建';
+    ELSE
+        RAISE NOTICE '用户 dpadmin 已存在';
+    END IF;
+END
+$$;
+
 -- 1. 创建数据库
 DROP DATABASE IF EXISTS dataplatform;
 CREATE DATABASE dataplatform
@@ -15,7 +28,11 @@ CREATE DATABASE dataplatform
     CONNECTION LIMIT = -1;
 
 -- 2. 连接数据库
-\c dataplatform;
+\c dataplatform dpadmin;
+
+-- 授权
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dpadmin;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dpadmin;
 
 -- =====================================================
 -- DDL 脚本
@@ -386,13 +403,6 @@ VALUES
     (2, 'C001', '风控系统', 'internal', 'active', '银行风控系统'),
     (2, 'C002', '信贷系统', 'internal', 'active', '银行信贷系统')
 ON CONFLICT (caller_code) DO NOTHING;
-
--- 用户
-INSERT INTO user_info (tenant_id, username, password, nickname, email, status)
-VALUES 
-    (1, 'admin', '$2a$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', '系统管理员', 'admin@example.com', 'active'),
-    (2, 'bank_admin', '$2a$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', '银行管理员', 'bank@example.com', 'active')
-ON CONFLICT (username) DO NOTHING;
 
 -- 角色
 INSERT INTO role_info (role_code, role_name, description)
