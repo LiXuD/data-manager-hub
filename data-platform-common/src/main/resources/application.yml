@@ -1,0 +1,20 @@
+# 公共配置
+spring:
+  application:
+    name: data-platform-common
+  jackson:
+    date-format: yyyy-MM-dd'T'HH:mm:ss'Z'
+    time-zone: GMT+8
+
+# MyBatis-Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.dataplatform.*.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: true
+      logic-not-delete-value: false

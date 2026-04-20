@@ -1,0 +1,96 @@
+server:
+  port: 8888
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+
+spring:
+  main:
+    web-application-type: reactive
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.jdbc.DataSourceHealthContributorAutoConfiguration
+  application:
+    name: data-platform-gateway
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origin-patterns: "*"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowed-headers:
+              - "*"
+            allow-credentials: true
+            max-age: 3600
+      routes:
+        - id: vendor-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/v1/vendor/**
+          filters:
+            - StripPrefix=2
+        - id: caller-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/v1/caller/**
+          filters:
+            - StripPrefix=2
+        - id: billing-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/v1/billing/**
+          filters:
+            - StripPrefix=2
+        - id: call-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/v1/data/**,/api/v1/call-record/**
+          filters:
+            - StripPrefix=2
+        - id: monitor-service
+          uri: http://localhost:8085
+          predicates:
+            - Path=/api/v1/monitor/**
+          filters:
+            - StripPrefix=2
+        - id: tenant-service
+          uri: http://localhost:8086
+          predicates:
+            - Path=/api/v1/tenant/**
+          filters:
+            - StripPrefix=2
+
+sa-token:
+  token-name: Authorization
+  timeout: 7200
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+
+spring.data.redis:
+  host: localhost
+  port: 6379
+  password: redis_password
+  database: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  health:
+    db:
+      enabled: false

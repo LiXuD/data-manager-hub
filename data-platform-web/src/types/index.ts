@@ -1,0 +1,164 @@
+// 租户相关类型
+export interface Tenant {
+  id: string
+  name: string
+  code: string
+  contact: string
+  email: string
+  phone: string
+  status: 'enabled' | 'disabled'
+  budget: number
+  createdAt: string
+  updatedAt: string
+}
+
+// 厂商相关类型
+export interface Vendor {
+  id: string
+  name: string
+  code: string
+  contact: string
+  email: string
+  url: string
+  authType: 'none' | 'basic' | 'oauth' | 'api_key' | 'hmac'
+  status: 'enabled' | 'disabled'
+  version: string
+  createdAt: string
+  updatedAt: string
+}
+
+// 调用方相关类型
+export interface Caller {
+  id: string
+  name: string
+  code: string
+  tenantId: string
+  tenantName: string
+  contact: string
+  email: string
+  apiKey: string
+  status: 'enabled' | 'disabled'
+  budget: number
+  quota: number
+  usedQuota: number
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// API Key相关类型
+export interface ApiKey {
+  id: string
+  callerId: string
+  key: string
+  name: string
+  status: 'active' | 'revoked' | 'expired'
+  expireTime: string
+  lastUsedTime?: string
+  createdAt: string
+}
+
+export interface CreateApiKeyRequest {
+  callerId: string
+  name: string
+  expireDays: number
+}
+
+export interface ApiKeyListResponse {
+  list: ApiKey[]
+  total: number
+}
+
+// 计费相关类型
+export interface BillingRule {
+  id: string
+  vendorId: string
+  vendorName: string
+  dataTypeId: string
+  dataTypeName: string
+  pricePerCall: number
+  minPrice: number
+  maxPrice: number
+  discountThreshold: number
+  discountRate: number
+  status: 'enabled' | 'disabled'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BillingRecord {
+  id: string
+  tenantId: string
+  tenantName: string
+  callerId: string
+  callerName: string
+  vendorId: string
+  vendorName: string
+  dataType: string
+  callCount: number
+  unitPrice: number
+  totalAmount: number
+  billingDate: string
+  status: 'pending' | 'paid' | 'overdue'
+}
+
+export interface BillingSummary {
+  totalAmount: number
+  paidAmount: number
+  pendingAmount: number
+  overdueAmount: number
+}
+
+// API接口相关类型
+export interface ApiInterface {
+  id: string
+  name: string
+  path: string
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  vendorId: string
+  vendorName: string
+  dataTypeId: string
+  dataTypeName: string
+  version: string
+  deprecated: boolean
+  status: 'enabled' | 'disabled'
+  createdAt: string
+  updatedAt: string
+}
+
+// 调用记录相关类型
+export interface CallRecord {
+  id: string
+  callerId: string
+  callerName: string
+  tenantId: string
+  tenantName: string
+  apiId: string
+  apiName: string
+  vendorId: string
+  vendorName: string
+  requestParams: Record<string, any>
+  responseData: Record<string, any>
+  status: 'success' | 'failed'
+  errorCode?: string
+  errorMessage?: string
+  cost: number
+  callTime: string
+  responseTime: number
+  traceId: string
+}
+
+// 分页响应
+export interface PageResponse<T> {
+  list: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+// 通用API响应
+export interface ApiResponse<T> {
+  code: number
+  message: string
+  data: T
+}

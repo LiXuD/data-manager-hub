@@ -1,0 +1,34 @@
+server:
+  port: 8085
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.dataplatform.monitor.entity
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 'true'
+      logic-not-delete-value: 'false'
+spring:
+  application:
+    name: data-platform-monitor
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        enabled: false
+  datasource:
+    url: jdbc:postgresql://localhost:5433/dataplatform
+    username: dpadmin
+    password: dpadmin123
+    driver-class-name: org.postgresql.Driver
+
+spring.data.redis:
+  host: localhost
+  port: 6379
+  password: redis_password
+  database: 0
+

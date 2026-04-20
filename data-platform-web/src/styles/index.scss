@@ -1,0 +1,143 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: #303133;
+  background-color: #f5f7fa;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+// 通用布局
+.page-container {
+  padding: 20px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #303133;
+  }
+}
+
+// 卡片样式
+.card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  padding: 20px;
+}
+
+// 表格操作按钮
+.table-actions {
+  display: flex;
+  gap: 8px;
+  
+  .el-button {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
+
+// 状态标签
+.status-tag {
+  &.enabled, &.success {
+    color: #67c23a;
+    background: #f0f9ff;
+  }
+  
+  &.disabled, &.failed {
+    color: #f56c6c;
+    background: #fef0f0;
+  }
+  
+  &.pending {
+    color: #e6a23c;
+    background: #fdf6ec;
+  }
+}
+
+// 表单样式
+.form-section {
+  margin-bottom: 20px;
+  
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #303133;
+    margin-bottom: 12px;
+    padding-left: 10px;
+    border-left: 3px solid #409eff;
+  }
+}
+
+// 搜索区域
+.search-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  
+  .el-input, .el-select {
+    width: 200px;
+  }
+  
+  .search-btn-group {
+    display: flex;
+    gap: 8px;
+  }
+}
+
+// 弹窗样式
+.dialog-footer {
+  text-align: right;
+  padding-top: 20px;
+}
+
+// 详情页面
+.detail-container {
+  .detail-item {
+    display: flex;
+    padding: 12px 0;
+    border-bottom: 1px solid #ebeef5;
+    
+    &:last-child {
+      border-bottom: none;
+    }
+    
+    .label {
+      width: 120px;
+      color: #909399;
+      font-weight: 500;
+    }
+    
+    .value {
+      flex: 1;
+      color: #606266;
+    }
+  }
+}
+
+// 动画
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
