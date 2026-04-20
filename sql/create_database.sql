@@ -201,8 +201,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 初始化当前月和下月分区
-SELECT create_monthly_partition(CURRENT_DATE);
-SELECT create_monthly_partition(CURRENT_DATE + INTERVAL '1 month');
+SELECT create_monthly_partition(CURRENT_DATE::DATE);
+SELECT create_monthly_partition((CURRENT_DATE + INTERVAL '1 month')::DATE);
 
 CREATE INDEX IF NOT EXISTS idx_call_record_caller ON call_record(caller_id);
 CREATE INDEX IF NOT EXISTS idx_call_record_vendor ON call_record(vendor_id);
