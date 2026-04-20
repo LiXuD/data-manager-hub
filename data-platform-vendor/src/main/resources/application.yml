@@ -11,7 +11,7 @@ spring:
       config:
         enabled: false
   datasource:
-    url: jdbc:postgresql://localhost:5433/dataplatform
+    url: jdbc:postgresql://localhost:5342/dataplatform
     username: dpadmin
     password: dpadmin123
     driver-class-name: org.postgresql.Driver
