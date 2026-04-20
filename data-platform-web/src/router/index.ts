@@ -25,6 +25,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '租户管理' }
       },
       {
+        path: '/user',
+        name: 'User',
+        component: () => import('@/views/user/index.vue'),
+        meta: { title: '用户管理' }
+      },
+      {
+        path: '/role',
+        name: 'Role',
+        component: () => import('@/views/role/index.vue'),
+        meta: { title: '角色管理' }
+      },
+      {
         path: '/vendor',
         name: 'Vendor',
         component: () => import('@/views/vendor/index.vue'),
@@ -35,6 +47,18 @@ const routes: RouteRecordRaw[] = [
         name: 'Caller',
         component: () => import('@/views/caller/index.vue'),
         meta: { title: '调用方管理' }
+      },
+      {
+        path: '/datatype',
+        name: 'DataType',
+        component: () => import('@/views/datatype/index.vue'),
+        meta: { title: '数据类型' }
+      },
+      {
+        path: '/call',
+        name: 'Call',
+        component: () => import('@/views/call/index.vue'),
+        meta: { title: '调用记录' }
       },
       {
         path: '/billing',
