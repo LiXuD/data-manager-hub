@@ -20,6 +20,7 @@
         <module>data-platform-call</module>
         <module>data-platform-monitor</module>
         <module>data-platform-tenant</module>
+        <module>data-platform-user</module>
     </modules>
 
     <properties>
