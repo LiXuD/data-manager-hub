@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { ElConfigProvider, ElMenu, ElMenuItem, ElSubMenu, ElAvatar, ElDropdown, ElDropdownItem, ElDropdownMenu, ElButton } from 'element-plus'
-import { Odometer, Setting, Goods, Connection, Wallet, AlarmClock } from '@element-plus/icons-vue'
+import { Odometer, Setting, Goods, Connection, Wallet, AlarmClock, Fold, Expand } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -61,11 +61,11 @@ const username = localStorage.getItem('username') || '管理员'
 
 <template>
   <el-config-provider :locale="zhCn">
-    <el-container class="layout-container">
+    <div class="layout-wrapper">
       <!-- 左侧菜单 -->
-      <el-aside :width="isCollapse ? '64px' : '220px'" class="sidebar">
+      <aside class="sidebar" :class="{ collapsed: isCollapse }">
         <div class="logo">
-          <img v-if="!isCollapse" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMDk4Q0MzIi8+PHJlY3QgeD0iMTAiIHk9IjEwIiB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIGZpbGw9IiNmZmYiLz48L3N2Zz4=" alt="logo" />
+          <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMDk4Q0MzIi8+PHJlY3QgeD0iMTAiIHk9IjEwIiB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIGZpbGw9IiNmZmYiLz48L3N2Zz4=" alt="logo" class="logo-img" />
           <span v-if="!isCollapse" class="logo-text">数据管理平台</span>
         </div>
         
@@ -73,12 +73,15 @@ const username = localStorage.getItem('username') || '管理员'
           :default-active="activeMenu"
           :collapse="isCollapse"
           class="sidebar-menu"
+          background-color="#304156"
+          text-color="#bfcbd9"
+          active-text-color="#409EFF"
           @select="handleMenuSelect"
         >
           <template v-for="item in menuItems" :key="item.path">
             <el-sub-menu v-if="item.children" :index="item.path">
               <template #title>
-                <component :is="item.icon" />
+                <component :is="item.icon" class="menu-icon" />
                 <span>{{ item.title }}</span>
               </template>
               <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
@@ -86,19 +89,19 @@ const username = localStorage.getItem('username') || '管理员'
               </el-menu-item>
             </el-sub-menu>
             <el-menu-item v-else :index="item.path">
-              <component :is="item.icon" />
+              <component :is="item.icon" class="menu-icon" />
               <span>{{ item.title }}</span>
             </el-menu-item>
           </template>
         </el-menu>
-      </el-aside>
+      </aside>
       
       <!-- 右侧内容 -->
-      <el-container>
+      <div class="main-wrapper">
         <!-- 顶部导航 -->
-        <el-header class="header">
+        <header class="header">
           <div class="header-left">
-            <el-button :icon="isCollapse ? 'Expand' : 'Fold'" text @click="toggleSidebar" />
+            <el-button :icon="isCollapse ? Expand : Fold" text @click="toggleSidebar" />
           </div>
           
           <div class="header-right">
@@ -115,26 +118,36 @@ const username = localStorage.getItem('username') || '管理员'
               </template>
             </el-dropdown>
           </div>
-        </el-header>
+        </header>
         
         <!-- 主内容区 -->
-        <el-main class="main-content">
+        <main class="main-content">
           <RouterView />
-        </el-main>
-      </el-container>
-    </el-container>
+        </main>
+      </div>
+    </div>
   </el-config-provider>
 </template>
 
 <style scoped>
-.layout-container {
+.layout-wrapper {
+  display: flex;
+  width: 100vw;
   height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
+  width: 220px;
+  height: 100vh;
   background-color: #304156;
-  transition: width 0.3s;
+  transition: width 0.3s ease;
   overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar.collapsed {
+  width: 64px;
 }
 
 .logo {
@@ -145,35 +158,50 @@ const username = localStorage.getItem('username') || '管理员'
   gap: 10px;
   background: #263445;
   color: #fff;
+  overflow: hidden;
 }
 
-.logo img {
+.logo-img {
   width: 32px;
   height: 32px;
+  flex-shrink: 0;
 }
 
 .logo-text {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: bold;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .sidebar-menu {
   border-right: none;
-  background-color: #304156;
+  height: calc(100vh - 60px);
+  overflow-y: auto;
 }
 
-.sidebar-menu:not(.el-menu--collapse) {
-  width: 220px;
+.menu-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+}
+
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .header {
+  height: 60px;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0,21,41,.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
+  flex-shrink: 0;
 }
 
 .header-left {
@@ -191,8 +219,9 @@ const username = localStorage.getItem('username') || '管理员'
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  padding: 0 8px;
+  padding: 8px 12px;
   border-radius: 4px;
+  transition: background-color 0.2s;
 }
 
 .user-info:hover {
@@ -205,32 +234,28 @@ const username = localStorage.getItem('username') || '管理员'
 }
 
 .main-content {
+  flex: 1;
   background: #f0f2f5;
   padding: 20px;
-  min-height: calc(100vh - 60px);
+  overflow-y: auto;
 }
 
-/* 菜单样式 */
-:deep(.el-menu) {
-  border-right: none;
-}
-
+/* 菜单样式覆盖 */
 :deep(.el-menu-item),
 :deep(.el-sub-menu__title) {
-  color: #bfcbd9;
+  height: 50px;
+  line-height: 50px;
 }
 
-:deep(.el-menu-item:hover),
-:deep(.el-sub-menu__title:hover) {
-  background-color: #263445 !important;
+:deep(.el-menu--collapse) {
+  width: 64px;
 }
 
-:deep(.el-menu-item.is-active) {
-  background-color: #409EFF !important;
-  color: #fff !important;
+:deep(.el-menu--collapse .el-sub-menu__title) {
+  padding: 0 20px !important;
 }
 
-:deep(.el-sub-menu.is-active > .el-sub-menu__title) {
-  color: #409EFF !important;
+:deep(.el-menu--collapse .el-menu-item) {
+  padding: 0 20px !important;
 }
 </style>
