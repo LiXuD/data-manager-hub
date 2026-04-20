@@ -16,6 +16,10 @@ interface User {
 const loading = ref(false)
 const tableData = ref<User[]>([])
 const total = ref(0)
+const pagination = ref({
+  currentPage: 1,
+  pageSize: 10
+})
 const searchForm = ref({
   username: '',
   status: ''
@@ -161,8 +165,8 @@ onMounted(() => {
       </el-table>
 
       <el-pagination
-        v-model:current-page="1"
-        v-model:page-size="10"
+        v-model:current-page="pagination.currentPage"
+        v-model:page-size="pagination.pageSize"
         :total="total"
         layout="total, prev, pager, next"
         style="margin-top: 20px; justify-content: flex-end"
