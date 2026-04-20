@@ -12,11 +12,11 @@ const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
 
 const menuItems = [
-  { path: '/dashboard', title: '数据概览', icon: 'Odometer' },
+  { path: '/dashboard', title: '数据概览', icon: Odometer },
   { 
     path: '/system', 
     title: '系统管理', 
-    icon: 'Setting',
+    icon: Setting,
     children: [
       { path: '/tenant', title: '租户管理' },
       { path: '/user', title: '用户管理' },
@@ -26,16 +26,16 @@ const menuItems = [
   { 
     path: '/business', 
     title: '业务管理', 
-    icon: 'Goods',
+    icon: Goods,
     children: [
       { path: '/vendor', title: '厂商管理' },
       { path: '/caller', title: '调用方管理' },
       { path: '/datatype', title: '数据类型' }
     ]
   },
-  { path: '/call', title: '调用记录', icon: 'Connection' },
-  { path: '/billing', title: '计费管理', icon: 'Wallet' },
-  { path: '/monitor', title: '监控告警', icon: 'AlarmClock' }
+  { path: '/call', title: '调用记录', icon: Connection },
+  { path: '/billing', title: '计费管理', icon: Wallet },
+  { path: '/monitor', title: '监控告警', icon: AlarmClock }
 ]
 
 const handleMenuSelect = (path: string) => {
@@ -54,6 +54,9 @@ const handleCommand = (command: string) => {
 const toggleSidebar = () => {
   isCollapse.value = !isCollapse.value
 }
+
+// 获取用户名
+const username = localStorage.getItem('username') || '管理员'
 </script>
 
 <template>
@@ -75,7 +78,7 @@ const toggleSidebar = () => {
           <template v-for="item in menuItems" :key="item.path">
             <el-sub-menu v-if="item.children" :index="item.path">
               <template #title>
-                <el-icon><Odometer v-if="item.icon === 'Odometer'" /><Setting v-else-if="item.icon === 'Setting'" /><Goods v-else-if="item.icon === 'Goods'" /></el-icon>
+                <component :is="item.icon" />
                 <span>{{ item.title }}</span>
               </template>
               <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
@@ -83,7 +86,7 @@ const toggleSidebar = () => {
               </el-menu-item>
             </el-sub-menu>
             <el-menu-item v-else :index="item.path">
-              <el-icon><Odometer v-if="item.icon === 'Odometer'" /><Connection v-else-if="item.icon === 'Connection'" /><Wallet v-else-if="item.icon === 'Wallet'" /><AlarmClock v-else-if="item.icon === 'AlarmClock'" /></el-icon>
+              <component :is="item.icon" />
               <span>{{ item.title }}</span>
             </el-menu-item>
           </template>
@@ -102,7 +105,7 @@ const toggleSidebar = () => {
             <el-dropdown @command="handleCommand">
               <div class="user-info">
                 <el-avatar :size="32" src="https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png" />
-                <span class="username">管理员</span>
+                <span class="username">{{ username }}</span>
               </div>
               <template #dropdown>
                 <el-dropdown-menu>

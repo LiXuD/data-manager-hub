@@ -12,8 +12,8 @@
 # 如果仍需使用 Docker 环境，取消注释以下配置
 # version: '3.8'
 # 
-# services:
-#   # PostgreSQL 数据库
+ services:
+   # PostgreSQL 数据库
 #   postgres:
 #     image: postgres:15-alpine
 #     container_name: data-platform-postgres
@@ -25,17 +25,17 @@
 #       - "5433:5432"
 #     volumes:
 #       - postgres_data:/var/lib/postgresql/data
-# 
-#   # Redis 缓存
-#   redis:
-#     image: redis:7-alpine
-#     container_name: data-platform-redis
-#     command: redis-server --requirepass redis_password
-#     ports:
-#       - "6379:6379"
-#     volumes:
-#       - redis_data:/data
-#
-# volumes:
+
+   # Redis 缓存
+   redis:
+     image: redis:7-alpine
+     container_name: data-platform-redis
+     command: redis-server --requirepass redis_password
+     ports:
+       - "6379:6379"
+     volumes:
+       - redis_data:/data
+
+ volumes:
 #   postgres_data:
-#   redis_data:
+   redis_data:
