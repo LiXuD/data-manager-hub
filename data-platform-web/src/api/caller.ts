@@ -29,37 +29,37 @@ export interface ApiKey {
 }
 
 export const getCallerList = (params: PageParams & { keyword?: string; status?: string }) => {
-  return request.get('/api/v1/caller/list', { params })
+  return request.get('/caller/list', { params })
 }
 
 export const getCaller = (id: number) => {
-  return request.get(`/api/v1/caller/${id}`)
+  return request.get(`/caller/${id}`)
 }
 
 export const createCaller = (data: Caller) => {
-  return request.post('/api/v1/caller', data)
+  return request.post('/caller', data)
 }
 
 export const updateCaller = (id: number, data: Caller) => {
-  return request.put(`/api/v1/caller/${id}`, data)
+  return request.put(`/caller/${id}`, data)
 }
 
 export const deleteCaller = (id: number) => {
-  return request.delete(`/api/v1/caller/${id}`)
+  return request.delete(`/caller/${id}`)
 }
 
 export const getApiKeyList = (callerId: number) => {
-  return request.get('/api/v1/api-key/caller/' + callerId)
+  return request.get('/caller/' + callerId + '/api-key/list')
 }
 
 export const createApiKey = (callerId: number) => {
-  return request.post('/api/v1/api-key/caller/' + callerId)
+  return request.post('/caller/' + callerId + '/api-key', { keyName: 'default' })
 }
 
 export const updateApiKeyStatus = (id: number, status: string) => {
-  return request.put(`/api/v1/api-key/${id}/status?status=${status}`)
+  return request.patch(`/caller/api-key/${id}/status`, { status })
 }
 
 export const deleteApiKey = (id: number) => {
-  return request.delete(`/api/v1/api-key/${id}`)
+  return request.delete(`/caller/api-key/${id}`)
 }

@@ -7,29 +7,29 @@ export const getVendorList = (params: {
   keyword?: string
   status?: string
 }) => {
-  return request.get<ApiResponse<PageResponse<Vendor>>>('/api/v1/vendor/list', { params })
+  return request.get<ApiResponse<PageResponse<Vendor>>>('/vendor/list', { params })
 }
 
 export const getVendorDetail = (id: string) => {
-  return request.get<ApiResponse<Vendor>>(`/api/v1/vendor/${id}`)
+  return request.get<ApiResponse<Vendor>>(`/vendor/${id}`)
 }
 
 export const createVendor = (data: Partial<Vendor>) => {
-  return request.post<ApiResponse<Vendor>>('/api/v1/vendor', data)
+  return request.post<ApiResponse<Vendor>>('/vendor', data)
 }
 
 export const updateVendor = (id: string, data: Partial<Vendor>) => {
-  return request.put<ApiResponse<Vendor>>(`/api/v1/vendor/${id}`, data)
+  return request.put<ApiResponse<Vendor>>(`/vendor/${id}`, data)
 }
 
 export const deleteVendor = (id: string) => {
-  return request.delete<ApiResponse<void>>(`/api/v1/vendor/${id}`)
+  return request.delete<ApiResponse<void>>(`/vendor/${id}`)
 }
 
 export const updateVendorStatus = (id: string, status: 'enabled' | 'disabled') => {
-  return request.patch<ApiResponse<void>>(`/api/v1/vendor/${id}/status`, { status })
+  return request.patch<ApiResponse<void>>(`/vendor/${id}/status`, { status })
 }
 
 export const testVendorConnection = (id: string) => {
-  return request.post<ApiResponse<{ success: boolean; message: string }>>(`/api/v1/vendor/${id}/test`)
+  return request.post<ApiResponse<{ success: boolean; message: string }>>(`/vendor/${id}/test`)
 }

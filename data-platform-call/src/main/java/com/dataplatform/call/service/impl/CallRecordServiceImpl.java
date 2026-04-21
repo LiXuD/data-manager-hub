@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.call.entity.CallRecord;
 import com.dataplatform.call.mapper.CallRecordMapper;
 import com.dataplatform.call.service.CallRecordService;
+import com.dataplatform.common.result.PageResult;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -69,7 +70,14 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
         }
 
         Long totalCount = count(wrapper);
-        LambdaQueryWrapper<CallRecord> successWrapper = new LambdaQueryWrapper<>(wrapper);
+
+        LambdaQueryWrapper<CallRecord> successWrapper = new LambdaQueryWrapper<>();
+        if (startTime != null) {
+            successWrapper.ge(CallRecord::getCallTime, startTime);
+        }
+        if (endTime != null) {
+            successWrapper.le(CallRecord::getCallTime, endTime);
+        }
         successWrapper.eq(CallRecord::getSuccess, true);
         Long successCount = count(successWrapper);
 

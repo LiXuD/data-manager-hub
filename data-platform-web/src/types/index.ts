@@ -166,3 +166,100 @@ export interface ApiResponse<T> {
   message: string
   data: T
 }
+
+// 分页参数
+export interface PageParams {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  status?: string
+}
+
+// 分页响应
+export interface PageResult<T> {
+  list: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+// 数据类型
+export interface DataType {
+  id: number
+  typeCode: string
+  typeName: string
+  description: string
+  vendorId: number
+  vendorName: string
+  schema?: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+// 配置中心
+export interface Config {
+  id: number
+  vendorId: number
+  vendorName: string
+  configKey: string
+  configValue: string
+  configType: string
+  description?: string
+  isEncrypted: boolean
+  isActive: boolean
+  status?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// 角色
+export interface Role {
+  id: number
+  roleCode: string
+  roleName: string
+  description?: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+// 权限
+export interface Permission {
+  id: number
+  permissionCode: string
+  permissionName: string
+  resource: string
+  action: string
+  description?: string
+}
+
+// 日志
+export interface LogRecord {
+  id: number
+  userId: number
+  username: string
+  operation: string
+  module: string
+  method: string
+  params?: string
+  result?: string
+  ip?: string
+  userAgent?: string
+  duration?: number
+  status: string
+  errorMsg?: string
+  createdAt: string
+}
+
+// 灰度发布
+export interface GraylogConfig {
+  id: number
+  configName: string
+  configKey: string
+  configValue: string
+  description?: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
