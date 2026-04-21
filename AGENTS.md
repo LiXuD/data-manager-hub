@@ -59,19 +59,38 @@
 
 ### 后端模块端口
 
-| 服务 | 端口 | 状态 |
+| 服务 | 端口 | 说明 |
 |------|------|------|
-| Gateway | 8888 | 需重启 |
-| vendor | 8081 | ✅ |
-| caller | 8082 | ✅ |
-| call | 8083 | ✅ |
-| billing | 8084 | ✅ |
-| monitor | 8085 | ✅ |
-| tenant | 8086 | ✅ |
-| user | 8087 | 需启动 |
-| role | 8088 | 需启动 |
-| datatype | 8089 | 需启动 |
-| log | 8090 | 新增 |
+| Gateway | 8888 | API网关 |
+| vendor | 8081 | 数据接入 |
+| caller | 8082 | API管理 |
+| call | 8083 | 调用记录 |
+| billing | 8084 | 计费管理 |
+| monitor | 8085 | 数据质量 |
+| tenant | 8086 | 多租户 |
+| user | 8087 | 用户管理 |
+| role | 8088 | 角色管理 |
+| datatype | 8089 | 数据类型 |
+| log | 8090 | 操作日志 |
+| config | 8091 | 配置中心 |
+| graylog | 8092 | 灰度发布 |
+
+### 页面路由
+
+| 路径 | 页面 | 模块 |
+|------|------|------|
+| /vendor | 厂商管理 | vendor |
+| /caller | 调用方管理 | caller |
+| /call | 调用记录 | call |
+| /billing | 计费管理 | billing |
+| /monitor | 监控告警 | monitor |
+| /tenant | 租户管理 | tenant |
+| /user | 用户管理 | user |
+| /role | 角色管理 | role |
+| /datatype | 数据类型 | datatype |
+| /audit | 操作日志 | log |
+| /config | 配置中心 | config |
+| /graylog | 灰度发布 | graylog |
 
 ---
 
