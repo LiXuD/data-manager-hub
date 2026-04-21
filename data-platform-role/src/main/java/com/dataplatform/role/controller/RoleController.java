@@ -1,48 +1,66 @@
 package com.dataplatform.role.controller;
 
-import com.dataplatform.common.pojo.ApiResponse;
-import com.dataplatform.common.pojo.PageResponse;
+import com.dataplatform.common.result.PageResult;
+import com.dataplatform.common.result.Result;
 import com.dataplatform.role.entity.Role;
 import com.dataplatform.role.service.RoleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
-@RequestMapping("/api/v1/role")
+@RequestMapping("/role")
 public class RoleController {
     @Autowired
     private RoleService roleService;
 
     @GetMapping("/list")
-    public ApiResponse<PageResponse<Role>> list(
-            @RequestParam(required = false) String roleName,
+    public PageResult<Role> list(
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
-        PageResponse<Role> result = roleService.list(roleName, status, page, pageSize);
-        return ApiResponse.success(result);
+        return roleService.list(keyword, status, page, pageSize);
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<Role> get(@PathVariable Long id) {
-        return ApiResponse.success(roleService.getById(id));
+    public Result<Role> get(@PathVariable Long id) {
+        Role role = roleService.getById(id);
+        if (role == null) {
+            return Result.fail(404, "角色不存在");
+        }
+        return Result.success(role);
     }
 
     @PostMapping
-    public ApiResponse<Void> create(@RequestBody Role role) {
-        roleService.create(role);
-        return ApiResponse.success(null);
+    public Result<Role> create(@RequestBody Role role) {
+        role.setId(null);
+        role.setStatus("active");
+        roleService.save(role);
+        return Result.success(role);
     }
 
-    @PutMapping
-    public ApiResponse<Void> update(@RequestBody Role role) {
-        roleService.update(role);
-        return ApiResponse.success(null);
+    @PutMapping("/{id}")
+    public Result<Role> update(@PathVariable Long id, @RequestBody Role role) {
+        role.setId(id);
+        roleService.updateById(role);
+        return Result.success(roleService.getById(id));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
-        roleService.delete(id);
-        return ApiResponse.success(null);
+    public Result<Void> delete(@PathVariable Long id) {
+        roleService.removeById(id);
+        return Result.success(null);
+    }
+
+    @PatchMapping("/{id}/status")
+    public Result<Void> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String status = body.get("status");
+        Role role = new Role();
+        role.setId(id);
+        role.setStatus(status);
+        roleService.updateById(role);
+        return Result.success(null);
     }
 }

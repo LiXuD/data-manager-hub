@@ -1,48 +1,66 @@
 package com.dataplatform.user.controller;
 
-import com.dataplatform.common.pojo.ApiResponse;
-import com.dataplatform.common.pojo.PageResponse;
+import com.dataplatform.common.result.PageResult;
+import com.dataplatform.common.result.Result;
 import com.dataplatform.user.entity.User;
 import com.dataplatform.user.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
-@RequestMapping("/api/v1/user")
+@RequestMapping("/user")
 public class UserController {
     @Autowired
     private UserService userService;
 
     @GetMapping("/list")
-    public ApiResponse<PageResponse<User>> list(
+    public PageResult<User> list(
             @RequestParam(required = false) String username,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
-        PageResponse<User> result = userService.list(username, status, page, pageSize);
-        return ApiResponse.success(result);
+        return userService.list(username, status, page, pageSize);
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<User> get(@PathVariable Long id) {
-        return ApiResponse.success(userService.getById(id));
+    public Result<User> get(@PathVariable Long id) {
+        User user = userService.getById(id);
+        if (user == null) {
+            return Result.fail(404, "用户不存在");
+        }
+        return Result.success(user);
     }
 
     @PostMapping
-    public ApiResponse<Void> create(@RequestBody User user) {
-        userService.create(user);
-        return ApiResponse.success(null);
+    public Result<User> create(@RequestBody User user) {
+        user.setId(null);
+        user.setStatus("active");
+        userService.save(user);
+        return Result.success(user);
     }
 
-    @PutMapping
-    public ApiResponse<Void> update(@RequestBody User user) {
-        userService.update(user);
-        return ApiResponse.success(null);
+    @PutMapping("/{id}")
+    public Result<User> update(@PathVariable Long id, @RequestBody User user) {
+        user.setId(id);
+        userService.updateById(user);
+        return Result.success(userService.getById(id));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
-        userService.delete(id);
-        return ApiResponse.success(null);
+    public Result<Void> delete(@PathVariable Long id) {
+        userService.removeById(id);
+        return Result.success(null);
+    }
+
+    @PatchMapping("/{id}/status")
+    public Result<Void> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String status = body.get("status");
+        User user = new User();
+        user.setId(id);
+        user.setStatus(status);
+        userService.updateById(user);
+        return Result.success(null);
     }
 }

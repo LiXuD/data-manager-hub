@@ -40,8 +40,8 @@ export const createCaller = (data: Caller) => {
   return request.post('/api/v1/caller', data)
 }
 
-export const updateCaller = (data: Caller) => {
-  return request.put('/api/v1/caller', data)
+export const updateCaller = (id: number, data: Caller) => {
+  return request.put(`/api/v1/caller/${id}`, data)
 }
 
 export const deleteCaller = (id: number) => {

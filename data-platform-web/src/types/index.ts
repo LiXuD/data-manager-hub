@@ -14,17 +14,21 @@ export interface Tenant {
 
 // 厂商相关类型
 export interface Vendor {
-  id: string
-  name: string
-  code: string
-  contact: string
-  email: string
-  url: string
-  authType: 'none' | 'basic' | 'oauth' | 'api_key' | 'hmac'
-  status: 'enabled' | 'disabled'
-  version: string
-  createdAt: string
-  updatedAt: string
+  id: string | number
+  vendorName: string
+  vendorCode: string
+  vendorType: string
+  contactPerson: string
+  contactPhone: string
+  contactEmail: string
+  url?: string
+  authType?: string
+  status: 'active' | 'inactive' | 'enabled' | 'disabled'
+  version?: string
+  contractStart?: string
+  contractEnd?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 // 调用方相关类型

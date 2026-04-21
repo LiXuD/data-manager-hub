@@ -15,8 +15,8 @@
         </el-input>
         
         <el-select v-model="searchForm.status" placeholder="状态" clearable>
-          <el-option label="启用" value="enabled" />
-          <el-option label="禁用" value="disabled" />
+          <el-option label="启用" value="active" />
+          <el-option label="禁用" value="inactive" />
         </el-select>
         
         <div class="search-btn-group">
@@ -41,31 +41,24 @@
       </div>
 
       <!-- 表格 -->
-      <el-table 
-        :data="tableData" 
+      <el-table
+        :data="tableData"
         v-loading="loading"
         stripe
         style="width: 100%"
       >
-        <el-table-column prop="code" label="厂商编码" width="120" />
-        <el-table-column prop="name" label="厂商名称" min-width="150" />
-        <el-table-column prop="contact" label="联系人" width="100" />
-        <el-table-column prop="email" label="邮箱" min-width="180" />
-        <el-table-column prop="url" label="API地址" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="authType" label="认证方式" width="100">
-          <template #default="{ row }">
-            <el-tag :type="getAuthTypeTag(row.authType)">
-              {{ getAuthTypeLabel(row.authType) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="version" label="版本" width="80" />
+        <el-table-column prop="vendorCode" label="厂商编码" width="120" />
+        <el-table-column prop="vendorName" label="厂商名称" min-width="150" />
+        <el-table-column prop="vendorType" label="厂商类型" width="100" />
+        <el-table-column prop="contactPerson" label="联系人" width="100" />
+        <el-table-column prop="contactPhone" label="联系电话" width="130" />
+        <el-table-column prop="contactEmail" label="邮箱" min-width="180" />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
             <el-switch
               v-model="row.status"
-              active-value="enabled"
-              inactive-value="disabled"
+              active-value="active"
+              inactive-value="inactive"
               @change="handleStatusChange(row)"
             />
           </template>
@@ -112,37 +105,33 @@
       <div class="detail-container">
         <div class="detail-item">
           <span class="label">厂商编码</span>
-          <span class="value">{{ currentRow?.code }}</span>
+          <span class="value">{{ currentRow?.vendorCode }}</span>
         </div>
         <div class="detail-item">
           <span class="label">厂商名称</span>
-          <span class="value">{{ currentRow?.name }}</span>
+          <span class="value">{{ currentRow?.vendorName }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">厂商类型</span>
+          <span class="value">{{ currentRow?.vendorType }}</span>
         </div>
         <div class="detail-item">
           <span class="label">联系人</span>
-          <span class="value">{{ currentRow?.contact }}</span>
+          <span class="value">{{ currentRow?.contactPerson }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">联系电话</span>
+          <span class="value">{{ currentRow?.contactPhone }}</span>
         </div>
         <div class="detail-item">
           <span class="label">邮箱</span>
-          <span class="value">{{ currentRow?.email }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">API地址</span>
-          <span class="value">{{ currentRow?.url }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">认证方式</span>
-          <span class="value">{{ getAuthTypeLabel(currentRow?.authType) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">接口版本</span>
-          <span class="value">{{ currentRow?.version }}</span>
+          <span class="value">{{ currentRow?.contactEmail }}</span>
         </div>
         <div class="detail-item">
           <span class="label">状态</span>
           <span class="value">
-            <el-tag :type="currentRow?.status === 'enabled' ? 'success' : 'danger'">
-              {{ currentRow?.status === 'enabled' ? '启用' : '禁用' }}
+            <el-tag :type="currentRow?.status === 'active' ? 'success' : 'danger'">
+              {{ currentRow?.status === 'active' ? '启用' : '禁用' }}
             </el-tag>
           </span>
         </div>
@@ -295,9 +284,9 @@ const handleDelete = async (row: Vendor) => {
 const handleStatusChange = async (row: Vendor) => {
   try {
     await updateVendorStatus(row.id, row.status)
-    ElMessage.success(row.status === 'enabled' ? '已启用' : '已禁用')
+    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
   } catch (error) {
-    row.status = row.status === 'enabled' ? 'disabled' : 'enabled'
+    row.status = row.status === 'active' ? 'inactive' : 'active'
   }
 }
 

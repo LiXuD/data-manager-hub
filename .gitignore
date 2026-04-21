@@ -93,3 +93,7 @@ dependency-reduced-pom.xml
 *.temp
 .cache/
 .parcel-cache/
+
+# -------- Claude --------
+CLAUDE.md
+2026-04-17-data-management-platform-design.md

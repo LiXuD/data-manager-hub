@@ -2,63 +2,45 @@ package com.dataplatform.graylog.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.dataplatform.common.pojo.PageResponse;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.dataplatform.common.result.PageResult;
 import com.dataplatform.graylog.entity.GrayRule;
 import com.dataplatform.graylog.mapper.GrayRuleMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
 @Service
-public class GraylogService {
-    @Autowired
-    private GrayRuleMapper ruleMapper;
+public class GraylogService extends ServiceImpl<GrayRuleMapper, GrayRule> {
 
-    public PageResponse<GrayRule> list(String serviceName, String status, int page, int pageSize) {
+    public PageResult<GrayRule> list(String keyword, String status, int page, int pageSize) {
         LambdaQueryWrapper<GrayRule> wrapper = new LambdaQueryWrapper<>();
-        if (StringUtils.hasText(serviceName)) {
-            wrapper.like(GrayRule::getServiceName, serviceName);
+        if (StringUtils.hasText(keyword)) {
+            wrapper.like(GrayRule::getRuleName, keyword)
+                   .or()
+                   .like(GrayRule::getServiceName, keyword);
         }
         if (StringUtils.hasText(status)) {
             wrapper.eq(GrayRule::getStatus, status);
         }
         wrapper.orderByDesc(GrayRule::getCreatedAt);
-        
-        Page<GrayRule> result = ruleMapper.selectPage(new Page<>(page, pageSize), wrapper);
-        PageResponse<GrayRule> response = new PageResponse<>();
+
+        Page<GrayRule> result = this.page(new Page<>(page, pageSize), wrapper);
+
+        PageResult<GrayRule> response = new PageResult<>();
+        response.setCode(0);
+        response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());
+        response.setPage(page);
+        response.setPageSize(pageSize);
         return response;
-    }
-
-    public GrayRule getById(Long id) {
-        return ruleMapper.selectById(id);
-    }
-
-    public GrayRule create(GrayRule rule) {
-        rule.setCreatedAt(LocalDateTime.now());
-        rule.setUpdatedAt(LocalDateTime.now());
-        ruleMapper.insert(rule);
-        return rule;
-    }
-
-    public GrayRule update(GrayRule rule) {
-        rule.setUpdatedAt(LocalDateTime.now());
-        ruleMapper.updateById(rule);
-        return rule;
-    }
-
-    public void delete(Long id) {
-        ruleMapper.deleteById(id);
     }
 
     public GrayRule getActiveRule(String serviceName) {
         LambdaQueryWrapper<GrayRule> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(GrayRule::getServiceName, serviceName);
         wrapper.eq(GrayRule::getStatus, "active");
-        return ruleMapper.selectOne(wrapper);
+        return getOne(wrapper);
     }
 }
