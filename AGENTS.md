@@ -15,47 +15,50 @@
 | 阶段1: 基础架构 | ✅ 100% | 2026-04-19 |
 | 阶段2: 核心业务 | ✅ 100% | 2026-04-19 |
 | 阶段3: 监控告警 | ✅ 100% | 2026-04-19 |
-| 阶段4: 前端完善 | 🔄 进行中 | 2026-04-20 |
+| 阶段4: 前端完善 | ✅ 100% | 2026-04-20 |
+| 阶段5: 配置与日志 | ✅ 100% | 2026-04-21 |
 
 ---
 
-## 今日开发 (2026-04-20)
+## 今日开发 (2026-04-21)
 
 ### 完成项
 
-1. **数据库改为本地 PostgreSQL**
-   - 端口: 5432
-   - 数据库: dataplatform
-   - 用户: postgres / 密码: 123456
-   - 新增 updated_by 字段到所有表
+1. **新增配置中心模块** (data-platform-config, 端口8091)
+   - 厂商动态配置管理
+   - 前端页面: /config
 
-2. **前端页面布局重构**
-   - App.vue: 完整管理后台布局（侧边栏+顶部导航）
-   - router/index.ts: 添加登录路由和路由守卫
-   - views/layout/: 布局组件
-   - views/login/: 登录页面
+2. **新增灰度发布模块** (data-platform-graylog, 端口8092)
+   - 灰度发布规则管理
+   - 前端页面: /graylog
+   - 数据库表: gray_rule
 
-3. **新增页面**
-   - /user: 用户管理（完整 CRUD）
-   - /role: 角色管理（占位）
-   - /datatype: 数据类型（占位）
-   - /call: 调用记录（占位）
+3. **新增操作日志模块** (data-platform-log, 端口8090)
+   - 前端页面: /audit
+   - 数据库表: operation_log, billing_rule, alert_record, vendor_config_extended
 
-4. **新增 User 后端模块**
-   - 端口: 8087
-   - 路径: data-platform-user/
-   - 包含: Entity/Mapper/Service/Controller
+4. **完善计费管理页面**
+   - 账单记录 + 计费规则 + 报表分析
 
-5. **Gateway 路由配置**
-   - 新增 /api/v1/user/** → localhost:8087
+5. **完善监控告警页面**
+   - 服务健康状态 + 告警规则 + 监控图表
+
+6. **新增/完善后端模块**
+   - role (8088): 角色管理
+   - datatype (8089): 数据类型
 
 ### 已完成
 
+- [x] 后端模块：vendor(8081), caller(8082), call(8083), billing(8084), monitor(8085)
+- [x] 后端模块：tenant(8086), user(8087), role(8088), datatype(8089), log(8090)
+- [x] 后端模块：config(8091), graylog(8092)
 - [x] 前端页面：vendor, tenant, user, role, datatype, call
 - [x] 前端页面：billing (账单+规则+报表)
 - [x] 前端页面：monitor (健康状态+告警规则+图表)
 - [x] 前端页面：caller (调用方+API Key管理)
-- [x] 后端模块：tenant(8086), user(8087), role(8088), datatype(8089)
+- [x] 前端页面：audit (操作日志)
+- [x] 前端页面：config (配置中心)
+- [x] 前端页面：graylog (灰度发布)
 
 ### 后端模块端口
 
@@ -99,8 +102,9 @@
 ```
 data-platform/
 ├── sql/
-│   └── create_database.sql         # DDL脚本 (15表)
+│   └── init.sql                   # DDL脚本
 ├── pom.xml                         # 父POM
+├── docker-compose.yml             # 基础设施 (Redis)
 ├── data-platform-common/           # 公共模块
 ├── data-platform-gateway/          # 网关 (8888)
 ├── data-platform-vendor/           # 厂商管理 (8081)
@@ -110,71 +114,70 @@ data-platform/
 ├── data-platform-monitor/          # 监控告警 (8085)
 ├── data-platform-tenant/           # 租户管理 (8086)
 ├── data-platform-user/             # 用户管理 (8087)
+├── data-platform-role/             # 角色管理 (8088)
+├── data-platform-datatype/         # 数据类型 (8089)
+├── data-platform-log/              # 操作日志 (8090)
+├── data-platform-config/           # 配置中心 (8091)
+├── data-platform-graylog/          # 灰度发布 (8092)
 └── data-platform-web/              # 前端 (3000)
 ```
 
 ---
 
-## 服务端口
+## 服务状态
 
 | 服务 | 端口 | 状态 |
 |------|------|------|
-| Gateway | 8888 | ✅ |
-| Vendor | 8081 | ✅ |
-| Caller | 8082 | ✅ |
-| Call | 8083 | ✅ |
-| Billing | 8084 | ✅ |
-| Monitor | 8085 | ✅ |
-| Tenant | 8086 | ✅ |
-| User | 8087 | 🔄 待启动 |
-| 前端 | 3000 | ✅ |
+| Gateway | 8888 | ✅ 运行中 |
+| Vendor | 8081 | ✅ 运行中 |
+| Caller | 8082 | ✅ 运行中 |
+| Call | 8083 | ✅ 运行中 |
+| Billing | 8084 | ✅ 运行中 |
+| Monitor | 8085 | ✅ 运行中 |
+| Tenant | 8086 | ✅ 运行中 |
+| User | 8087 | ✅ 运行中 |
+| Role | 8088 | ✅ 运行中 |
+| Datatype | 8089 | ✅ 运行中 |
+| Log | 8090 | ✅ 运行中 |
+| Config | 8091 | ✅ 运行中 |
+| Graylog | 8092 | ✅ 运行中 |
+| PostgreSQL | 5432 | ✅ 本地 |
+| Redis | 6379 | ✅ 本地 |
+| 前端 | 3000 | ✅ 运行中 |
 
 ---
 
-## 数据库表 (15张)
+## 数据库表
 
-1. `tenant_info` - 租户信息
-2. `vendor_info` - 厂商信息
-3. `data_type` - 数据类型
-4. `vendor_config` - 厂商配置
-5. `caller_info` - 调用方信息
-6. `api_key` - API Key
-7. `call_record` - 调用记录 (按月分区)
-8. `billing_daily` - 日账单
-9. `user_info` - 用户
-10. `role_info` - 角色
-11. `user_role` - 用户角色关联
-12. `alert_rule` - 告警规则
-13. `alert_record` - 告警记录
-14. `circuit_breaker` - 熔断记录
-15. `operation_log` - 操作日志
-
----
-
-## 前端路由
-
-| 路径 | 页面 | 状态 |
+| 序号 | 表名 | 说明 |
 |------|------|------|
-| /login | 登录页 | ✅ |
-| /dashboard | 数据概览 | ✅ |
-| /tenant | 租户管理 | ✅ |
-| /user | 用户管理 | ✅ |
-| /role | 角色管理 | 占位 |
-| /vendor | 厂商管理 | ✅ |
-| /caller | 调用方管理 | ✅ |
-| /datatype | 数据类型 | 占位 |
-| /call | 调用记录 | 占位 |
-| /billing | 计费管理 | ✅ |
-| /monitor | 监控告警 | ✅ |
+| 1 | tenant_info | 租户信息 |
+| 2 | vendor_info | 厂商信息 |
+| 3 | data_type | 数据类型 |
+| 4 | vendor_config | 厂商配置 |
+| 5 | caller_info | 调用方信息 |
+| 6 | api_key | API Key |
+| 7 | call_record | 调用记录 (按月分区) |
+| 8 | billing_daily | 日账单 |
+| 9 | billing_rule | 计费规则 |
+| 10 | user_info | 用户 |
+| 11 | role_info | 角色 |
+| 12 | user_role | 用户角色关联 |
+| 13 | alert_rule | 告警规则 |
+| 14 | alert_record | 告警记录 |
+| 15 | circuit_breaker | 熔断记录 |
+| 16 | operation_log | 操作日志 |
+| 17 | gray_rule | 灰度规则 |
 
 ---
 
 ## 技术栈
 
-- **后端**: Java 21 + Spring Boot 3.4 + MyBatis-Plus 3.5
+- **后端**: Java 21 + Spring Boot 3.4 + Spring Cloud 2023.0.x + MyBatis-Plus 3.5
 - **数据库**: PostgreSQL 16 (localhost:5432)
-- **缓存**: Redis
-- **前端**: Vue3 + TypeScript + Element Plus + Vite
+- **缓存**: Redis 7 (Redisson)
+- **服务发现**: Nacos (本地配置模式)
+- **前端**: Vue3 + TypeScript + Element Plus + Vite + Pinia
 
 ---
 
@@ -190,7 +193,12 @@ data-platform/
 | 2026-04-20 | feat: 添加用户管理等页面 | 新增页面 |
 | 2026-04-20 | fix: 修复v-model绑定问题 | TypeScript修复 |
 | 2026-04-20 | feat: 新增user模块 | 8087端口 |
+| 2026-04-20 | feat: 完善role和datatype后端模块 | 后端模块完善 |
+| 2026-04-20 | fix: 修复datatype模块类名 | Bug修复 |
+| 2026-04-20 | feat: 完善计费管理和监控页面 | 前端页面完善 |
+| 2026-04-20 | feat: 新增操作日志模块 | log模块+数据库表 |
+| 2026-04-21 | feat: 新增配置中心和灰度发布模块 | config+graylog模块 |
 
 ---
 
-*最后更新: 2026-04-20 16:44*
+*最后更新: 2026-04-21 08:46*
