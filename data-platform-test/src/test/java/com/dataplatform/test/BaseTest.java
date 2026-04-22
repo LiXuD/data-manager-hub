@@ -4,6 +4,8 @@ import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import org.junit.jupiter.api.BeforeEach;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -15,6 +17,8 @@ import static org.hamcrest.Matchers.*;
  * API 测试基类
  */
 public class BaseTest {
+
+    private static final Logger log = LoggerFactory.getLogger(BaseTest.class);
 
     protected static final String BASE_URL = "http://localhost:8080";
     protected static final String DB_URL = "jdbc:postgresql://localhost:5432/dataplatform";
@@ -52,6 +56,10 @@ public class BaseTest {
 
         if (response.getStatusCode() == 200) {
             authToken = response.jsonPath().getString("data.token");
+            log.info("登录成功, 获取 token: {}", authToken != null ? "***" + authToken.substring(Math.max(0, authToken.length() - 4)) : "null");
+        } else {
+            log.error("登录失败, 状态码: {}, 响应: {}", response.getStatusCode(), response.getBody().asString());
+            throw new RuntimeException("登录失败, 状态码: " + response.getStatusCode());
         }
     }
 
@@ -59,6 +67,10 @@ public class BaseTest {
      * 获取带认证的请求规范
      */
     protected RequestSpecification getAuthRequest() {
+        if (authToken == null) {
+            log.error("authToken 为 null, 无法创建认证请求");
+            throw new IllegalStateException("authToken 为 null, 请先调用 login() 方法");
+        }
         return given()
             .contentType("application/json")
             .header("Authorization", "Bearer " + authToken);
