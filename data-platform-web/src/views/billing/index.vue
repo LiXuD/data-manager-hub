@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { request } from '@/utils/request'
+import { getBillingList, getBillingRuleList, createBillingRule, updateBillingRule, deleteBillingRule } from '@/api/billing'
 import { Money, Timer, Warning, TrendCharts } from '@element-plus/icons-vue'
 
 interface BillingRecord {
@@ -70,30 +70,15 @@ const statusOptions = [
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/v1/billing/list', {
-      params: { page: pagination.value.currentPage, pageSize: pagination.value.pageSize }
+    const res = await getBillingList({
+      page: pagination.value.currentPage,
+      pageSize: pagination.value.pageSize
     })
-    tableData.value = res.data?.records || res.data || []
-    total.value = res.data?.total || res.total || 0
+    tableData.value = res.data?.data?.records || res.data?.data || res.data || []
+    total.value = res.data?.total || 0
   } catch (e: any) {
     console.error('获取账单列表失败:', e)
-    // 模拟数据
-    tableData.value = [
-      { id: 1, tenantName: '风控部', vendorName: '企查查', dataType: '工商信息', callCount: 15000, unitPrice: 0.3, totalCost: 4500, billingDate: '2026-04-20', status: 'pending' },
-      { id: 2, tenantName: '信贷部', vendorName: '天眼查', dataType: '企业征信', callCount: 8000, unitPrice: 2.5, totalCost: 20000, billingDate: '2026-04-20', status: 'settled' },
-      { id: 3, tenantName: '核心系统', vendorName: '企查查', dataType: '工商信息', callCount: 50000, unitPrice: 0.25, totalCost: 12500, billingDate: '2026-04-19', status: 'settled' },
-      { id: 4, tenantName: '网贷系统', vendorName: '裁判文书网', dataType: '诉讼信息', callCount: 3000, unitPrice: 0.8, totalCost: 2400, billingDate: '2026-04-19', status: 'pending' },
-      { id: 5, tenantName: '风控部', vendorName: '启信宝', dataType: '新闻舆情', callCount: 12000, unitPrice: 0.5, totalCost: 6000, billingDate: '2026-04-18', status: 'overdue' }
-    ]
-    total.value = 156
-    
-    // 计算统计数据
-    statsData.value = {
-      totalCost: 45800,
-      totalCalls: 88000,
-      avgCost: 0.52,
-      overdueCount: 1
-    }
+    ElMessage.error('获取账单列表失败')
   } finally {
     loading.value = false
   }

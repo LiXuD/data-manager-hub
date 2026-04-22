@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { request } from '@/utils/request'
+import { getConfigList, createConfig, updateConfig, deleteConfig } from '@/api/config'
 import { Plus, Edit, Delete, Key } from '@element-plus/icons-vue'
 
 interface VendorConfig {
@@ -61,33 +61,17 @@ const configTypeOptions = [
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/v1/config/list', {
-      params: {
-        page: pagination.value.currentPage,
-        pageSize: pagination.value.pageSize,
-        vendorId: searchForm.value.vendorId,
-        configKey: searchForm.value.configKey
-      }
+    const res = await getConfigList({
+      page: pagination.value.currentPage,
+      pageSize: pagination.value.pageSize,
+      vendorId: searchForm.value.vendorId || undefined,
+      keyword: searchForm.value.configKey || undefined
     })
-    tableData.value = res.data?.records || res.data || []
-    total.value = res.data?.total || res.total || 0
+    tableData.value = res.data?.data?.records || res.data?.data || res.data || []
+    total.value = res.data?.total || 0
   } catch (e: any) {
     console.error('获取配置列表失败:', e)
-    // 模拟数据
-    tableData.value = [
-      { id: 1, vendorId: 1, vendorName: '企查查', configKey: 'api_timeout', configValue: '5000', configType: 'number', description: 'API超时时间(毫秒)', isEncrypted: false, isActive: true, createdAt: '2026-04-15 10:00:00', updatedAt: '2026-04-20 15:30:00' },
-      { id: 2, vendorId: 1, vendorName: '企查查', configKey: 'api_key', configValue: 'sk-xxxxx', configType: 'password', description: 'API密钥', isEncrypted: true, isActive: true, createdAt: '2026-04-15 10:00:00', updatedAt: '2026-04-20 15:30:00' },
-      { id: 3, vendorId: 2, vendorName: '天眼查', configKey: 'max_retries', configValue: '3', configType: 'number', description: '最大重试次数', isEncrypted: false, isActive: true, createdAt: '2026-04-16 11:00:00', updatedAt: '2026-04-18 09:00:00' },
-      { id: 4, vendorId: 2, vendorName: '天眼查', configKey: 'retry_interval', configValue: '1000', configType: 'number', description: '重试间隔(毫秒)', isEncrypted: false, isActive: true, createdAt: '2026-04-16 11:00:00', updatedAt: '2026-04-18 09:00:00' },
-      { id: 5, vendorId: 3, vendorName: '裁判文书网', configKey: 'cache_ttl', configValue: '3600', configType: 'number', description: '缓存有效期(秒)', isEncrypted: false, isActive: false, createdAt: '2026-04-17 14:00:00', updatedAt: '2026-04-19 16:00:00' }
-    ]
-    total.value = 28
-    
-    vendorList.value = [
-      { id: 1, vendorName: '企查查' },
-      { id: 2, vendorName: '天眼查' },
-      { id: 3, vendorName: '裁判文书网' }
-    ]
+    ElMessage.error('获取配置列表失败')
   } finally {
     loading.value = false
   }
@@ -123,9 +107,12 @@ const handleEdit = (row: VendorConfig) => {
 const handleDelete = async (row: VendorConfig) => {
   try {
     await ElMessageBox.confirm(`确定要删除配置"${row.configKey}"吗？`, '提示', { type: 'warning' })
+    await deleteConfig(row.id)
     ElMessage.success('删除成功')
     fetchList()
-  } catch (e) {}
+  } catch (e: any) {
+    ElMessage.error('删除失败')
+  }
 }
 
 const handleSubmit = async () => {
@@ -133,9 +120,19 @@ const handleSubmit = async () => {
     ElMessage.warning('请填写完整信息')
     return
   }
-  ElMessage.success('保存成功')
-  dialogVisible.value = false
-  fetchList()
+  try {
+    if (formData.value.id) {
+      await updateConfig(formData.value.id, formData.value)
+      ElMessage.success('更新成功')
+    } else {
+      await createConfig(formData.value)
+      ElMessage.success('创建成功')
+    }
+    dialogVisible.value = false
+    fetchList()
+  } catch (e: any) {
+    ElMessage.error('保存失败')
+  }
 }
 
 const handleToggleStatus = (row: VendorConfig) => {

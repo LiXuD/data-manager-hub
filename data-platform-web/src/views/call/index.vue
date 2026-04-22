@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { request } from '@/utils/request'
+import { getCallRecordList } from '@/api/call'
 import { Search, Refresh, Download, Filter } from '@element-plus/icons-vue'
 
 interface CallRecord {
@@ -49,26 +49,15 @@ const dataTypeOptions = [
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/v1/call-record/list', {
-      params: {
-        page: pagination.value.currentPage,
-        pageSize: pagination.value.pageSize,
-        ...searchForm.value
-      }
+    const res = await getCallRecordList({
+      page: pagination.value.currentPage,
+      pageSize: pagination.value.pageSize
     })
-    tableData.value = res.data?.records || res.data || []
-    total.value = res.data?.total || res.total || 0
+    tableData.value = res.data?.data?.records || res.data?.data || res.data || []
+    total.value = res.data?.total || 0
   } catch (e: any) {
     console.error('获取调用记录失败:', e)
-    // 模拟数据
-    tableData.value = [
-      { id: 1, callerName: '风控系统', vendorName: '企查查', dataType: '工商信息', apiName: '企业基本信息', requestTime: '2026-04-20 10:00:00', responseTime: 150, status: 'success', cost: 0.3, traceId: 'trace-001' },
-      { id: 2, callerName: '信贷系统', vendorName: '天眼查', dataType: '企业征信', apiName: '征信报告', requestTime: '2026-04-20 10:01:00', responseTime: 320, status: 'success', cost: 2.5, traceId: 'trace-002' },
-      { id: 3, callerName: '核心系统', vendorName: '企查查', dataType: '工商信息', apiName: '企业工商变更', requestTime: '2026-04-20 10:02:00', responseTime: 89, status: 'success', cost: 0.5, traceId: 'trace-003' },
-      { id: 4, callerName: '网贷系统', vendorName: '裁判文书网', dataType: '诉讼信息', apiName: '诉讼记录', requestTime: '2026-04-20 10:03:00', responseTime: 5000, status: 'timeout', cost: 0, traceId: 'trace-004' },
-      { id: 5, callerName: '风控系统', vendorName: '启信宝', dataType: '新闻舆情', apiName: '新闻列表', requestTime: '2026-04-20 10:04:00', responseTime: 200, status: 'success', cost: 0.8, traceId: 'trace-005' }
-    ]
-    total.value = 156
+    ElMessage.error('获取调用记录失败')
   } finally {
     loading.value = false
   }

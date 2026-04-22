@@ -263,3 +263,54 @@ export interface GraylogConfig {
   createdAt: string
   updatedAt: string
 }
+
+// 数据血缘
+export interface DataLineage {
+  id: number
+  sourceType: string
+  sourceId: number
+  sourceName: string
+  targetType: string
+  targetId: number
+  targetName: string
+  relationType: string
+  transformRule?: string
+  createdAt: string
+}
+
+// 数据质量
+export interface QualityRule {
+  id: number
+  ruleName: string
+  ruleType: string
+  dataType: string
+  checkExpression: string
+  threshold?: string
+  severity: number
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface QualityScore {
+  id: number
+  dataType: string
+  dataId: number
+  score: number
+  passCount: number
+  failCount: number
+  issueSummary?: string
+  checkedAt: string
+}
+
+// 字段加密
+export interface EncryptedField {
+  id: number
+  tableName: string
+  fieldName: string
+  fieldType: string
+  algorithm: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
