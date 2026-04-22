@@ -18,6 +18,11 @@ public class BillingRule {
     private Integer tierMin;
     private Integer tierMax;
     private BigDecimal discount;
+
+    // SLA相关字段
+    private Integer slaThreshold;          // SLA阈值(毫秒)
+    private BigDecimal compensationRate;   // 补偿系数
+
     private String status;
     private Long createdBy;
     private LocalDateTime createdAt;
@@ -40,6 +45,10 @@ public class BillingRule {
     public void setTierMax(Integer tierMax) { this.tierMax = tierMax; }
     public BigDecimal getDiscount() { return discount; }
     public void setDiscount(BigDecimal discount) { this.discount = discount; }
+    public Integer getSlaThreshold() { return slaThreshold; }
+    public void setSlaThreshold(Integer slaThreshold) { this.slaThreshold = slaThreshold; }
+    public BigDecimal getCompensationRate() { return compensationRate; }
+    public void setCompensationRate(BigDecimal compensationRate) { this.compensationRate = compensationRate; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Long getCreatedBy() { return createdBy; }

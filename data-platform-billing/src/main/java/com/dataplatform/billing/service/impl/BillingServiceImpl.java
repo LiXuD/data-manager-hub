@@ -35,32 +35,85 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
 
     /**
      * 计算费用 - 支持阶梯计费
-     *
-     * 计费公式:
-     * - 标准计费: 费用 = 调用次数 × 单价
-     * - 阶梯计费: 根据调用量应用不同折扣
-     *   - 0-10万次: 单价×1.0
-     *   - 10-50万次: 单价×0.9
-     *   - 50万次以上: 单价×0.8
      */
     @Override
     public BigDecimal calculateCost(String dataType, int callCount) {
+        return calculateCost(dataType, callCount, 0);
+    }
+
+    /**
+     * 计算费用(带响应时间) - 支持SLA补偿
+     *
+     * SLA补偿公式:
+     * - 响应时间超过SLA阈值后，每超100ms，费用减免compensationRate
+     * - 例如: SLA=2000ms, 响应时间=2300ms, 补偿率=0.1
+     * - 超时300ms，减免系数 = 1 - 0.1 × (300/100) = 1 - 0.3 = 0.7
+     * - 实际费用 = 原价 × 0.7
+     */
+    @Override
+    public BigDecimal calculateCost(String dataType, int callCount, long latency) {
         // 1. 获取该数据类型的计费规则
         BillingRule rule = getBillingRule(dataType);
         BigDecimal unitPrice = rule != null && rule.getUnitPrice() != null
             ? rule.getUnitPrice()
             : DEFAULT_UNIT_PRICES.getOrDefault(dataType, BigDecimal.ZERO);
 
-        // 2. 如果有阶梯折扣，应用折扣
-        BigDecimal discount = calculateTierDiscount(callCount, rule);
+        // 2. 阶梯折扣
+        BigDecimal tierDiscount = calculateTierDiscount(callCount, rule);
 
-        // 3. 计算总费用
-        BigDecimal totalCost = unitPrice
+        // 3. 计算基础费用
+        BigDecimal baseCost = unitPrice
             .multiply(BigDecimal.valueOf(callCount))
-            .multiply(discount)
+            .multiply(tierDiscount);
+
+        // 4. SLA补偿 (仅在有响应时间且超过SLA阈值时计算)
+        BigDecimal slaDiscount = BigDecimal.ONE;
+        if (latency > 0) {
+            slaDiscount = calculateSlaDiscount(latency, rule);
+        }
+
+        // 5. 计算最终费用
+        BigDecimal totalCost = baseCost
+            .multiply(slaDiscount)
             .setScale(2, RoundingMode.HALF_UP);
 
         return totalCost;
+    }
+
+    /**
+     * 计算SLA补偿折扣
+     * 补偿公式: 减免系数 = 1 - compensationRate × (超出时间 / 100ms)
+     * 最低折扣为0.1 (最多减免90%)
+     */
+    private BigDecimal calculateSlaDiscount(long latency, BillingRule rule) {
+        // 获取SLA阈值，默认为2000ms
+        int slaThreshold = rule != null && rule.getSlaThreshold() != null
+            ? rule.getSlaThreshold()
+            : 2000;
+
+        // 如果响应时间在SLA内，不补偿
+        if (latency <= slaThreshold) {
+            return BigDecimal.ONE;
+        }
+
+        // 获取补偿率，默认为0.1 (每超100ms减免10%)
+        BigDecimal compensationRate = rule != null && rule.getCompensationRate() != null
+            ? rule.getCompensationRate()
+            : new BigDecimal("0.1");
+
+        // 计算超出时间(毫秒)
+        long exceedTime = latency - slaThreshold;
+
+        // 计算减免系数
+        BigDecimal discount = BigDecimal.ONE
+            .subtract(compensationRate.multiply(BigDecimal.valueOf(exceedTime / 100.0)));
+
+        // 最低折扣0.1
+        if (discount.compareTo(new BigDecimal("0.1")) < 0) {
+            return new BigDecimal("0.1");
+        }
+
+        return discount;
     }
 
     /**

@@ -17,6 +17,7 @@ public class VendorConfig {
     private Boolean isEncrypted;
     private Boolean isActive;
     private String status;
+    private Long updatedBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -38,6 +39,8 @@ public class VendorConfig {
     public void setIsActive(Boolean isActive) { this.isActive = isActive; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public Long getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
