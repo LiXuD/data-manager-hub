@@ -16,8 +16,6 @@ import static org.hamcrest.Matchers.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class TenantApiTest extends BaseTest {
 
-    private static Long testTenantId;
-
     /**
      * 测试租户列表查询 - 正常场景
      */

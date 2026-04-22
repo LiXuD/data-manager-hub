@@ -26,8 +26,8 @@ public class BaseTest {
     protected static final String DB_PASSWORD = "123456";
 
     protected String authToken;
-    protected Long testTenantId;
-    protected Long testUserId;
+    protected static Long testTenantId;
+    protected static Long testUserId;
 
     static {
         RestAssured.baseURI = BASE_URL;
