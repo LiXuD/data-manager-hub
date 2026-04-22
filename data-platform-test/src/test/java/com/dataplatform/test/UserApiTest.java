@@ -316,4 +316,63 @@ public class UserApiTest extends BaseTest {
             verifySuccess(response);
         }
     }
+
+    /**
+     * 测试重置密码 - 弱密码
+     */
+    @Test
+    @Order(18)
+    public void testResetPassword_WeakPassword() {
+        Response response = getAuthRequest()
+            .body(Map.of("password", "123"))
+            .when()
+            .post("/user/1/reset-password");
+
+        response.then()
+            .statusCode(anyOf(is(400), is(422)));
+    }
+
+    /**
+     * 测试重置密码 - 不存在的用户
+     */
+    @Test
+    @Order(19)
+    public void testResetPassword_NotFound() {
+        Response response = getAuthRequest()
+            .body(Map.of("password", "NewPass123"))
+            .when()
+            .post("/user/999999999/reset-password");
+
+        response.then()
+            .statusCode(anyOf(is(404), is(400)));
+    }
+
+    /**
+     * 测试获取用户角色 - 不存在的用户
+     */
+    @Test
+    @Order(20)
+    public void testGetUserRoles_NotFound() {
+        Response response = getAuthRequest()
+            .when()
+            .get("/user/999999999/roles");
+
+        response.then()
+            .statusCode(anyOf(is(404), is(400)));
+    }
+
+    /**
+     * 测试分配用户角色 - 不存在的用户
+     */
+    @Test
+    @Order(21)
+    public void testAssignUserRoles_NotFound() {
+        Response response = getAuthRequest()
+            .body(Map.of("roleIds", new Integer[]{1}))
+            .when()
+            .post("/user/999999999/roles");
+
+        response.then()
+            .statusCode(anyOf(is(404), is(400)));
+    }
 }
