@@ -15,6 +15,7 @@ interface Role {
 const loading = ref(false)
 const tableData = ref<Role[]>([])
 const total = ref(0)
+const pagination = ref({ currentPage: 1, pageSize: 10 })
 const searchForm = ref({
   roleName: '',
   status: ''
@@ -160,7 +161,7 @@ onMounted(() => {
         <el-table-column prop="createdAt" label="创建时间" width="180" />
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handlePermission(row">配置权限</el-button>
+            <el-button type="primary" link @click="handlePermission(row)">配置权限</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
@@ -168,8 +169,8 @@ onMounted(() => {
       </el-table>
 
       <el-pagination
-        v-model:current-page="1"
-        v-model:page-size="10"
+        v-model:current-page="pagination.currentPage"
+        v-model:page-size="pagination.pageSize"
         :total="total"
         layout="total, prev, pager, next"
         style="margin-top: 20px; justify-content: flex-end"
