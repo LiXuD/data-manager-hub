@@ -12,6 +12,7 @@
     <description>银行数据管理平台</description>
 
     <modules>
+        <module>data-platform-test</module>
         <module>data-platform-gateway</module>
         <module>data-platform-common</module>
         <module>data-platform-config</module>
