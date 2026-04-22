@@ -27,6 +27,10 @@
         <module>data-platform-role</module>
         <module>data-platform-tenant</module>
         <module>data-platform-user</module>
+        <module>data-platform-trace</module>
+        <module>data-platform-quality</module>
+        <module>data-platform-security</module>
+        <module>data-platform-sdk</module>
     </modules>
 
     <properties>
