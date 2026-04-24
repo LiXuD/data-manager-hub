@@ -1,227 +1,97 @@
-<script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBillingList, getBillingRuleList, createBillingRule, updateBillingRule, deleteBillingRule } from '@/api/billing'
-import { Money, Timer, Warning, TrendCharts } from '@element-plus/icons-vue'
-
-interface BillingRecord {
-  id: number
-  tenantName: string
-  vendorName: string
-  dataType: string
-  callCount: number
-  unitPrice: number
-  totalCost: number
-  billingDate: string
-  status: string
-}
-
-interface BillingRule {
-  id: number
-  vendorName: string
-  dataType: string
-  unitPrice: number
-  tierMin: number
-  tierMax: number
-  discount: number
-  status: string
-}
-
-const loading = ref(false)
-const activeTab = ref('record')
-const tableData = ref<BillingRecord[]>([])
-const ruleData = ref<BillingRecord[]>([])
-const total = ref(0)
-const pagination = ref({ currentPage: 1, pageSize: 10 })
-
-const searchForm = ref({
-  tenantName: '',
-  vendorName: '',
-  dateRange: [] as string[]
-})
-
-const ruleForm = ref({
-  id: null as number | null,
-  vendorName: '',
-  dataType: '',
-  unitPrice: 0,
-  tierMin: 0,
-  tierMax: 100000,
-  discount: 1.0,
-  status: 'active'
-})
-
-const dialogVisible = ref(false)
-
-// 统计卡片数据
-const statsData = ref({
-  totalCost: 0,
-  totalCalls: 0,
-  avgCost: 0,
-  overdueCount: 0
-})
-
-const statusOptions = [
-  { label: '待结算', value: 'pending' },
-  { label: '已结算', value: 'settled' },
-  { label: '逾期', value: 'overdue' }
-]
-
-const fetchList = async () => {
-  loading.value = true
-  try {
-    const res = await getBillingList({
-      page: pagination.value.currentPage,
-      pageSize: pagination.value.pageSize
-    })
-    tableData.value = res.data?.data?.records || res.data?.data || res.data || []
-    total.value = res.data?.total || 0
-  } catch (e: any) {
-    console.error('获取账单列表失败:', e)
-    ElMessage.error('获取账单列表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-const fetchRules = async () => {
-  // 模拟计费规则数据
-  ruleData.value = [
-    { id: 1, tenantName: '', vendorName: '企查查', dataType: '工商信息', callCount: 0, unitPrice: 0.3, totalCost: 0, billingDate: '', status: 'active' },
-    { id: 2, tenantName: '', vendorName: '天眼查', dataType: '企业征信', callCount: 0, unitPrice: 2.5, totalCost: 0, billingDate: '', status: 'active' },
-    { id: 3, tenantName: '', vendorName: '企查查', dataType: '工商信息', callCount: 100000, unitPrice: 0.25, totalCost: 0, billingDate: '', status: 'tier' },
-    { id: 4, tenantName: '', vendorName: '天眼查', dataType: '企业征信', callCount: 50000, unitPrice: 2.0, totalCost: 0, billingDate: '', status: 'tier' }
-  ]
-}
-
-const handleSearch = () => {
-  pagination.value.currentPage = 1
-  fetchList()
-}
-
-const handleReset = () => {
-  searchForm.value = { tenantName: '', vendorName: '', dateRange: [] }
-  pagination.value.currentPage = 1
-  fetchList()
-}
-
-const handleAddRule = () => {
-  ruleForm.value = {
-    id: null, vendorName: '', dataType: '', unitPrice: 0,
-    tierMin: 0, tierMax: 100000, discount: 1.0, status: 'active'
-  }
-  dialogVisible.value = true
-}
-
-const handleEditRule = (row: any) => {
-  ruleForm.value = { ...row }
-  dialogVisible.value = true
-}
-
-const handleDeleteRule = async (row: any) => {
-  try {
-    await ElMessageBox.confirm(`确定要删除该计费规则吗？`, '提示', { type: 'warning' })
-    ElMessage.success('删除成功')
-    fetchRules()
-  } catch (e) {}
-}
-
-const handleSubmitRule = async () => {
-  if (!ruleForm.value.vendorName || !ruleForm.value.dataType) {
-    ElMessage.warning('请填写完整信息')
-    return
-  }
-  ElMessage.success('保存成功')
-  dialogVisible.value = false
-  fetchRules()
-}
-
-const handleExport = () => {
-  ElMessage.info('导出功能开发中...')
-}
-
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = { pending: 'warning', settled: 'success', overdue: 'danger' }
-  return map[status] || 'info'
-}
-
-const getStatusText = (status: string) => {
-  const map: Record<string, string> = { pending: '待结算', settled: '已结算', overdue: '逾期' }
-  return map[status] || status
-}
-
-onMounted(() => {
-  fetchList()
-  fetchRules()
-})
-</script>
-
 <template>
-  <div class="billing-page">
+  <div class="page-container">
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <div>
+        <h2>计费管理</h2>
+        <p class="header-desc">查看账单明细与管理计费规则</p>
+      </div>
+    </div>
+
     <!-- 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-icon" style="background: #409EFF"><Money /></div>
-          <div class="stat-content">
-            <div class="stat-title">本月总消费</div>
+        <div class="stat-card">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"/>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">本月总消费</div>
             <div class="stat-value">¥{{ statsData.totalCost.toLocaleString() }}</div>
           </div>
-        </el-card>
+        </div>
       </el-col>
       <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-icon" style="background: #67C23A"><Timer /></div>
-          <div class="stat-content">
-            <div class="stat-title">本月调用次数</div>
-            <div class="stat-value">{{ statsData.totalCalls.toLocaleString() }}</div>
+        <div class="stat-card">
+          <div class="stat-icon success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
           </div>
-        </el-card>
+          <div class="stat-info">
+            <div class="stat-label">本月调用次数</div>
+            <div class="stat-value success">{{ statsData.totalCalls.toLocaleString() }}</div>
+          </div>
+        </div>
       </el-col>
       <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-icon" style="background: #E6A23C"><TrendCharts /></div>
-          <div class="stat-content">
-            <div class="stat-title">平均单价</div>
+        <div class="stat-card">
+          <div class="stat-icon warning">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">平均单价</div>
             <div class="stat-value">¥{{ statsData.avgCost.toFixed(2) }}</div>
           </div>
-        </el-card>
+        </div>
       </el-col>
       <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-icon" style="background: #F56C6C"><Warning /></div>
-          <div class="stat-content">
-            <div class="stat-title">逾期账单</div>
-            <div class="stat-value text-danger">{{ statsData.overdueCount }}笔</div>
+        <div class="stat-card">
+          <div class="stat-icon danger">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
           </div>
-        </el-card>
+          <div class="stat-info">
+            <div class="stat-label">逾期账单</div>
+            <div class="stat-value danger">{{ statsData.overdueCount }}笔</div>
+          </div>
+        </div>
       </el-col>
     </el-row>
 
     <!-- Tab 切换 -->
-    <el-card>
+    <el-card class="table-card">
       <el-tabs v-model="activeTab">
         <!-- 账单记录 -->
         <el-tab-pane label="账单记录" name="record">
           <!-- 搜索区域 -->
           <div class="search-bar">
-            <el-form :model="searchForm" inline>
-              <el-form-item label="租户">
-                <el-input v-model="searchForm.tenantName" placeholder="请输入租户" clearable style="width: 150px" />
-              </el-form-item>
-              <el-form-item label="厂商">
-                <el-input v-model="searchForm.vendorName" placeholder="请输入厂商" clearable style="width: 150px" />
-              </el-form-item>
-              <el-form-item label="账单日期">
-                <el-date-picker v-model="searchForm.dateRange" type="daterange" range-separator="至"
-                  start-placeholder="开始日期" end-placeholder="结束日期" style="width: 240px" />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleSearch">查询</el-button>
-                <el-button @click="handleReset">重置</el-button>
-                <el-button type="success" @click="handleExport">导出</el-button>
-              </el-form-item>
-            </el-form>
+            <div class="search-inputs">
+              <el-input v-model="searchForm.tenantName" placeholder="搜索租户" clearable class="search-input" @keyup.enter="handleSearch" />
+              <el-input v-model="searchForm.vendorName" placeholder="搜索厂商" clearable class="search-input" @keyup.enter="handleSearch" />
+              <el-date-picker
+                v-model="searchForm.dateRange"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                class="date-picker"
+              />
+            </div>
+            <div class="search-btn-group">
+              <el-button type="primary" @click="handleSearch">搜索</el-button>
+              <el-button @click="handleReset">重置</el-button>
+              <el-button type="success" @click="handleExport">导出</el-button>
+            </div>
           </div>
 
           <!-- 账单表格 -->
@@ -231,62 +101,82 @@ onMounted(() => {
             <el-table-column prop="vendorName" label="厂商" width="120" />
             <el-table-column prop="dataType" label="数据类型" width="120" />
             <el-table-column prop="callCount" label="调用次数" width="100">
-              <template #default="{ row }">{{ row.callCount.toLocaleString() }}</template>
-            </el-table-column>
-            <el-table-column prop="unitPrice" label="单价(元)" width="100">
-              <template #default="{ row }">¥{{ row.unitPrice.toFixed(2) }}</template>
-            </el-table-column>
-            <el-table-column prop="totalCost" label="总费用(元)" width="120">
               <template #default="{ row }">
-                <span class="text-primary">¥{{ row.totalCost.toLocaleString() }}</span>
+                <span class="number-cell">{{ row.callCount?.toLocaleString() }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="billingDate" label="账单日期" width="120" />
+            <el-table-column prop="unitPrice" label="单价" width="100">
+              <template #default="{ row }">
+                <span class="price-cell">¥{{ row.unitPrice?.toFixed(2) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="totalCost" label="总费用" width="120">
+              <template #default="{ row }">
+                <span class="cost-cell">¥{{ row.totalCost?.toLocaleString() }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="billingDate" label="账单日期" width="120">
+              <template #default="{ row }">
+                <span class="time-cell">{{ row.billingDate }}</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+                <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column label="操作" width="80" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" link>详情</el-button>
               </template>
             </el-table-column>
           </el-table>
 
-          <el-pagination
-            v-model:current-page="pagination.currentPage"
-            v-model:page-size="pagination.pageSize"
-            :total="total"
-            :page-sizes="[10, 20, 50, 100]"
-            layout="total, sizes, prev, pager, next, jumper"
-            style="margin-top: 20px; justify-content: flex-end"
-          />
+          <div class="pagination-container">
+            <el-pagination
+              v-model:current-page="pagination.currentPage"
+              v-model:page-size="pagination.pageSize"
+              :page-sizes="[10, 20, 50, 100]"
+              :total="total"
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="fetchList"
+              @current-change="fetchList"
+            />
+          </div>
         </el-tab-pane>
 
         <!-- 计费规则 -->
         <el-tab-pane label="计费规则" name="rule">
           <div class="tool-bar">
-            <el-button type="primary" @click="handleAddRule">新增规则</el-button>
+            <el-button type="primary" @click="handleAddRule">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              新增规则
+            </el-button>
           </div>
 
           <el-table :data="ruleData" stripe>
             <el-table-column prop="vendorName" label="厂商" width="150" />
             <el-table-column prop="dataType" label="数据类型" width="150" />
-            <el-table-column prop="unitPrice" label="单价(元)" width="100">
-              <template #default="{ row }">¥{{ row.unitPrice.toFixed(2) }}</template>
+            <el-table-column prop="unitPrice" label="单价" width="100">
+              <template #default="{ row }">
+                <span class="price-cell">¥{{ row.unitPrice?.toFixed(2) }}</span>
+              </template>
             </el-table-column>
             <el-table-column label="阶梯范围" width="150">
               <template #default="{ row }">
-                {{ row.tierMin.toLocaleString() }} - {{ row.tierMax.toLocaleString() }}
+                <span class="number-cell">{{ row.tierMin?.toLocaleString() }} - {{ row.tierMax?.toLocaleString() }}</span>
               </template>
             </el-table-column>
             <el-table-column prop="discount" label="折扣" width="100">
-              <template #default="{ row }">{{ (row.discount * 10).toFixed(1) }}折</template>
+              <template #default="{ row }">
+                <el-tag type="warning" size="small">{{ (row.discount * 10).toFixed(1) }}折</el-tag>
+              </template>
             </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
-                <el-tag :type="row.status === 'active' ? 'success' : row.status === 'tier' ? 'warning' : 'info'">
+                <el-tag :type="row.status === 'active' ? 'success' : row.status === 'tier' ? 'warning' : 'info'" size="small">
                   {{ row.status === 'active' ? '标准' : row.status === 'tier' ? '阶梯' : '禁用' }}
                 </el-tag>
               </template>
@@ -310,7 +200,7 @@ onMounted(() => {
     </el-card>
 
     <!-- 新增/编辑规则弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="ruleForm.id ? '编辑规则' : '新增规则'" width="500px">
+    <el-dialog v-model="dialogVisible" :title="ruleForm.id ? '编辑规则' : '新增规则'" width="500px" class="form-dialog">
       <el-form :model="ruleForm" label-width="100px">
         <el-form-item label="厂商" required>
           <el-input v-model="ruleForm.vendorName" placeholder="请输入厂商名称" />
@@ -351,59 +241,218 @@ onMounted(() => {
   </div>
 </template>
 
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getBillingList, getBillingRuleList, createBillingRule, updateBillingRule, deleteBillingRule } from '@/api/billing'
+
+interface BillingRecord {
+  id: number
+  tenantName: string
+  vendorName: string
+  dataType: string
+  callCount: number
+  unitPrice: number
+  totalCost: number
+  billingDate: string
+  status: string
+}
+
+interface BillingRule {
+  id: number
+  vendorName: string
+  dataType: string
+  unitPrice: number
+  tierMin: number
+  tierMax: number
+  discount: number
+  status: string
+}
+
+const loading = ref(false)
+const activeTab = ref('record')
+const tableData = ref<BillingRecord[]>([])
+const ruleData = ref<BillingRule[]>([])
+const total = ref(0)
+const pagination = reactive({ currentPage: 1, pageSize: 10 })
+
+const searchForm = reactive({
+  tenantName: '',
+  vendorName: '',
+  dateRange: [] as string[]
+})
+
+const ruleForm = reactive({
+  id: null as number | null,
+  vendorName: '',
+  dataType: '',
+  unitPrice: 0,
+  tierMin: 0,
+  tierMax: 100000,
+  discount: 1.0,
+  status: 'active'
+})
+
+const dialogVisible = ref(false)
+
+// 统计卡片数据
+const statsData = reactive({
+  totalCost: 45678,
+  totalCalls: 123456,
+  avgCost: 0.37,
+  overdueCount: 3
+})
+
+const statusOptions = [
+  { label: '待结算', value: 'pending' },
+  { label: '已结算', value: 'settled' },
+  { label: '逾期', value: 'overdue' }
+]
+
+const fetchList = async () => {
+  loading.value = true
+  try {
+    const res = await getBillingList({
+      page: pagination.currentPage,
+      pageSize: pagination.pageSize
+    })
+    tableData.value = res.data?.data?.records || res.data?.data || res.data || []
+    total.value = res.data?.total || 0
+  } catch (e: any) {
+    // 错误已在拦截器中处理
+    tableData.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+const fetchRules = async () => {
+  ruleData.value = [
+    { id: 1, vendorName: '企查查', dataType: '工商信息', unitPrice: 0.3, tierMin: 0, tierMax: 100000, discount: 1.0, status: 'active' },
+    { id: 2, vendorName: '天眼查', dataType: '企业征信', unitPrice: 2.5, tierMin: 0, tierMax: 50000, discount: 1.0, status: 'active' },
+    { id: 3, vendorName: '企查查', dataType: '工商信息', unitPrice: 0.25, tierMin: 100000, tierMax: 500000, discount: 0.85, status: 'tier' },
+    { id: 4, vendorName: '天眼查', dataType: '企业征信', unitPrice: 2.0, tierMin: 50000, tierMax: 200000, discount: 0.8, status: 'tier' }
+  ]
+}
+
+const handleSearch = () => {
+  pagination.currentPage = 1
+  fetchList()
+}
+
+const handleReset = () => {
+  searchForm.tenantName = ''
+  searchForm.vendorName = ''
+  searchForm.dateRange = []
+  pagination.currentPage = 1
+  fetchList()
+}
+
+const handleAddRule = () => {
+  Object.assign(ruleForm, { id: null, vendorName: '', dataType: '', unitPrice: 0, tierMin: 0, tierMax: 100000, discount: 1.0, status: 'active' })
+  dialogVisible.value = true
+}
+
+const handleEditRule = (row: BillingRule) => {
+  Object.assign(ruleForm, { ...row })
+  dialogVisible.value = true
+}
+
+const handleDeleteRule = async (row: BillingRule) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除该计费规则吗？`, '提示', { type: 'warning' })
+    ElMessage.success('删除成功')
+    fetchRules()
+  } catch (e) {}
+}
+
+const handleSubmitRule = async () => {
+  if (!ruleForm.vendorName || !ruleForm.dataType) {
+    ElMessage.warning('请填写完整信息')
+    return
+  }
+  ElMessage.success('保存成功')
+  dialogVisible.value = false
+  fetchRules()
+}
+
+const handleExport = () => {
+  ElMessage.info('导出功能开发中...')
+}
+
+const getStatusType = (status: string) => {
+  const map: Record<string, string> = { pending: 'warning', settled: 'success', overdue: 'danger' }
+  return map[status] || 'info'
+}
+
+const getStatusText = (status: string) => {
+  const map: Record<string, string> = { pending: '待结算', settled: '已结算', overdue: '逾期' }
+  return map[status] || status
+}
+
+onMounted(() => {
+  fetchList()
+  fetchRules()
+})
+</script>
+
 <style scoped>
-.billing-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
+.page-container { max-width: 1600px; margin: 0 auto; }
 
-.stats-row {
-  margin-bottom: 8px;
-}
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.page-header h2 { font-size: 24px; font-weight: 700; color: var(--color-text-primary); margin: 0 0 4px; letter-spacing: -0.02em; }
+.header-desc { font-size: 14px; color: var(--color-text-tertiary); margin: 0; }
 
+.stats-row { margin-bottom: 20px; }
 .stat-card {
+  background: var(--color-bg-lighter);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
+  transition: all 0.3s ease;
 }
+.stat-card:hover { border-color: var(--color-primary); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 212, 170, 0.1); }
 
 .stat-icon {
   width: 48px;
   height: 48px;
-  border-radius: 8px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--color-primary), #00A080);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 24px;
+  flex-shrink: 0;
 }
+.stat-icon svg { width: 24px; height: 24px; color: #0A1628; }
+.stat-icon.success { background: linear-gradient(135deg, #67C23A, #5Daf34); }
+.stat-icon.warning { background: linear-gradient(135deg, #E6A23C, #d48806); }
+.stat-icon.danger { background: linear-gradient(135deg, #F56C6C, #e04545); }
 
-.stat-content {
-  flex: 1;
-}
+.stat-info { flex: 1; min-width: 0; }
+.stat-label { font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 700; color: var(--color-text-primary); font-family: var(--font-mono); }
+.stat-value.success { color: #67C23A; }
+.stat-value.danger { color: #F56C6C; }
 
-.stat-title {
-  font-size: 14px;
-  color: #909399;
-}
+.search-card { margin-bottom: 20px; }
+.search-bar, .tool-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.search-inputs { display: flex; gap: 12px; flex: 1; flex-wrap: wrap; }
+.search-input { width: 160px; }
+.search-select { width: 140px; }
+.date-picker { width: 260px; }
+.search-btn-group { display: flex; gap: 10px; }
+.tool-bar .el-button { display: flex; align-items: center; gap: 6px; }
+.tool-bar .el-button svg { width: 16px; height: 16px; }
 
-.stat-value {
-  font-size: 24px;
-  font-weight: bold;
-  color: #303133;
-}
+.number-cell { font-family: var(--font-mono); color: var(--color-text-secondary); }
+.price-cell { color: var(--color-text-secondary); }
+.cost-cell { color: var(--color-primary); font-weight: 600; font-family: var(--font-mono); }
+.time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
 
-.text-danger {
-  color: #F56C6C;
-}
+.pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }
 
-.text-primary {
-  color: #409EFF;
-  font-weight: 500;
-}
-
-.search-bar, .tool-bar {
-  margin-bottom: 16px;
-}
+:deep(.el-tabs__item) { font-size: 14px; }
 </style>
