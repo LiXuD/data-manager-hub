@@ -8,24 +8,42 @@ import java.time.LocalDateTime;
 
 @TableName("billing_daily")
 public class BillingDaily {
-    
+
     @TableId(type = IdType.AUTO)
     private Long id;
-    
-    private Long tenantId;
+
     private Long callerId;
+
+    @TableField(exist = false)
+    private Long tenantId;
+
+    @TableField(exist = false)
     private Long vendorId;
+
+    @TableField(exist = false)
     private String dataType;
+
+    @TableField("call_count")
     private Long callCount;
+
+    @TableField("success_count")
     private Long successCount;
+
+    @TableField("fail_count")
     private Long failCount;
+
+    @TableField("total_cost")
     private BigDecimal totalCost;
+
+    @TableField(exist = false)
     private Integer avgLatency;
+
+    @TableField("billing_date")
     private LocalDate billingDate;
-    
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
-    
+
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 

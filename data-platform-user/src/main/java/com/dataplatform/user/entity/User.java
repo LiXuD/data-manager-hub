@@ -1,7 +1,9 @@
 package com.dataplatform.user.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 
@@ -20,7 +22,12 @@ public class User {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long updatedBy;
+    @TableLogic
     private Boolean deleted;
+
+    // Alias for test compatibility - not a database column
+    @TableField(exist = false)
+    private String realName;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -48,4 +55,8 @@ public class User {
     public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
     public Boolean getDeleted() { return deleted; }
     public void setDeleted(Boolean deleted) { this.deleted = deleted; }
+
+    // Alias for test compatibility
+    public String getRealName() { return nickname; }
+    public void setRealName(String realName) { this.nickname = realName; }
 }

@@ -37,4 +37,11 @@ public class DataTypeService extends ServiceImpl<DataTypeMapper, DataType> {
         response.setPageSize(pageSize);
         return response;
     }
+
+    public DataType getByTypeCode(String typeCode) {
+        LambdaQueryWrapper<DataType> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(DataType::getDataTypeCode, typeCode);
+        wrapper.eq(DataType::getDeleted, false);
+        return this.getOne(wrapper);
+    }
 }

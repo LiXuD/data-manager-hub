@@ -240,7 +240,7 @@ public class BillingApiTest extends BaseTest {
     @Order(14)
     public void testUpdateBillingRule_Success() {
         if (testBillingRuleId == null) {
-            Assertions.skip("No test billing rule to update");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test billing rule to update");
             return;
         }
 
@@ -280,7 +280,7 @@ public class BillingApiTest extends BaseTest {
     @Order(16)
     public void testDeleteBillingRule_Success() {
         if (testBillingRuleId == null) {
-            Assertions.skip("No test billing rule to delete");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test billing rule to delete");
             return;
         }
 

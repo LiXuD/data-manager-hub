@@ -37,4 +37,10 @@ public class RoleService extends ServiceImpl<RoleMapper, Role> {
         response.setPageSize(pageSize);
         return response;
     }
+
+    public Role getByRoleCode(String roleCode) {
+        return this.getOne(new LambdaQueryWrapper<Role>()
+            .eq(Role::getRoleCode, roleCode)
+            .eq(Role::getDeleted, false));
+    }
 }

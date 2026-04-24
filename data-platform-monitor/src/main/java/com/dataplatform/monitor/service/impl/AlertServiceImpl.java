@@ -30,6 +30,11 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
     }
 
     @Override
+    public AlertRecord getRecordById(Long id) {
+        return alertRecordMapper.selectById(id);
+    }
+
+    @Override
     public PageResult<AlertRule> listRules(String keyword, String status, int page, int pageSize) {
         LambdaQueryWrapper<AlertRule> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(keyword)) {

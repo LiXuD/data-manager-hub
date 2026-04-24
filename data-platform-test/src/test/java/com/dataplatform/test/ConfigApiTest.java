@@ -130,7 +130,7 @@ public class ConfigApiTest extends BaseTest {
     @Order(7)
     public void testUpdateConfig_Success() {
         if (testConfigId == null) {
-            Assertions.skip("No test config to update");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test config to update");
             return;
         }
 
@@ -170,7 +170,7 @@ public class ConfigApiTest extends BaseTest {
     @Order(9)
     public void testDeleteConfig_Success() {
         if (testConfigId == null) {
-            Assertions.skip("No test config to delete");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test config to delete");
             return;
         }
 

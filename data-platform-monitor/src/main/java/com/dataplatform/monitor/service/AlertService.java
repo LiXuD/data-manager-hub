@@ -24,5 +24,7 @@ public interface AlertService extends IService<AlertRule> {
     // 告警记录
     PageResult<AlertRecord> listRecords(String status, String level, int page, int pageSize);
 
+    AlertRecord getRecordById(Long id);
+
     void resolveRecord(Long id, String resolution);
 }

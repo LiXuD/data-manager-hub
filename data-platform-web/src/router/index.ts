@@ -73,10 +73,28 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '监控告警' }
       },
       {
+        path: '/config',
+        name: 'Config',
+        component: () => import('@/views/config/index.vue'),
+        meta: { title: '配置中心' }
+      },
+      {
+        path: '/graylog',
+        name: 'Graylog',
+        component: () => import('@/views/graylog/index.vue'),
+        meta: { title: '灰度发布' }
+      },
+      {
         path: '/audit',
         name: 'Audit',
         component: () => import('@/views/audit/index.vue'),
         meta: { title: '操作日志' }
+      },
+      {
+        path: '/profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/index.vue'),
+        meta: { title: '个人中心' }
       }
     ]
   }

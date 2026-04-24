@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS tenant_info (
     max_callers INTEGER DEFAULT 50,
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted BOOLEAN NOT NULL DEFAULT false
 );
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS vendor_info (
     contract_end DATE,
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted BOOLEAN NOT NULL DEFAULT false
 );
@@ -108,6 +110,7 @@ CREATE TABLE IF NOT EXISTS caller_info (
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted BOOLEAN NOT NULL DEFAULT false,
     CONSTRAINT fk_caller_tenant FOREIGN KEY (tenant_id) REFERENCES tenant_info(id)
@@ -202,6 +205,7 @@ CREATE INDEX idx_billing_tenant ON billing_daily(tenant_id);
 CREATE TABLE IF NOT EXISTS user_info (
     id BIGSERIAL PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
+    nickname VARCHAR(100),
     password VARCHAR(128) NOT NULL,
     real_name VARCHAR(50),
     email VARCHAR(100),
@@ -209,7 +213,9 @@ CREATE TABLE IF NOT EXISTS user_info (
     tenant_id BIGINT,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     last_login_time TIMESTAMP,
+    created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted BOOLEAN NOT NULL DEFAULT false,
     CONSTRAINT fk_user_tenant FOREIGN KEY (tenant_id) REFERENCES tenant_info(id)
@@ -225,6 +231,7 @@ CREATE TABLE IF NOT EXISTS role_info (
     role_name VARCHAR(100) NOT NULL,
     description VARCHAR(500),
     status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted BOOLEAN NOT NULL DEFAULT false
@@ -246,6 +253,8 @@ CREATE TABLE IF NOT EXISTS alert_rule (
     id BIGSERIAL PRIMARY KEY,
     rule_name VARCHAR(100) NOT NULL,
     rule_type VARCHAR(20) NOT NULL,
+    target_type VARCHAR(50),
+    target_id BIGINT,
     metric_name VARCHAR(50) NOT NULL,
     condition VARCHAR(20) NOT NULL,
     threshold DECIMAL(10, 2) NOT NULL,
@@ -276,6 +285,7 @@ CREATE TABLE IF NOT EXISTS alert_record (
     status VARCHAR(20) NOT NULL DEFAULT 'firing',
     fired_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resolved_at TIMESTAMP,
+    resolved_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_alert_record_rule FOREIGN KEY (rule_id) REFERENCES alert_rule(id)
 );
@@ -307,17 +317,27 @@ CREATE INDEX idx_cb_vendor ON circuit_breaker(vendor_id);
 CREATE TABLE IF NOT EXISTS operation_log (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT,
+    username VARCHAR(100),
     tenant_id BIGINT,
     operation_type VARCHAR(20) NOT NULL,
     operation_module VARCHAR(50) NOT NULL,
+    module VARCHAR(100),
+    operation VARCHAR(200),
     operation_content TEXT,
     request_url VARCHAR(200),
     request_method VARCHAR(10),
+    method VARCHAR(200),
     request_params JSONB,
+    params TEXT,
     response_code VARCHAR(10),
+    result TEXT,
     ip_address VARCHAR(50),
+    ip VARCHAR(50),
+    location VARCHAR(200),
     user_agent VARCHAR(500),
     execution_time INTEGER,
+    duration INTEGER,
+    status VARCHAR(20),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -385,39 +405,7 @@ CREATE TABLE IF NOT EXISTS billing_rule (
     updated_by BIGINT
 );
 
--- 操作日志表（数据溯源用）
-CREATE TABLE IF NOT EXISTS operation_log (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT,
-    username VARCHAR(50),
-    module VARCHAR(50),
-    operation VARCHAR(50),
-    method VARCHAR(200),
-    params TEXT,
-    result TEXT,
-    ip VARCHAR(50),
-    location VARCHAR(100),
-    duration INTEGER,
-    status VARCHAR(20),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- 告警记录表
-CREATE TABLE IF NOT EXISTS alert_record (
-    id BIGSERIAL PRIMARY KEY,
-    rule_id BIGINT,
-    rule_name VARCHAR(100),
-    metric VARCHAR(50),
-    current_value DECIMAL(20, 2),
-    threshold DECIMAL(20, 2),
-    level VARCHAR(20),
-    message TEXT,
-    status VARCHAR(20) DEFAULT 'pending',
-    resolved_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- 厂商配置表（配置中心用）
+-- 厂商配置扩展表（配置中心用）
 CREATE TABLE IF NOT EXISTS vendor_config_extended (
     id BIGSERIAL PRIMARY KEY,
     vendor_id BIGINT NOT NULL,
@@ -427,15 +415,14 @@ CREATE TABLE IF NOT EXISTS vendor_config_extended (
     description VARCHAR(200),
     is_encrypted BOOLEAN DEFAULT false,
     is_active BOOLEAN DEFAULT true,
+    status VARCHAR(20) DEFAULT 'active',
+    created_by BIGINT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_operation_log_created ON operation_log(created_at);
-CREATE INDEX idx_operation_log_module ON operation_log(module);
-CREATE INDEX idx_alert_record_status ON alert_record(status);
-CREATE INDEX idx_alert_record_created ON alert_record(created_at);
-CREATE INDEX idx_vendor_config_vendor ON vendor_config_extended(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_config_extended_vendor ON vendor_config_extended(vendor_id);
 
 -- 灰度规则表
 CREATE TABLE IF NOT EXISTS gray_rule (
@@ -456,3 +443,68 @@ CREATE TABLE IF NOT EXISTS gray_rule (
 
 CREATE INDEX idx_gray_rule_service ON gray_rule(service_name);
 CREATE INDEX idx_gray_rule_status ON gray_rule(status);
+
+-- 数据血缘表（数据溯源用）
+CREATE TABLE IF NOT EXISTS data_lineage (
+    id BIGSERIAL PRIMARY KEY,
+    source_system VARCHAR(100) NOT NULL,
+    source_table VARCHAR(100) NOT NULL,
+    source_column VARCHAR(100),
+    target_system VARCHAR(100) NOT NULL,
+    target_table VARCHAR(100) NOT NULL,
+    target_column VARCHAR(100),
+    transformation_type VARCHAR(50),
+    transformation_logic TEXT,
+    lineage_level INTEGER DEFAULT 1,
+    status VARCHAR(20) DEFAULT 'active',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_data_lineage_source ON data_lineage(source_system, source_table);
+CREATE INDEX idx_data_lineage_target ON data_lineage(target_system, target_table);
+
+-- 数据质量规则表
+CREATE TABLE IF NOT EXISTS quality_rule (
+    id BIGSERIAL PRIMARY KEY,
+    rule_code VARCHAR(50) NOT NULL UNIQUE,
+    rule_name VARCHAR(100) NOT NULL,
+    rule_type VARCHAR(20) NOT NULL,
+    target_table VARCHAR(100) NOT NULL,
+    target_column VARCHAR(100),
+    rule_config JSONB,
+    threshold DECIMAL(10, 2),
+    status VARCHAR(20) DEFAULT 'active',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted BOOLEAN DEFAULT false
+);
+
+CREATE INDEX idx_quality_rule_table ON quality_rule(target_table);
+CREATE INDEX idx_quality_rule_type ON quality_rule(rule_type);
+
+-- 数据质量评分表
+CREATE TABLE IF NOT EXISTS quality_score (
+    id BIGSERIAL PRIMARY KEY,
+    rule_id BIGINT NOT NULL,
+    score_date DATE NOT NULL,
+    score_value DECIMAL(5, 2) NOT NULL,
+    record_count BIGINT,
+    pass_count BIGINT,
+    fail_count BIGINT,
+    details JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_quality_score_rule FOREIGN KEY (rule_id) REFERENCES quality_rule(id),
+    UNIQUE(rule_id, score_date)
+);
+
+CREATE INDEX idx_quality_score_date ON quality_score(score_date);
+CREATE INDEX idx_quality_score_rule ON quality_score(rule_id);
+
+-- =====================================================
+-- 更新记录
+-- 2026-04-24: 添加缺失字段 (nickname, updated_by, resolved_by等)
+-- 2026-04-24: 添加 data_lineage, quality_rule, quality_score 表
+-- =====================================================

@@ -131,7 +131,7 @@ public class GraylogApiTest extends BaseTest {
     @Order(7)
     public void testUpdateGraylog_Success() {
         if (testGraylogId == null) {
-            Assertions.skip("No test graylog to update");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test graylog to update");
             return;
         }
 
@@ -172,7 +172,7 @@ public class GraylogApiTest extends BaseTest {
     @Order(9)
     public void testDeleteGraylog_Success() {
         if (testGraylogId == null) {
-            Assertions.skip("No test graylog to delete");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test graylog to delete");
             return;
         }
 

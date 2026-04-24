@@ -58,6 +58,7 @@ public class CallerServiceImpl extends ServiceImpl<CallerInfoMapper, CallerInfo>
     @Override
     public CallerInfo getByCode(String callerCode) {
         return getOne(new LambdaQueryWrapper<CallerInfo>()
-            .eq(CallerInfo::getCallerCode, callerCode));
+            .eq(CallerInfo::getCallerCode, callerCode)
+            .eq(CallerInfo::getDeleted, false));
     }
 }

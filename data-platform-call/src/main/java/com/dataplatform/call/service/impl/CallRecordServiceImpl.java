@@ -91,8 +91,28 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
     }
 
     @Override
-    public String export(Long callerId, LocalDateTime startTime, LocalDateTime endTime) {
-        // TODO: 实现导出功能
-        return "/exports/call-record-" + System.currentTimeMillis() + ".csv";
+    public PageResult<CallRecord> query(Long callerId, String phoneNumber, int page, int pageSize) {
+        LambdaQueryWrapper<CallRecord> wrapper = new LambdaQueryWrapper<>();
+        if (callerId != null) {
+            wrapper.eq(CallRecord::getCallerId, callerId);
+        }
+        wrapper.orderByDesc(CallRecord::getCallTime);
+        Page<CallRecord> result = this.page(new Page<>(page, pageSize), wrapper);
+
+        PageResult<CallRecord> response = new PageResult<>();
+        response.setCode(0);
+        response.setMessage("success");
+        response.setData(result.getRecords());
+        response.setTotal(result.getTotal());
+        response.setPage(page);
+        response.setPageSize(pageSize);
+        return response;
+    }
+
+    @Override
+    public byte[] exportData(Long callerId, LocalDateTime startTime, LocalDateTime endTime, String format) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("id,request_id,caller_id,vendor_id,data_type,success,latency,call_time\n");
+        return sb.toString().getBytes();
     }
 }

@@ -142,7 +142,7 @@ public class TenantApiTest extends BaseTest {
     @Order(8)
     public void testUpdateTenant_Success() {
         if (testTenantId == null) {
-            Assertions.skip("No test tenant to update");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test tenant to update");
             return;
         }
 
@@ -182,7 +182,7 @@ public class TenantApiTest extends BaseTest {
     @Order(10)
     public void testDeleteTenant_Success() {
         if (testTenantId == null) {
-            Assertions.skip("No test tenant to delete");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test tenant to delete");
             return;
         }
 

@@ -87,7 +87,7 @@ public class VendorApiTest extends BaseTest {
         Map<String, Object> data = new HashMap<>();
         data.put("vendorName", "测试供应商_" + System.currentTimeMillis());
         data.put("vendorCode", "VENDOR_" + System.currentTimeMillis());
-        data.put("contactName", "联系人");
+        data.put("contactPerson", "联系人");
         data.put("contactPhone", "13800138000");
 
         Response response = getAuthRequest()
@@ -110,7 +110,7 @@ public class VendorApiTest extends BaseTest {
     @Order(6)
     public void testCreateVendor_MissingRequired() {
         Map<String, Object> data = new HashMap<>();
-        data.put("contactName", "联系人");
+        data.put("contactPerson", "联系人");
 
         Response response = getAuthRequest()
             .body(data)
@@ -147,7 +147,7 @@ public class VendorApiTest extends BaseTest {
     @Order(8)
     public void testUpdateVendor_Success() {
         if (testVendorId == null) {
-            Assertions.skip("No test vendor to update");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test vendor to update");
             return;
         }
 
@@ -187,7 +187,7 @@ public class VendorApiTest extends BaseTest {
     @Order(10)
     public void testDeleteVendor_Success() {
         if (testVendorId == null) {
-            Assertions.skip("No test vendor to delete");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test vendor to delete");
             return;
         }
 

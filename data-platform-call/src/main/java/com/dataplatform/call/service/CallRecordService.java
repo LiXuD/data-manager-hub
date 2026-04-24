@@ -14,7 +14,9 @@ public interface CallRecordService extends IService<CallRecord> {
                                 LocalDateTime startTime, LocalDateTime endTime,
                                 int page, int pageSize);
 
+    PageResult<CallRecord> query(Long callerId, String phoneNumber, int page, int pageSize);
+
     Map<String, Object> getStats(LocalDateTime startTime, LocalDateTime endTime);
 
-    String export(Long callerId, LocalDateTime startTime, LocalDateTime endTime);
+    byte[] exportData(Long callerId, LocalDateTime startTime, LocalDateTime endTime, String format);
 }

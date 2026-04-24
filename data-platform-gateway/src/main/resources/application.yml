@@ -63,7 +63,7 @@ spring:
         - id: monitor-service
           uri: http://localhost:8085
           predicates:
-            - Path=/api/v1/monitor/**
+            - Path=/api/v1/alert/**
           filters:
             - StripPrefix=2
         - id: tenant-service
@@ -78,6 +78,12 @@ spring:
             - Path=/api/v1/user/**
           filters:
             - StripPrefix=2
+        - id: auth-service
+          uri: http://localhost:8087
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - StripPrefix=2
         - id: role-service
           uri: http://localhost:8088
           predicates:
@@ -87,7 +93,7 @@ spring:
         - id: datatype-service
           uri: http://localhost:8089
           predicates:
-            - Path=/api/v1/data-type/**
+            - Path=/api/v1/datatype/**
           filters:
             - StripPrefix=2
         - id: log-service
@@ -106,6 +112,30 @@ spring:
           uri: http://localhost:8092
           predicates:
             - Path=/api/v1/graylog/**
+          filters:
+            - StripPrefix=2
+        - id: sdk-service
+          uri: http://localhost:8093
+          predicates:
+            - Path=/api/v1/sdk/**
+          filters:
+            - StripPrefix=2
+        - id: security-service
+          uri: http://localhost:8094
+          predicates:
+            - Path=/api/v1/security/**
+          filters:
+            - StripPrefix=2
+        - id: trace-service
+          uri: http://localhost:8095
+          predicates:
+            - Path=/api/v1/trace/**
+          filters:
+            - StripPrefix=2
+        - id: quality-service
+          uri: http://localhost:8096
+          predicates:
+            - Path=/api/v1/quality/**
           filters:
             - StripPrefix=2
 

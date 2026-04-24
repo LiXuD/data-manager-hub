@@ -3,6 +3,7 @@ package com.dataplatform.billing.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.dataplatform.billing.entity.BillingDaily;
+import com.dataplatform.billing.entity.BillingRule;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -40,4 +41,13 @@ public interface BillingService extends IService<BillingDaily> {
      * 获取账单统计
      */
     Map<String, Object> getBillingStats(Long tenantId, LocalDate startDate, LocalDate endDate);
+
+    // BillingRule 相关方法
+    List<BillingRule> listRules();
+    BillingRule getRuleById(Long id);
+    void saveRule(BillingRule rule);
+    void updateRule(BillingRule rule);
+    void deleteRule(Long id);
+    Map<String, Object> getStats();
+    byte[] export();
 }

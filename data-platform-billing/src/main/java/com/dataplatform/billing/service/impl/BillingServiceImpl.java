@@ -209,4 +209,45 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
 
         return stats;
     }
+
+    @Override
+    public List<BillingRule> listRules() {
+        LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByDesc(BillingRule::getCreatedAt);
+        return billingRuleMapper.selectList(wrapper);
+    }
+
+    @Override
+    public BillingRule getRuleById(Long id) {
+        return billingRuleMapper.selectById(id);
+    }
+
+    @Override
+    public void saveRule(BillingRule rule) {
+        billingRuleMapper.insert(rule);
+    }
+
+    @Override
+    public void updateRule(BillingRule rule) {
+        billingRuleMapper.updateById(rule);
+    }
+
+    @Override
+    public void deleteRule(Long id) {
+        billingRuleMapper.deleteById(id);
+    }
+
+    @Override
+    public Map<String, Object> getStats() {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalBilling", count());
+        stats.put("totalRules", billingRuleMapper.selectCount(null));
+        return stats;
+    }
+
+    @Override
+    public byte[] export() {
+        // 简单实现：返回空的CSV
+        return "id,billing_date,call_count,total_cost\n".getBytes();
+    }
 }

@@ -6,31 +6,35 @@ import java.time.LocalDateTime;
 
 @TableName("caller_info")
 public class CallerInfo {
-    
+
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     private String callerCode;
     private String callerName;
     private Long tenantId;
     private String callerType;
     private String description;
-    private String contactPerson;
-    private String contactPhone;
     private String status;
-    
+
+    @TableField(exist = false)
+    private String contactPerson;
+
+    @TableField(exist = false)
+    private String contactPhone;
+
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
-    
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
-    
+
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Long updatedBy;
-    
+
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
-    
+
     @TableLogic
     private Boolean deleted;
 
@@ -47,12 +51,12 @@ public class CallerInfo {
     public void setCallerType(String callerType) { this.callerType = callerType; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
     public String getContactPerson() { return contactPerson; }
     public void setContactPerson(String contactPerson) { this.contactPerson = contactPerson; }
     public String getContactPhone() { return contactPhone; }
     public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }

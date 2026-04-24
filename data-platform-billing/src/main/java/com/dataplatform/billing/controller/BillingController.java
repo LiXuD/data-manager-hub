@@ -2,28 +2,92 @@ package com.dataplatform.billing.controller;
 
 import com.dataplatform.common.result.Result;
 import com.dataplatform.billing.entity.BillingDaily;
+import com.dataplatform.billing.entity.BillingRule;
 import com.dataplatform.billing.service.BillingService;
-// import io.swagger.v3.oas.annotations.Operation;
-// import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/billing")
 public class BillingController {
-    
+
     @Autowired
     private BillingService billingService;
-    
+
+    private static final List<String> VALID_STATUSES = List.of("active", "inactive", "pending");
+
     @GetMapping("/list")
     public Result<List<BillingDaily>> list() {
         return Result.success(billingService.list());
     }
-    
+
     @GetMapping("/{id}")
-    public Result<BillingDaily> getById(@PathVariable Long id) {
-        return Result.success(billingService.getById(id));
+    public ResponseEntity<Result<BillingDaily>> getById(@PathVariable Long id) {
+        BillingDaily billing = billingService.getById(id);
+        if (billing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "账单不存在"));
+        }
+        return ResponseEntity.ok(Result.success(billing));
+    }
+
+    @GetMapping("/stats")
+    public Result<Map<String, Object>> stats() {
+        return Result.success(billingService.getStats());
+    }
+
+    @GetMapping("/export")
+    public Result<byte[]> export() {
+        return Result.success(billingService.export());
+    }
+
+    @GetMapping("/rule/list")
+    public Result<List<BillingRule>> listRules() {
+        return Result.success(billingService.listRules());
+    }
+
+    @PostMapping("/rule")
+    public ResponseEntity<Result<BillingRule>> createRule(@RequestBody BillingRule rule) {
+        // 验证必填参数
+        if (rule.getRuleName() == null || rule.getRuleName().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "ruleName不能为空"));
+        }
+        if (rule.getUnitPrice() == null || rule.getUnitPrice().doubleValue() < 0) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "unitPrice无效"));
+        }
+        rule.setId(null);
+        rule.setStatus("active");
+        billingService.saveRule(rule);
+        return ResponseEntity.ok(Result.success(rule));
+    }
+
+    @PutMapping("/rule/{id}")
+    public ResponseEntity<Result<BillingRule>> updateRule(@PathVariable Long id, @RequestBody BillingRule rule) {
+        BillingRule existing = billingService.getRuleById(id);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "计费规则不存在"));
+        }
+        rule.setId(id);
+        billingService.updateRule(rule);
+        return ResponseEntity.ok(Result.success(billingService.getRuleById(id)));
+    }
+
+    @DeleteMapping("/rule/{id}")
+    public ResponseEntity<Result<Void>> deleteRule(@PathVariable Long id) {
+        BillingRule existing = billingService.getRuleById(id);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "计费规则不存在"));
+        }
+        billingService.deleteRule(id);
+        return ResponseEntity.ok(Result.success(null));
     }
 }

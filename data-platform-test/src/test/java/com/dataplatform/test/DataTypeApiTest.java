@@ -146,7 +146,7 @@ public class DataTypeApiTest extends BaseTest {
     @Order(8)
     public void testUpdateDataType_Success() {
         if (testDataTypeId == null) {
-            Assertions.skip("No test datatype to update");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test datatype to update");
             return;
         }
 
@@ -186,7 +186,7 @@ public class DataTypeApiTest extends BaseTest {
     @Order(10)
     public void testDeleteDataType_Success() {
         if (testDataTypeId == null) {
-            Assertions.skip("No test datatype to delete");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test datatype to delete");
             return;
         }
 

@@ -173,7 +173,7 @@ public class UserApiTest extends BaseTest {
     @Order(9)
     public void testUpdateUser_Success() {
         if (testUserId == null) {
-            Assertions.skip("No test user to update");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test user to update");
             return;
         }
 
@@ -213,7 +213,7 @@ public class UserApiTest extends BaseTest {
     @Order(11)
     public void testDeleteUser_Success() {
         if (testUserId == null) {
-            Assertions.skip("No test user to delete");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test user to delete");
             return;
         }
 

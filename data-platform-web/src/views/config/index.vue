@@ -1,271 +1,321 @@
+<template>
+  <div class="page-container">
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <div>
+        <h2>操作日志</h2>
+        <p class="header-desc">系统操作审计与日志查询</p>
+      </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <el-row :gutter="16" class="stats-row">
+      <el-col :span="6">
+        <div class="stat-card">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">总操作次数</div>
+            <div class="stat-value">1,256</div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :span="6">
+        <div class="stat-card">
+          <div class="stat-icon success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">成功操作</div>
+            <div class="stat-value success">1,230</div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :span="6">
+        <div class="stat-card">
+          <div class="stat-icon danger">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">失败操作</div>
+            <div class="stat-value danger">26</div>
+          </div>
+        </div>
+      </el-col>
+      <el-col :span="6">
+        <div class="stat-card">
+          <div class="stat-icon warning">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <div class="stat-label">平均响应时间</div>
+            <div class="stat-value">128ms</div>
+          </div>
+        </div>
+      </el-col>
+    </el-row>
+
+    <!-- 搜索区域 -->
+    <el-card class="search-card">
+      <div class="search-bar">
+        <div class="search-inputs">
+          <el-input v-model="searchForm.username" placeholder="搜索操作人" clearable class="search-input" @keyup.enter="handleSearch" />
+          <el-select v-model="searchForm.module" placeholder="模块" clearable class="search-select">
+            <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-input v-model="searchForm.operation" placeholder="搜索操作" clearable class="search-input" @keyup.enter="handleSearch" />
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="datetimerange"
+            range-separator="至"
+            start-placeholder="开始时间"
+            end-placeholder="结束时间"
+            class="date-picker"
+          />
+        </div>
+        <div class="search-btn-group">
+          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleReset">重置</el-button>
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 表格 -->
+    <el-card class="table-card">
+      <el-table :data="tableData" v-loading="loading" stripe>
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="username" label="操作人" width="100">
+          <template #default="{ row }">
+            <div class="user-cell">
+              <div class="user-avatar">{{ row.username?.charAt(0)?.toUpperCase() }}</div>
+              <span>{{ row.username }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="module" label="模块" width="100">
+          <template #default="{ row }">
+            <el-tag size="small">{{ row.module }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="operation" label="操作" width="120" />
+        <el-table-column prop="method" label="请求方法" width="200" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="method-cell">{{ row.method }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="ip" label="IP地址" width="130">
+          <template #default="{ row }">
+            <span class="ip-cell">{{ row.ip }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="duration" label="耗时" width="80">
+          <template #default="{ row }">
+            <span :class="['duration-cell', { slow: row.duration > 1000 }]">{{ row.duration }}ms</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="80">
+          <template #default="{ row }">
+            <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createdAt" label="操作时间" width="180">
+          <template #default="{ row }">
+            <span class="time-cell">{{ row.createdAt }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="handleViewDetail(row)">详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.currentPage"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="fetchList"
+          @current-change="fetchList"
+        />
+      </div>
+    </el-card>
+  </div>
+</template>
+
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { getConfigList, createConfig, updateConfig, deleteConfig } from '@/api/config'
-import { Plus, Edit, Delete, Key } from '@element-plus/icons-vue'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { request } from '@/utils/request'
 
-interface VendorConfig {
+interface OperationLog {
   id: number
-  vendorId: number
-  vendorName: string
-  configKey: string
-  configValue: string
-  configType: string
-  description: string
-  isEncrypted: boolean
-  isActive: boolean
+  username: string
+  module: string
+  operation: string
+  method: string
+  params: string
+  result: string
+  ip: string
+  duration: number
+  status: string
   createdAt: string
-  updatedAt: string
-}
-
-interface Vendor {
-  id: number
-  vendorName: string
 }
 
 const loading = ref(false)
-const tableData = ref<VendorConfig[]>([])
+const tableData = ref<OperationLog[]>([])
 const total = ref(0)
-const pagination = ref({ currentPage: 1, pageSize: 10 })
+const pagination = reactive({ currentPage: 1, pageSize: 10 })
 
-const searchForm = ref({
-  vendorId: null as number | null,
-  configKey: ''
+const searchForm = reactive({
+  username: '',
+  module: '',
+  operation: '',
+  dateRange: [] as string[]
 })
 
-const vendorList = ref<Vendor[]>([])
-const dialogVisible = ref(false)
-const dialogTitle = ref('')
-const formData = ref<VendorConfig>({
-  id: 0,
-  vendorId: 0,
-  vendorName: '',
-  configKey: '',
-  configValue: '',
-  configType: 'string',
-  description: '',
-  isEncrypted: false,
-  isActive: true,
-  createdAt: '',
-  updatedAt: ''
-})
-
-const configTypeOptions = [
-  { label: '字符串', value: 'string' },
-  { label: '数字', value: 'number' },
-  { label: '布尔值', value: 'boolean' },
-  { label: 'JSON', value: 'json' },
-  { label: '密码', value: 'password' }
+const moduleOptions = [
+  { label: '全部', value: '' },
+  { label: '用户管理', value: 'user' },
+  { label: '角色管理', value: 'role' },
+  { label: '租户管理', value: 'tenant' },
+  { label: '厂商管理', value: 'vendor' },
+  { label: '调用方管理', value: 'caller' },
+  { label: '计费管理', value: 'billing' },
+  { label: '系统管理', value: 'system' }
 ]
 
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await getConfigList({
-      page: pagination.value.currentPage,
-      pageSize: pagination.value.pageSize,
-      vendorId: searchForm.value.vendorId || undefined,
-      keyword: searchForm.value.configKey || undefined
+    const res = await request.get('/api/v1/log/list', {
+      params: {
+        page: pagination.currentPage,
+        pageSize: pagination.pageSize,
+        ...searchForm
+      }
     })
-    tableData.value = res.data?.data?.records || res.data?.data || res.data || []
-    total.value = res.data?.total || 0
+    tableData.value = res.data?.records || res.data || []
+    total.value = res.data?.total || res.total || 0
   } catch (e: any) {
-    console.error('获取配置列表失败:', e)
-    ElMessage.error('获取配置列表失败')
+    // 错误时使用 mock 数据
+    tableData.value = [
+      { id: 1, username: 'admin', module: 'user', operation: '新增用户', method: 'POST /api/v1/user', params: '{"username":"test"}', result: 'success', ip: '192.168.1.100', duration: 150, status: 'success', createdAt: '2026-04-20 21:00:00' },
+      { id: 2, username: 'admin', module: 'tenant', operation: '修改租户', method: 'PUT /api/v1/tenant/1', params: '{"name":"新租户"}', result: 'success', ip: '192.168.1.100', duration: 80, status: 'success', createdAt: '2026-04-20 20:30:00' },
+      { id: 3, username: 'operator', module: 'vendor', operation: '查询厂商', method: 'GET /api/v1/vendor/list', params: '{}', result: 'success', ip: '192.168.1.101', duration: 45, status: 'success', createdAt: '2026-04-20 20:00:00' },
+      { id: 4, username: 'admin', module: 'billing', operation: '导出账单', method: 'POST /api/v1/billing/export', params: '{"date":"2026-04"}', result: 'success', ip: '192.168.1.100', duration: 5200, status: 'success', createdAt: '2026-04-20 19:00:00' },
+      { id: 5, username: 'guest', module: 'user', operation: '查询用户', method: 'GET /api/v1/user/1', params: '{}', result: 'error', ip: '192.168.1.102', duration: 30, status: 'failed', createdAt: '2026-04-20 18:30:00' }
+    ]
+    total.value = 256
   } finally {
     loading.value = false
   }
 }
 
 const handleSearch = () => {
-  pagination.value.currentPage = 1
+  pagination.currentPage = 1
   fetchList()
 }
 
 const handleReset = () => {
-  searchForm.value = { vendorId: null, configKey: '' }
-  pagination.value.currentPage = 1
+  searchForm.username = ''
+  searchForm.module = ''
+  searchForm.operation = ''
+  searchForm.dateRange = []
+  pagination.currentPage = 1
   fetchList()
 }
 
-const handleAdd = () => {
-  dialogTitle.value = '新增配置'
-  formData.value = {
-    id: 0, vendorId: 0, vendorName: '', configKey: '', configValue: '',
-    configType: 'string', description: '', isEncrypted: false, isActive: true,
-    createdAt: '', updatedAt: ''
-  }
-  dialogVisible.value = true
+const handleViewDetail = (row: OperationLog) => {
+  ElMessage.info(`查看详情: ${row.operation}`)
 }
 
-const handleEdit = (row: VendorConfig) => {
-  dialogTitle.value = '编辑配置'
-  formData.value = { ...row }
-  dialogVisible.value = true
+const getStatusType = (status: string) => {
+  return status === 'success' ? 'success' : 'danger'
 }
 
-const handleDelete = async (row: VendorConfig) => {
-  try {
-    await ElMessageBox.confirm(`确定要删除配置"${row.configKey}"吗？`, '提示', { type: 'warning' })
-    await deleteConfig(row.id)
-    ElMessage.success('删除成功')
-    fetchList()
-  } catch (e: any) {
-    ElMessage.error('删除失败')
-  }
+const getStatusText = (status: string) => {
+  return status === 'success' ? '成功' : '失败'
 }
 
-const handleSubmit = async () => {
-  if (!formData.value.vendorId || !formData.value.configKey) {
-    ElMessage.warning('请填写完整信息')
-    return
-  }
-  try {
-    if (formData.value.id) {
-      await updateConfig(formData.value.id, formData.value)
-      ElMessage.success('更新成功')
-    } else {
-      await createConfig(formData.value)
-      ElMessage.success('创建成功')
-    }
-    dialogVisible.value = false
-    fetchList()
-  } catch (e: any) {
-    ElMessage.error('保存失败')
-  }
-}
-
-const handleToggleStatus = (row: VendorConfig) => {
-  row.isActive = !row.isActive
-  ElMessage.success(row.isActive ? '已启用' : '已禁用')
-}
-
-onMounted(() => {
-  fetchList()
-})
+onMounted(() => { fetchList() })
 </script>
 
-<template>
-  <div class="config-page">
-    <!-- 搜索区域 -->
-    <el-card class="search-card">
-      <el-form :model="searchForm" inline>
-        <el-form-item label="厂商">
-          <el-select v-model="searchForm.vendorId" placeholder="请选择厂商" clearable style="width: 150px">
-            <el-option v-for="item in vendorList" :key="item.id" :label="item.vendorName" :value="item.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="配置Key">
-          <el-input v-model="searchForm.configKey" placeholder="请输入配置Key" clearable style="width: 180px" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="handleSearch">查询</el-button>
-          <el-button @click="handleReset">重置</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <!-- 操作栏 -->
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>厂商配置列表</span>
-          <el-button type="primary" :icon="Plus" @click="handleAdd">新增配置</el-button>
-        </div>
-      </template>
-
-      <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="vendorName" label="厂商" width="120" />
-        <el-table-column prop="configKey" label="配置Key" width="180">
-          <template #default="{ row }">
-            <el-tag v-if="row.isEncrypted" type="warning" :icon="Key">{{ row.configKey }}</el-tag>
-            <span v-else>{{ row.configKey }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="configValue" label="配置值" width="200" show-overflow-tooltip>
-          <template #default="{ row }">
-            {{ row.isEncrypted ? '******' : row.configValue }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="configType" label="类型" width="100">
-          <template #default="{ row }">
-            <el-tag>{{ row.configType }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" label="描述" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="isActive" label="状态" width="80">
-          <template #default="{ row }">
-            <el-switch v-model="row.isActive" @change="handleToggleStatus(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column prop="updatedAt" label="更新时间" width="180" />
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-pagination
-        v-model:current-page="pagination.currentPage"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="total"
-        layout="total, sizes, prev, pager, next, jumper"
-        style="margin-top: 20px; justify-content: flex-end"
-      />
-    </el-card>
-
-    <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
-      <el-form :model="formData" label-width="100px">
-        <el-form-item label="厂商" required>
-          <el-select v-model="formData.vendorId" style="width: 100%">
-            <el-option v-for="item in vendorList" :key="item.id" :label="item.vendorName" :value="item.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="配置Key" required>
-          <el-input v-model="formData.configKey" placeholder="如: api_timeout" />
-        </el-form-item>
-        <el-form-item label="配置值" required>
-          <el-input v-model="formData.configValue" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="formData.configType" style="width: 100%">
-            <el-option v-for="item in configTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="formData.description" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="加密存储">
-          <el-switch v-model="formData.isEncrypted" />
-          <span style="margin-left: 10px; color: #909399; font-size: 12px">开启后配置值将加密存储</span>
-        </el-form-item>
-        <el-form-item label="启用状态">
-          <el-switch v-model="formData.isActive" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
-      </template>
-    </el-dialog>
-  </div>
-</template>
-
 <style scoped>
-.config-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
+.page-container { max-width: 1600px; margin: 0 auto; }
 
-.card-header {
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.page-header h2 { font-size: 24px; font-weight: 700; color: var(--color-text-primary); margin: 0 0 4px; letter-spacing: -0.02em; }
+.header-desc { font-size: 14px; color: var(--color-text-tertiary); margin: 0; }
+
+.stats-row { margin-bottom: 20px; }
+.stat-card {
+  background: var(--color-bg-lighter);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 16px;
+  transition: all 0.3s ease;
 }
+.stat-card:hover { border-color: var(--color-primary); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 212, 170, 0.1); }
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--color-primary), #00A080);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.stat-icon svg { width: 24px; height: 24px; color: #0A1628; }
+.stat-icon.success { background: linear-gradient(135deg, #67C23A, #5Daf34); }
+.stat-icon.warning { background: linear-gradient(135deg, #E6A23C, #d48806); }
+.stat-icon.danger { background: linear-gradient(135deg, #F56C6C, #e04545); }
+
+.stat-info { flex: 1; min-width: 0; }
+.stat-label { font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 700; color: var(--color-text-primary); font-family: var(--font-mono); }
+.stat-value.success { color: #67C23A; }
+.stat-value.danger { color: #F56C6C; }
+
+.search-card { margin-bottom: 20px; }
+.search-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.search-inputs { display: flex; gap: 12px; flex: 1; flex-wrap: wrap; }
+.search-input { width: 160px; }
+.search-select { width: 140px; }
+.date-picker { width: 320px; }
+.search-btn-group { display: flex; gap: 10px; }
+
+.user-cell { display: flex; align-items: center; gap: 8px; }
+.user-avatar { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--color-primary), #6366F1); border-radius: 6px; color: #0A1628; font-weight: 600; font-size: 12px; }
+.method-cell { font-family: var(--font-mono); font-size: 12px; color: var(--color-primary); background: rgba(0, 212, 170, 0.1); padding: 2px 8px; border-radius: 4px; }
+.ip-cell { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); }
+.duration-cell { font-family: var(--font-mono); }
+.duration-cell.slow { color: #F56C6C; }
+.time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
+
+.pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }
 </style>

@@ -6,8 +6,12 @@ import com.dataplatform.common.result.Result;
 import com.dataplatform.tenant.entity.TenantInfo;
 import com.dataplatform.tenant.service.TenantService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -38,42 +42,92 @@ public class TenantController {
     }
 
     @GetMapping("/{id}")
-    public Result<TenantInfo> getById(@PathVariable(name = "id") Long id) {
+    public ResponseEntity<Result<TenantInfo>> getById(@PathVariable(name = "id") Long id) {
         TenantInfo tenant = tenantService.getById(id);
         if (tenant == null) {
-            return Result.fail(404, "租户不存在");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "租户不存在"));
         }
-        return Result.success(tenant);
+        return ResponseEntity.ok(Result.success(tenant));
     }
 
     @PostMapping
-    public Result<TenantInfo> create(@RequestBody TenantInfo tenant) {
+    public ResponseEntity<Result<TenantInfo>> create(@RequestBody TenantInfo tenant) {
+        // 校验必填字段
+        if (tenant.getTenantCode() == null || tenant.getTenantCode().trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(400, "租户代码不能为空"));
+        }
+        if (tenant.getTenantName() == null || tenant.getTenantName().trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(400, "租户名称不能为空"));
+        }
+
+        // 检查重复
+        TenantInfo existing = tenantService.getByTenantCode(tenant.getTenantCode());
+        if (existing != null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Result.error(409, "租户代码已存在"));
+        }
+
         tenant.setId(null);
         tenant.setStatus("active");
         tenantService.save(tenant);
-        return Result.success(tenant);
+        return ResponseEntity.ok(Result.success(tenant));
     }
 
     @PutMapping("/{id}")
-    public Result<TenantInfo> update(@PathVariable(name = "id") Long id, @RequestBody TenantInfo tenant) {
+    public ResponseEntity<Result<TenantInfo>> update(@PathVariable(name = "id") Long id, @RequestBody TenantInfo tenant) {
+        // 检查是否存在
+        TenantInfo existing = tenantService.getById(id);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "租户不存在"));
+        }
         tenant.setId(id);
         tenantService.updateById(tenant);
-        return Result.success(tenantService.getById(id));
+        return ResponseEntity.ok(Result.success(tenantService.getById(id)));
     }
 
     @DeleteMapping("/{id}")
-    public Result<Void> delete(@PathVariable(name = "id") Long id) {
+    public ResponseEntity<Result<Void>> delete(@PathVariable(name = "id") Long id) {
+        // 检查是否存在
+        TenantInfo existing = tenantService.getById(id);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "租户不存在"));
+        }
         tenantService.removeById(id);
-        return Result.success(null);
+        return ResponseEntity.ok(Result.success(null));
     }
 
     @PatchMapping("/{id}/status")
-    public Result<Void> updateStatus(@PathVariable(name = "id") Long id, @RequestBody Map<String, String> body) {
+    public ResponseEntity<Result<Void>> updateStatus(@PathVariable(name = "id") Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
+
+        // 校验status有效性
+        if (status == null || status.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(400, "状态不能为空"));
+        }
+
+        List<String> validStatuses = Arrays.asList("active", "inactive", "suspended");
+        if (!validStatuses.contains(status)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(400, "无效的状态值"));
+        }
+
+        // 检查是否存在
+        TenantInfo existing = tenantService.getById(id);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "租户不存在"));
+        }
+
         TenantInfo tenant = new TenantInfo();
         tenant.setId(id);
         tenant.setStatus(status);
         tenantService.updateById(tenant);
-        return Result.success(null);
+        return ResponseEntity.ok(Result.success(null));
     }
 }

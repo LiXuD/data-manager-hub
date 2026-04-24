@@ -37,4 +37,10 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         response.setPageSize(pageSize);
         return response;
     }
+
+    public User getByUsername(String username) {
+        return this.getOne(new LambdaQueryWrapper<User>()
+            .eq(User::getUsername, username)
+            .eq(User::getDeleted, false));
+    }
 }

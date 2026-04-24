@@ -6,4 +6,5 @@ import com.dataplatform.vendor.entity.VendorInfo;
 
 public interface VendorService extends IService<VendorInfo> {
     PageResult<VendorInfo> list(Integer page, Integer pageSize, String keyword, String status);
+    VendorInfo getByVendorCode(String vendorCode);
 }

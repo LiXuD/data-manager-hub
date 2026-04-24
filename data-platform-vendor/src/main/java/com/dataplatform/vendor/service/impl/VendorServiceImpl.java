@@ -48,4 +48,11 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper, VendorInfo> imp
         
         return pageResult;
     }
+
+    @Override
+    public VendorInfo getByVendorCode(String vendorCode) {
+        return this.getOne(new LambdaQueryWrapper<VendorInfo>()
+            .eq(VendorInfo::getVendorCode, vendorCode)
+            .eq(VendorInfo::getDeleted, false));
+    }
 }

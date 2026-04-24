@@ -1,15 +1,18 @@
 package com.dataplatform.datatype.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 
-@TableName("datatype_info")
+@TableName("data_type")
 public class DataType {
     @TableId(type = IdType.AUTO)
     private Long id;
+    @TableField("data_type_code")
     private String datatypeCode;
+    @TableField("data_type_name")
     private String datatypeName;
     private String description;
     private String status;

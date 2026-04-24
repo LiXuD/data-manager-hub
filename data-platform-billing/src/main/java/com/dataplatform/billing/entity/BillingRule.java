@@ -1,6 +1,7 @@
 package com.dataplatform.billing.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.math.BigDecimal;
@@ -11,6 +12,8 @@ import java.time.LocalDateTime;
 public class BillingRule {
     @TableId(type = IdType.AUTO)
     private Long id;
+    @TableField("rule_name")
+    private String ruleName;
     private Long vendorId;
     private String vendorName;
     private String dataType;
@@ -31,6 +34,8 @@ public class BillingRule {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public String getRuleName() { return ruleName; }
+    public void setRuleName(String ruleName) { this.ruleName = ruleName; }
     public Long getVendorId() { return vendorId; }
     public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
     public String getVendorName() { return vendorName; }
@@ -39,6 +44,7 @@ public class BillingRule {
     public void setDataType(String dataType) { this.dataType = dataType; }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
+    public void setPricePerUnit(BigDecimal pricePerUnit) { this.unitPrice = pricePerUnit; }  // Alias for test compatibility
     public Integer getTierMin() { return tierMin; }
     public void setTierMin(Integer tierMin) { this.tierMin = tierMin; }
     public Integer getTierMax() { return tierMax; }

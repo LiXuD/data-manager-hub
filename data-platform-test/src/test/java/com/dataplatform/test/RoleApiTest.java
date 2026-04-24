@@ -143,7 +143,7 @@ public class RoleApiTest extends BaseTest {
     @Order(8)
     public void testUpdateRole_Success() {
         if (testRoleId == null) {
-            Assertions.skip("No test role to update");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test role to update");
             return;
         }
 
@@ -183,7 +183,7 @@ public class RoleApiTest extends BaseTest {
     @Order(10)
     public void testDeleteRole_Success() {
         if (testRoleId == null) {
-            Assertions.skip("No test role to delete");
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test role to delete");
             return;
         }
 

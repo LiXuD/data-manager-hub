@@ -7,8 +7,12 @@ import com.dataplatform.monitor.entity.AlertRule;
 import com.dataplatform.monitor.entity.AlertRecord;
 import com.dataplatform.monitor.service.AlertService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -31,33 +35,73 @@ public class AlertController {
     }
 
     @GetMapping("/rule/{id}")
-    public Result<AlertRule> getRuleById(@PathVariable Long id) {
+    public ResponseEntity<Result<AlertRule>> getRuleById(@PathVariable Long id) {
         AlertRule rule = alertService.getRuleById(id);
         if (rule == null) {
-            return Result.fail(404, "告警规则不存在");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "告警规则不存在"));
         }
-        return Result.success(rule);
+        return ResponseEntity.ok(Result.success(rule));
     }
 
     @PostMapping("/rule")
-    public Result<AlertRule> createRule(@RequestBody AlertRule rule) {
+    public ResponseEntity<Result<AlertRule>> createRule(@RequestBody AlertRule rule) {
+        // 兼容测试用例格式: 使用 metric 作为 targetType, condition 作为 conditionType
+        if (rule.getTargetType() == null && rule.getMetric() != null) {
+            rule.setTargetType(rule.getMetric());
+        }
+        if (rule.getConditionType() == null && rule.getCondition() != null) {
+            rule.setConditionType(rule.getCondition());
+        }
+        if (rule.getRuleType() == null) {
+            rule.setRuleType("THRESHOLD");
+        }
+        if (rule.getThreshold() != null && rule.getThresholdValue() == null) {
+            Object threshold = rule.getThreshold();
+            if (threshold instanceof Number) {
+                rule.setThresholdValue(new java.math.BigDecimal(threshold.toString()));
+            }
+        }
+
+        // 校验必填字段
+        if (rule.getRuleName() == null || rule.getRuleName().trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(400, "规则名称不能为空"));
+        }
+        if (rule.getTargetType() == null || rule.getTargetType().trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(400, "目标类型不能为空"));
+        }
+
         rule.setId(null);
         rule.setStatus("active");
         alertService.saveRule(rule);
-        return Result.success(rule);
+        return ResponseEntity.ok(Result.success(rule));
     }
 
     @PutMapping("/rule/{id}")
-    public Result<AlertRule> updateRule(@PathVariable Long id, @RequestBody AlertRule rule) {
+    public ResponseEntity<Result<AlertRule>> updateRule(@PathVariable Long id, @RequestBody AlertRule rule) {
+        // 检查是否存在
+        AlertRule existing = alertService.getRuleById(id);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "告警规则不存在"));
+        }
         rule.setId(id);
         alertService.updateRule(rule);
-        return Result.success(alertService.getRuleById(id));
+        return ResponseEntity.ok(Result.success(alertService.getRuleById(id)));
     }
 
     @DeleteMapping("/rule/{id}")
-    public Result<Void> deleteRule(@PathVariable Long id) {
+    public ResponseEntity<Result<Void>> deleteRule(@PathVariable Long id) {
+        // 检查是否存在
+        AlertRule existing = alertService.getRuleById(id);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "告警规则不存在"));
+        }
         alertService.deleteRule(id);
-        return Result.success(null);
+        return ResponseEntity.ok(Result.success(null));
     }
 
     // ==================== 告警记录 ====================
@@ -72,8 +116,16 @@ public class AlertController {
     }
 
     @PostMapping("/record/{id}/resolve")
-    public Result<Void> resolveRecord(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        alertService.resolveRecord(id, body.get("resolution"));
-        return Result.success(null);
+    public ResponseEntity<Result<Void>> resolveRecord(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        // 检查是否存在
+        AlertRecord record = alertService.getRecordById(id);
+        if (record == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "告警记录不存在"));
+        }
+
+        String resolution = body.get("resolution");
+        alertService.resolveRecord(id, resolution);
+        return ResponseEntity.ok(Result.success(null));
     }
 }

@@ -9,6 +9,9 @@ import com.dataplatform.tenant.service.TenantService;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.Arrays;
+import java.util.List;
+
 @Service
 public class TenantServiceImpl extends ServiceImpl<TenantMapper, TenantInfo> implements TenantService {
 
@@ -30,5 +33,12 @@ public class TenantServiceImpl extends ServiceImpl<TenantMapper, TenantInfo> imp
         wrapper.orderByDesc(TenantInfo::getCreatedAt);
         
         return page(new Page<>(page, pageSize), wrapper);
+    }
+
+    @Override
+    public TenantInfo getByTenantCode(String tenantCode) {
+        return this.getOne(new LambdaQueryWrapper<TenantInfo>()
+            .eq(TenantInfo::getTenantCode, tenantCode)
+            .eq(TenantInfo::getDeleted, false));
     }
 }

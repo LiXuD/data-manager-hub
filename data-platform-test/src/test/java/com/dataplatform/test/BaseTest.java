@@ -20,7 +20,18 @@ public class BaseTest {
 
     private static final Logger log = LoggerFactory.getLogger(BaseTest.class);
 
-    protected static final String BASE_URL = "http://localhost:8080";
+    protected static final String BASE_URL = "http://localhost:8888";
+
+    // 各服务端口映射
+    protected static final String USER_URL = "http://localhost:8087";
+    protected static final String TENANT_URL = "http://localhost:8086";
+    protected static final String VENDOR_URL = "http://localhost:8081";
+    protected static final String ROLE_URL = "http://localhost:8088";
+    protected static final String BILLING_URL = "http://localhost:8083";
+    protected static final String CALL_URL = "http://localhost:8084";
+    protected static final String CALLER_URL = "http://localhost:8082";
+    protected static final String MONITOR_URL = "http://localhost:8085";
+
     protected static final String DB_URL = "jdbc:postgresql://localhost:5432/dataplatform";
     protected static final String DB_USER = "postgres";
     protected static final String DB_PASSWORD = "123456";
@@ -31,6 +42,7 @@ public class BaseTest {
 
     static {
         RestAssured.baseURI = BASE_URL;
+        RestAssured.basePath = "/api/v1";
         RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
     }
 
