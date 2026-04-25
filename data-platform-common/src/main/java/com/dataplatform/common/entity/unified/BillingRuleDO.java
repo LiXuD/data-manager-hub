@@ -13,7 +13,6 @@ public class BillingRuleDO {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String ruleName;
     private Long vendorId;
     private String vendorName;
     private String dataType;
@@ -29,12 +28,6 @@ public class BillingRuleDO {
 
     /** 折扣率 */
     private BigDecimal discount;
-
-    /** SLA阈值(毫秒) */
-    private Integer slaThreshold;
-
-    /** SLA补偿系数 */
-    private BigDecimal compensationRate;
 
     private String status;
 
@@ -53,8 +46,6 @@ public class BillingRuleDO {
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-    public String getRuleName() { return ruleName; }
-    public void setRuleName(String ruleName) { this.ruleName = ruleName; }
     public Long getVendorId() { return vendorId; }
     public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
     public String getVendorName() { return vendorName; }
@@ -69,10 +60,6 @@ public class BillingRuleDO {
     public void setTierMax(Integer tierMax) { this.tierMax = tierMax; }
     public BigDecimal getDiscount() { return discount; }
     public void setDiscount(BigDecimal discount) { this.discount = discount; }
-    public Integer getSlaThreshold() { return slaThreshold; }
-    public void setSlaThreshold(Integer slaThreshold) { this.slaThreshold = slaThreshold; }
-    public BigDecimal getCompensationRate() { return compensationRate; }
-    public void setCompensationRate(BigDecimal compensationRate) { this.compensationRate = compensationRate; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Long getCreatedBy() { return createdBy; }

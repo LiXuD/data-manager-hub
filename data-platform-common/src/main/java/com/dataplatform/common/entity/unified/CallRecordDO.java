@@ -20,7 +20,6 @@ public class CallRecordDO {
     private Long vendorId;
     private String vendorCode;
     private String dataType;
-    private String dataTypeCode;
 
     /** 请求参数 JSON */
     private String requestParams;
@@ -46,12 +45,6 @@ public class CallRecordDO {
     /** 调用时间 */
     private LocalDateTime callTime;
 
-    @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
-
-    @TableLogic
-    private Boolean deleted;
-
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -69,8 +62,6 @@ public class CallRecordDO {
     public void setVendorCode(String vendorCode) { this.vendorCode = vendorCode; }
     public String getDataType() { return dataType; }
     public void setDataType(String dataType) { this.dataType = dataType; }
-    public String getDataTypeCode() { return dataTypeCode; }
-    public void setDataTypeCode(String dataTypeCode) { this.dataTypeCode = dataTypeCode; }
     public String getRequestParams() { return requestParams; }
     public void setRequestParams(String requestParams) { this.requestParams = requestParams; }
     public String getResponseData() { return responseData; }
@@ -89,8 +80,4 @@ public class CallRecordDO {
     public void setCached(Boolean cached) { this.cached = cached; }
     public LocalDateTime getCallTime() { return callTime; }
     public void setCallTime(LocalDateTime callTime) { this.callTime = callTime; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    public Boolean getDeleted() { return deleted; }
-    public void setDeleted(Boolean deleted) { this.deleted = deleted; }
 }
