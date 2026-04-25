@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS vendor_config (
     id BIGSERIAL PRIMARY KEY,
     vendor_id BIGINT NOT NULL,
     data_type_id BIGINT NOT NULL,
+    data_type_code VARCHAR(50),  -- 数据类型编码(冗余字段)
     api_url VARCHAR(500) NOT NULL,
     method VARCHAR(10) NOT NULL DEFAULT 'POST',
     timeout INTEGER NOT NULL DEFAULT 5000,
@@ -96,6 +97,7 @@ CREATE TABLE IF NOT EXISTS vendor_config (
 
 CREATE INDEX idx_vendor_config_vendor ON vendor_config(vendor_id);
 CREATE INDEX idx_vendor_config_datatype ON vendor_config(data_type_id);
+CREATE INDEX idx_vendor_config_data_type_code ON vendor_config(data_type_code);
 
 -- 5. 调用方信息表
 CREATE TABLE IF NOT EXISTS caller_info (
