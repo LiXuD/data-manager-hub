@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS vendor_config (
 
 CREATE INDEX idx_vendor_config_vendor ON vendor_config(vendor_id);
 CREATE INDEX idx_vendor_config_datatype ON vendor_config(data_type_id);
-CREATE INDEX idx_vendor_config_data_type_code ON vendor_config(data_type_code);
+CREATE INDEX IF NOT EXISTS idx_vendor_config_data_type_code ON vendor_config(data_type_code);
 
 -- 5. 调用方信息表
 CREATE TABLE IF NOT EXISTS caller_info (
