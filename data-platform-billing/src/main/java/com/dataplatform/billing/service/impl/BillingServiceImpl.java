@@ -250,4 +250,16 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
         // 简单实现：返回空的CSV
         return "id,billing_date,call_count,total_cost\n".getBytes();
     }
+
+    @Override
+    public BillingRule getRuleByVendorAndDataType(String vendorCode, String dataType) {
+        // 根据数据类型查询计费规则 (厂商编码暂时仅用于日志/扩展)
+        LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BillingRule::getDataType, dataType);
+        wrapper.eq(BillingRule::getStatus, "active");
+        wrapper.orderByDesc(BillingRule::getCreatedAt);
+        wrapper.last("LIMIT 1");
+
+        return billingRuleMapper.selectOne(wrapper);
+    }
 }

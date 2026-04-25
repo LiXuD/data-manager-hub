@@ -50,4 +50,9 @@ public interface BillingService extends IService<BillingDaily> {
     void deleteRule(Long id);
     Map<String, Object> getStats();
     byte[] export();
+
+    /**
+     * 根据厂商编码和数据类型获取计费规则
+     */
+    BillingRule getRuleByVendorAndDataType(String vendorCode, String dataType);
 }

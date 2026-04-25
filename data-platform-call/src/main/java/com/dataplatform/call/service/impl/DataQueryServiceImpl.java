@@ -1,10 +1,15 @@
 package com.dataplatform.call.service.impl;
 
 import cn.hutool.crypto.digest.DigestUtil;
+import com.dataplatform.billing.entity.BillingRule;
+import com.dataplatform.billing.service.BillingService;
 import com.dataplatform.call.entity.CallRecord;
-import com.dataplatform.call.enums.CallStatus;
 import com.dataplatform.call.service.CallRecordService;
 import com.dataplatform.call.service.DataQueryService;
+import com.dataplatform.call.service.VendorProxyService;
+import com.dataplatform.common.billing.BillingCalculator;
+import com.dataplatform.common.billing.StandardBillingCalculator;
+import com.dataplatform.common.entity.unified.BillingRuleDO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +19,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -28,22 +32,19 @@ public class DataQueryServiceImpl implements DataQueryService {
     private CallRecordService callRecordService;
 
     @Autowired
+    private VendorProxyService vendorProxyService;
+
+    @Autowired
+    private BillingService billingService;
+
+    @Autowired
     private StringRedisTemplate redisTemplate;
 
     @Value("${data.query.cache.ttl:3600}")
     private int cacheTtl;
 
-    @Value("${data.query.timeout:5000}")
-    private int defaultTimeout;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    // 计费单价配置 (实际应从配置中心或数据库读取)
-    private static final Map<String, BigDecimal> UNIT_PRICES = Map.of(
-        "company_info", new BigDecimal("0.30"),
-        "person_phone", new BigDecimal("0.15"),
-        "id_card_verify", new BigDecimal("0.20")
-    );
+    private final BillingCalculator billingCalculator = new StandardBillingCalculator();
 
     @Override
     public Map<String, Object> queryData(String vendorCode, String dataType,
@@ -62,32 +63,34 @@ public class DataQueryServiceImpl implements DataQueryService {
                 result.put("cached", true);
                 result.put("latency", System.currentTimeMillis() - startTime);
 
-                // 记录缓存命中
                 recordCall(requestId, callerId, vendorCode, dataType, params,
-                          result, true, System.currentTimeMillis() - startTime, BigDecimal.ZERO, true);
+                          result, true, System.currentTimeMillis() - startTime,
+                          BigDecimal.ZERO, true);
                 return result;
             }
 
-            // 2. 调用厂商API (这里用模拟实现)
-            Map<String, Object> vendorResult = callVendorApi(vendorCode, dataType, params);
+            // 2. 调用厂商API (通过适配器)
+            Map<String, Object> vendorResult = vendorProxyService.callVendor(vendorCode, dataType, params);
 
-            // 3. 记录调用结果
+            // 3. 计算费用
             long latency = System.currentTimeMillis() - startTime;
-            BigDecimal cost = calculateCost(dataType);
+            BigDecimal cost = calculateCost(vendorCode, dataType, latency);
 
-            boolean success = vendorResult.get("success") != null
-                              && Boolean.TRUE.equals(vendorResult.get("success"));
+            boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
 
+            // 4. 记录调用
             recordCall(requestId, callerId, vendorCode, dataType, params,
                       vendorResult, success, latency, cost, false);
 
-            // 4. 存入缓存
-            try {
-                redisTemplate.opsForValue().set(cacheKey,
-                    objectMapper.writeValueAsString(vendorResult),
-                    cacheTtl, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.warn("缓存存储失败: {}", e.getMessage());
+            // 5. 存入缓存 (仅成功时缓存)
+            if (success) {
+                try {
+                    redisTemplate.opsForValue().set(cacheKey,
+                        objectMapper.writeValueAsString(vendorResult),
+                        cacheTtl, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    log.warn("缓存存储失败: {}", e.getMessage());
+                }
             }
 
             vendorResult.put("cached", false);
@@ -102,10 +105,10 @@ public class DataQueryServiceImpl implements DataQueryService {
 
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("success", false);
-            errorResult.put("error", e.getMessage());
+            errorResult.put("errorCode", "QUERY_ERROR");
+            errorResult.put("errorMsg", e.getMessage());
             errorResult.put("requestId", requestId);
 
-            // 记录失败调用
             recordCall(requestId, callerId, vendorCode, dataType, params,
                       errorResult, false, System.currentTimeMillis() - startTime,
                       BigDecimal.ZERO, false);
@@ -114,9 +117,7 @@ public class DataQueryServiceImpl implements DataQueryService {
         }
     }
 
-    /**
-     * 批量查询
-     */
+    @Override
     public Map<String, Object> batchQuery(String vendorCode, String dataType,
                                            List<Map<String, Object>> paramsList,
                                            Long callerId, String apiKey) {
@@ -136,9 +137,9 @@ public class DataQueryServiceImpl implements DataQueryService {
                     failed++;
                 }
                 results.add(Map.of(
-                    "requestId", queryResult.get("requestId"),
+                    "requestId", queryResult.getOrDefault("requestId", ""),
                     "success", queryResult.get("success") != null ? queryResult.get("success") : false,
-                    "result", queryResult.get("data")
+                    "result", queryResult.getOrDefault("data", Collections.emptyMap())
                 ));
             } catch (Exception e) {
                 failed++;
@@ -159,60 +160,44 @@ public class DataQueryServiceImpl implements DataQueryService {
     }
 
     /**
-     * 调用厂商API (实际实现需要根据厂商配置进行HTTP调用)
+     * 计算费用 (从数据库获取计费规则)
      */
-    private Map<String, Object> callVendorApi(String vendorCode, String dataType,
-                                                Map<String, Object> params) {
-        // TODO: 实际实现应该根据 vendorCode 获取厂商配置
-        // 构建HTTP请求，调用厂商API，解析响应
-
-        // 模拟响应
-        Map<String, Object> result = new HashMap<>();
-        result.put("success", true);
-        result.put("data", buildMockData(dataType, params));
-        return result;
-    }
-
-    /**
-     * 构建模拟数据
-     */
-    private Map<String, Object> buildMockData(String dataType, Map<String, Object> params) {
-        Map<String, Object> data = new HashMap<>();
-        data.put("requestParams", params);
-
-        switch (dataType) {
-            case "company_info":
-                data.put("companyName", params.get("companyName"));
-                data.put("legalPerson", "张三");
-                data.put("registeredCapital", 10000000);
-                data.put("businessStatus", "存续");
-                break;
-            case "person_phone":
-                data.put("name", params.get("name"));
-                data.put("phone", "138****8000");
-                break;
-            case "id_card_verify":
-                data.put("name", params.get("name"));
-                data.put("idCard", params.get("idCard"));
-                data.put("result", "MATCH");
-                break;
-            default:
-                data.put("message", "数据查询成功");
+    private BigDecimal calculateCost(String vendorCode, String dataType, long latencyMs) {
+        try {
+            BillingRule rule = billingService.getRuleByVendorAndDataType(vendorCode, dataType);
+            if (rule != null) {
+                BillingRuleDO ruleDO = convertToBillingRuleDO(rule);
+                return billingCalculator.calculateSingle(ruleDO, (int) latencyMs);
+            }
+        } catch (Exception e) {
+            log.warn("获取计费规则失败，使用默认价格: {}", e.getMessage());
         }
 
-        return data;
+        // 默认价格
+        return new BigDecimal("0.10");
     }
 
     /**
-     * 生成请求ID
+     * 转换 BillingRule 为 BillingRuleDO
      */
+    private BillingRuleDO convertToBillingRuleDO(BillingRule rule) {
+        BillingRuleDO ruleDO = new BillingRuleDO();
+        ruleDO.setId(rule.getId());
+        ruleDO.setVendorId(rule.getVendorId());
+        ruleDO.setVendorName(rule.getVendorName());
+        ruleDO.setDataType(rule.getDataType());
+        ruleDO.setUnitPrice(rule.getUnitPrice());
+        ruleDO.setTierMin(rule.getTierMin());
+        ruleDO.setTierMax(rule.getTierMax());
+        ruleDO.setDiscount(rule.getDiscount());
+        ruleDO.setStatus(rule.getStatus());
+        return ruleDO;
+    }
+
     private String generateRequestId() {
         return "req_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     }
 
-    /**
-     * 构建缓存Key
-     */
     private String buildCacheKey(String vendorCode, String dataType, Map<String, Object> params) {
         try {
             String paramsStr = objectMapper.writeValueAsString(params);
@@ -223,16 +208,6 @@ public class DataQueryServiceImpl implements DataQueryService {
         }
     }
 
-    /**
-     * 计算费用 - 使用本地配置
-     */
-    private BigDecimal calculateCost(String dataType) {
-        return UNIT_PRICES.getOrDefault(dataType, BigDecimal.ZERO);
-    }
-
-    /**
-     * 记录调用
-     */
     private void recordCall(String requestId, Long callerId, String vendorCode,
                            String dataType, Map<String, Object> params,
                            Map<String, Object> result, boolean success,
@@ -257,47 +232,32 @@ public class DataQueryServiceImpl implements DataQueryService {
         }
     }
 
-    /**
-     * 清除缓存
-     */
+    @Override
     public void clearCache(String vendorCode, String dataType, Map<String, Object> params) {
         String cacheKey = buildCacheKey(vendorCode, dataType, params);
         redisTemplate.delete(cacheKey);
     }
 
-    /**
-     * 获取缓存统计（使用 SCAN 替代 keys() 避免阻塞 Redis）
-     */
+    @Override
     public Map<String, Object> getCacheStats() {
         Map<String, Object> stats = new HashMap<>();
         try {
-            // 使用 SCAN 迭代获取 keys，避免阻塞 Redis
-            long count = scanCount("data_cache:*");
+            long count = 0;
+            var scanOptions = org.springframework.data.redis.core.ScanOptions.scanOptions()
+                .match("data_cache:*")
+                .count(100)
+                .build();
+
+            try (var cursor = redisTemplate.scan(scanOptions)) {
+                while (cursor.hasNext()) {
+                    count++;
+                }
+            }
             stats.put("totalKeys", count);
         } catch (Exception e) {
             log.warn("获取缓存统计失败: {}", e.getMessage());
             stats.put("totalKeys", 0);
         }
         return stats;
-    }
-
-    /**
-     * 使用 SCAN 统计 key 数量
-     */
-    private long scanCount(String pattern) {
-        long count = 0;
-        var scanOptions = org.springframework.data.redis.core.ScanOptions.scanOptions()
-            .match(pattern)
-            .count(100)
-            .build();
-
-        try (var cursor = redisTemplate.scan(scanOptions)) {
-            while (cursor.hasNext()) {
-                count++;
-            }
-        } catch (Exception e) {
-            log.warn("SCAN 统计失败: {}", e.getMessage());
-        }
-        return count;
     }
 }
