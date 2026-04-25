@@ -44,6 +44,10 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
 
     @Override
     public Map<String, Object> execute(VendorAdapterConfig config, Map<String, Object> params) {
+        if (config == null) {
+            throw new IllegalArgumentException("config cannot be null");
+        }
+
         long startTime = System.currentTimeMillis();
 
         try {
@@ -102,7 +106,11 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
 
         // 设置请求方法
         if ("GET".equals(method)) {
-            HttpUrl.Builder urlBuilder = HttpUrl.parse(url).newBuilder();
+            HttpUrl httpUrl = HttpUrl.parse(url);
+            if (httpUrl == null) {
+                throw new IllegalArgumentException("Invalid URL: " + url);
+            }
+            HttpUrl.Builder urlBuilder = httpUrl.newBuilder();
             for (Map.Entry<String, Object> entry : params.entrySet()) {
                 urlBuilder.addQueryParameter(entry.getKey(), String.valueOf(entry.getValue()));
             }
