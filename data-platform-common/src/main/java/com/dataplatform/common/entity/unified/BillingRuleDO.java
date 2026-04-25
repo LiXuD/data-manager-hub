@@ -37,9 +37,17 @@ public class BillingRuleDO {
     private BigDecimal compensationRate;
 
     private String status;
+
+    @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
+
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private Long updatedBy;
 
     // Getters and Setters
