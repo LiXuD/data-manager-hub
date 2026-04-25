@@ -35,3 +35,25 @@ mybatis-plus:
   type-aliases-package: com.dataplatform.call.entity
 
 spring.cloud.nacos.config.import-check.enabled: false
+
+# Resilience4j 配置
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+        sliding-window-type: count_based
+        sliding-window-size: 10
+    instances:
+      vendor_default:
+        base-config: default
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 500ms
+    instances:
+      vendor_default:
+        base-config: default

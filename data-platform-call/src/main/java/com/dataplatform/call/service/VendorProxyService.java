@@ -3,10 +3,12 @@ package com.dataplatform.call.service;
 import com.dataplatform.common.adapter.VendorAdapter;
 import com.dataplatform.common.adapter.VendorAdapterConfig;
 import com.dataplatform.common.adapter.VendorAdapterFactory;
+import com.dataplatform.common.circuitbreaker.CircuitBreakerManager;
 import com.dataplatform.vendor.entity.VendorConfig;
 import com.dataplatform.vendor.service.VendorConfigService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +28,9 @@ public class VendorProxyService {
 
     @Autowired
     private VendorConfigService vendorConfigService;
+
+    @Autowired
+    private CircuitBreakerManager circuitBreakerManager;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -57,9 +62,12 @@ public class VendorProxyService {
         VendorAdapter adapter = VendorAdapterFactory.getAdapter(vendorCode);
 
         try {
-            Map<String, Object> result = adapter.execute(adapterConfig, params);
-            log.info("厂商调用成功: vendor={}, type={}", vendorCode, dataTypeCode);
-            return result;
+            // 使用熔断和重试保护
+            return circuitBreakerManager.executeWithProtection(vendorCode,
+                () -> adapter.execute(adapterConfig, params));
+        } catch (CallNotPermittedException e) {
+            log.warn("熔断器打开，拒绝调用: vendor={}", vendorCode);
+            return errorResult("CIRCUIT_BREAKER_OPEN", "厂商服务暂时不可用，请稍后重试");
         } catch (Exception e) {
             log.error("厂商调用失败: vendor={}, error={}", vendorCode, e.getMessage(), e);
             return errorResult("VENDOR_ERROR", e.getMessage());
