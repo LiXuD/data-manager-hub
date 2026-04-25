@@ -5,10 +5,16 @@ import com.dataplatform.billing.entity.BillingDaily;
 import com.dataplatform.billing.entity.BillingRule;
 import com.dataplatform.billing.service.BillingService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.dataplatform.common.constant.StatusConstants;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -19,7 +25,7 @@ public class BillingController {
     @Autowired
     private BillingService billingService;
 
-    private static final List<String> VALID_STATUSES = List.of("active", "inactive", "pending");
+    private static final List<String> VALID_STATUSES = List.of(StatusConstants.ACTIVE, StatusConstants.INACTIVE, StatusConstants.PENDING);
 
     @GetMapping("/list")
     public Result<List<BillingDaily>> list() {
@@ -42,8 +48,18 @@ public class BillingController {
     }
 
     @GetMapping("/export")
-    public Result<byte[]> export() {
-        return Result.success(billingService.export());
+    public ResponseEntity<byte[]> export() {
+        byte[] data = billingService.export();
+        String filename = "billing_export_" + LocalDate.now().format(DateTimeFormatter.ISO_DATE) + ".csv";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv"));
+        headers.setContentDispositionFormData("attachment", filename);
+        headers.setContentLength(data.length);
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(data);
     }
 
     @GetMapping("/rule/list")
@@ -63,7 +79,7 @@ public class BillingController {
                     .body(Result.error(400, "unitPrice无效"));
         }
         rule.setId(null);
-        rule.setStatus("active");
+        rule.setStatus(StatusConstants.ACTIVE);
         billingService.saveRule(rule);
         return ResponseEntity.ok(Result.success(rule));
     }
