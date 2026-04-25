@@ -1,7 +1,7 @@
 package com.dataplatform.billing.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.dataplatform.billing.entity.DataType;
+import com.dataplatform.common.entity.DataType;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;

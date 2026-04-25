@@ -125,6 +125,10 @@ public class AlertController {
         }
 
         String resolution = body.get("resolution");
+        if (resolution == null || resolution.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(400, "解决方案不能为空"));
+        }
         alertService.resolveRecord(id, resolution);
         return ResponseEntity.ok(Result.success(null));
     }

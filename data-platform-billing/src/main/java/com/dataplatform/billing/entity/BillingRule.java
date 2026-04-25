@@ -1,9 +1,9 @@
 package com.dataplatform.billing.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -12,18 +12,42 @@ import java.time.LocalDateTime;
 public class BillingRule {
     @TableId(type = IdType.AUTO)
     private Long id;
-    @TableField("rule_name")
+
+    @JsonProperty("ruleName")
     private String ruleName;
+
+    @JsonProperty("vendorId")
     private Long vendorId;
+
+    @JsonProperty("vendorName")
     private String vendorName;
+
+    @JsonProperty("dataType")
     private String dataType;
+
+    @JsonProperty("unitPrice")
     private BigDecimal unitPrice;
+
+    public void setPricePerUnit(BigDecimal price) {
+        if (this.unitPrice == null && price != null) {
+            this.unitPrice = price;
+        }
+    }
+
+    @JsonProperty("tierMin")
     private Integer tierMin;
+
+    @JsonProperty("tierMax")
     private Integer tierMax;
+
+    @JsonProperty("discount")
     private BigDecimal discount;
 
     // SLA相关字段
+    @JsonProperty("slaThreshold")
     private Integer slaThreshold;          // SLA阈值(毫秒)
+
+    @JsonProperty("compensationRate")
     private BigDecimal compensationRate;   // 补偿系数
 
     private String status;
@@ -44,7 +68,6 @@ public class BillingRule {
     public void setDataType(String dataType) { this.dataType = dataType; }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
-    public void setPricePerUnit(BigDecimal pricePerUnit) { this.unitPrice = pricePerUnit; }  // Alias for test compatibility
     public Integer getTierMin() { return tierMin; }
     public void setTierMin(Integer tierMin) { this.tierMin = tierMin; }
     public Integer getTierMax() { return tierMax; }

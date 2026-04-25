@@ -266,12 +266,38 @@ public class DataQueryServiceImpl implements DataQueryService {
     }
 
     /**
-     * 获取缓存统计
+     * 获取缓存统计（使用 SCAN 替代 keys() 避免阻塞 Redis）
      */
     public Map<String, Object> getCacheStats() {
-        Set<String> keys = redisTemplate.keys("data_cache:*");
         Map<String, Object> stats = new HashMap<>();
-        stats.put("totalKeys", keys != null ? keys.size() : 0);
+        try {
+            // 使用 SCAN 迭代获取 keys，避免阻塞 Redis
+            long count = scanCount("data_cache:*");
+            stats.put("totalKeys", count);
+        } catch (Exception e) {
+            log.warn("获取缓存统计失败: {}", e.getMessage());
+            stats.put("totalKeys", 0);
+        }
         return stats;
+    }
+
+    /**
+     * 使用 SCAN 统计 key 数量
+     */
+    private long scanCount(String pattern) {
+        long count = 0;
+        var scanOptions = org.springframework.data.redis.core.ScanOptions.scanOptions()
+            .match(pattern)
+            .count(100)
+            .build();
+
+        try (var cursor = redisTemplate.scan(scanOptions)) {
+            while (cursor.hasNext()) {
+                count++;
+            }
+        } catch (Exception e) {
+            log.warn("SCAN 统计失败: {}", e.getMessage());
+        }
+        return count;
     }
 }

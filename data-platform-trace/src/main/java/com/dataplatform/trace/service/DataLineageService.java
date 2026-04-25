@@ -7,12 +7,12 @@ import com.dataplatform.trace.mapper.DataLineageMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.*;
 
 @Service
 public class DataLineageService extends ServiceImpl<DataLineageMapper, DataLineage> {
+
+    private static final int MAX_LINEAGE_DEPTH = 20;
 
     public boolean recordLineage(String sourceType, Long sourceId, String sourceName,
                                 String targetType, Long targetId, String targetName,
@@ -46,17 +46,27 @@ public class DataLineageService extends ServiceImpl<DataLineageMapper, DataLinea
 
     public List<DataLineage> getFullLineage(String type, Long id) {
         List<DataLineage> result = new ArrayList<>();
-        collectUpstream(type, id, result);
+        Set<String> visited = new HashSet<>();
+        collectUpstream(type, id, result, visited, 0);
         return result;
     }
 
-    private void collectUpstream(String type, Long id, List<DataLineage> result) {
+    private void collectUpstream(String type, Long id, List<DataLineage> result,
+                                 Set<String> visited, int depth) {
+        if (depth > MAX_LINEAGE_DEPTH) {
+            return;
+        }
+        String key = type + ":" + id;
+        if (visited.contains(key)) {
+            return;
+        }
+        visited.add(key);
+
         List<DataLineage> upstreams = getUpstream(type, id);
         for (DataLineage lineage : upstreams) {
-            if (!result.contains(lineage)) {
-                result.add(lineage);
-                collectUpstream(lineage.getSourceType(), lineage.getSourceId(), result);
-            }
+            result.add(lineage);
+            collectUpstream(lineage.getSourceType(), lineage.getSourceId(),
+                result, visited, depth + 1);
         }
     }
 }

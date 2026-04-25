@@ -8,7 +8,7 @@ import java.util.Map;
 @Service
 public class SDKGeneratorService {
 
-    public String generateJavaSDK(String baseUrl, String apiKey) {
+    public String generateJavaSDK(String baseUrl) {
         return """
             package com.dataplatform.client;
 
@@ -16,6 +16,7 @@ public class SDKGeneratorService {
             import java.net.URI;
             import java.net.http.HttpRequest;
             import java.net.http.HttpResponse;
+            import java.util.Map;
 
             public class DataPlatformClient {
                 private final String baseUrl;
@@ -27,8 +28,18 @@ public class SDKGeneratorService {
                     this.apiKey = apiKey;
                 }
 
+                private HttpRequest buildRequest(String endpoint, String method, String body) {
+                    HttpRequest.Builder builder = HttpRequest.newBuilder()
+                        .uri(URI.create(baseUrl + endpoint))
+                        .header("Content-Type", "application/json")
+                        .header("X-API-Key", apiKey);
+                    if ("POST".equals(method)) {
+                        builder.POST(HttpRequest.BodyPublishers.ofString(body != null ? body : ""));
+                    }
+                    return builder.build();
+                }
+
                 public String query(String dataType, Map<String, Object> params) {
-                    String url = baseUrl + "/api/call/query?dataType=" + dataType;
                     // Implementation details...
                     return "";
                 }
@@ -41,7 +52,7 @@ public class SDKGeneratorService {
             """;
     }
 
-    public String generatePythonSDK(String baseUrl, String apiKey) {
+    public String generatePythonSDK(String baseUrl) {
         return """
             import requests
             from typing import Dict, List, Any
@@ -51,7 +62,7 @@ public class SDKGeneratorService {
                     self.base_url = base_url
                     self.api_key = api_key
                     self.session = requests.Session()
-                    self.session.headers.update({"Authorization": f"Bearer {api_key}"})
+                    self.session.headers.update({"X-API-Key": api_key})
 
                 def query(self, data_type: str, params: Dict[str, Any]) -> Dict:
                     url = f"{self.base_url}/api/call/query"
@@ -64,7 +75,7 @@ public class SDKGeneratorService {
             """;
     }
 
-    public String generateGoSDK(String baseUrl, String apiKey) {
+    public String generateGoSDK(String baseUrl) {
         return """
             package dataplatform
 
@@ -99,11 +110,11 @@ public class SDKGeneratorService {
             """;
     }
 
-    public Map<String, String> generateAllSDKs(String baseUrl, String apiKey) {
+    public Map<String, String> generateAllSDKs(String baseUrl) {
         Map<String, String> sdks = new HashMap<>();
-        sdks.put("java", generateJavaSDK(baseUrl, apiKey));
-        sdks.put("python", generatePythonSDK(baseUrl, apiKey));
-        sdks.put("go", generateGoSDK(baseUrl, apiKey));
+        sdks.put("java", generateJavaSDK(baseUrl));
+        sdks.put("python", generatePythonSDK(baseUrl));
+        sdks.put("go", generateGoSDK(baseUrl));
         return sdks;
     }
 }

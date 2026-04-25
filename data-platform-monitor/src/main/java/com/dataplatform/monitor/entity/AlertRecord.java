@@ -12,6 +12,11 @@ public class AlertRecord {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long ruleId;
+    private Long tenantId;
+    @TableField("alert_type")
+    private String alertType;
+    @TableField("alert_title")
+    private String alertTitle;
     @TableField("fired_at")
     private LocalDateTime alertTime;
     @TableField("severity")
@@ -45,6 +50,12 @@ public class AlertRecord {
     public void setResolvedBy(Long resolvedBy) { this.resolvedBy = resolvedBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+    public String getAlertType() { return alertType; }
+    public void setAlertType(String alertType) { this.alertType = alertType; }
+    public String getAlertTitle() { return alertTitle; }
+    public void setAlertTitle(String alertTitle) { this.alertTitle = alertTitle; }
 
     // Alias methods for service compatibility
     public LocalDateTime getTriggerTime() { return alertTime; }

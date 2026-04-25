@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @TableName("data_lineage")
 public class DataLineage {
@@ -44,4 +45,20 @@ public class DataLineage {
     public void setTransformRule(String transformRule) { this.transformRule = transformRule; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DataLineage that = (DataLineage) o;
+        return Objects.equals(sourceType, that.sourceType) &&
+               Objects.equals(sourceId, that.sourceId) &&
+               Objects.equals(targetType, that.targetType) &&
+               Objects.equals(targetId, that.targetId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sourceType, sourceId, targetType, targetId);
+    }
 }

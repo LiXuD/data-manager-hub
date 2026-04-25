@@ -30,7 +30,7 @@ public class VendorParamsMapping {
     public void setVendorConfigId(Long vendorConfigId) { this.vendorConfigId = vendorConfigId; }
     public String getParamName() { return paramName; }
     public void setParamName(String paramName) { this.paramName = paramName; }
-    public String getParamType() { return paramName; }
+    public String getParamType() { return paramType; }
     public void setParamType(String paramType) { this.paramType = paramType; }
     public Boolean getRequired() { return required; }
     public void setRequired(Boolean required) { this.required = required; }

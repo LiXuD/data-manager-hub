@@ -4,12 +4,15 @@ import com.dataplatform.call.service.DataQueryService;
 import com.dataplatform.call.service.RateLimitService;
 import com.dataplatform.call.vo.ApiQueryReqVO;
 import com.dataplatform.call.vo.BatchQueryReqVO;
+import com.dataplatform.caller.entity.ApiKey;
+import com.dataplatform.caller.service.ApiKeyService;
 import com.dataplatform.common.result.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
@@ -17,6 +20,7 @@ import java.util.Map;
 public class DataQueryController {
 
     private static final Logger log = LoggerFactory.getLogger(DataQueryController.class);
+    private static final String API_KEY_STATUS_ACTIVE = "active";
 
     @Autowired
     private DataQueryService dataQueryService;
@@ -24,30 +28,26 @@ public class DataQueryController {
     @Autowired
     private RateLimitService rateLimitService;
 
-    /**
-     * 单条数据查询
-     */
+    @Autowired
+    private ApiKeyService apiKeyService;
+
     @PostMapping("/query")
     public Result<Map<String, Object>> query(
             @RequestHeader(value = "X-API-Key", required = false) String apiKey,
             @RequestHeader(value = "X-Tenant-ID", required = false) String tenantId,
             @RequestBody ApiQueryReqVO request) {
 
-        // 1. API Key 认证 (后续实现)
-        // Long callerId = authenticateApiKey(apiKey);
-        // if (callerId == null) {
-        //     return Result.fail(401, "无效的API Key");
-        // }
-
-        // 使用模拟调用方ID
-        Long callerId = 1L;
-
-        // 2. 限流检查
-        if (!rateLimitService.checkRateLimit(apiKey, 1000)) {
-            return Result.fail(429, "请求过于频繁，请稍后再试");
+        ApiKey apiKeyEntity = validateApiKey(apiKey);
+        if (apiKeyEntity == null) {
+            return Result.error(401, "无效的API Key");
         }
 
-        // 3. 执行查询
+        Long callerId = apiKeyEntity.getCallerId();
+
+        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit())) {
+            return Result.error(429, "请求过于频繁，请稍后再试");
+        }
+
         Map<String, Object> result = dataQueryService.queryData(
             request.getVendorCode(),
             request.getDataType(),
@@ -59,19 +59,20 @@ public class DataQueryController {
         return Result.success(result);
     }
 
-    /**
-     * 批量数据查询
-     */
     @PostMapping("/batch-query")
     public Result<Map<String, Object>> batchQuery(
             @RequestHeader(value = "X-API-Key", required = false) String apiKey,
             @RequestBody BatchQueryReqVO request) {
 
-        Long callerId = 1L;
+        ApiKey apiKeyEntity = validateApiKey(apiKey);
+        if (apiKeyEntity == null) {
+            return Result.error(401, "无效的API Key");
+        }
 
-        // 限流检查
-        if (!rateLimitService.checkRateLimit(apiKey, 1000)) {
-            return Result.fail(429, "请求过于频繁，请稍后再试");
+        Long callerId = apiKeyEntity.getCallerId();
+
+        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit())) {
+            return Result.error(429, "请求过于频繁，请稍后再试");
         }
 
         Map<String, Object> result = dataQueryService.batchQuery(
@@ -85,9 +86,25 @@ public class DataQueryController {
         return Result.success(result);
     }
 
-    /**
-     * 清除缓存
-     */
+    private ApiKey validateApiKey(String apiKey) {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            return null;
+        }
+
+        ApiKey apiKeyEntity = apiKeyService.getByKey(apiKey);
+        if (apiKeyEntity == null) {
+            return null;
+        }
+        if (!API_KEY_STATUS_ACTIVE.equals(apiKeyEntity.getStatus())) {
+            return null;
+        }
+        if (apiKeyEntity.getExpireTime() != null &&
+            apiKeyEntity.getExpireTime().isBefore(LocalDateTime.now())) {
+            return null;
+        }
+        return apiKeyEntity;
+    }
+
     @PostMapping("/cache/clear")
     public Result<Void> clearCache(@RequestBody ApiQueryReqVO request) {
         dataQueryService.clearCache(
@@ -98,9 +115,6 @@ public class DataQueryController {
         return Result.success(null);
     }
 
-    /**
-     * 获取缓存统计
-     */
     @GetMapping("/cache/stats")
     public Result<Map<String, Object>> getCacheStats() {
         return Result.success(dataQueryService.getCacheStats());

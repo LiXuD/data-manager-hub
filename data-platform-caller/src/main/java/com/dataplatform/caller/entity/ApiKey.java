@@ -6,11 +6,12 @@ import java.time.LocalDateTime;
 
 @TableName("api_key")
 public class ApiKey {
-    
+
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     private Long callerId;
+    private String keyName;
     private String apiKey;
     private String apiSecret;
     private Integer rateLimit;
@@ -33,6 +34,8 @@ public class ApiKey {
     public void setId(Long id) { this.id = id; }
     public Long getCallerId() { return callerId; }
     public void setCallerId(Long callerId) { this.callerId = callerId; }
+    public String getKeyName() { return keyName; }
+    public void setKeyName(String keyName) { this.keyName = keyName; }
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
     public String getApiSecret() { return apiSecret; }

@@ -1,6 +1,7 @@
 package com.dataplatform.billing.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.billing.entity.TenantBudget;
 import com.dataplatform.billing.mapper.TenantBudgetMapper;
@@ -9,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -26,17 +28,27 @@ public class BudgetAlertService extends ServiceImpl<TenantBudgetMapper, TenantBu
 
     private static final String BUDGET_KEY_PREFIX = "budget:alert:";
 
+    @Transactional(rollbackFor = Exception.class)
     public boolean checkAndAlert(Long tenantId, BigDecimal newAmount) {
+        LambdaUpdateWrapper<TenantBudget> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(TenantBudget::getTenantId, tenantId)
+            .setSql("used_amount = COALESCE(used_amount, 0) + " + newAmount.toString())
+            .set(TenantBudget::getUpdatedAt, LocalDateTime.now());
+
+        boolean updated = this.update(updateWrapper);
+        if (!updated) {
+            return false;
+        }
+
         TenantBudget budget = getByTenantId(tenantId);
         if (budget == null || budget.getMonthlyBudget() == null) {
             return false;
         }
 
         BigDecimal usedAmount = budget.getUsedAmount() != null ? budget.getUsedAmount() : BigDecimal.ZERO;
-        BigDecimal totalAmount = usedAmount.add(newAmount);
         BigDecimal budgetAmount = budget.getMonthlyBudget();
 
-        BigDecimal usageRate = totalAmount.divide(budgetAmount, 4, RoundingMode.HALF_UP)
+        BigDecimal usageRate = usedAmount.divide(budgetAmount, 4, RoundingMode.HALF_UP)
             .multiply(new BigDecimal("100"));
 
         int alertLevel = 0;
@@ -44,7 +56,7 @@ public class BudgetAlertService extends ServiceImpl<TenantBudgetMapper, TenantBu
             BigDecimal warningThreshold = budget.getWarningThreshold();
             if (usageRate.compareTo(warningThreshold) >= 0) {
                 alertLevel = 1;
-                sendAlert(tenantId, "warning", usageRate, budgetAmount, totalAmount);
+                sendAlert(tenantId, "warning", usageRate, budgetAmount, usedAmount);
             }
         }
 
@@ -52,16 +64,19 @@ public class BudgetAlertService extends ServiceImpl<TenantBudgetMapper, TenantBu
             BigDecimal limitThreshold = budget.getLimitThreshold();
             if (usageRate.compareTo(limitThreshold) >= 0) {
                 alertLevel = 2;
-                sendAlert(tenantId, "limit", usageRate, budgetAmount, totalAmount);
-                return true;
+                sendAlert(tenantId, "limit", usageRate, budgetAmount, usedAmount);
             }
         }
 
-        budget.setUsedAmount(totalAmount);
-        budget.setAlertLevel(alertLevel);
-        this.updateById(budget);
+        if (alertLevel != budget.getAlertLevel()) {
+            LambdaUpdateWrapper<TenantBudget> alertUpdateWrapper = new LambdaUpdateWrapper<>();
+            alertUpdateWrapper.eq(TenantBudget::getTenantId, tenantId)
+                .set(TenantBudget::getAlertLevel, alertLevel)
+                .set(TenantBudget::getUpdatedAt, LocalDateTime.now());
+            this.update(alertUpdateWrapper);
+        }
 
-        return false;
+        return alertLevel >= 2;
     }
 
     public boolean isOverLimit(Long tenantId) {
@@ -88,6 +103,7 @@ public class BudgetAlertService extends ServiceImpl<TenantBudgetMapper, TenantBu
         return this.getOne(wrapper);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public boolean saveBudget(TenantBudget budget) {
         TenantBudget existing = getByTenantId(budget.getTenantId());
         if (existing != null) {
@@ -114,19 +130,18 @@ public class BudgetAlertService extends ServiceImpl<TenantBudgetMapper, TenantBu
         return this.list(wrapper);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void resetMonthlyBudget() {
-        LambdaQueryWrapper<TenantBudget> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TenantBudget::getStatus, "active");
-        List<TenantBudget> budgets = this.list(wrapper);
+        LambdaUpdateWrapper<TenantBudget> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(TenantBudget::getStatus, "active")
+            .set(TenantBudget::getUsedAmount, BigDecimal.ZERO)
+            .set(TenantBudget::getAlertLevel, 0)
+            .set(TenantBudget::getUpdatedAt, LocalDateTime.now());
 
-        for (TenantBudget budget : budgets) {
-            budget.setUsedAmount(BigDecimal.ZERO);
-            budget.setAlertLevel(0);
-            budget.setUpdatedAt(LocalDateTime.now());
-            this.updateById(budget);
+        boolean updated = this.update(wrapper);
+        if (updated) {
+            log.info("月度预算已重置");
         }
-
-        log.info("月度预算已重置，共重置 {} 个租户", budgets.size());
     }
 
     private void sendAlert(Long tenantId, String alertType, BigDecimal usageRate,

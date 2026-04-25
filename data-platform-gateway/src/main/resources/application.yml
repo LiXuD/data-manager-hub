@@ -75,13 +75,7 @@ spring:
         - id: user-service
           uri: http://localhost:8087
           predicates:
-            - Path=/api/v1/user/**
-          filters:
-            - StripPrefix=2
-        - id: auth-service
-          uri: http://localhost:8087
-          predicates:
-            - Path=/api/v1/auth/**
+            - Path=/api/v1/user/**,/api/v1/auth/**
           filters:
             - StripPrefix=2
         - id: role-service
@@ -93,7 +87,7 @@ spring:
         - id: datatype-service
           uri: http://localhost:8089
           predicates:
-            - Path=/api/v1/datatype/**
+            - Path=/api/v1/data-type/**,/api/v1/datatype/**
           filters:
             - StripPrefix=2
         - id: log-service

@@ -54,15 +54,4 @@ public class Result<T> implements Serializable {
     public static <T> Result<T> error(String message) {
         return error(4001, message);
     }
-
-    public static <T> Result<T> fail(Integer code, String message) {
-        Result<T> result = new Result<>();
-        result.setCode(code);
-        result.setMessage(message);
-        return result;
-    }
-
-    public static <T> Result<T> fail(String message) {
-        return fail(4001, message);
-    }
 }

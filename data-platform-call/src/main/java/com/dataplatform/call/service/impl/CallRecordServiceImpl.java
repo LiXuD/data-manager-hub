@@ -13,6 +13,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -91,28 +92,36 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
     }
 
     @Override
-    public PageResult<CallRecord> query(Long callerId, String phoneNumber, int page, int pageSize) {
+    public String export(Long callerId, LocalDateTime startTime, LocalDateTime endTime) {
+        return "/exports/call-record-" + System.currentTimeMillis() + ".csv";
+    }
+
+    @Override
+    public byte[] exportData(Long callerId, LocalDateTime startTime, LocalDateTime endTime) {
         LambdaQueryWrapper<CallRecord> wrapper = new LambdaQueryWrapper<>();
         if (callerId != null) {
             wrapper.eq(CallRecord::getCallerId, callerId);
         }
-        wrapper.orderByDesc(CallRecord::getCallTime);
-        Page<CallRecord> result = this.page(new Page<>(page, pageSize), wrapper);
+        if (startTime != null) {
+            wrapper.ge(CallRecord::getCallTime, startTime);
+        }
+        if (endTime != null) {
+            wrapper.le(CallRecord::getCallTime, endTime);
+        }
+        List<CallRecord> records = list(wrapper);
 
-        PageResult<CallRecord> response = new PageResult<>();
-        response.setCode(0);
-        response.setMessage("success");
-        response.setData(result.getRecords());
-        response.setTotal(result.getTotal());
-        response.setPage(page);
-        response.setPageSize(pageSize);
-        return response;
-    }
-
-    @Override
-    public byte[] exportData(Long callerId, LocalDateTime startTime, LocalDateTime endTime, String format) {
         StringBuilder sb = new StringBuilder();
-        sb.append("id,request_id,caller_id,vendor_id,data_type,success,latency,call_time\n");
+        sb.append("ID,CallerID,VendorID,DataType,Success,Latency,Cost,CallTime\n");
+        for (CallRecord record : records) {
+            sb.append(record.getId()).append(",");
+            sb.append(record.getCallerId()).append(",");
+            sb.append(record.getVendorId()).append(",");
+            sb.append(record.getDataType()).append(",");
+            sb.append(record.getSuccess()).append(",");
+            sb.append(record.getLatency()).append(",");
+            sb.append(record.getCost()).append(",");
+            sb.append(record.getCallTime()).append("\n");
+        }
         return sb.toString().getBytes();
     }
 }

@@ -6,11 +6,15 @@ import com.dataplatform.call.entity.CallRecord;
 import com.dataplatform.call.service.CallRecordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +38,24 @@ public class CallRecordController {
         return callRecordService.list(callerId, vendorId, dataType, success, startTime, endTime, page, pageSize);
     }
 
+    @PostMapping("/query")
+    public ResponseEntity<Result<PageResult<CallRecord>>> query(@RequestBody Map<String, Object> queryParams) {
+        int page = queryParams.get("page") != null ? ((Number) queryParams.get("page")).intValue() : 1;
+        int pageSize = queryParams.get("pageSize") != null ? ((Number) queryParams.get("pageSize")).intValue() : 10;
+
+        if (page < 1 || pageSize < 1 || pageSize > 100) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "分页参数不合法"));
+        }
+
+        Long callerId = queryParams.get("callerId") != null ? ((Number) queryParams.get("callerId")).longValue() : null;
+        Long vendorId = queryParams.get("vendorId") != null ? ((Number) queryParams.get("vendorId")).longValue() : null;
+        String dataType = (String) queryParams.get("dataType");
+        Boolean success = (Boolean) queryParams.get("success");
+
+        return ResponseEntity.ok(Result.success(callRecordService.list(callerId, vendorId, dataType, success, null, null, page, pageSize)));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<Result<CallRecord>> getById(@PathVariable Long id) {
         CallRecord record = callRecordService.getById(id);
@@ -51,27 +73,21 @@ public class CallRecordController {
         return Result.success(callRecordService.getStats(startTime, endTime));
     }
 
-    @PostMapping("/query")
-    public PageResult<CallRecord> query(@RequestBody Map<String, Object> params) {
-        int page = params.get("page") != null ? ((Number) params.get("page")).intValue() : 1;
-        int pageSize = params.get("pageSize") != null ? ((Number) params.get("pageSize")).intValue() : 10;
-
-        Long callerId = params.get("callerId") != null ? ((Number) params.get("callerId")).longValue() : null;
-        String phoneNumber = (String) params.get("phoneNumber");
-
-        return callRecordService.query(callerId, phoneNumber, page, pageSize);
-    }
-
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(
             @RequestParam(required = false) Long callerId,
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDateTime startTime,
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDateTime endTime,
-            @RequestParam(required = false, defaultValue = "csv") String format) {
-        byte[] data = callRecordService.exportData(callerId, startTime, endTime, format);
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
+        byte[] data = callRecordService.exportData(callerId, startTime, endTime);
+        String filename = "call-record-" + LocalDate.now().format(DateTimeFormatter.ISO_DATE) + ".csv";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv"));
+        headers.setContentDispositionFormData("attachment", filename);
+        headers.setContentLength(data.length);
+
         return ResponseEntity.ok()
-                .header("Content-Type", "text/csv")
-                .header("Content-Disposition", "attachment; filename=call_records.csv")
+                .headers(headers)
                 .body(data);
     }
 }

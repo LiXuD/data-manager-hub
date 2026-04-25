@@ -81,7 +81,7 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
         if (StringUtils.hasText(level)) {
             wrapper.eq(AlertRecord::getLevel, level);
         }
-        wrapper.orderByDesc(AlertRecord::getTriggerTime);
+        wrapper.orderByDesc(AlertRecord::getAlertTime);
 
         Page<AlertRecord> result = alertRecordMapper.selectPage(new Page<>(page, pageSize), wrapper);
 

@@ -4,16 +4,20 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 
-@TableName("data_type")
+@TableName("datatype_info")
 public class DataType {
     @TableId(type = IdType.AUTO)
     private Long id;
-    @TableField("data_type_code")
+
+    @JsonProperty("datatypeCode")
     private String datatypeCode;
-    @TableField("data_type_name")
+
+    @JsonProperty("datatypeName")
     private String datatypeName;
+
     private String description;
     private String status;
     private Long createdBy;

@@ -1,5 +1,7 @@
 package com.dataplatform.security.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
@@ -8,18 +10,33 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class EncryptionService {
 
+    private static final Logger log = LoggerFactory.getLogger(EncryptionService.class);
     private static final String ALGORITHM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
+    private static final int MAX_KEY_CACHE_SIZE = 100;
 
     private final SecureRandom secureRandom = new SecureRandom();
-    private final Map<String, byte[]> tableKeys = new ConcurrentHashMap<>();
+
+    // 使用 LinkedHashMap 实现 LRU 缓存，限制容量防止 OOM
+    private final Map<String, byte[]> tableKeys = new LinkedHashMap<>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, byte[]> eldest) {
+            if (size() > MAX_KEY_CACHE_SIZE) {
+                log.warn("Encryption key cache exceeds max size, evicting oldest key for table: {}",
+                    eldest.getKey());
+                return true;
+            }
+            return false;
+        }
+    };
 
     public String encrypt(String plainText, String tableName) {
         try {
@@ -67,16 +84,28 @@ public class EncryptionService {
         }
     }
 
-    private byte[] getOrCreateKey(String tableName) {
-        return tableKeys.computeIfAbsent(tableName, k -> {
-            byte[] key = new byte[32];
+    private synchronized byte[] getOrCreateKey(String tableName) {
+        byte[] key = tableKeys.get(tableName);
+        if (key == null) {
+            key = new byte[32];
             secureRandom.nextBytes(key);
-            return key;
-        });
+            tableKeys.put(tableName, key);
+            log.info("Generated new encryption key for table: {}", tableName);
+            log.warn("WARNING: Encryption keys are stored in memory only. " +
+                "Service restart will cause data loss! Consider using a key management service (KMS) for production.");
+        }
+        return key;
     }
 
     public void rotateKey(String tableName) {
-        tableKeys.remove(tableName);
-        getOrCreateKey(tableName);
+        synchronized (this) {
+            byte[] oldKey = tableKeys.remove(tableName);
+            if (oldKey != null) {
+                log.warn("Rotating encryption key for table: {}. " +
+                    "Data encrypted with the old key will become unreadable!", tableName);
+            }
+            getOrCreateKey(tableName);
+            log.info("Encryption key rotated for table: {}", tableName);
+        }
     }
 }

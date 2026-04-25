@@ -199,7 +199,29 @@ public class ConfigService extends ServiceImpl<VendorConfigMapper, VendorConfig>
      * 清除所有配置缓存
      */
     public void clearAllCache() {
-        redisTemplate.delete(redisTemplate.keys(CONFIG_CACHE_PREFIX + "*"));
-        log.info("已清除所有配置缓存");
+        scanAndDelete(CONFIG_CACHE_PREFIX + "*");
+    }
+
+    /**
+     * 使用 SCAN 迭代删除keys，避免阻塞Redis
+     */
+    private void scanAndDelete(String pattern) {
+        long deleted = 0;
+        var scanOptions = org.springframework.data.redis.core.ScanOptions.scanOptions()
+            .match(pattern)
+            .count(100)
+            .build();
+
+        try (var cursor = redisTemplate.scan(scanOptions)) {
+            while (cursor.hasNext()) {
+                String key = (String) cursor.next();
+                if (redisTemplate.delete(key)) {
+                    deleted++;
+                }
+            }
+        } catch (Exception e) {
+            log.error("SCAN 删除缓存失败: {}", e.getMessage());
+        }
+        log.info("SCAN 方式已删除 {} 个缓存", deleted);
     }
 }
