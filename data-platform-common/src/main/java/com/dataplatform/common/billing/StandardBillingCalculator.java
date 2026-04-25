@@ -26,6 +26,6 @@ public class StandardBillingCalculator implements BillingCalculator {
         if (rule == null || rule.getUnitPrice() == null) {
             return BigDecimal.ZERO;
         }
-        return rule.getUnitPrice();
+        return rule.getUnitPrice().setScale(4, RoundingMode.HALF_UP);
     }
 }
