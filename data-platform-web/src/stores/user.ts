@@ -1,33 +1,67 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { STORAGE_KEYS } from '@/constants'
+
+interface UserInfo {
+  id: string
+  username: string
+  nickname: string
+  email?: string
+  phone?: string
+  roles: string[]
+}
+
+const loadUserInfo = (): UserInfo | null => {
+  const stored = localStorage.getItem(STORAGE_KEYS.USER_INFO)
+  return stored ? JSON.parse(stored) : null
+}
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref<string>('')
-  const userInfo = ref<{
-    id: string
-    username: string
-    nickname: string
-    roles: string[]
-  } | null>(null)
+  const token = ref<string>(localStorage.getItem(STORAGE_KEYS.TOKEN) || '')
+  const userInfo = ref<UserInfo | null>(loadUserInfo())
+  const username = computed(() => userInfo.value?.username || '')
+  const isLoggedIn = computed(() => !!token.value)
 
   const setToken = (newToken: string) => {
+    if (newToken === token.value) return
     token.value = newToken
+    if (newToken) {
+      localStorage.setItem(STORAGE_KEYS.TOKEN, newToken)
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.TOKEN)
+    }
   }
 
-  const setUserInfo = (info: typeof userInfo.value) => {
+  const setUserInfo = (info: UserInfo | null) => {
+    if (info === userInfo.value) return
     userInfo.value = info
+    if (info) {
+      localStorage.setItem(STORAGE_KEYS.USER_INFO, JSON.stringify(info))
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.USER_INFO)
+    }
+  }
+
+  const login = (newToken: string, info?: UserInfo) => {
+    setToken(newToken)
+    if (info) {
+      setUserInfo(info)
+    }
   }
 
   const logout = () => {
-    token.value = ''
-    userInfo.value = null
+    setToken('')
+    setUserInfo(null)
   }
 
   return {
     token,
     userInfo,
+    username,
+    isLoggedIn,
     setToken,
     setUserInfo,
+    login,
     logout
   }
 })

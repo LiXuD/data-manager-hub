@@ -1,35 +1,25 @@
 <template>
   <div class="page-container">
     <!-- 页面标题 -->
-    <div class="page-header">
-      <div>
-        <h2>角色管理</h2>
-        <p class="header-desc">管理系统角色与权限配置</p>
-      </div>
-      <el-button type="primary" @click="handleAdd">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
-        新增角色
-      </el-button>
-    </div>
+    <PageHeader title="角色管理" description="管理系统角色与权限配置">
+      <template #action>
+        <el-button type="primary" @click="handleAdd">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          新增角色
+        </el-button>
+      </template>
+    </PageHeader>
 
     <!-- 搜索区域 -->
-    <el-card class="search-card">
-      <div class="search-bar">
-        <div class="search-inputs">
-          <el-input v-model="searchForm.roleName" placeholder="搜索角色名称" clearable class="search-input" @keyup.enter="handleSearch" />
-          <el-select v-model="searchForm.status" placeholder="状态" clearable class="search-select">
-            <el-option label="启用" value="active" />
-            <el-option label="禁用" value="inactive" />
-          </el-select>
-        </div>
-        <div class="search-btn-group">
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-          <el-button @click="handleReset">重置</el-button>
-        </div>
-      </div>
-    </el-card>
+    <SearchBar @search="handleSearch" @reset="handleReset">
+      <el-input v-model="searchForm.roleName" placeholder="搜索角色名称" clearable class="search-input" @keyup.enter="handleSearch" />
+      <el-select v-model="searchForm.status" placeholder="状态" clearable class="search-select">
+        <el-option :label="STATUS_LABELS[USER_STATUS.ACTIVE]" :value="USER_STATUS.ACTIVE" />
+        <el-option :label="STATUS_LABELS[USER_STATUS.INACTIVE]" :value="USER_STATUS.INACTIVE" />
+      </el-select>
+    </SearchBar>
 
     <!-- 数据表格 -->
     <el-card class="table-card">
@@ -44,7 +34,7 @@
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-switch v-model="row.status" active-value="active" inactive-value="inactive" @change="handleStatusChange(row)" />
+            <el-switch v-model="row.status" :active-value="USER_STATUS.ACTIVE" :inactive-value="USER_STATUS.INACTIVE" @change="handleStatusChange(row)" />
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170">
@@ -104,6 +94,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { request } from '@/utils/request'
+import { PageHeader, SearchBar } from '@/components'
+import { USER_STATUS, STATUS_LABELS } from '@/constants'
 
 interface Role { id: number; roleCode: string; roleName: string; description: string; status: string; createdAt: string }
 
@@ -146,17 +138,10 @@ onMounted(() => { fetchList() })
 
 <style scoped>
 .page-container { max-width: 1600px; margin: 0 auto; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.page-header h2 { font-size: 24px; font-weight: 700; color: var(--color-text-primary); margin: 0 0 4px; letter-spacing: -0.02em; }
-.header-desc { font-size: 14px; color: var(--color-text-tertiary); margin: 0; }
 .page-header .el-button { display: flex; align-items: center; gap: 8px; }
 .page-header .el-button svg { width: 18px; height: 18px; }
-.search-card { margin-bottom: 20px; }
-.search-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-.search-inputs { display: flex; gap: 12px; flex: 1; }
 .search-input { width: 280px; }
 .search-select { width: 160px; }
-.search-btn-group { display: flex; gap: 10px; }
 .code-tag { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); background: var(--color-bg-light); padding: 4px 10px; border-radius: 6px; }
 .time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
 .pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }

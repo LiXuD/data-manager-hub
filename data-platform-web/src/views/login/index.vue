@@ -2,14 +2,16 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
 const loginFormRef = ref<FormInstance>()
 const loading = ref(false)
 
 const loginForm = ref({
-  username: 'admin',
-  password: 'admin123',
+  username: '',
+  password: '',
   remember: false
 })
 
@@ -27,8 +29,12 @@ const handleLogin = async () => {
 
       setTimeout(() => {
         const mockToken = 'mock-token-' + Date.now()
-        localStorage.setItem('token', mockToken)
-        localStorage.setItem('username', loginForm.value.username)
+        userStore.login(mockToken, {
+          id: '1',
+          username: loginForm.value.username,
+          nickname: loginForm.value.username,
+          roles: ['admin']
+        })
 
         ElMessage.success('登录成功')
         loading.value = false
@@ -133,11 +139,6 @@ const handleLogin = async () => {
       <div class="login-footer">
         <div class="divider">
           <span>安全登录</span>
-        </div>
-        <div class="footer-tips">
-          <span>默认账号: admin</span>
-          <span class="dot"></span>
-          <span>默认密码: admin123</span>
         </div>
       </div>
     </div>

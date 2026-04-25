@@ -127,7 +127,8 @@ const fetchList = async () => {
     const res = await request.get('/api/v1/user/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
     tableData.value = res.data || []
     total.value = res.total || 0
-  } catch (e: any) {
+  } catch (e: unknown) {
+    console.error('加载用户列表失败:', e)
     tableData.value = [
       { id: 1, username: 'admin', nickname: '管理员', email: 'admin@example.com', phone: '13800138000', status: 'active', createdAt: '2026-01-01 10:00:00' },
       { id: 2, username: 'operator', nickname: '运营人员', email: 'operator@example.com', phone: '13800138001', status: 'active', createdAt: '2026-01-02 10:00:00' }

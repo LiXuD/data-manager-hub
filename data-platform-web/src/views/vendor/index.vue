@@ -262,6 +262,7 @@ const loadData = async () => {
     pagination.total = res.total || res.data?.total || 0
   } catch (error) {
     console.error('加载失败:', error)
+    ElMessage.error('加载数据失败，请稍后重试')
   } finally {
     loading.value = false
   }
@@ -316,6 +317,7 @@ const handleDelete = async (row: Vendor) => {
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除失败:', error)
+      ElMessage.error('删除失败，请稍后重试')
     }
   }
 }
@@ -327,6 +329,7 @@ const handleStatusChange = async (row: Vendor) => {
     ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
   } catch (error) {
     row.status = row.status === 'active' ? 'inactive' : 'active'
+    ElMessage.error('状态更新失败，请稍后重试')
   }
 }
 

@@ -120,43 +120,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { STORAGE_KEYS, THEME_MODE } from '@/constants'
+import { applyTheme, getStoredTheme, setStoredTheme } from '@/composables/useTheme'
 
 const activeTab = ref('info')
 
-// 主题相关
-type ThemeMode = 'dark' | 'light' | 'auto'
+type ThemeMode = typeof THEME_MODE[keyof typeof THEME_MODE]
 
-const getStoredTheme = (): ThemeMode => {
-  return (localStorage.getItem('theme') as ThemeMode) || 'dark'
-}
+let mediaQuery: MediaQueryList | null = null
 
-const applyTheme = (theme: ThemeMode) => {
-  const body = document.body
-
-  if (theme === 'auto') {
-    body.classList.remove('light-theme')
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    if (!prefersDark) {
-      body.classList.add('light-theme')
-    }
-  } else if (theme === 'light') {
-    body.classList.add('light-theme')
-  } else {
-    body.classList.remove('light-theme')
+const handleMediaQueryChange = () => {
+  if (preferenceForm.theme === THEME_MODE.AUTO) {
+    applyTheme(THEME_MODE.AUTO)
   }
 }
 
-// 监听系统主题变化
 const setupMediaQuery = () => {
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  mediaQuery.addEventListener('change', () => {
-    if (preferenceForm.theme === 'auto') {
-      applyTheme('auto')
-    }
-  })
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  mediaQuery.addEventListener('change', handleMediaQueryChange)
 }
+
+onUnmounted(() => {
+  if (mediaQuery) {
+    mediaQuery.removeEventListener('change', handleMediaQueryChange)
+    mediaQuery = null
+  }
+})
 
 const userInfo = reactive({
   username: 'admin',
@@ -187,11 +178,9 @@ const preferenceForm = reactive({
   emailNotify: true
 })
 
-// 监听主题变化
 watch(() => preferenceForm.theme, (newTheme) => {
   applyTheme(newTheme)
-  localStorage.setItem('theme', newTheme)
-  // 通知其他组件主题已变更
+  setStoredTheme(newTheme)
   window.dispatchEvent(new Event('theme-change'))
 })
 
@@ -215,10 +204,10 @@ const handleChangePassword = () => {
 }
 
 const handleSavePreference = () => {
-  localStorage.setItem('theme', preferenceForm.theme)
-  localStorage.setItem('language', preferenceForm.language)
-  localStorage.setItem('timezone', preferenceForm.timezone)
-  localStorage.setItem('emailNotify', String(preferenceForm.emailNotify))
+  localStorage.setItem(STORAGE_KEYS.THEME, preferenceForm.theme)
+  localStorage.setItem(STORAGE_KEYS.LANGUAGE, preferenceForm.language)
+  localStorage.setItem(STORAGE_KEYS.TIMEZONE, preferenceForm.timezone)
+  localStorage.setItem(STORAGE_KEYS.EMAIL_NOTIFY, String(preferenceForm.emailNotify))
   ElMessage.success('偏好设置已保存')
 }
 

@@ -1,46 +1,37 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { ElConfigProvider, ElMenu, ElMenuItem, ElSubMenu, ElAvatar, ElDropdown, ElDropdownItem, ElDropdownMenu, ElButton, ElBadge } from 'element-plus'
+import { useUserStore } from '@/stores/user'
+import { STORAGE_KEYS, THEME_MODE } from '@/constants'
+import { applyTheme, getStoredTheme } from '@/composables/useTheme'
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
 const isCollapse = ref(false)
 
-// 初始化主题
-onMounted(() => {
-  const theme = localStorage.getItem('theme') || 'dark'
-  applyTheme(theme)
-
-  // 监听主题变化
-  window.addEventListener('storage', (e) => {
-    if (e.key === 'theme') {
-      applyTheme(e.newValue || 'dark')
-    }
-  })
-
-  // 监听当前页面主题变化
-  window.addEventListener('theme-change', () => {
-    const theme = localStorage.getItem('theme') || 'dark'
-    applyTheme(theme)
-  })
-})
-
-const applyTheme = (theme: string) => {
-  const body = document.body
-  if (theme === 'auto') {
-    body.classList.remove('light-theme')
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    if (!prefersDark) {
-      body.classList.add('light-theme')
-    }
-  } else if (theme === 'light') {
-    body.classList.add('light-theme')
-  } else {
-    body.classList.remove('light-theme')
+const handleStorageChange = (e: StorageEvent) => {
+  if (e.key === STORAGE_KEYS.THEME) {
+    applyTheme((e.newValue || THEME_MODE.DARK) as typeof THEME_MODE[keyof typeof THEME_MODE])
   }
 }
+
+const handleThemeChange = () => {
+  applyTheme(getStoredTheme())
+}
+
+onMounted(() => {
+  applyTheme(getStoredTheme())
+  window.addEventListener('storage', handleStorageChange)
+  window.addEventListener('theme-change', handleThemeChange)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('storage', handleStorageChange)
+  window.removeEventListener('theme-change', handleThemeChange)
+})
 
 const activeMenu = computed(() => route.path)
 
@@ -159,7 +150,7 @@ const handleMenuSelect = (path: string) => {
 
 const handleCommand = (command: string) => {
   if (command === 'logout') {
-    localStorage.removeItem('token')
+    userStore.logout()
     router.push('/login')
   } else if (command === 'profile') {
     router.push('/profile')
@@ -169,8 +160,6 @@ const handleCommand = (command: string) => {
 const toggleSidebar = () => {
   isCollapse.value = !isCollapse.value
 }
-
-const username = localStorage.getItem('username') || '管理员'
 </script>
 
 <template>
@@ -266,7 +255,7 @@ const username = localStorage.getItem('username') || '管理员'
                     <circle cx="12" cy="7" r="4"/>
                   </svg>
                 </div>
-                <span class="username">{{ username }}</span>
+                <span class="username">{{ userStore.username || '用户' }}</span>
                 <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="m6 9 6 6 6-6"/>
                 </svg>

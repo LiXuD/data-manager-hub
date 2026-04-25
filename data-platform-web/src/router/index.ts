@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -106,13 +107,17 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
-  
+router.beforeEach((to, _from, next) => {
+  const userStore = useUserStore()
+
   if (to.path === '/login') {
-    next()
+    if (userStore.isLoggedIn) {
+      next('/dashboard')
+    } else {
+      next()
+    }
   } else {
-    if (token) {
+    if (userStore.isLoggedIn) {
       next()
     } else {
       next('/login')
