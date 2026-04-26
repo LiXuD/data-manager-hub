@@ -61,5 +61,3 @@ INSERT INTO api_interface (interface_code, interface_name, data_type_id, path, d
 ('COMPANY_SHAREHOLDER', '股东信息', 1, '/company/shareholder', '查询企业股东信息', 'active'),
 ('COMPANY_BRANCH', '分支机构', 1, '/company/branch', '查询企业分支机构信息', 'active'),
 ('PERSONAL_CREDIT', '个人征信报告', 2, '/personal/credit', '查询个人征信报告', 'active');
-
-COMMIT;
