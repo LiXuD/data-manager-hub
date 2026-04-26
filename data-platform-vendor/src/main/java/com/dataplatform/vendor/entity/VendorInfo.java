@@ -1,16 +1,17 @@
 package com.dataplatform.vendor.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 
 @TableName("vendor_info")
 public class VendorInfo {
-    
+
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     private String vendorCode;
     private String vendorName;
     private String vendorType;
@@ -18,6 +19,9 @@ public class VendorInfo {
     private String contactPerson;
     private String contactPhone;
     private String contactEmail;
+
+    @JsonIgnore
+    private String secretKey;
     private LocalDate contractStart;
     private LocalDate contractEnd;
     
@@ -53,6 +57,8 @@ public class VendorInfo {
     public void setContactPhone(String contactPhone) { this.contactPhone = contactPhone; }
     public String getContactEmail() { return contactEmail; }
     public void setContactEmail(String contactEmail) { this.contactEmail = contactEmail; }
+    public String getSecretKey() { return secretKey; }
+    public void setSecretKey(String secretKey) { this.secretKey = secretKey; }
     public LocalDate getContractStart() { return contractStart; }
     public void setContractStart(LocalDate contractStart) { this.contractStart = contractStart; }
     public LocalDate getContractEnd() { return contractEnd; }

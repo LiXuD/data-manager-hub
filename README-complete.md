@@ -46,12 +46,14 @@
 data-platform/
 ├── data-platform-gateway/      # API网关 (端口 8888)
 ├── data-platform-common/       # 公共模块
+├── data-platform-interface/    # 接口管理服务 (新增)
 ├── data-platform-vendor/       # 厂商管理服务 (端口 8081)
 ├── data-platform-caller/       # 调用方管理服务 (端口 8082)
 ├── data-platform-call/         # 调用记录服务 (端口 8083)
 ├── data-platform-billing/      # 计费管理服务 (端口 8084)
 ├── data-platform-monitor/      # 监控告警服务 (端口 8085)
 ├── data-platform-tenant/       # 租户管理服务 (端口 8086)
+├── data-platform-test/         # 测试模块
 └── data-platform-web/          # 前端 Vue3 项目
 ```
 
@@ -112,6 +114,23 @@ data-platform/
 | GET | `/call/record` | 调用记录查询 |
 | POST | `/call/query` | 数据查询请求 |
 | GET | `/call/statistics` | 调用统计 |
+
+### 接口管理 (/api/v1/interface)
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/interface/list` | 接口列表(分页) |
+| GET | `/interface/{id}` | 接口详情 |
+| POST | `/interface` | 创建接口 |
+| PUT | `/interface/{id}` | 更新接口 |
+| DELETE | `/interface/{id}` | 删除接口 |
+| PATCH | `/interface/{id}/status` | 更新接口状态 |
+| GET | `/interface/{id}/schema` | 获取接口Schema |
+| PUT | `/interface/{id}/schema` | 更新接口Schema |
+| POST | `/interface/schema/validate` | 验证Schema格式 |
+| GET | `/interface/{id}/stats` | 接口调用统计 |
+| GET | `/interface/{id}/stats/daily` | 接口日统计 |
+| GET | `/interface/by-data-type/{dataTypeId}` | 按数据类型获取接口 |
 
 ### 计费管理 (/api/v1/billing)
 
@@ -273,6 +292,9 @@ data-platform/
 | 核心业务 (Call/Billing) | ✅ 100% | 2026-04-19 |
 | 监控告警 (Monitor) | ✅ 100% | 2026-04-19 |
 | 租户管理 (Tenant) | ✅ 100% | 2026-04-19 |
+| 接口管理 (Interface) | ✅ 100% | 2026-04-26 |
+| 集成测试 | ✅ 100% | 2026-04-26 |
+| 代码质量修复 | ✅ 100% | 2026-04-26 |
 
 ---
 

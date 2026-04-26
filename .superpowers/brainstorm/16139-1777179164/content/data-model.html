@@ -1,0 +1,100 @@
+<h2>Data Model Revision</h2>
+<p class="subtitle">当前模型缺少"接口"层级，无法精确配置具体API</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header" style="background: #f56c6c; color: #fff;">当前模型 (不足)</div>
+    <div class="mockup-body" style="padding: 16px;">
+      <div style="text-align: center; padding: 20px;">
+        <div style="display: inline-block; background: var(--color-bg-light); padding: 12px 24px; border-radius: 8px; margin: 8px;">
+          <div style="font-weight: 600;">厂商</div>
+          <div style="font-size: 12px; color: var(--color-text-tertiary);">天眼查</div>
+        </div>
+        <div style="font-size: 20px; color: var(--color-text-tertiary);">→</div>
+        <div style="display: inline-block; background: var(--color-bg-light); padding: 12px 24px; border-radius: 8px; margin: 8px;">
+          <div style="font-weight: 600;">数据类型</div>
+          <div style="font-size: 12px; color: var(--color-text-tertiary);">企业工商</div>
+        </div>
+        <div style="font-size: 20px; color: var(--color-text-tertiary);">→</div>
+        <div style="display: inline-block; background: var(--color-bg-light); padding: 12px 24px; border-radius: 8px; margin: 8px;">
+          <div style="font-weight: 600;">API配置</div>
+          <div style="font-size: 12px; color: var(--color-text-tertiary);">??? 哪个接口</div>
+        </div>
+      </div>
+      <div style="background: #fef0f0; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px;">
+        <strong>问题：</strong>企业工商类型下有10+接口，无法区分具体是哪个
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header" style="background: #67c23a; color: #fff;">新模型 (推荐)</div>
+    <div class="mockup-body" style="padding: 16px;">
+      <div style="text-align: center; padding: 16px;">
+        <div style="display: inline-block; background: var(--color-bg-light); padding: 10px 16px; border-radius: 8px; margin: 4px;">
+          <div style="font-weight: 600;">厂商</div>
+          <div style="font-size: 11px; color: var(--color-text-tertiary);">天眼查</div>
+        </div>
+        <div style="font-size: 16px; color: var(--color-text-tertiary);">→</div>
+        <div style="display: inline-block; background: var(--color-bg-light); padding: 10px 16px; border-radius: 8px; margin: 4px;">
+          <div style="font-weight: 600;">数据类型</div>
+          <div style="font-size: 11px; color: var(--color-text-tertiary);">企业工商</div>
+        </div>
+        <div style="font-size: 16px; color: var(--color-text-tertiary);">→</div>
+        <div style="display: inline-block; background: #e6f7ff; padding: 10px 16px; border-radius: 8px; margin: 4px; border: 2px solid #1890ff;">
+          <div style="font-weight: 600; color: #1890ff;">接口</div>
+          <div style="font-size: 11px; color: var(--color-text-tertiary);">企业基本信息</div>
+        </div>
+        <div style="font-size: 16px; color: var(--color-text-tertiary);">→</div>
+        <div style="display: inline-block; background: var(--color-bg-light); padding: 10px 16px; border-radius: 8px; margin: 4px;">
+          <div style="font-weight: 600;">API配置</div>
+          <div style="font-size: 11px; color: var(--color-text-tertiary);">URL/签名/超时</div>
+        </div>
+      </div>
+      <div style="background: #f0f9eb; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px;">
+        <strong>企业工商</strong> 类型下的接口示例：
+        <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+          <li>企业基本信息查询</li>
+          <li>股东信息查询</li>
+          <li>分支机构查询</li>
+          <li>行政处罚查询</li>
+          <li>司法风险查询</li>
+          <li>... 更多接口</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>数据模型调整</h3>
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <tr style="background: var(--color-bg-light);">
+      <th style="padding: 8px; text-align: left;">实体</th>
+      <th style="padding: 8px; text-align: left;">字段</th>
+      <th style="padding: 8px; text-align: left;">说明</th>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px; font-weight: 600;">Vendor (厂商)</td>
+      <td style="padding: 8px;">id, vendorCode, vendorName...</td>
+      <td style="padding: 8px;">数据供应商，如天眼查、企查查</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px; font-weight: 600;">DataType (数据类型)</td>
+      <td style="padding: 8px;">id, typeCode, typeName, vendorId</td>
+      <td style="padding: 8px;">大类，如企业工商、个人征信</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border); background: #e6f7ff;">
+      <td style="padding: 8px; font-weight: 600; color: #1890ff;">ApiInterface (接口) <span style="font-size: 11px;">新增</span></td>
+      <td style="padding: 8px;">id, interfaceCode, interfaceName, dataTypeId, path</td>
+      <td style="padding: 8px;">具体接口，如企业基本信息查询</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; font-weight: 600;">VendorConfig (API配置)</td>
+      <td style="padding: 8px;">id, interfaceId, apiUrl, method...</td>
+      <td style="padding: 8px;">接口级别的API配置</td>
+    </tr>
+  </table>
+</div>
+
+<p style="margin-top: 16px; color: var(--color-text-tertiary);">确认新增"接口"层级？在终端回复。</p>

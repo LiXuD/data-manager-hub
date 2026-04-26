@@ -26,4 +26,14 @@ public interface VendorConfigService extends IService<VendorConfig> {
      * TODO: 需要添加data-platform-interface依赖并注入ApiInterfaceService
      */
     VendorConfig getByVendorCodeAndInterfaceCode(String vendorCode, String interfaceCode);
+
+    /**
+     * 根据厂商ID和数据类型编码获取配置
+     */
+    VendorConfig getByVendorIdAndDataTypeCode(Long vendorId, String dataTypeCode);
+
+    /**
+     * 获取厂商密钥
+     */
+    String getSecretKey(String vendorCode);
 }

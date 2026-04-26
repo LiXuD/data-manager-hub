@@ -29,7 +29,7 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
 
     // 差异率阈值
     private static final BigDecimal DIFF_RATE_WARNING = new BigDecimal("0.01");   // 1%
-    private static final BigDecimal DIFF_RATE_ERROR = new BigDecimal("0.01");     // 1%
+    private static final BigDecimal DIFF_RATE_ERROR = new BigDecimal("0.05");     // 5%
 
     @Autowired
     private BillingDailyMapper billingDailyMapper;
@@ -85,9 +85,9 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
         if (diffRate.abs().compareTo(DIFF_RATE_WARNING) <= 0) {
             status = "matched";  // 差异≤1%，自动匹配
         } else if (diffRate.abs().compareTo(DIFF_RATE_ERROR) <= 0) {
-            status = "diff_warning";  // 1%<差异≤1%，生成报告，人工确认
+            status = "diff_warning";  // 1%<差异≤5%，生成报告，人工确认
         } else {
-            status = "diff_error";  // 差异>1%，触发告警
+            status = "diff_error";  // 差异>5%，触发告警
             log.error("对账差异过大: vendorId={}, date={}, diffRate={}",
                      vendorId, billingDate, diffRate);
         }

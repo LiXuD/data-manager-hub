@@ -1,8 +1,10 @@
 package com.dataplatform.common.adapter;
 
+import com.dataplatform.common.security.SignatureBuilder;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.*;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -77,8 +79,11 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         String url = config.getApiUrl();
         String method = config.getMethod() != null ? config.getMethod().toUpperCase() : "POST";
 
+        // 添加签名
+        Map<String, Object> signedParams = addSignature(config, params);
+
         // 构建请求体
-        String jsonBody = objectMapper.writeValueAsString(params);
+        String jsonBody = objectMapper.writeValueAsString(signedParams);
         RequestBody body = RequestBody.create(jsonBody, JSON_MEDIA_TYPE);
 
         // 构建请求构建器
@@ -103,7 +108,7 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
                 throw new IllegalArgumentException("Invalid URL: " + url);
             }
             HttpUrl.Builder urlBuilder = httpUrl.newBuilder();
-            for (Map.Entry<String, Object> entry : params.entrySet()) {
+            for (Map.Entry<String, Object> entry : signedParams.entrySet()) {
                 urlBuilder.addQueryParameter(entry.getKey(), String.valueOf(entry.getValue()));
             }
             builder.url(urlBuilder.build()).get();
@@ -112,6 +117,20 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         }
 
         return builder.build();
+    }
+
+    /**
+     * 添加签名
+     */
+    private Map<String, Object> addSignature(VendorAdapterConfig config, Map<String, Object> params) {
+        if (StringUtils.hasText(config.getSignType()) && StringUtils.hasText(config.getSecretKey())) {
+            Map<String, Object> signedParams = new HashMap<>(params);
+            String sign = SignatureBuilder.sign(params, config.getSecretKey(), config.getSignType());
+            signedParams.put("sign", sign);
+            log.debug("生成签名: type={}", config.getSignType());
+            return signedParams;
+        }
+        return params;
     }
 
     /**

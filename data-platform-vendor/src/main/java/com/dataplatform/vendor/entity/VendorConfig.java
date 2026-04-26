@@ -12,6 +12,7 @@ public class VendorConfig {
     
     private Long vendorId;
     private Long dataTypeId;
+    private String dataTypeCode;
     private Long interfaceId;
     private String apiUrl;
     private String method;
@@ -49,6 +50,8 @@ public class VendorConfig {
     public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
     public Long getDataTypeId() { return dataTypeId; }
     public void setDataTypeId(Long dataTypeId) { this.dataTypeId = dataTypeId; }
+    public String getDataTypeCode() { return dataTypeCode; }
+    public void setDataTypeCode(String dataTypeCode) { this.dataTypeCode = dataTypeCode; }
     public Long getInterfaceId() { return interfaceId; }
     public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
     public String getApiUrl() { return apiUrl; }

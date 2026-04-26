@@ -9,7 +9,11 @@ import com.dataplatform.billing.mapper.BillingDailyMapper;
 import com.dataplatform.billing.mapper.BillingRuleMapper;
 import com.dataplatform.billing.service.BillingService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -18,13 +22,22 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingDaily>
     implements BillingService {
 
+    private static final String RULE_CACHE_PREFIX = "billing:rule:";
+    private static final long RULE_CACHE_TTL_SECONDS = 300; // 5 minutes
+
     @Autowired
     private BillingRuleMapper billingRuleMapper;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // 默认单价 (当没有配置计费规则时使用)
     private static final Map<String, BigDecimal> DEFAULT_UNIT_PRICES = Map.of(
@@ -253,13 +266,38 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
 
     @Override
     public BillingRule getRuleByVendorAndDataType(String vendorCode, String dataType) {
-        // 根据数据类型查询计费规则 (厂商编码暂时仅用于日志/扩展)
+        if (dataType == null || dataType.isEmpty()) {
+            return null;
+        }
+
+        String cacheKey = RULE_CACHE_PREFIX + dataType;
+        String cachedRule = redisTemplate.opsForValue().get(cacheKey);
+        if (cachedRule != null) {
+            try {
+                return objectMapper.readValue(cachedRule, BillingRule.class);
+            } catch (JsonProcessingException e) {
+                // 缓存解析失败，继续查询数据库
+            }
+        }
+
         LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(BillingRule::getDataType, dataType);
         wrapper.eq(BillingRule::getStatus, "active");
         wrapper.orderByDesc(BillingRule::getCreatedAt);
         wrapper.last("LIMIT 1");
 
-        return billingRuleMapper.selectOne(wrapper);
+        BillingRule rule = billingRuleMapper.selectOne(wrapper);
+
+        if (rule != null) {
+            try {
+                redisTemplate.opsForValue().set(cacheKey,
+                    objectMapper.writeValueAsString(rule),
+                    RULE_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+            } catch (JsonProcessingException e) {
+                // 缓存写入失败不影响主流程
+            }
+        }
+
+        return rule;
     }
 }

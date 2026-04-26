@@ -10,6 +10,8 @@ public final class StatusConstants {
     public static final String PENDING = "pending";
     public static final String SUSPENDED = "suspended";
     public static final String RESOLVED = "resolved";
+    public static final String CONFIRMED = "confirmed";
+    public static final String ALERTED = "alerted";
 
     private StatusConstants() {
     }

@@ -1,0 +1,143 @@
+<h2>API Config Page Fields</h2>
+<p class="subtitle">根据后端VendorConfig实体，需要配置以下字段</p>
+
+<div class="mockup">
+  <div class="mockup-header">API配置表单</div>
+  <div class="mockup-body" style="padding: 16px;">
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+      <!-- 基础配置 -->
+      <div style="grid-column: span 2; font-weight: 600; color: var(--color-primary);">基础配置</div>
+      <div>
+        <div class="label">厂商 *</div>
+        <div class="mock-input">选择厂商 ▼</div>
+      </div>
+      <div>
+        <div class="label">数据类型 *</div>
+        <div class="mock-input">选择数据类型 ▼</div>
+      </div>
+      <div style="grid-column: span 2;">
+        <div class="label">API地址 *</div>
+        <div class="mock-input">https://api.vendor.com/endpoint</div>
+      </div>
+      <div>
+        <div class="label">请求方法</div>
+        <div class="mock-input">POST ▼</div>
+      </div>
+      <div>
+        <div class="label">超时时间(ms)</div>
+        <div class="mock-input">30000</div>
+      </div>
+
+      <!-- 重试与熔断 -->
+      <div style="grid-column: span 2; font-weight: 600; color: var(--color-primary); margin-top: 8px;">重试与熔断</div>
+      <div>
+        <div class="label">重试次数</div>
+        <div class="mock-input">3</div>
+      </div>
+      <div>
+        <div class="label">熔断阈值</div>
+        <div class="mock-input">5</div>
+      </div>
+      <div>
+        <div class="label">熔断超时(s)</div>
+        <div class="mock-input">60</div>
+      </div>
+      <div>
+        <div class="label">降级厂商</div>
+        <div class="mock-input">选择降级厂商 ▼</div>
+      </div>
+
+      <!-- 安全配置 -->
+      <div style="grid-column: span 2; font-weight: 600; color: var(--color-primary); margin-top: 8px;">安全配置</div>
+      <div>
+        <div class="label">签名类型</div>
+        <div class="mock-input">HMAC-SHA256 ▼</div>
+      </div>
+      <div>
+        <div class="label">加密类型</div>
+        <div class="mock-input">AES ▼</div>
+      </div>
+      <div style="grid-column: span 2;">
+        <div class="label">请求头配置 (JSON)</div>
+        <div class="mock-input" style="height: 60px;">{"Authorization": "Bearer {secretKey}"}</div>
+      </div>
+
+      <!-- 数据转换 -->
+      <div style="grid-column: span 2; font-weight: 600; color: var(--color-primary); margin-top: 8px;">数据转换</div>
+      <div style="grid-column: span 2;">
+        <div class="label">请求模板 (JSON)</div>
+        <div class="mock-input" style="height: 60px;">{"name": "{companyName}", "id": "{companyId}"}</div>
+      </div>
+      <div style="grid-column: span 2;">
+        <div class="label">响应映射 (JSON)</div>
+        <div class="mock-input" style="height: 60px;">{"data.result": "result", "data.code": "code"}</div>
+      </div>
+
+      <div style="grid-column: span 2;">
+        <div class="label">状态</div>
+        <div style="display: flex; gap: 16px;">
+          <label><input type="radio" checked> 启用</label>
+          <label><input type="radio"> 禁用</label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>字段说明</h3>
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <th style="text-align: left; padding: 8px;">字段</th>
+      <th style="text-align: left; padding: 8px;">必填</th>
+      <th style="text-align: left; padding: 8px;">说明</th>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">vendorId</td>
+      <td style="padding: 8px;">✓</td>
+      <td style="padding: 8px;">关联厂商</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">dataTypeId</td>
+      <td style="padding: 8px;">✓</td>
+      <td style="padding: 8px;">数据类型</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">apiUrl</td>
+      <td style="padding: 8px;">✓</td>
+      <td style="padding: 8px;">API端点地址</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">method</td>
+      <td style="padding: 8px;">-</td>
+      <td style="padding: 8px;">GET/POST，默认POST</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">timeout</td>
+      <td style="padding: 8px;">-</td>
+      <td style="padding: 8px;">超时毫秒数，默认30000</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">retryCount</td>
+      <td style="padding: 8px;">-</td>
+      <td style="padding: 8px;">失败重试次数</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">circuitThreshold</td>
+      <td style="padding: 8px;">-</td>
+      <td style="padding: 8px;">熔断触发阈值</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">signType</td>
+      <td style="padding: 8px;">-</td>
+      <td style="padding: 8px;">签名算法类型</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px;">requestTemplate</td>
+      <td style="padding: 8px;">-</td>
+      <td style="padding: 8px;">请求参数映射模板</td>
+    </tr>
+  </table>
+</div>
+
+<p style="margin-top: 16px; color: var(--color-text-tertiary);">确认这些字段是否完整？在终端回复。</p>

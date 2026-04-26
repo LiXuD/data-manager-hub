@@ -8,7 +8,7 @@ import com.dataplatform.call.service.CallRecordService;
 import com.dataplatform.call.service.DataQueryService;
 import com.dataplatform.call.service.VendorProxyService;
 import com.dataplatform.common.billing.BillingCalculator;
-import com.dataplatform.common.billing.StandardBillingCalculator;
+import com.dataplatform.common.billing.BillingCalculatorFactory;
 import com.dataplatform.common.entity.unified.BillingRuleDO;
 import com.dataplatform.vendor.entity.VendorConfig;
 import com.dataplatform.vendor.service.VendorConfigService;
@@ -45,11 +45,13 @@ public class DataQueryServiceImpl implements DataQueryService {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    @Autowired
+    private BillingCalculatorFactory calculatorFactory;
+
     @Value("${data.query.cache.ttl:3600}")
     private int cacheTtl;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final BillingCalculator billingCalculator = new StandardBillingCalculator();
 
     @Override
     public Map<String, Object> queryData(String vendorCode, String dataType, String interfaceCode,
@@ -186,7 +188,8 @@ public class DataQueryServiceImpl implements DataQueryService {
             BillingRule rule = billingService.getRuleByVendorAndDataType(vendorCode, dataType);
             if (rule != null) {
                 BillingRuleDO ruleDO = convertToBillingRuleDO(rule);
-                return billingCalculator.calculateSingle(ruleDO, (int) latencyMs);
+                BillingCalculator calculator = calculatorFactory.getCalculator(ruleDO.getBillingType());
+                return calculator.calculateSingle(ruleDO, (int) latencyMs);
             }
         } catch (Exception e) {
             log.warn("获取计费规则失败，使用默认价格: {}", e.getMessage());
@@ -205,10 +208,13 @@ public class DataQueryServiceImpl implements DataQueryService {
         ruleDO.setVendorId(rule.getVendorId());
         ruleDO.setVendorName(rule.getVendorName());
         ruleDO.setDataType(rule.getDataType());
+        ruleDO.setBillingType(rule.getBillingType());
         ruleDO.setUnitPrice(rule.getUnitPrice());
         ruleDO.setTierMin(rule.getTierMin());
         ruleDO.setTierMax(rule.getTierMax());
         ruleDO.setDiscount(rule.getDiscount());
+        ruleDO.setSlaThreshold(rule.getSlaThreshold());
+        ruleDO.setCompensationRate(rule.getCompensationRate());
         ruleDO.setStatus(rule.getStatus());
         return ruleDO;
     }

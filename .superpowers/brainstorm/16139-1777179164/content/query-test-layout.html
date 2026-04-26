@@ -1,0 +1,69 @@
+<h2>Data Query Test Page Layout</h2>
+<p class="subtitle">用户选择厂商、数据类型、输入参数，执行查询并查看结果</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Option A: 上下布局 (Form + Results)</div>
+    <div class="mockup-body" style="min-height: 320px;">
+      <div class="mock-section" style="border: 1px dashed var(--color-border); padding: 12px; margin-bottom: 12px; border-radius: 8px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">查询参数</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <div class="mock-input" style="flex: 1; min-width: 120px;">厂商 ▼</div>
+          <div class="mock-input" style="flex: 1; min-width: 120px;">数据类型 ▼</div>
+        </div>
+        <div style="margin-top: 8px;">
+          <div class="mock-input" style="width: 100%;">请求参数 (JSON)</div>
+        </div>
+        <div style="margin-top: 8px;">
+          <button class="mock-button">执行查询</button>
+          <button class="mock-button" style="margin-left: 8px;">清空</button>
+        </div>
+      </div>
+      <div class="mock-section" style="border: 1px dashed var(--color-border); padding: 12px; border-radius: 8px; background: var(--color-bg-light);">
+        <div style="font-weight: 600; margin-bottom: 8px;">查询结果</div>
+        <div class="placeholder" style="height: 150px;">响应数据展示区域</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Option B: 左右布局 (Form | Results)</div>
+    <div class="mockup-body" style="min-height: 320px; display: flex; gap: 12px;">
+      <div style="width: 280px; flex-shrink: 0; border: 1px dashed var(--color-border); padding: 12px; border-radius: 8px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">查询参数</div>
+        <div class="mock-input" style="width: 100%; margin-bottom: 8px;">厂商 ▼</div>
+        <div class="mock-input" style="width: 100%; margin-bottom: 8px;">数据类型 ▼</div>
+        <div class="mock-input" style="width: 100%; height: 100px; margin-bottom: 8px;">JSON参数</div>
+        <button class="mock-button" style="width: 100%;">执行查询</button>
+      </div>
+      <div style="flex: 1; border: 1px dashed var(--color-border); padding: 12px; border-radius: 8px; background: var(--color-bg-light);">
+        <div style="font-weight: 600; margin-bottom: 8px;">查询结果</div>
+        <div class="placeholder" style="height: 260px;">响应数据展示区域</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Trade-offs</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>A: 上下布局</h4>
+      <ul>
+        <li>移动端友好</li>
+        <li>表单宽度更大</li>
+        <li>适合复杂参数输入</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>B: 左右布局</h4>
+      <ul>
+        <li>参数和结果同时可见</li>
+        <li>无需滚动对比</li>
+        <li>桌面端体验更佳</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top: 16px; color: var(--color-text-tertiary);">选择一个布局方案，在终端回复。</p>

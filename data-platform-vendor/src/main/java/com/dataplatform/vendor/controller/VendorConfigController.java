@@ -3,8 +3,6 @@ package com.dataplatform.vendor.controller;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.vendor.entity.VendorConfig;
 import com.dataplatform.vendor.service.VendorConfigService;
-// import io.swagger.v3.oas.annotations.Operation;
-// import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 

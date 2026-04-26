@@ -25,6 +25,9 @@ public class BillingRule {
     @JsonProperty("dataType")
     private String dataType;
 
+    @JsonProperty("billingType")
+    private String billingType = "STANDARD";
+
     @JsonProperty("unitPrice")
     private BigDecimal unitPrice;
 
@@ -66,6 +69,8 @@ public class BillingRule {
     public void setVendorName(String vendorName) { this.vendorName = vendorName; }
     public String getDataType() { return dataType; }
     public void setDataType(String dataType) { this.dataType = dataType; }
+    public String getBillingType() { return billingType; }
+    public void setBillingType(String billingType) { this.billingType = billingType; }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
     public Integer getTierMin() { return tierMin; }

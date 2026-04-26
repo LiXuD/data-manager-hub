@@ -6,10 +6,12 @@ import com.dataplatform.common.result.Result;
 import com.dataplatform.interface_.entity.ApiInterface;
 import com.dataplatform.interface_.service.ApiInterfaceService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -117,5 +119,70 @@ public class ApiInterfaceController {
         apiInterface.setStatus(status);
         apiInterfaceService.updateById(apiInterface);
         return ResponseEntity.ok(Result.success(null));
+    }
+
+    @GetMapping("/{id}/schema")
+    public ResponseEntity<Result<Map<String, Object>>> getSchema(@PathVariable Long id) {
+        Map<String, Object> schema = apiInterfaceService.getInterfaceSchema(id);
+        if (schema == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "接口不存在"));
+        }
+        return ResponseEntity.ok(Result.success(schema));
+    }
+
+    @PutMapping("/{id}/schema")
+    public ResponseEntity<Result<Void>> updateSchema(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String requestSchema = body.get("requestSchema");
+        String responseSchema = body.get("responseSchema");
+
+        // 验证 Schema 格式
+        if (requestSchema != null && !apiInterfaceService.validateSchema(requestSchema)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "请求 Schema 格式无效"));
+        }
+        if (responseSchema != null && !apiInterfaceService.validateSchema(responseSchema)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "响应 Schema 格式无效"));
+        }
+
+        boolean updated = apiInterfaceService.updateSchema(id, requestSchema, responseSchema);
+        if (!updated) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "接口不存在"));
+        }
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    @PostMapping("/schema/validate")
+    public Result<Map<String, Object>> validateSchema(@RequestBody Map<String, String> body) {
+        String schema = body.get("schema");
+        boolean valid = apiInterfaceService.validateSchema(schema);
+
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("valid", valid);
+        return Result.success(result);
+    }
+
+    @GetMapping("/{id}/stats")
+    public ResponseEntity<Result<Map<String, Object>>> getCallStats(
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
+        Map<String, Object> stats = apiInterfaceService.getCallStats(id, startTime, endTime);
+        if (stats == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "接口不存在"));
+        }
+        return ResponseEntity.ok(Result.success(stats));
+    }
+
+    @GetMapping("/{id}/stats/daily")
+    public ResponseEntity<Result<List<Map<String, Object>>>> getDailyCallStats(
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
+        List<Map<String, Object>> stats = apiInterfaceService.getDailyCallStats(id, startTime, endTime);
+        return ResponseEntity.ok(Result.success(stats));
     }
 }

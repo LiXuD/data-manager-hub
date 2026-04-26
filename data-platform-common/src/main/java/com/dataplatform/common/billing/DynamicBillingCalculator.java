@@ -66,8 +66,9 @@ public class DynamicBillingCalculator implements BillingCalculator {
      * 返回值: 0.0 ~ 1.0
      */
     private BigDecimal calculateCompensationFactor(BillingRuleDO rule, Integer latencyMs) {
-        int slaThreshold = DEFAULT_SLA_THRESHOLD;
-        BigDecimal compensationRate = DEFAULT_COMPENSATION_RATE;
+        // 使用规则中的SLA阈值，如果未设置则使用默认值
+        int slaThreshold = rule.getSlaThreshold() != null ? rule.getSlaThreshold() : DEFAULT_SLA_THRESHOLD;
+        BigDecimal compensationRate = rule.getCompensationRate() != null ? rule.getCompensationRate() : DEFAULT_COMPENSATION_RATE;
 
         // 响应时间在SLA内，无补偿
         if (latencyMs <= slaThreshold) {

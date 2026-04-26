@@ -17,6 +17,9 @@ public class BillingRuleDO {
     private String vendorName;
     private String dataType;
 
+    /** 计费类型: STANDARD, TIERED, DYNAMIC */
+    private String billingType;
+
     /** 单价 */
     private BigDecimal unitPrice;
 
@@ -28,6 +31,12 @@ public class BillingRuleDO {
 
     /** 折扣率 */
     private BigDecimal discount;
+
+    /** SLA阈值(毫秒) */
+    private Integer slaThreshold;
+
+    /** 补偿系数 */
+    private BigDecimal compensationRate;
 
     private String status;
 
@@ -43,6 +52,9 @@ public class BillingRuleDO {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Long updatedBy;
 
+    @TableLogic
+    private Boolean deleted;
+
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -52,6 +64,8 @@ public class BillingRuleDO {
     public void setVendorName(String vendorName) { this.vendorName = vendorName; }
     public String getDataType() { return dataType; }
     public void setDataType(String dataType) { this.dataType = dataType; }
+    public String getBillingType() { return billingType; }
+    public void setBillingType(String billingType) { this.billingType = billingType; }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
     public Integer getTierMin() { return tierMin; }
@@ -60,8 +74,14 @@ public class BillingRuleDO {
     public void setTierMax(Integer tierMax) { this.tierMax = tierMax; }
     public BigDecimal getDiscount() { return discount; }
     public void setDiscount(BigDecimal discount) { this.discount = discount; }
+    public Integer getSlaThreshold() { return slaThreshold; }
+    public void setSlaThreshold(Integer slaThreshold) { this.slaThreshold = slaThreshold; }
+    public BigDecimal getCompensationRate() { return compensationRate; }
+    public void setCompensationRate(BigDecimal compensationRate) { this.compensationRate = compensationRate; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public Boolean getDeleted() { return deleted; }
+    public void setDeleted(Boolean deleted) { this.deleted = deleted; }
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }

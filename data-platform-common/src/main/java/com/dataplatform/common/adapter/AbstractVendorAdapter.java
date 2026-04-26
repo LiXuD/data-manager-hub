@@ -87,12 +87,4 @@ public abstract class AbstractVendorAdapter implements VendorAdapter {
 
         return current;
     }
-
-    /**
-     * 构建签名 (子类可重写实现具体签名算法)
-     */
-    protected String buildSignature(Map<String, Object> params, String secretKey, String signType) {
-        // 默认不签名, 子类可重写
-        return null;
-    }
 }

@@ -1,0 +1,109 @@
+<h2>Design Summary</h2>
+<p class="subtitle">两个新页面的完整设计方案</p>
+
+<div class="mockup" style="margin-bottom: 24px;">
+  <div class="mockup-header">Page 1: API配置管理 (新增独立页面)</div>
+  <div class="mockup-body" style="padding: 16px;">
+    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+      <div class="mock-input" style="width: 200px;">厂商 ▼</div>
+      <div class="mock-input" style="width: 200px;">数据类型 ▼</div>
+      <div class="mock-input" style="width: 200px;">状态 ▼</div>
+      <button class="mock-button">搜索</button>
+      <button class="mock-button">新增配置</button>
+    </div>
+    <div style="border: 1px dashed var(--color-border); border-radius: 8px; overflow: hidden;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <tr style="background: var(--color-bg-light);">
+          <th style="padding: 8px; text-align: left;">厂商</th>
+          <th style="padding: 8px; text-align: left;">数据类型</th>
+          <th style="padding: 8px; text-align: left;">API地址</th>
+          <th style="padding: 8px; text-align: left;">超时</th>
+          <th style="padding: 8px; text-align: left;">状态</th>
+          <th style="padding: 8px; text-align: left;">操作</th>
+        </tr>
+        <tr style="border-top: 1px solid var(--color-border);">
+          <td style="padding: 8px;">天眼查</td>
+          <td style="padding: 8px;">企业工商</td>
+          <td style="padding: 8px;">https://api.tianyancha.com/...</td>
+          <td style="padding: 8px;">30s</td>
+          <td style="padding: 8px;"><span style="color: #67C23A;">启用</span></td>
+          <td style="padding: 8px;">编辑 | 删除</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Page 2: 数据查询测试 (新增独立页面)</div>
+  <div class="mockup-body" style="padding: 16px;">
+    <div style="border: 1px dashed var(--color-border); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+      <div style="font-weight: 600; margin-bottom: 12px;">查询参数</div>
+      <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+        <div style="flex: 1;">
+          <div class="label">厂商</div>
+          <div class="mock-input">天眼查 ▼</div>
+        </div>
+        <div style="flex: 1;">
+          <div class="label">数据类型</div>
+          <div class="mock-input">企业工商 ▼</div>
+        </div>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <div class="label">请求参数 (JSON)</div>
+        <div class="mock-input" style="height: 80px; font-family: monospace;">{"companyName": "阿里巴巴"}</div>
+      </div>
+      <div>
+        <button class="mock-button" style="background: var(--color-primary); color: #fff;">执行查询</button>
+        <button class="mock-button" style="margin-left: 8px;">清空</button>
+        <button class="mock-button" style="margin-left: 8px;">查看历史</button>
+      </div>
+    </div>
+    <div style="border: 1px dashed var(--color-border); padding: 16px; border-radius: 8px; background: var(--color-bg-light);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="font-weight: 600;">查询结果</div>
+        <div style="font-size: 12px; color: var(--color-text-tertiary);">耗时: 156ms | 状态: 成功</div>
+      </div>
+      <div style="background: #1a1a2e; color: #00d4aa; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 12px;">
+        <pre style="margin: 0;">{
+  "success": true,
+  "data": {
+    "companyName": "阿里巴巴集团",
+    "creditCode": "91330100...""",
+    "status": "存续"
+  }
+}</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Implementation Summary</h3>
+  <div style="background: var(--color-bg-light); border-radius: 8px; padding: 16px;">
+    <table style="width: 100%; font-size: 13px;">
+      <tr>
+        <td style="padding: 8px; font-weight: 600; width: 140px;">菜单新增</td>
+        <td style="padding: 8px;">API配置、数据测试 两个菜单项</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px; font-weight: 600;">新增页面</td>
+        <td style="padding: 8px;">src/views/api-config/index.vue, src/views/data-test/index.vue</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px; font-weight: 600;">新增API</td>
+        <td style="padding: 8px;">src/api/vendor-config.ts, src/api/data-query.ts</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px; font-weight: 600;">新增类型</td>
+        <td style="padding: 8px;">VendorConfig, DataQueryRequest, DataQueryResponse</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px; font-weight: 600;">路由更新</td>
+        <td style="padding: 8px;">router/index.ts 添加两个路由</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<p style="margin-top: 16px; color: var(--color-text-tertiary);">确认设计方案？在终端回复 "确认" 开始编写设计文档。</p>
