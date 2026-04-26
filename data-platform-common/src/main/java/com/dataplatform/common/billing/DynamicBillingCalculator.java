@@ -66,7 +66,6 @@ public class DynamicBillingCalculator implements BillingCalculator {
      * 返回值: 0.0 ~ 1.0
      */
     private BigDecimal calculateCompensationFactor(BillingRuleDO rule, Integer latencyMs) {
-        // BillingRuleDO没有slaThreshold和compensationRate字段，使用默认值
         int slaThreshold = DEFAULT_SLA_THRESHOLD;
         BigDecimal compensationRate = DEFAULT_COMPENSATION_RATE;
 

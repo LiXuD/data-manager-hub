@@ -19,11 +19,9 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
 
     private final String vendorCode;
     private final OkHttpClient httpClient;
-    private final ObjectMapper objectMapper;
 
     public HttpVendorAdapter(String vendorCode) {
         this.vendorCode = vendorCode;
-        this.objectMapper = new ObjectMapper();
         this.httpClient = new OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
