@@ -22,6 +22,7 @@
         <module>data-platform-billing</module>
         <module>data-platform-call</module>
         <module>data-platform-graylog</module>
+        <module>data-platform-interface</module>
         <module>data-platform-log</module>
         <module>data-platform-monitor</module>
         <module>data-platform-role</module>
