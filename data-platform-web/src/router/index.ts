@@ -56,6 +56,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '数据类型' }
       },
       {
+        path: '/interface',
+        name: 'Interface',
+        component: () => import('@/views/interface/index.vue'),
+        meta: { title: '接口管理' }
+      },
+      {
         path: '/call',
         name: 'Call',
         component: () => import('@/views/call/index.vue'),
@@ -90,6 +96,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Audit',
         component: () => import('@/views/audit/index.vue'),
         meta: { title: '操作日志' }
+      },
+      {
+        path: '/data-test',
+        name: 'DataTest',
+        component: () => import('@/views/data-test/index.vue'),
+        meta: { title: '数据查询测试' }
       },
       {
         path: '/profile',
