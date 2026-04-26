@@ -3,6 +3,7 @@ package com.dataplatform.interface_.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.interface_.entity.ApiInterface;
 import com.dataplatform.interface_.mapper.ApiInterfaceMapper;
@@ -38,7 +39,7 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
     public List<ApiInterface> listByDataTypeId(Long dataTypeId) {
         LambdaQueryWrapper<ApiInterface> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ApiInterface::getDataTypeId, dataTypeId);
-        wrapper.eq(ApiInterface::getStatus, "active");
+        wrapper.eq(ApiInterface::getStatus, StatusConstants.ACTIVE);
         wrapper.eq(ApiInterface::getDeleted, false);
         wrapper.orderByAsc(ApiInterface::getSort);
         return this.list(wrapper);

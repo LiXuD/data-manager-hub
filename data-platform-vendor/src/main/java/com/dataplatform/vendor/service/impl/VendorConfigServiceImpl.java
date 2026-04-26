@@ -2,6 +2,7 @@ package com.dataplatform.vendor.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.vendor.entity.DataType;
 import com.dataplatform.vendor.entity.VendorConfig;
 import com.dataplatform.vendor.entity.VendorInfo;
@@ -29,7 +30,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
     public List<VendorConfig> listByVendor(Long vendorId) {
         return list(new LambdaQueryWrapper<VendorConfig>()
             .eq(VendorConfig::getVendorId, vendorId)
-            .eq(VendorConfig::getStatus, "active")
+            .eq(VendorConfig::getStatus, StatusConstants.ACTIVE)
             .orderByAsc(VendorConfig::getId));
     }
 
@@ -38,7 +39,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
         return getOne(new LambdaQueryWrapper<VendorConfig>()
             .eq(VendorConfig::getVendorId, vendorId)
             .likeRight(VendorConfig::getDataTypeId, dataType)
-            .eq(VendorConfig::getStatus, "active"));
+            .eq(VendorConfig::getStatus, StatusConstants.ACTIVE));
     }
 
     @Override
@@ -47,7 +48,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
         VendorInfo vendorInfo = vendorInfoMapper.selectOne(
             new LambdaQueryWrapper<VendorInfo>()
                 .eq(VendorInfo::getVendorCode, vendorCode)
-                .eq(VendorInfo::getStatus, "active")
+                .eq(VendorInfo::getStatus, StatusConstants.ACTIVE)
         );
         if (vendorInfo == null) {
             return null;
@@ -66,7 +67,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
         return getOne(new LambdaQueryWrapper<VendorConfig>()
             .eq(VendorConfig::getVendorId, vendorInfo.getId())
             .eq(VendorConfig::getDataTypeId, dataType.getId())
-            .eq(VendorConfig::getStatus, "active")
+            .eq(VendorConfig::getStatus, StatusConstants.ACTIVE)
         );
     }
 
@@ -74,7 +75,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
     public VendorConfig getByInterfaceId(Long interfaceId) {
         return getOne(new LambdaQueryWrapper<VendorConfig>()
             .eq(VendorConfig::getInterfaceId, interfaceId)
-            .eq(VendorConfig::getStatus, "active")
+            .eq(VendorConfig::getStatus, StatusConstants.ACTIVE)
         );
     }
 

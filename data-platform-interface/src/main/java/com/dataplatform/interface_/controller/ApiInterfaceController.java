@@ -1,5 +1,6 @@
 package com.dataplatform.interface_.controller;
 
+import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.interface_.entity.ApiInterface;
@@ -19,7 +20,7 @@ public class ApiInterfaceController {
     @Autowired
     private ApiInterfaceService apiInterfaceService;
 
-    private static final List<String> VALID_STATUSES = List.of("active", "inactive");
+    private static final List<String> VALID_STATUSES = List.of(StatusConstants.ACTIVE, StatusConstants.INACTIVE);
 
     @GetMapping("/list")
     public PageResult<ApiInterface> list(
@@ -65,7 +66,7 @@ public class ApiInterfaceController {
 
         apiInterface.setId(null);
         if (apiInterface.getStatus() == null) {
-            apiInterface.setStatus("active");
+            apiInterface.setStatus(StatusConstants.ACTIVE);
         }
         if (apiInterface.getSort() == null) {
             apiInterface.setSort(0);
