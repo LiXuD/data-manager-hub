@@ -157,19 +157,40 @@ export interface BillingSummary {
 
 // API接口相关类型
 export interface ApiInterface {
-  id: string
-  name: string
+  id: number
+  interfaceCode: string
+  interfaceName: string
+  dataTypeId: number
+  dataTypeName?: string
+  vendorId?: number
+  vendorName?: string
   path: string
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
-  vendorId: string
-  vendorName: string
-  dataTypeId: string
-  dataTypeName: string
-  version: string
-  deprecated: boolean
-  status: 'enabled' | 'disabled'
+  description?: string
+  requestSchema?: string
+  responseSchema?: string
+  sort: number
+  status: 'active' | 'inactive'
+  hasConfig?: boolean
   createdAt: string
   updatedAt: string
+}
+
+// 数据查询请求
+export interface DataQueryRequest {
+  vendorCode: string
+  dataTypeCode: string
+  interfaceCode?: string
+  params: Record<string, any>
+}
+
+// 数据查询响应
+export interface DataQueryResponse {
+  success: boolean
+  data?: any
+  errorCode?: string
+  errorMsg?: string
+  latency?: number
+  cached?: boolean
 }
 
 // 调用记录相关类型
