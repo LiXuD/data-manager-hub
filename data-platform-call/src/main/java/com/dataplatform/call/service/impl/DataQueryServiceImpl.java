@@ -10,6 +10,8 @@ import com.dataplatform.call.service.VendorProxyService;
 import com.dataplatform.common.billing.BillingCalculator;
 import com.dataplatform.common.billing.StandardBillingCalculator;
 import com.dataplatform.common.entity.unified.BillingRuleDO;
+import com.dataplatform.vendor.entity.VendorConfig;
+import com.dataplatform.vendor.service.VendorConfigService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +37,9 @@ public class DataQueryServiceImpl implements DataQueryService {
     private VendorProxyService vendorProxyService;
 
     @Autowired
+    private VendorConfigService vendorConfigService;
+
+    @Autowired
     private BillingService billingService;
 
     @Autowired
@@ -47,15 +52,29 @@ public class DataQueryServiceImpl implements DataQueryService {
     private final BillingCalculator billingCalculator = new StandardBillingCalculator();
 
     @Override
-    public Map<String, Object> queryData(String vendorCode, String dataType,
+    public Map<String, Object> queryData(String vendorCode, String dataType, String interfaceCode,
                                           Map<String, Object> params,
                                           Long callerId, String apiKey) {
         long startTime = System.currentTimeMillis();
         String requestId = generateRequestId();
 
+        // 使用interfaceCode或dataType获取配置
+        VendorConfig config = null;
+        if (interfaceCode != null && !interfaceCode.isEmpty()) {
+            config = vendorConfigService.getByVendorCodeAndInterfaceCode(vendorCode, interfaceCode);
+        }
+        if (config == null && dataType != null && !dataType.isEmpty()) {
+            config = vendorConfigService.getByVendorCodeAndDataTypeCode(vendorCode, dataType);
+        }
+
+        // 确定实际使用的数据类型
+        String effectiveDataType = (config != null && config.getDataTypeCode() != null)
+            ? config.getDataTypeCode()
+            : dataType;
+
         try {
             // 1. 检查缓存
-            String cacheKey = buildCacheKey(vendorCode, dataType, params);
+            String cacheKey = buildCacheKey(vendorCode, effectiveDataType, params);
             String cachedResult = redisTemplate.opsForValue().get(cacheKey);
             if (cachedResult != null) {
                 log.info("命中缓存: {}", cacheKey);
@@ -63,23 +82,23 @@ public class DataQueryServiceImpl implements DataQueryService {
                 result.put("cached", true);
                 result.put("latency", System.currentTimeMillis() - startTime);
 
-                recordCall(requestId, callerId, vendorCode, dataType, params,
+                recordCall(requestId, callerId, vendorCode, effectiveDataType, params,
                           result, true, System.currentTimeMillis() - startTime,
                           BigDecimal.ZERO, true);
                 return result;
             }
 
             // 2. 调用厂商API (通过适配器)
-            Map<String, Object> vendorResult = vendorProxyService.callVendor(vendorCode, dataType, params);
+            Map<String, Object> vendorResult = vendorProxyService.callVendor(vendorCode, effectiveDataType, params);
 
             // 3. 计算费用
             long latency = System.currentTimeMillis() - startTime;
-            BigDecimal cost = calculateCost(vendorCode, dataType, latency);
+            BigDecimal cost = calculateCost(vendorCode, effectiveDataType, latency);
 
             boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
 
             // 4. 记录调用
-            recordCall(requestId, callerId, vendorCode, dataType, params,
+            recordCall(requestId, callerId, vendorCode, effectiveDataType, params,
                       vendorResult, success, latency, cost, false);
 
             // 5. 存入缓存 (仅成功时缓存)
@@ -101,7 +120,7 @@ public class DataQueryServiceImpl implements DataQueryService {
 
         } catch (Exception e) {
             log.error("数据查询失败: vendor={}, type={}, error={}",
-                     vendorCode, dataType, e.getMessage(), e);
+                     vendorCode, effectiveDataType, e.getMessage(), e);
 
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("success", false);
@@ -109,7 +128,7 @@ public class DataQueryServiceImpl implements DataQueryService {
             errorResult.put("errorMsg", e.getMessage());
             errorResult.put("requestId", requestId);
 
-            recordCall(requestId, callerId, vendorCode, dataType, params,
+            recordCall(requestId, callerId, vendorCode, effectiveDataType, params,
                       errorResult, false, System.currentTimeMillis() - startTime,
                       BigDecimal.ZERO, false);
 
@@ -118,7 +137,7 @@ public class DataQueryServiceImpl implements DataQueryService {
     }
 
     @Override
-    public Map<String, Object> batchQuery(String vendorCode, String dataType,
+    public Map<String, Object> batchQuery(String vendorCode, String dataType, String interfaceCode,
                                            List<Map<String, Object>> paramsList,
                                            Long callerId, String apiKey) {
         Map<String, Object> result = new HashMap<>();
@@ -130,7 +149,7 @@ public class DataQueryServiceImpl implements DataQueryService {
 
         for (Map<String, Object> params : paramsList) {
             try {
-                Map<String, Object> queryResult = queryData(vendorCode, dataType, params, callerId, apiKey);
+                Map<String, Object> queryResult = queryData(vendorCode, dataType, interfaceCode, params, callerId, apiKey);
                 if (Boolean.TRUE.equals(queryResult.get("success"))) {
                     success++;
                 } else {

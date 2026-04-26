@@ -6,6 +6,7 @@ import java.util.Map;
 public class BatchQueryReqVO {
     private String vendorCode;
     private String dataType;
+    private String interfaceCode;
     private List<Map<String, Object>> paramsList;
     private BatchOptions options;
 
@@ -13,6 +14,8 @@ public class BatchQueryReqVO {
     public void setVendorCode(String vendorCode) { this.vendorCode = vendorCode; }
     public String getDataType() { return dataType; }
     public void setDataType(String dataType) { this.dataType = dataType; }
+    public String getInterfaceCode() { return interfaceCode; }
+    public void setInterfaceCode(String interfaceCode) { this.interfaceCode = interfaceCode; }
     public List<Map<String, Object>> getParamsList() { return paramsList; }
     public void setParamsList(List<Map<String, Object>> paramsList) { this.paramsList = paramsList; }
     public BatchOptions getOptions() { return options; }

@@ -51,6 +51,7 @@ public class DataQueryController {
         Map<String, Object> result = dataQueryService.queryData(
             request.getVendorCode(),
             request.getDataType(),
+            request.getInterfaceCode(),
             request.getParams(),
             callerId,
             apiKey
@@ -78,6 +79,7 @@ public class DataQueryController {
         Map<String, Object> result = dataQueryService.batchQuery(
             request.getVendorCode(),
             request.getDataType(),
+            request.getInterfaceCode(),
             request.getParamsList(),
             callerId,
             apiKey
