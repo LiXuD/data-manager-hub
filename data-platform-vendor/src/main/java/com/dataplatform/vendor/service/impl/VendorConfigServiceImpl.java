@@ -80,11 +80,10 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
 
     @Override
     public VendorConfig getByVendorCodeAndInterfaceCode(String vendorCode, String interfaceCode) {
-        // TODO: 需要添加data-platform-interface依赖并注入ApiInterfaceService
-        // 实现逻辑:
-        // 1. 通过vendorCode查询VendorInfo获取vendorId
-        // 2. 通过interfaceCode查询ApiInterface获取interfaceId
-        // 3. 通过vendorId和interfaceId查询VendorConfig
-        return null;
+        // TODO: Requires data-platform-interface dependency and ApiInterfaceService injection
+        throw new UnsupportedOperationException(
+            "getByVendorCodeAndInterfaceCode requires data-platform-interface dependency. " +
+            "Add dependency and inject ApiInterfaceService to implement."
+        );
     }
 }
