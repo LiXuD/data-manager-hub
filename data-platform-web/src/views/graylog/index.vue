@@ -353,13 +353,8 @@ const handleSubmit = async () => {
   fetchList()
 }
 
-const handleToggleStatus = (row: GrayRule) => {
-  row.status = row.status === 'active' ? 'inactive' : 'active'
-  ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
-}
-
 const getStatusType = (status: string) => getTagType('active', status)
-const getStatusTextLocalized = (status: string) => getStatusText(status, graylogStatusLabels)
+const getStatusTextLocalized = (status: string) => getStatusText('active', status)
 
 onMounted(() => { fetchList() })
 </script>

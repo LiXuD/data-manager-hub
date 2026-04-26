@@ -182,19 +182,6 @@ import { ElMessage } from 'element-plus'
 import { request } from '@/utils/request'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
-const healthStatusLabels = {
-  healthy: '正常',
-  unhealthy: '异常',
-  unknown: '未知'
-}
-
-const levelLabels = {
-  info: '信息',
-  warning: '警告',
-  error: '错误',
-  critical: '严重'
-}
-
 interface HealthStatus {
   id: number
   serviceName: string
@@ -218,7 +205,6 @@ const loading = ref(false)
 const activeTab = ref('health')
 const tableData = ref<HealthStatus[]>([])
 const alertData = ref<AlertRule[]>([])
-const pagination = reactive({ currentPage: 1, pageSize: 10 })
 
 const healthOptions = [
   { label: '全部', value: '' },
@@ -280,17 +266,16 @@ const handleSearch = () => { fetchHealth() }
 const handleReset = () => { searchForm.serviceName = ''; searchForm.status = ''; fetchHealth() }
 const handleAddRule = () => { ElMessage.info('新增告警规则') }
 const handleEditRule = (row: AlertRule) => { ElMessage.info(`编辑告警规则: ${row.ruleName}`) }
-const handleDeleteRule = (row: AlertRule) => { ElMessage.success('删除成功'); fetchAlerts() }
+const handleDeleteRule = (_row: AlertRule) => { ElMessage.success('删除成功'); fetchAlerts() }
 
-const getStatusType = (status: string) => getTagType('health', status)
-const getStatusTextLocalized = (status: string) => getStatusText(status, healthStatusLabels)
+const getStatusTextLocalized = (status: string) => getStatusText('health', status)
 const getLevelType = (level: string) => getTagType('enabled', level)
-const getLevelTextLocalized = (level: string) => getStatusText(level, levelLabels)
+const getLevelTextLocalized = (level: string) => getStatusText('level', level)
 
 const handleCheckNow = (row: HealthStatus) => { ElMessage.info(`立即检查: ${row.serviceName}`) }
 const handleViewLogs = (row: HealthStatus) => { ElMessage.info(`查看日志: ${row.serviceName}`) }
 
-onMounted(() => { fetchHealth(); fetchAlerts() })
+onMounted(() => { Promise.all([fetchHealth(), fetchAlerts()]) })
 </script>
 
 <style scoped>
