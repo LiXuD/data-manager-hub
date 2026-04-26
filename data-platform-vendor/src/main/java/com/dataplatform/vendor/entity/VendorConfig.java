@@ -12,6 +12,7 @@ public class VendorConfig {
     
     private Long vendorId;
     private Long dataTypeId;
+    private Long interfaceId;
     private String apiUrl;
     private String method;
     private Integer timeout;
@@ -48,6 +49,8 @@ public class VendorConfig {
     public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
     public Long getDataTypeId() { return dataTypeId; }
     public void setDataTypeId(Long dataTypeId) { this.dataTypeId = dataTypeId; }
+    public Long getInterfaceId() { return interfaceId; }
+    public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
     public String getApiUrl() { return apiUrl; }
     public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
     public String getMethod() { return method; }
