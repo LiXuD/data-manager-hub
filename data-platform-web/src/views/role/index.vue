@@ -94,7 +94,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { request } from '@/utils/request'
-import { PageHeader, SearchBar } from '@/components'
+import PageHeader from '@/components/PageHeader.vue'
+import SearchBar from '@/components/SearchBar.vue'
 import { USER_STATUS, STATUS_LABELS } from '@/constants'
 
 interface Role { id: number; roleCode: string; roleName: string; description: string; status: string; createdAt: string }
@@ -107,13 +108,24 @@ const searchForm = reactive({ roleName: '', status: '' })
 const dialogVisible = ref(false)
 const form = reactive({ id: null as number | null, roleCode: '', roleName: '', description: '', status: 'active' })
 
+interface RoleListResponse {
+  data?: { records?: Role[]; total?: number } | Role[]
+  total?: number
+}
+
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/v1/role/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
-    tableData.value = res.data?.records || res.data || []
-    total.value = res.data?.total || res.total || 0
-  } catch (e: any) {
+    const res = await request.get<RoleListResponse>('/api/v1/role/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
+    const data = res.data
+    if (data && 'records' in data && Array.isArray(data.records)) {
+      tableData.value = data.records
+      total.value = data.total || 0
+    } else if (Array.isArray(data)) {
+      tableData.value = data
+      total.value = res.total || 0
+    }
+  } catch {
     tableData.value = [
       { id: 1, roleCode: 'ADMIN', roleName: '系统管理员', description: '拥有所有权限', status: 'active', createdAt: '2026-01-01 10:00:00' },
       { id: 2, roleCode: 'TENANT_ADMIN', roleName: '租户管理员', description: '租户管理权限', status: 'active', createdAt: '2026-01-02 10:00:00' },

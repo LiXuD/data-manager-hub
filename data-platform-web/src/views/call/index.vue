@@ -121,7 +121,7 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+            <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusTextLocalized(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="cost" label="费用" width="100">
@@ -155,6 +155,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCallRecordList } from '@/api/call'
+import { extractPageData } from '@/utils/pagination'
+import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
 interface CallRecord {
   id: number
@@ -205,10 +207,10 @@ const fetchList = async () => {
       page: pagination.currentPage,
       pageSize: pagination.pageSize
     })
-    tableData.value = res.data?.data?.records || res.data?.data || res.data || []
-    total.value = res.data?.total || 0
-  } catch (e: any) {
-    // 错误已在拦截器中处理
+    const { list, total: totalCount } = extractPageData<CallRecord>(res)
+    tableData.value = list
+    total.value = totalCount
+  } catch {
     tableData.value = []
   } finally {
     loading.value = false
@@ -234,15 +236,8 @@ const handleExport = () => {
   ElMessage.info('导出功能开发中...')
 }
 
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = { success: 'success', failed: 'danger', timeout: 'warning', rate_limited: 'info' }
-  return map[status] || 'info'
-}
-
-const getStatusText = (status: string) => {
-  const map: Record<string, string> = { success: '成功', failed: '失败', timeout: '超时', rate_limited: '限流' }
-  return map[status] || status
-}
+const getStatusType = (status: string) => getTagType('call', status)
+const getStatusTextLocalized = (status: string) => getStatusText('call', status)
 
 onMounted(() => { fetchList() })
 </script>

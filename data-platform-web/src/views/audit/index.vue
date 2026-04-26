@@ -205,7 +205,7 @@ const fetchList = async () => {
     })
     tableData.value = res.data?.data?.records || res.data?.data || res.data || []
     total.value = res.data?.total || 0
-  } catch (e: any) {
+  } catch {
     // 错误已在拦截器中处理
     tableData.value = []
   } finally {
@@ -234,7 +234,7 @@ const handleDelete = async (row: VendorConfig) => {
     await deleteConfig(row.id)
     ElMessage.success('删除成功')
     fetchList()
-  } catch (e: any) {
+  } catch {
     ElMessage.error('删除失败')
   }
 }
@@ -254,7 +254,7 @@ const handleSubmit = async () => {
     }
     dialogVisible.value = false
     fetchList()
-  } catch (e: any) {
+  } catch {
     ElMessage.error('保存失败')
   }
 }

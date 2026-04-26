@@ -32,7 +32,7 @@ instance.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
     if (res.code === 0 || res.code === 200 || res.code === null || res.code === undefined) {
-      return response
+      return res
     }
 
     const msg = res.message || res.msg || '请求失败'
@@ -93,19 +93,24 @@ instance.interceptors.response.use(
 export default instance
 
 export const request = {
-  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return instance.get(url, config).then(res => res.data)
+  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.get(url, config)
+    return response as T
   },
-  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return instance.post(url, data, config).then(res => res.data)
+  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.post(url, data, config)
+    return response as T
   },
-  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return instance.put(url, data, config).then(res => res.data)
+  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.put(url, data, config)
+    return response as T
   },
-  patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return instance.patch(url, data, config).then(res => res.data)
+  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.patch(url, data, config)
+    return response as T
   },
-  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return instance.delete(url, config).then(res => res.data)
+  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.delete(url, config)
+    return response as T
   }
 }

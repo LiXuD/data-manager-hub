@@ -49,17 +49,11 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         long startTime = System.currentTimeMillis();
 
         try {
-            // 1. 转换请求参数
             Map<String, Object> vendorParams = transformRequest(params, config.getRequestTemplate());
-
-            // 2. 构建请求
             Request request = buildRequest(config, vendorParams);
 
-            // 3. 执行请求
             try (Response response = httpClient.newCall(request).execute()) {
                 long latency = System.currentTimeMillis() - startTime;
-
-                // 4. 处理响应
                 return handleResponse(response, config, latency);
             }
 

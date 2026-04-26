@@ -104,7 +104,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getCallerList, createCaller, updateCaller, deleteCaller, getApiKeyList, createApiKey, deleteApiKey } from '@/api/caller'
+import { getCallerList, deleteCaller, getApiKeyList, createApiKey, deleteApiKey } from '@/api/caller'
 import type { Caller, ApiKey } from '@/api/caller'
 
 const searchForm = reactive({ keyword: '', status: '' })
@@ -121,17 +121,17 @@ const loadData = async () => {
     const res = await getCallerList({ page: pagination.page, pageSize: pagination.pageSize })
     tableData.value = res.data || []
     pagination.total = res.total || 0
-  } catch (e) { console.error(e) }
+  } catch { tableData.value = [] }
   finally { loading.value = false }
 }
 
 const handleSearch = () => { pagination.page = 1; loadData() }
 const handleReset = () => { searchForm.keyword = ''; searchForm.status = ''; loadData() }
 const handleAdd = () => { ElMessage.info('新增功能开发中') }
-const handleEdit = (row: Caller) => { ElMessage.info('编辑功能开发中') }
+const handleEdit = (_row: Caller) => { ElMessage.info('编辑功能开发中') }
 const handleDelete = async (row: Caller) => { await ElMessageBox.confirm(`确认删除"${row.callerName}"?`, '提示', { type: 'warning' }); await deleteCaller(row.id!); ElMessage.success('删除成功'); loadData() }
 const handleApiKey = async (row: Caller) => { currentCallerId.value = row.id!; const res = await getApiKeyList(row.id!); apiKeyList.value = res.data || []; apiKeyVisible.value = true }
-const handleCreateApiKey = async () => { const res = await createApiKey(currentCallerId.value); ElMessage.success('创建成功: ' + res.data?.apiKey); apiKeyList.value = [...apiKeyList.value, res.data] }
+const handleCreateApiKey = async () => { const res = await createApiKey(currentCallerId.value); ElMessage.success('创建成功: ' + res.apiKey); apiKeyList.value = [...apiKeyList.value, res] }
 const handleDeleteApiKey = async (id: number) => { await deleteApiKey(id); ElMessage.success('删除成功'); apiKeyList.value = apiKeyList.value.filter(k => k.id !== id) }
 const handleStatusChange = (row: Caller) => { ElMessage.success(row.status === 'active' ? '已启用' : '已禁用') }
 

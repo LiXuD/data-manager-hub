@@ -66,14 +66,24 @@ const emit = defineEmits(['update:modelValue', 'success'])
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 
-const form = ref({
+type VendorStatus = 'active' | 'inactive' | 'enabled' | 'disabled'
+
+const form = ref<{
+  vendorCode: string
+  vendorName: string
+  vendorType: string
+  contactPerson: string
+  contactPhone: string
+  contactEmail: string
+  status: VendorStatus
+}>({
   vendorCode: '',
   vendorName: '',
   vendorType: 'business',
   contactPerson: '',
   contactPhone: '',
   contactEmail: '',
-  status: 'active' as const
+  status: 'active'
 })
 
 const rules: FormRules = {

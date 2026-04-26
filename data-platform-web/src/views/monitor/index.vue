@@ -95,7 +95,7 @@
               <template #default="{ row }">
                 <div class="status-cell" :class="row.status">
                   <span class="status-dot"></span>
-                  {{ getStatusText(row.status) }}
+                  {{ getStatusTextLocalized(row.status) }}
                 </div>
               </template>
             </el-table-column>
@@ -148,7 +148,7 @@
             </el-table-column>
             <el-table-column prop="level" label="告警级别" width="100">
               <template #default="{ row }">
-                <el-tag :type="getLevelType(row.level)" size="small">{{ getLevelText(row.level) }}</el-tag>
+                <el-tag :type="getLevelType(row.level)" size="small">{{ getLevelTextLocalized(row.level) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
@@ -180,6 +180,20 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { request } from '@/utils/request'
+import { getStatusType as getTagType, getStatusText } from '@/utils/status'
+
+const healthStatusLabels = {
+  healthy: '正常',
+  unhealthy: '异常',
+  unknown: '未知'
+}
+
+const levelLabels = {
+  info: '信息',
+  warning: '警告',
+  error: '错误',
+  critical: '严重'
+}
 
 interface HealthStatus {
   id: number
@@ -226,14 +240,18 @@ const statsData = reactive({
   avgResponseTime: 528
 })
 
+interface HealthListResponse {
+  data?: HealthStatus[]
+}
+
 const fetchHealth = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/v1/monitor/health', {
+    const res = await request.get<HealthListResponse>('/api/v1/monitor/health', {
       params: { ...searchForm }
     })
     tableData.value = res.data || []
-  } catch (e: any) {
+  } catch {
     // 错误时使用 mock 数据
     tableData.value = [
       { id: 1, serviceName: 'API网关', status: 'healthy', responseTime: 25, uptime: 99.9, lastCheck: '2026-04-20 21:00:00' },
@@ -264,25 +282,10 @@ const handleAddRule = () => { ElMessage.info('新增告警规则') }
 const handleEditRule = (row: AlertRule) => { ElMessage.info(`编辑告警规则: ${row.ruleName}`) }
 const handleDeleteRule = (row: AlertRule) => { ElMessage.success('删除成功'); fetchAlerts() }
 
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = { healthy: 'success', unhealthy: 'danger', unknown: 'warning' }
-  return map[status] || 'info'
-}
-
-const getStatusText = (status: string) => {
-  const map: Record<string, string> = { healthy: '正常', unhealthy: '异常', unknown: '未知' }
-  return map[status] || status
-}
-
-const getLevelType = (level: string) => {
-  const map: Record<string, string> = { info: 'info', warning: 'warning', error: 'danger', critical: 'danger' }
-  return map[level] || 'info'
-}
-
-const getLevelText = (level: string) => {
-  const map: Record<string, string> = { info: '信息', warning: '警告', error: '错误', critical: '严重' }
-  return map[level] || level
-}
+const getStatusType = (status: string) => getTagType('health', status)
+const getStatusTextLocalized = (status: string) => getStatusText(status, healthStatusLabels)
+const getLevelType = (level: string) => getTagType('enabled', level)
+const getLevelTextLocalized = (level: string) => getStatusText(level, levelLabels)
 
 const handleCheckNow = (row: HealthStatus) => { ElMessage.info(`立即检查: ${row.serviceName}`) }
 const handleViewLogs = (row: HealthStatus) => { ElMessage.info(`查看日志: ${row.serviceName}`) }

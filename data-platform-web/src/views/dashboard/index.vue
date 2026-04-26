@@ -55,7 +55,7 @@ const initTrendChart = () => {
       borderColor: 'rgba(0, 212, 170, 0.3)',
       borderWidth: 1,
       textStyle: { color: '#E8EDF3' },
-      formatter: (params: any) => {
+      formatter: (params: { name: string; value: number }[]) => {
         const data = params[0]
         return `<div style="font-family: var(--font-mono)">${data.name}<br/><span style="color: #00D4AA">调用量:</span> ${data.value.toLocaleString()}</div>`
       }

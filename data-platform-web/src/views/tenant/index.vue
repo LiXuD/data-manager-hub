@@ -145,8 +145,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTenantList, createTenant, updateTenant, deleteTenant } from '@/api/tenant'
+import type { Tenant } from '@/types'
 
-const tableData = ref<any[]>([])
+const tableData = ref<Tenant[]>([])
 const loading = ref(false)
 const searchForm = reactive({ keyword: '', status: '' })
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
@@ -155,8 +156,8 @@ const dialogTitle = ref('')
 const isEdit = ref(false)
 const submitting = ref(false)
 const formRef = ref()
-const formData = reactive({
-  id: null as number | null, tenantCode: '', tenantName: '', tenantType: 'enterprise',
+const formData = reactive<Partial<Tenant>>({
+  id: undefined, tenantCode: '', tenantName: '', tenantType: 'enterprise',
   status: 'active', contactPerson: '', contactEmail: '', maxApiKeys: 10, maxCallers: 50
 })
 const formRules = {
@@ -171,12 +172,11 @@ const fetchData = async () => {
   try {
     const res = await getTenantList({
       page: pagination.page, pageSize: pagination.pageSize,
-      keyword: searchForm.keyword || undefined, status: searchForm.status || undefined
+      keyword: searchForm.keyword || undefined, status: searchForm.status as 'active' | 'disabled' | undefined
     })
-    tableData.value = Array.isArray(res.data) ? res.data : (res.data?.list || [])
-    pagination.total = res.total || res.data?.total || 0
-  } catch (error: any) {
-    // 错误已在拦截器中处理
+    tableData.value = res.data || []
+    pagination.total = res.total || 0
+  } catch {
     tableData.value = []
   }
   finally { loading.value = false }
@@ -191,27 +191,27 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
-const handleEdit = (row: any) => {
+const handleEdit = (row: Tenant) => {
   isEdit.value = true; dialogTitle.value = '编辑租户'
   Object.assign(formData, { ...row })
   dialogVisible.value = true
 }
 
-const handleDelete = async (row: any) => {
+const handleDelete = async (row: Tenant) => {
   await ElMessageBox.confirm(`确定要删除租户 "${row.tenantName}" 吗？`, '警告', { type: 'warning' })
   try {
     await deleteTenant(String(row.id))
     ElMessage.success('删除成功')
     fetchData()
-  } catch (error: any) { ElMessage.error(error.message || '删除失败') }
+  } catch { /* 错误已在拦截器中处理 */ }
 }
 
-const handleToggleStatus = async (row: any) => {
+const handleToggleStatus = async (row: Tenant) => {
   const newStatus = row.status === 'active' ? 'disabled' : 'active'
   try {
     await updateTenant(String(row.id), { ...row, status: newStatus })
     ElMessage.success(newStatus === 'active' ? '已启用' : '已禁用')
-  } catch (error: any) { row.status = row.status === 'active' ? 'disabled' : 'active' }
+  } catch { row.status = row.status === 'active' ? 'disabled' : 'active' }
 }
 
 const handleSubmit = async () => {
@@ -219,13 +219,15 @@ const handleSubmit = async () => {
   await formRef.value.validate()
   submitting.value = true
   try {
-    const api = isEdit.value ? updateTenant : createTenant
-    const params = isEdit.value ? [formData.id, formData] : [formData]
-    await api(...params)
+    if (isEdit.value) {
+      await updateTenant(formData.id!, formData)
+    } else {
+      await createTenant(formData)
+    }
     ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
     dialogVisible.value = false
     fetchData()
-  } catch (error: any) { ElMessage.error(error.message || '操作失败') }
+  } catch { /* 错误已在拦截器中处理 */ }
   finally { submitting.value = false }
 }
 

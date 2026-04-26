@@ -136,15 +136,29 @@ const categoryOptions = [
 ]
 
 const categoryMap: Record<string, string> = { business: '工商信息', judicial: '司法信息', financial: '财务信息', public_opinion: '舆情信息', other: '其他' }
-const getCategoryTag = (category: string) => { const map: Record<string, string> = { business: 'success', judicial: 'warning', financial: 'info', public_opinion: 'danger', other: '' }; return map[category] || 'info' }
+const getCategoryTag = (category: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { business: 'success', judicial: 'warning', financial: 'info', public_opinion: 'danger', other: 'info' }
+  return map[category] || 'info'
+}
+
+interface DataTypeListResponse {
+  data?: { records?: DataType[]; total?: number } | DataType[]
+  total?: number
+}
 
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/v1/data-type/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
-    tableData.value = res.data?.records || res.data || []
-    total.value = res.data?.total || res.total || 0
-  } catch (e: any) {
+    const res = await request.get<DataTypeListResponse>('/api/v1/data-type/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
+    const data = res.data
+    if (data && 'records' in data && Array.isArray(data.records)) {
+      tableData.value = data.records
+      total.value = data.total || 0
+    } else if (Array.isArray(data)) {
+      tableData.value = data
+      total.value = res.total || 0
+    }
+  } catch {
     tableData.value = [
       { id: 1, typeCode: 'BUSINESS_INFO', typeName: '工商信息', category: 'business', description: '企业工商信息查询', status: 'active', createdAt: '2026-01-01 10:00:00' },
       { id: 2, typeCode: 'CREDIT_QUERY', typeName: '企业征信', category: 'financial', description: '企业征信报告查询', status: 'active', createdAt: '2026-01-02 10:00:00' }

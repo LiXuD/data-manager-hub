@@ -121,10 +121,15 @@ const searchForm = reactive({ username: '', status: '' })
 const dialogVisible = ref(false)
 const form = reactive({ id: null as number | null, username: '', nickname: '', email: '', phone: '', status: 'active' })
 
+interface UserListResponse {
+  data?: User[]
+  total?: number
+}
+
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/v1/user/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
+    const res = await request.get<UserListResponse>('/api/v1/user/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
     tableData.value = res.data || []
     total.value = res.total || 0
   } catch (e: unknown) {

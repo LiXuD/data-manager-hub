@@ -132,7 +132,7 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+            <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusTextLocalized(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="操作时间" width="180">
@@ -166,6 +166,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { request } from '@/utils/request'
+import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
 interface OperationLog {
   id: number
@@ -204,20 +205,30 @@ const moduleOptions = [
   { label: '系统管理', value: 'system' }
 ]
 
+interface LogListResponse {
+  data?: { records?: OperationLog[]; total?: number } | OperationLog[]
+  total?: number
+}
+
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/v1/log/list', {
+    const res = await request.get<LogListResponse>('/api/v1/log/list', {
       params: {
         page: pagination.currentPage,
         pageSize: pagination.pageSize,
         ...searchForm
       }
     })
-    tableData.value = res.data?.records || res.data || []
-    total.value = res.data?.total || res.total || 0
-  } catch (e: any) {
-    // 错误时使用 mock 数据
+    const data = res.data
+    if (data && 'records' in data && Array.isArray(data.records)) {
+      tableData.value = data.records
+      total.value = data.total || 0
+    } else if (Array.isArray(data)) {
+      tableData.value = data
+      total.value = res.total || 0
+    }
+  } catch {
     tableData.value = [
       { id: 1, username: 'admin', module: 'user', operation: '新增用户', method: 'POST /api/v1/user', params: '{"username":"test"}', result: 'success', ip: '192.168.1.100', duration: 150, status: 'success', createdAt: '2026-04-20 21:00:00' },
       { id: 2, username: 'admin', module: 'tenant', operation: '修改租户', method: 'PUT /api/v1/tenant/1', params: '{"name":"新租户"}', result: 'success', ip: '192.168.1.100', duration: 80, status: 'success', createdAt: '2026-04-20 20:30:00' },
@@ -249,13 +260,8 @@ const handleViewDetail = (row: OperationLog) => {
   ElMessage.info(`查看详情: ${row.operation}`)
 }
 
-const getStatusType = (status: string) => {
-  return status === 'success' ? 'success' : 'danger'
-}
-
-const getStatusText = (status: string) => {
-  return status === 'success' ? '成功' : '失败'
-}
+const getStatusType = (status: string) => getTagType('enabled', status)
+const getStatusTextLocalized = (status: string) => getStatusText('enabled', status)
 
 onMounted(() => { fetchList() })
 </script>

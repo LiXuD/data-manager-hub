@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
  * 熔断器配置类
  */
 @Configuration
-public class CircuitBreakerConfig {
+public class CircuitBreakerConfiguration {
 
     @Bean
     public CircuitBreakerManager circuitBreakerManager() {

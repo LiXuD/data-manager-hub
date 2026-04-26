@@ -122,7 +122,7 @@
             </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+                <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusTextLocalized(row.status) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right">
@@ -244,7 +244,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBillingList, getBillingRuleList, createBillingRule, updateBillingRule, deleteBillingRule } from '@/api/billing'
+import { getBillingList } from '@/api/billing'
+import { extractPageData } from '@/utils/pagination'
+import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
 interface BillingRecord {
   id: number
@@ -303,12 +305,6 @@ const statsData = reactive({
   overdueCount: 3
 })
 
-const statusOptions = [
-  { label: '待结算', value: 'pending' },
-  { label: '已结算', value: 'settled' },
-  { label: '逾期', value: 'overdue' }
-]
-
 const fetchList = async () => {
   loading.value = true
   try {
@@ -316,10 +312,10 @@ const fetchList = async () => {
       page: pagination.currentPage,
       pageSize: pagination.pageSize
     })
-    tableData.value = res.data?.data?.records || res.data?.data || res.data || []
-    total.value = res.data?.total || 0
-  } catch (e: any) {
-    // 错误已在拦截器中处理
+    const { list, total: totalCount } = extractPageData<BillingRecord>(res)
+    tableData.value = list
+    total.value = totalCount
+  } catch {
     tableData.value = []
   } finally {
     loading.value = false
@@ -363,7 +359,7 @@ const handleDeleteRule = async (row: BillingRule) => {
     await ElMessageBox.confirm(`确定要删除该计费规则吗？`, '提示', { type: 'warning' })
     ElMessage.success('删除成功')
     fetchRules()
-  } catch (e) {}
+  } catch {}
 }
 
 const handleSubmitRule = async () => {
@@ -380,15 +376,8 @@ const handleExport = () => {
   ElMessage.info('导出功能开发中...')
 }
 
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = { pending: 'warning', settled: 'success', overdue: 'danger' }
-  return map[status] || 'info'
-}
-
-const getStatusText = (status: string) => {
-  const map: Record<string, string> = { pending: '待结算', settled: '已结算', overdue: '逾期' }
-  return map[status] || status
-}
+const getStatusType = (status: string) => getTagType('billing', status)
+const getStatusTextLocalized = (status: string) => getStatusText('billing', status)
 
 onMounted(() => {
   fetchList()

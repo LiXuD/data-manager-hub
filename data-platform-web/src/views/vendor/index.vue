@@ -236,12 +236,12 @@ const getTypeLabel = (type?: string) => {
   return map[type || ''] || type || '-'
 }
 
-const getTypeTag = (type?: string) => {
-  const map: Record<string, string> = {
+const getTypeTag = (type?: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
     BUSINESS: 'success',
     PERSONAL: 'warning',
     CREDIT: 'info',
-    OTHER: ''
+    OTHER: 'info'
   }
   return map[type || ''] || 'info'
 }
@@ -254,12 +254,12 @@ const loadData = async () => {
       page: pagination.page,
       pageSize: pagination.pageSize,
       keyword: searchForm.keyword || undefined,
-      status: searchForm.status || undefined,
+      status: searchForm.status as 'active' | 'inactive' | undefined,
       vendorType: searchForm.vendorType || undefined
     }
     const res = await getVendorList(params)
-    tableData.value = Array.isArray(res.data) ? res.data : (res.data?.list || [])
-    pagination.total = res.total || res.data?.total || 0
+    tableData.value = res.data || []
+    pagination.total = res.total || 0
   } catch (error) {
     console.error('加载失败:', error)
     ElMessage.error('加载数据失败，请稍后重试')
@@ -325,7 +325,7 @@ const handleDelete = async (row: Vendor) => {
 // 状态切换
 const handleStatusChange = async (row: Vendor) => {
   try {
-    await updateVendorStatus(row.id, row.status)
+    await updateVendorStatus(String(row.id), row.status as 'active' | 'inactive')
     ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
   } catch (error) {
     row.status = row.status === 'active' ? 'inactive' : 'active'

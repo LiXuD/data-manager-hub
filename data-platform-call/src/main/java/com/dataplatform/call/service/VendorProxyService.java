@@ -4,6 +4,7 @@ import com.dataplatform.common.adapter.VendorAdapter;
 import com.dataplatform.common.adapter.VendorAdapterConfig;
 import com.dataplatform.common.adapter.VendorAdapterFactory;
 import com.dataplatform.common.circuitbreaker.CircuitBreakerManager;
+import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.vendor.entity.VendorConfig;
 import com.dataplatform.vendor.service.VendorConfigService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -44,21 +45,16 @@ public class VendorProxyService {
      */
     public Map<String, Object> callVendor(String vendorCode, String dataTypeCode,
                                            Map<String, Object> params) {
-        // 1. 获取厂商配置
         VendorConfig config = vendorConfigService.getByVendorCodeAndDataTypeCode(vendorCode, dataTypeCode);
         if (config == null) {
             return errorResult("CONFIG_NOT_FOUND", "厂商配置不存在: " + vendorCode + "/" + dataTypeCode);
         }
 
-        // 2. 检查厂商状态
-        if (!"active".equals(config.getStatus())) {
+        if (!StatusConstants.ACTIVE.equals(config.getStatus())) {
             return errorResult("VENDOR_INACTIVE", "厂商已禁用: " + vendorCode);
         }
 
-        // 3. 构建适配器配置
         VendorAdapterConfig adapterConfig = buildAdapterConfig(config, vendorCode, dataTypeCode);
-
-        // 4. 获取适配器并执行
         VendorAdapter adapter = VendorAdapterFactory.getAdapter(vendorCode);
 
         try {

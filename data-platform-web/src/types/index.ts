@@ -1,13 +1,55 @@
+// 告警规则
+export interface AlertRule {
+  id: number
+  ruleName: string
+  ruleType: string
+  targetType: string
+  targetId?: number
+  conditionType: string
+  thresholdValue: number
+  timeWindowMinutes: number
+  notifyChannels: string
+  status: 'active' | 'inactive'
+  createdBy?: number
+  createdAt: string
+  updatedAt: string
+  // 兼容字段
+  metric?: string
+  threshold?: number
+  condition?: string
+  level?: string
+}
+
+// 告警记录
+export interface AlertRecord {
+  id: number
+  ruleId: number
+  tenantId?: number
+  alertType: string
+  alertTitle: string
+  alertTime: string
+  level: string
+  alertMessage: string
+  triggeredValue?: number
+  status: 'pending' | 'resolved'
+  resolvedAt?: string
+  resolvedBy?: number
+  createdAt: string
+}
+
 // 租户相关类型
 export interface Tenant {
-  id: string
-  name: string
-  code: string
-  contact: string
-  email: string
-  phone: string
-  status: 'enabled' | 'disabled'
-  budget: number
+  id: number
+  tenantCode: string
+  tenantName: string
+  tenantType: 'enterprise' | 'personal'
+  status: 'active' | 'disabled'
+  contactPerson: string
+  contactPhone?: string
+  contactEmail: string
+  maxApiKeys: number
+  maxCallers: number
+  createdBy?: number
   createdAt: string
   updatedAt: string
 }
@@ -132,24 +174,23 @@ export interface ApiInterface {
 
 // 调用记录相关类型
 export interface CallRecord {
-  id: string
-  callerId: string
-  callerName: string
-  tenantId: string
-  tenantName: string
-  apiId: string
-  apiName: string
-  vendorId: string
-  vendorName: string
-  requestParams: Record<string, any>
-  responseData: Record<string, any>
-  status: 'success' | 'failed'
+  id: number
+  requestId: string
+  tenantId: number
+  callerId: number
+  apiKeyId?: number
+  vendorId: number
+  vendorCode: string
+  dataType: string
+  requestParams: string
+  responseData: string
+  success: boolean
   errorCode?: string
-  errorMessage?: string
+  errorMsg?: string
+  latency: number
   cost: number
+  cached?: boolean
   callTime: string
-  responseTime: number
-  traceId: string
 }
 
 // 分页响应
@@ -175,12 +216,36 @@ export interface PageParams {
   status?: string
 }
 
+// 告警规则查询参数
+export interface AlertRuleQueryParams {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  status?: string
+}
+
+// 告警记录查询参数
+export interface AlertRecordQueryParams {
+  page?: number
+  pageSize?: number
+  status?: string
+  level?: string
+}
+
 // 分页响应
 export interface PageResult<T> {
   list: T[]
   total: number
   page: number
   pageSize: number
+}
+
+// 列表响应 (简化版分页)
+export interface ListResponse<T> {
+  data: T[]
+  total: number
+  page?: number
+  pageSize?: number
 }
 
 // 数据类型

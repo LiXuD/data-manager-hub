@@ -119,7 +119,7 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+            <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusTextLocalized(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="有效期" width="160">
@@ -220,6 +220,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { request } from '@/utils/request'
+import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
 interface GrayRule {
   id: number
@@ -268,20 +269,45 @@ const conditionTypeOptions = [
   { label: 'Cookie', value: 'cookie' }
 ]
 
+interface GraylogConfig {
+  id: number
+  ruleName: string
+  serviceName: string
+  version: string
+  weight: number
+  conditionType: string
+  conditionValue: string
+  description: string
+  status: string
+  startTime: string
+  endTime: string
+  createdAt: string
+}
+
+interface GraylogListResponse {
+  data?: { records?: GraylogConfig[]; total?: number } | GraylogConfig[]
+  total?: number
+}
+
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get('/api/v1/graylog/list', {
+    const res = await request.get<GraylogListResponse>('/api/v1/graylog/list', {
       params: {
         page: pagination.currentPage,
         pageSize: pagination.pageSize,
         ...searchForm
       }
     })
-    tableData.value = res.data?.records || res.data || []
-    total.value = res.data?.total || res.total || 0
-  } catch (e: any) {
-    // 错误时使用 mock 数据
+    const data = res.data
+    if (data && 'records' in data && Array.isArray(data.records)) {
+      tableData.value = data.records
+      total.value = data.total || 0
+    } else if (Array.isArray(data)) {
+      tableData.value = data
+      total.value = res.total || 0
+    }
+  } catch {
     tableData.value = [
       { id: 1, ruleName: '用户服务V2灰度', serviceName: 'user-service', version: '2.0.0', weight: 20, conditionType: 'random', conditionValue: '', description: '新版本用户服务灰度发布', status: 'active', startTime: '2026-04-15 00:00:00', endTime: '2026-04-30 23:59:59', createdAt: '2026-04-14 10:00:00' },
       { id: 2, ruleName: '计费服务V1.5', serviceName: 'billing-service', version: '1.5.0', weight: 50, conditionType: 'userId', conditionValue: '1000-5000', description: '特定用户ID范围灰度', status: 'active', startTime: '2026-04-10 00:00:00', endTime: '2026-04-25 23:59:59', createdAt: '2026-04-09 14:00:00' },
@@ -332,15 +358,8 @@ const handleToggleStatus = (row: GrayRule) => {
   ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
 }
 
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = { active: 'success', inactive: 'info', expired: 'warning' }
-  return map[status] || 'info'
-}
-
-const getStatusText = (status: string) => {
-  const map: Record<string, string> = { active: '启用中', inactive: '已禁用', expired: '已过期' }
-  return map[status] || status
-}
+const getStatusType = (status: string) => getTagType('active', status)
+const getStatusTextLocalized = (status: string) => getStatusText(status, graylogStatusLabels)
 
 onMounted(() => { fetchList() })
 </script>
