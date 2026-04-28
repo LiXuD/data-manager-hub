@@ -1,8 +1,51 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-04-26
-**状态**: MVP 已完成
+**最后更新**: 2026-04-28
+**状态**: MVP 已完成, 契约分离架构重构进行中
+
+---
+
+## 🏗️ 契约分离架构重构进度
+
+### ✅ Task 1: 创建 data-platform-api 公共契约模块 (完成)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| 创建 data-platform-api/pom.xml | ✅ 完成 | 2026-04-28 |
+| 创建 Result.java 统一返回结果类 | ✅ 完成 | 2026-04-28 |
+| 创建 PageResult.java 分页结果类 | ✅ 完成 | 2026-04-28 |
+| 创建 BusinessException.java 业务异常类 | ✅ 完成 | 2026-04-28 |
+| 创建 ErrorCode.java 错误码枚举 | ✅ 完成 | 2026-04-28 |
+| 更新父 pom.xml 添加模块聚合 | ✅ 完成 | 2026-04-28 |
+| 编译验证 | ✅ 通过 | 2026-04-28 |
+
+**提交记录**: `c205b2c refactor: 创建 data-platform-api 公共契约模块`
+
+### ✅ Task 2: 重构 data-platform-common 公共模块 (完成)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| 修改 common pom.xml 依赖管理 | ✅ 完成 | 2026-04-28 |
+| 更新 common 依赖 data-platform-api | ✅ 完成 | 2026-04-28 |
+| 编译验证 | ✅ 通过 | 2026-04-28 |
+
+**提交记录**: `d6bc3e5 refactor: 重构 data-platform-common 依赖管理`
+
+### ✅ Task 3: 重构 data-platform-vendor 为 api + service 双模块 (完成)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| 修改 vendor 父 pom 为聚合模块 | ✅ 完成 | 2026-04-28 |
+| 创建 vendor-api 契约层模块 | ✅ 完成 | 2026-04-28 |
+| 创建 DTO 类 (VendorInfoDTO, VendorConfigDTO 等) | ✅ 完成 | 2026-04-28 |
+| 创建 Feign 客户端接口 | ✅ 完成 | 2026-04-28 |
+| 完善 vendor-service 业务层模块 | ✅ 完成 | 2026-04-28 |
+| 编译验证 | ✅ 通过 | 2026-04-28 |
+
+**提交记录**: `5fb0a04 refactor: 重构 data-platform-vendor 为 api + service 双模块`
+
+### 🔄 Task 4: 批量重构其他业务服务模块 (待实施)
 
 ---
 
