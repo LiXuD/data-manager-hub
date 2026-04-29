@@ -58,7 +58,7 @@ public class BaseTest {
     protected void login() {
         Map<String, String> loginData = new HashMap<>();
         loginData.put("username", "admin");
-        loginData.put("password", "admin123");
+        loginData.put("password", "Test123456");
 
         Response response = given()
             .contentType("application/json")
