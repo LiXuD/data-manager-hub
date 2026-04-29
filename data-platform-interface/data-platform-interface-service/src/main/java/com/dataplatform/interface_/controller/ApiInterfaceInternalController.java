@@ -1,0 +1,43 @@
+package com.dataplatform.interface_.controller;
+
+import com.dataplatform.interface_.api.dto.ApiInterfaceDTO;
+import com.dataplatform.interface_.entity.ApiInterface;
+import com.dataplatform.interface_.service.ApiInterfaceService;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/interface/internal")
+public class ApiInterfaceInternalController {
+
+    @Autowired
+    private ApiInterfaceService apiInterfaceService;
+
+    @GetMapping("/by-code/{code}")
+    public ApiInterfaceDTO getByInterfaceCode(@PathVariable("code") String code) {
+        ApiInterface entity = apiInterfaceService.getByInterfaceCode(code);
+        if (entity == null) {
+            return null;
+        }
+        return toDTO(entity);
+    }
+
+    @GetMapping("/{id}")
+    public ApiInterfaceDTO getById(@PathVariable("id") Long id) {
+        ApiInterface entity = apiInterfaceService.getById(id);
+        if (entity == null) {
+            return null;
+        }
+        return toDTO(entity);
+    }
+
+    private ApiInterfaceDTO toDTO(ApiInterface entity) {
+        ApiInterfaceDTO dto = new ApiInterfaceDTO();
+        BeanUtils.copyProperties(entity, dto);
+        return dto;
+    }
+}

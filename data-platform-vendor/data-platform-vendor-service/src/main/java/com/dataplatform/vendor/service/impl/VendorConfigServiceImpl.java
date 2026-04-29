@@ -3,8 +3,8 @@ package com.dataplatform.vendor.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.common.constant.StatusConstants;
-import com.dataplatform.interface_.entity.ApiInterface;
-import com.dataplatform.interface_.service.ApiInterfaceService;
+import com.dataplatform.interface_.api.dto.ApiInterfaceDTO;
+import com.dataplatform.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.vendor.entity.DataType;
 import com.dataplatform.vendor.entity.VendorConfig;
 import com.dataplatform.vendor.entity.VendorInfo;
@@ -38,7 +38,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
     private DataTypeMapper dataTypeMapper;
 
     @Autowired
-    private ApiInterfaceService apiInterfaceService;
+    private ApiInterfaceFeignClient apiInterfaceFeignClient;
 
     @Autowired
     private StringRedisTemplate redisTemplate;
@@ -96,7 +96,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
             return null;
         }
 
-        ApiInterface apiInterface = apiInterfaceService.getByInterfaceCode(interfaceCode);
+        ApiInterfaceDTO apiInterface = apiInterfaceFeignClient.getByInterfaceCode(interfaceCode);
         if (apiInterface == null) {
             return null;
         }
