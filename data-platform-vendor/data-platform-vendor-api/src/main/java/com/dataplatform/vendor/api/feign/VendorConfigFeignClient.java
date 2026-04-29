@@ -64,4 +64,20 @@ public interface VendorConfigFeignClient {
      */
     @GetMapping("/vendor/config/secretKey")
     Result<String> getSecretKey(@RequestParam("vendorCode") String vendorCode);
+
+    /**
+     * 根据厂商ID和数据类型编码获取配置
+     */
+    @GetMapping("/vendor/config/byVendorIdAndDataTypeCode")
+    Result<VendorConfigDTO> getByVendorIdAndDataTypeCode(
+            @RequestParam("vendorId") Long vendorId,
+            @RequestParam("dataTypeCode") String dataTypeCode);
+
+    /**
+     * 根据厂商编码和接口编码获取配置
+     */
+    @GetMapping("/vendor/config/byInterfaceCode")
+    Result<VendorConfigDTO> getByVendorCodeAndInterfaceCode(
+            @RequestParam("vendorCode") String vendorCode,
+            @RequestParam("interfaceCode") String interfaceCode);
 }

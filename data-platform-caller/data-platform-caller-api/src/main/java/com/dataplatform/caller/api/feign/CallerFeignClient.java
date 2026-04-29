@@ -15,6 +15,9 @@ public interface CallerFeignClient {
     @GetMapping("/apiKey/{apiKey}")
     Result<ApiKeyDTO> getApiKey(@PathVariable("apiKey") String apiKey);
 
+    @GetMapping("/apiKey/validate/{apiKey}")
+    Result<ApiKeyDTO> validateApiKey(@PathVariable("apiKey") String apiKey);
+
     @PostMapping
     Result<Long> createCaller(@RequestBody CallerInfoDTO dto);
 

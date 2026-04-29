@@ -1,8 +1,9 @@
 package com.dataplatform.call.service.impl;
 
 import cn.hutool.crypto.digest.DigestUtil;
-import com.dataplatform.billing.entity.BillingRule;
-import com.dataplatform.billing.service.BillingService;
+import com.dataplatform.api.Result;
+import com.dataplatform.billing.api.dto.BillingRuleDTO;
+import com.dataplatform.billing.api.feign.BillingFeignClient;
 import com.dataplatform.call.entity.CallRecord;
 import com.dataplatform.call.service.CallRecordService;
 import com.dataplatform.call.service.DataQueryService;
@@ -10,8 +11,8 @@ import com.dataplatform.call.service.VendorProxyService;
 import com.dataplatform.common.billing.BillingCalculator;
 import com.dataplatform.common.billing.BillingCalculatorFactory;
 import com.dataplatform.common.entity.unified.BillingRuleDO;
-import com.dataplatform.vendor.entity.VendorConfig;
-import com.dataplatform.vendor.service.VendorConfigService;
+import com.dataplatform.vendor.api.dto.VendorConfigDTO;
+import com.dataplatform.vendor.api.feign.VendorConfigFeignClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,10 +38,10 @@ public class DataQueryServiceImpl implements DataQueryService {
     private VendorProxyService vendorProxyService;
 
     @Autowired
-    private VendorConfigService vendorConfigService;
+    private VendorConfigFeignClient vendorConfigFeignClient;
 
     @Autowired
-    private BillingService billingService;
+    private BillingFeignClient billingFeignClient;
 
     @Autowired
     private StringRedisTemplate redisTemplate;
@@ -60,22 +61,21 @@ public class DataQueryServiceImpl implements DataQueryService {
         long startTime = System.currentTimeMillis();
         String requestId = generateRequestId();
 
-        // 使用interfaceCode或dataType获取配置
-        VendorConfig config = null;
+        VendorConfigDTO config = null;
         if (interfaceCode != null && !interfaceCode.isEmpty()) {
-            config = vendorConfigService.getByVendorCodeAndInterfaceCode(vendorCode, interfaceCode);
+            Result<VendorConfigDTO> configResult = vendorConfigFeignClient.getByVendorCodeAndInterfaceCode(vendorCode, interfaceCode);
+            config = configResult != null ? configResult.getData() : null;
         }
         if (config == null && dataType != null && !dataType.isEmpty()) {
-            config = vendorConfigService.getByVendorCodeAndDataTypeCode(vendorCode, dataType);
+            Result<VendorConfigDTO> configResult = vendorConfigFeignClient.getByVendorCodeAndDataTypeCode(vendorCode, dataType);
+            config = configResult != null ? configResult.getData() : null;
         }
 
-        // 确定实际使用的数据类型
         String effectiveDataType = (config != null && config.getDataTypeCode() != null)
             ? config.getDataTypeCode()
             : dataType;
 
         try {
-            // 1. 检查缓存
             String cacheKey = buildCacheKey(vendorCode, effectiveDataType, params);
             String cachedResult = redisTemplate.opsForValue().get(cacheKey);
             if (cachedResult != null) {
@@ -90,20 +90,16 @@ public class DataQueryServiceImpl implements DataQueryService {
                 return result;
             }
 
-            // 2. 调用厂商API (通过适配器)
             Map<String, Object> vendorResult = vendorProxyService.callVendor(vendorCode, effectiveDataType, params);
 
-            // 3. 计算费用
             long latency = System.currentTimeMillis() - startTime;
             BigDecimal cost = calculateCost(vendorCode, effectiveDataType, latency);
 
             boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
 
-            // 4. 记录调用
             recordCall(requestId, callerId, vendorCode, effectiveDataType, params,
                       vendorResult, success, latency, cost, false);
 
-            // 5. 存入缓存 (仅成功时缓存)
             if (success) {
                 try {
                     redisTemplate.opsForValue().set(cacheKey,
@@ -180,12 +176,10 @@ public class DataQueryServiceImpl implements DataQueryService {
         return result;
     }
 
-    /**
-     * 计算费用 (从数据库获取计费规则)
-     */
     private BigDecimal calculateCost(String vendorCode, String dataType, long latencyMs) {
         try {
-            BillingRule rule = billingService.getRuleByVendorAndDataType(vendorCode, dataType);
+            Result<BillingRuleDTO> ruleResult = billingFeignClient.getRuleByVendorAndDataType(vendorCode, dataType);
+            BillingRuleDTO rule = ruleResult != null ? ruleResult.getData() : null;
             if (rule != null) {
                 BillingRuleDO ruleDO = convertToBillingRuleDO(rule);
                 BillingCalculator calculator = calculatorFactory.getCalculator(ruleDO.getBillingType());
@@ -195,14 +189,10 @@ public class DataQueryServiceImpl implements DataQueryService {
             log.warn("获取计费规则失败，使用默认价格: {}", e.getMessage());
         }
 
-        // 默认价格
         return new BigDecimal("0.10");
     }
 
-    /**
-     * 转换 BillingRule 为 BillingRuleDO
-     */
-    private BillingRuleDO convertToBillingRuleDO(BillingRule rule) {
+    private BillingRuleDO convertToBillingRuleDO(BillingRuleDTO rule) {
         BillingRuleDO ruleDO = new BillingRuleDO();
         ruleDO.setId(rule.getId());
         ruleDO.setVendorId(rule.getVendorId());

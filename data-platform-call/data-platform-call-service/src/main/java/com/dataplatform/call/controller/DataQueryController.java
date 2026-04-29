@@ -1,12 +1,12 @@
 package com.dataplatform.call.controller;
 
+import com.dataplatform.api.Result;
 import com.dataplatform.call.service.DataQueryService;
 import com.dataplatform.call.service.RateLimitService;
 import com.dataplatform.call.vo.ApiQueryReqVO;
 import com.dataplatform.call.vo.BatchQueryReqVO;
-import com.dataplatform.caller.entity.ApiKey;
-import com.dataplatform.caller.service.ApiKeyService;
-import com.dataplatform.common.result.Result;
+import com.dataplatform.caller.api.dto.ApiKeyDTO;
+import com.dataplatform.caller.api.feign.CallerFeignClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +29,7 @@ public class DataQueryController {
     private RateLimitService rateLimitService;
 
     @Autowired
-    private ApiKeyService apiKeyService;
+    private CallerFeignClient callerFeignClient;
 
     @PostMapping("/query")
     public Result<Map<String, Object>> query(
@@ -37,14 +37,14 @@ public class DataQueryController {
             @RequestHeader(value = "X-Tenant-ID", required = false) String tenantId,
             @RequestBody ApiQueryReqVO request) {
 
-        ApiKey apiKeyEntity = validateApiKey(apiKey);
+        ApiKeyDTO apiKeyEntity = validateApiKey(apiKey);
         if (apiKeyEntity == null) {
             return Result.error(401, "无效的API Key");
         }
 
         Long callerId = apiKeyEntity.getCallerId();
 
-        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit())) {
+        if (!rateLimitService.checkRateLimit(apiKey, 100)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
         }
 
@@ -65,14 +65,14 @@ public class DataQueryController {
             @RequestHeader(value = "X-API-Key", required = false) String apiKey,
             @RequestBody BatchQueryReqVO request) {
 
-        ApiKey apiKeyEntity = validateApiKey(apiKey);
+        ApiKeyDTO apiKeyEntity = validateApiKey(apiKey);
         if (apiKeyEntity == null) {
             return Result.error(401, "无效的API Key");
         }
 
         Long callerId = apiKeyEntity.getCallerId();
 
-        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit())) {
+        if (!rateLimitService.checkRateLimit(apiKey, 100)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
         }
 
@@ -88,12 +88,13 @@ public class DataQueryController {
         return Result.success(result);
     }
 
-    private ApiKey validateApiKey(String apiKey) {
+    private ApiKeyDTO validateApiKey(String apiKey) {
         if (apiKey == null || apiKey.trim().isEmpty()) {
             return null;
         }
 
-        ApiKey apiKeyEntity = apiKeyService.getByKey(apiKey);
+        Result<ApiKeyDTO> result = callerFeignClient.validateApiKey(apiKey);
+        ApiKeyDTO apiKeyEntity = result != null ? result.getData() : null;
         if (apiKeyEntity == null) {
             return null;
         }

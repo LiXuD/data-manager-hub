@@ -16,6 +16,11 @@ public interface BillingFeignClient {
     @GetMapping("/rule/{tenantId}")
     Result<BillingRuleDTO> getBillingRule(@PathVariable("tenantId") Long tenantId);
 
+    @GetMapping("/rule/byVendorAndDataType")
+    Result<BillingRuleDTO> getRuleByVendorAndDataType(
+            @RequestParam("vendorCode") String vendorCode,
+            @RequestParam("dataType") String dataType);
+
     @GetMapping("/budget/{tenantId}")
     Result<TenantBudgetDTO> getTenantBudget(@PathVariable("tenantId") Long tenantId);
 

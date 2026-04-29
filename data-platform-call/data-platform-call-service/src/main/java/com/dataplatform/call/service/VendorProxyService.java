@@ -1,14 +1,15 @@
 package com.dataplatform.call.service;
 
+import com.dataplatform.api.Result;
 import com.dataplatform.common.adapter.VendorAdapter;
 import com.dataplatform.common.adapter.VendorAdapterConfig;
 import com.dataplatform.common.adapter.VendorAdapterFactory;
 import com.dataplatform.common.circuitbreaker.CircuitBreakerManager;
 import com.dataplatform.common.constant.StatusConstants;
-import com.dataplatform.vendor.entity.VendorConfig;
-import com.dataplatform.vendor.entity.VendorInfo;
-import com.dataplatform.vendor.mapper.VendorInfoMapper;
-import com.dataplatform.vendor.service.VendorConfigService;
+import com.dataplatform.vendor.api.dto.VendorConfigDTO;
+import com.dataplatform.vendor.api.dto.VendorInfoDTO;
+import com.dataplatform.vendor.api.feign.VendorConfigFeignClient;
+import com.dataplatform.vendor.api.feign.VendorFeignClient;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -32,10 +33,10 @@ public class VendorProxyService {
     private static final Logger log = LoggerFactory.getLogger(VendorProxyService.class);
 
     @Autowired
-    private VendorConfigService vendorConfigService;
+    private VendorConfigFeignClient vendorConfigFeignClient;
 
     @Autowired
-    private VendorInfoMapper vendorInfoMapper;
+    private VendorFeignClient vendorFeignClient;
 
     @Autowired
     private CircuitBreakerManager circuitBreakerManager;
@@ -44,15 +45,9 @@ public class VendorProxyService {
 
     /**
      * 调用厂商API (支持多厂商路由)
-     *
-     * @param vendorCode   厂商编码
-     * @param dataTypeCode 数据类型编码
-     * @param params       请求参数
-     * @return 响应结果
      */
     public Map<String, Object> callVendor(String vendorCode, String dataTypeCode,
                                            Map<String, Object> params) {
-        // 使用 Set 记录已尝试的厂商，防止循环调用
         Set<String> triedVendors = new HashSet<>();
         return callVendorWithFallback(vendorCode, dataTypeCode, params, triedVendors);
     }
@@ -63,14 +58,14 @@ public class VendorProxyService {
     private Map<String, Object> callVendorWithFallback(String vendorCode, String dataTypeCode,
                                                         Map<String, Object> params,
                                                         Set<String> triedVendors) {
-        // 防止循环调用
         if (triedVendors.contains(vendorCode)) {
             log.warn("检测到厂商循环调用，终止: vendor={}", vendorCode);
             return errorResult("CIRCULAR_ROUTING", "厂商路由配置存在循环");
         }
         triedVendors.add(vendorCode);
 
-        VendorConfig config = vendorConfigService.getByVendorCodeAndDataTypeCode(vendorCode, dataTypeCode);
+        Result<VendorConfigDTO> configResult = vendorConfigFeignClient.getByVendorCodeAndDataTypeCode(vendorCode, dataTypeCode);
+        VendorConfigDTO config = configResult != null ? configResult.getData() : null;
         if (config == null) {
             return errorResult("CONFIG_NOT_FOUND", "厂商配置不存在: " + vendorCode + "/" + dataTypeCode);
         }
@@ -83,11 +78,9 @@ public class VendorProxyService {
         VendorAdapter adapter = VendorAdapterFactory.getAdapter(vendorCode);
 
         try {
-            // 使用熔断和重试保护
             Map<String, Object> result = circuitBreakerManager.executeWithProtection(vendorCode,
                 () -> adapter.execute(adapterConfig, params));
 
-            // 检查业务层错误，尝试备用厂商
             if (!Boolean.TRUE.equals(result.get("success"))) {
                 String errorCode = (String) result.get("errorCode");
                 if (shouldFallback(errorCode) && config.getFallbackVendorId() != null) {
@@ -119,7 +112,8 @@ public class VendorProxyService {
                                                    Map<String, Object> params,
                                                    Set<String> triedVendors,
                                                    String originalVendorCode) {
-        VendorInfo fallbackVendor = vendorInfoMapper.selectById(fallbackVendorId);
+        Result<VendorInfoDTO> vendorResult = vendorFeignClient.getById(fallbackVendorId);
+        VendorInfoDTO fallbackVendor = vendorResult != null ? vendorResult.getData() : null;
         if (fallbackVendor == null || !StatusConstants.ACTIVE.equals(fallbackVendor.getStatus())) {
             log.warn("备用厂商不可用: vendorId={}", fallbackVendorId);
             return errorResult("FALLBACK_UNAVAILABLE", "主厂商和备用厂商均不可用");
@@ -128,12 +122,11 @@ public class VendorProxyService {
         String fallbackVendorCode = fallbackVendor.getVendorCode();
         log.info("切换到备用厂商: {} -> {}", originalVendorCode, fallbackVendorCode);
 
-        // 直接使用 vendorId 获取配置，避免重复查询 VendorInfo
         return callVendorWithFallbackById(fallbackVendorId, fallbackVendorCode, dataTypeCode, params, triedVendors, originalVendorCode);
     }
 
     /**
-     * 通过 vendorId 调用厂商API（避免重复查询）
+     * 通过 vendorId 调用厂商API
      */
     private Map<String, Object> callVendorWithFallbackById(Long vendorId, String vendorCode, String dataTypeCode,
                                                             Map<String, Object> params,
@@ -145,7 +138,8 @@ public class VendorProxyService {
         }
         triedVendors.add(vendorCode);
 
-        VendorConfig config = vendorConfigService.getByVendorIdAndDataTypeCode(vendorId, dataTypeCode);
+        Result<VendorConfigDTO> configResult = vendorConfigFeignClient.getByVendorIdAndDataTypeCode(vendorId, dataTypeCode);
+        VendorConfigDTO config = configResult != null ? configResult.getData() : null;
         if (config == null) {
             return errorResult("CONFIG_NOT_FOUND", "厂商配置不存在: " + vendorCode + "/" + dataTypeCode);
         }
@@ -195,7 +189,6 @@ public class VendorProxyService {
         if (errorCode == null) {
             return false;
         }
-        // HTTP 5xx 错误、超时、服务不可用等错误触发切换
         return errorCode.startsWith("HTTP_5") ||
                errorCode.equals("VENDOR_ERROR") ||
                errorCode.equals("TIMEOUT") ||
@@ -206,7 +199,7 @@ public class VendorProxyService {
     /**
      * 构建适配器配置
      */
-    private VendorAdapterConfig buildAdapterConfig(VendorConfig config, String vendorCode, String dataTypeCode) {
+    private VendorAdapterConfig buildAdapterConfig(VendorConfigDTO config, String vendorCode, String dataTypeCode) {
         VendorAdapterConfig adapterConfig = new VendorAdapterConfig();
         adapterConfig.setVendorCode(vendorCode);
         adapterConfig.setDataTypeCode(dataTypeCode);
@@ -217,9 +210,10 @@ public class VendorProxyService {
         adapterConfig.setRequestTemplate(config.getRequestTemplate());
         adapterConfig.setResponseMapping(config.getResponseMapping());
         adapterConfig.setSignType(config.getSignType());
-        adapterConfig.setSecretKey(vendorConfigService.getSecretKey(vendorCode));
 
-        // 解析请求头配置
+        Result<String> secretKeyResult = vendorConfigFeignClient.getSecretKey(vendorCode);
+        adapterConfig.setSecretKey(secretKeyResult != null ? secretKeyResult.getData() : null);
+
         if (config.getHeaderConfig() != null && !config.getHeaderConfig().isEmpty()) {
             try {
                 Map<String, String> headers = objectMapper.readValue(config.getHeaderConfig(),
@@ -233,9 +227,6 @@ public class VendorProxyService {
         return adapterConfig;
     }
 
-    /**
-     * 构建错误结果
-     */
     private Map<String, Object> errorResult(String errorCode, String errorMsg) {
         Map<String, Object> result = new HashMap<>();
         result.put("success", false);
