@@ -44,7 +44,7 @@ public class DataQueryController {
 
         Long callerId = apiKeyEntity.getCallerId();
 
-        if (!rateLimitService.checkRateLimit(apiKey, 100)) {
+        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
         }
 
@@ -72,7 +72,7 @@ public class DataQueryController {
 
         Long callerId = apiKeyEntity.getCallerId();
 
-        if (!rateLimitService.checkRateLimit(apiKey, 100)) {
+        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
         }
 

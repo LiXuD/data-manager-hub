@@ -12,6 +12,7 @@ public class ApiKeyDTO implements Serializable {
     private Long callerId;
     private String apiKey;
     private String apiSecret;
+    private Integer rateLimit;
     private String description;
     private Integer status;
     private LocalDateTime expireTime;

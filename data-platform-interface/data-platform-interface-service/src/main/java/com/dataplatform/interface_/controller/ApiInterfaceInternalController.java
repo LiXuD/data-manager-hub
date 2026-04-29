@@ -1,5 +1,6 @@
 package com.dataplatform.interface_.controller;
 
+import com.dataplatform.api.Result;
 import com.dataplatform.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.interface_.entity.ApiInterface;
 import com.dataplatform.interface_.service.ApiInterfaceService;
@@ -18,21 +19,21 @@ public class ApiInterfaceInternalController {
     private ApiInterfaceService apiInterfaceService;
 
     @GetMapping("/by-code/{code}")
-    public ApiInterfaceDTO getByInterfaceCode(@PathVariable("code") String code) {
+    public Result<ApiInterfaceDTO> getByInterfaceCode(@PathVariable("code") String code) {
         ApiInterface entity = apiInterfaceService.getByInterfaceCode(code);
         if (entity == null) {
-            return null;
+            return Result.success(null);
         }
-        return toDTO(entity);
+        return Result.success(toDTO(entity));
     }
 
     @GetMapping("/{id}")
-    public ApiInterfaceDTO getById(@PathVariable("id") Long id) {
+    public Result<ApiInterfaceDTO> getById(@PathVariable("id") Long id) {
         ApiInterface entity = apiInterfaceService.getById(id);
         if (entity == null) {
-            return null;
+            return Result.success(null);
         }
-        return toDTO(entity);
+        return Result.success(toDTO(entity));
     }
 
     private ApiInterfaceDTO toDTO(ApiInterface entity) {
