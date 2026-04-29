@@ -48,8 +48,17 @@ public class VendorProxyService {
      */
     public Map<String, Object> callVendor(String vendorCode, String dataTypeCode,
                                            Map<String, Object> params) {
+        return callVendor(vendorCode, dataTypeCode, params, null);
+    }
+
+    /**
+     * 调用厂商API (支持多厂商路由，接受预获取的配置)
+     */
+    public Map<String, Object> callVendor(String vendorCode, String dataTypeCode,
+                                           Map<String, Object> params,
+                                           VendorConfigDTO preFetchedConfig) {
         Set<String> triedVendors = new HashSet<>();
-        return callVendorWithFallback(vendorCode, dataTypeCode, params, triedVendors);
+        return callVendorWithFallback(vendorCode, dataTypeCode, params, triedVendors, preFetchedConfig);
     }
 
     /**
@@ -57,15 +66,19 @@ public class VendorProxyService {
      */
     private Map<String, Object> callVendorWithFallback(String vendorCode, String dataTypeCode,
                                                         Map<String, Object> params,
-                                                        Set<String> triedVendors) {
+                                                        Set<String> triedVendors,
+                                                        VendorConfigDTO preFetchedConfig) {
         if (triedVendors.contains(vendorCode)) {
             log.warn("检测到厂商循环调用，终止: vendor={}", vendorCode);
             return errorResult("CIRCULAR_ROUTING", "厂商路由配置存在循环");
         }
         triedVendors.add(vendorCode);
 
-        Result<VendorConfigDTO> configResult = vendorConfigFeignClient.getByVendorCodeAndDataTypeCode(vendorCode, dataTypeCode);
-        VendorConfigDTO config = configResult != null ? configResult.getData() : null;
+        VendorConfigDTO config = preFetchedConfig;
+        if (config == null) {
+            Result<VendorConfigDTO> configResult = vendorConfigFeignClient.getByVendorCodeAndDataTypeCode(vendorCode, dataTypeCode);
+            config = configResult != null ? configResult.getData() : null;
+        }
         if (config == null) {
             return errorResult("CONFIG_NOT_FOUND", "厂商配置不存在: " + vendorCode + "/" + dataTypeCode);
         }

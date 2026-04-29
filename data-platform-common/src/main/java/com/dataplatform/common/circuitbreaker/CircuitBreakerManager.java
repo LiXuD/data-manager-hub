@@ -9,8 +9,6 @@ import io.github.resilience4j.retry.RetryRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.springframework.stereotype.Component;
-
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,7 +17,6 @@ import java.util.function.Supplier;
 /**
  * 熔断器和重试管理器
  */
-@Component
 public class CircuitBreakerManager {
 
     private static final Logger log = LoggerFactory.getLogger(CircuitBreakerManager.class);

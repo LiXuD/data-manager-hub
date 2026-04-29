@@ -90,7 +90,7 @@ public class DataQueryServiceImpl implements DataQueryService {
                 return result;
             }
 
-            Map<String, Object> vendorResult = vendorProxyService.callVendor(vendorCode, effectiveDataType, params);
+            Map<String, Object> vendorResult = vendorProxyService.callVendor(vendorCode, effectiveDataType, params, config);
 
             long latency = System.currentTimeMillis() - startTime;
             BigDecimal cost = calculateCost(vendorCode, effectiveDataType, latency);
