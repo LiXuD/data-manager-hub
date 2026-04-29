@@ -1,5 +1,5 @@
-import request from '@/utils/request'
-import type { PageParams } from '@/types'
+import { request } from '@/utils/request'
+import type { PageParams, ListResponse } from '@/types'
 
 export interface Caller {
   id?: number
@@ -10,7 +10,7 @@ export interface Caller {
   description?: string
   contactPerson?: string
   contactPhone?: string
-  status?: string
+  status?: 'active' | 'inactive'
   createdAt?: string
   updatedAt?: string
 }
@@ -23,43 +23,43 @@ export interface ApiKey {
   rateLimit?: number
   quotaLimit?: number
   quotaUsed?: number
-  status?: string
+  status?: 'active' | 'inactive' | 'expired'
   expireTime?: string
   createdAt?: string
 }
 
-export const getCallerList = (params: PageParams & { keyword?: string; status?: string }) => {
-  return request.get('/api/v1/caller/list', { params })
+export const getCallerList = (params: PageParams & { keyword?: string; status?: 'active' | 'inactive' }) => {
+  return request.get<ListResponse<Caller>>('/caller/list', { params })
 }
 
 export const getCaller = (id: number) => {
-  return request.get(`/api/v1/caller/${id}`)
+  return request.get<Caller>(`/caller/${id}`)
 }
 
 export const createCaller = (data: Caller) => {
-  return request.post('/api/v1/caller', data)
+  return request.post<Caller>('/caller', data)
 }
 
-export const updateCaller = (data: Caller) => {
-  return request.put('/api/v1/caller', data)
+export const updateCaller = (id: number, data: Caller) => {
+  return request.put<Caller>(`/caller/${id}`, data)
 }
 
 export const deleteCaller = (id: number) => {
-  return request.delete(`/api/v1/caller/${id}`)
+  return request.delete<void>(`/caller/${id}`)
 }
 
 export const getApiKeyList = (callerId: number) => {
-  return request.get('/api/v1/api-key/caller/' + callerId)
+  return request.get<ListResponse<ApiKey>>('/caller/' + callerId + '/api-key/list')
 }
 
 export const createApiKey = (callerId: number) => {
-  return request.post('/api/v1/api-key/caller/' + callerId)
+  return request.post<ApiKey>('/caller/' + callerId + '/api-key', { keyName: 'default' })
 }
 
-export const updateApiKeyStatus = (id: number, status: string) => {
-  return request.put(`/api/v1/api-key/${id}/status?status=${status}`)
+export const updateApiKeyStatus = (id: number, status: 'active' | 'inactive' | 'expired') => {
+  return request.patch<void>(`/caller/api-key/${id}/status`, { status })
 }
 
 export const deleteApiKey = (id: number) => {
-  return request.delete(`/api/v1/api-key/${id}`)
+  return request.delete<void>(`/caller/api-key/${id}`)
 }

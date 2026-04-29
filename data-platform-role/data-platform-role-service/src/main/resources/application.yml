@@ -1,0 +1,30 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: data-platform-role
+  datasource:
+    url: jdbc:postgresql://localhost:5432/dataplatform
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      idle-timeout: 30000
+      connection-timeout: 10000
+      max-lifetime: 600000
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+nacos:
+  discovery:
+    enabled: false
+
+logging:
+  level:
+    com.dataplatform: debug

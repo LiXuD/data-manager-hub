@@ -32,29 +32,60 @@ instance.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
     if (res.code === 0 || res.code === 200 || res.code === null || res.code === undefined) {
-      return response
+      return res
     }
-    
-    ElMessage.error(res.message || '请求失败')
-    return Promise.reject(new Error(res.message || '请求失败'))
+
+    const msg = res.message || res.msg || '请求失败'
+    ElMessage.error(msg)
+    return Promise.reject(new Error(msg))
   },
   (error) => {
+    let msg = '请求失败'
+
     if (error.response) {
       const { status, data } = error.response
-      if (status === 401) {
-        ElMessage.error('登录已过期，请重新登录')
-        localStorage.removeItem('token')
-        window.location.href = '/login'
-      } else if (status === 403) {
-        ElMessage.error('没有权限访问')
-      } else if (status === 500) {
-        ElMessage.error('服务器错误')
-      } else {
-        ElMessage.error(data.message || '请求失败')
+
+      switch (status) {
+        case 400:
+          msg = data?.message || data?.msg || '请求参数错误'
+          break
+        case 401:
+          msg = '登录已过期，请重新登录'
+          localStorage.removeItem('token')
+          localStorage.removeItem('username')
+          window.location.href = '/login'
+          break
+        case 403:
+          msg = '没有权限访问'
+          break
+        case 404:
+          msg = '请求的资源不存在'
+          break
+        case 408:
+          msg = '请求超时'
+          break
+        case 500:
+          msg = '服务器内部错误'
+          break
+        case 502:
+          msg = '网关错误'
+          break
+        case 503:
+          msg = '服务不可用'
+          break
+        case 504:
+          msg = '网关超时'
+          break
+        default:
+          msg = data?.message || data?.msg || '请求失败'
       }
+    } else if (error.request) {
+      msg = '网络连接失败，请检查网络'
     } else {
-      ElMessage.error('网络错误，请检查网络连接')
+      msg = error.message || '请求失败'
     }
+
+    ElMessage.error(msg)
     return Promise.reject(error)
   }
 )
@@ -62,19 +93,24 @@ instance.interceptors.response.use(
 export default instance
 
 export const request = {
-  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return instance.get(url, config).then(res => res.data)
+  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.get(url, config)
+    return response as T
   },
-  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return instance.post(url, data, config).then(res => res.data)
+  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.post(url, data, config)
+    return response as T
   },
-  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return instance.put(url, data, config).then(res => res.data)
+  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.put(url, data, config)
+    return response as T
   },
-  patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    return instance.patch(url, data, config).then(res => res.data)
+  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.patch(url, data, config)
+    return response as T
   },
-  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return instance.delete(url, config).then(res => res.data)
+  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    const response = await instance.delete(url, config)
+    return response as T
   }
 }

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -55,6 +56,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '数据类型' }
       },
       {
+        path: '/interface',
+        name: 'Interface',
+        component: () => import('@/views/interface/index.vue'),
+        meta: { title: '接口管理' }
+      },
+      {
         path: '/call',
         name: 'Call',
         component: () => import('@/views/call/index.vue'),
@@ -73,10 +80,34 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '监控告警' }
       },
       {
+        path: '/config',
+        name: 'Config',
+        component: () => import('@/views/config/index.vue'),
+        meta: { title: '配置中心' }
+      },
+      {
+        path: '/graylog',
+        name: 'Graylog',
+        component: () => import('@/views/graylog/index.vue'),
+        meta: { title: '灰度发布' }
+      },
+      {
         path: '/audit',
         name: 'Audit',
         component: () => import('@/views/audit/index.vue'),
         meta: { title: '操作日志' }
+      },
+      {
+        path: '/data-test',
+        name: 'DataTest',
+        component: () => import('@/views/data-test/index.vue'),
+        meta: { title: '数据查询测试' }
+      },
+      {
+        path: '/profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/index.vue'),
+        meta: { title: '个人中心' }
       }
     ]
   }
@@ -88,13 +119,17 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
-  
+router.beforeEach((to, _from, next) => {
+  const userStore = useUserStore()
+
   if (to.path === '/login') {
-    next()
+    if (userStore.isLoggedIn) {
+      next('/dashboard')
+    } else {
+      next()
+    }
   } else {
-    if (token) {
+    if (userStore.isLoggedIn) {
       next()
     } else {
       next('/login')

@@ -1,41 +1,151 @@
 # =====================================================
 # 数据管理平台 - Docker Compose 配置
-# 
-# 注意: 本地已安装 PostgreSQL 5432 和 Redis，不再需要 Docker 启动
-# 如需使用 Docker，请确保端口不冲突
+#
+# 使用说明:
+# - 数据库: 使用本地PostgreSQL (localhost:5432)
+# - 其他中间件: 使用Docker启动
+#
+# 启动命令: docker-compose up -d
+# 停止命令: docker-compose down
+# 查看日志: docker-compose logs -f [服务名]
 # =====================================================
 
-# 本地数据库配置 (仅供参考)
-# PostgreSQL: localhost:5432/dataplatform
-# Redis: localhost:6379
+services:
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: data-platform-redis
+    command: redis-server --requirepass redis_password --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-# 如果仍需使用 Docker 环境，取消注释以下配置
-# version: '3.8'
-# 
- services:
-   # PostgreSQL 数据库
-#   postgres:
-#     image: postgres:15-alpine
-#     container_name: data-platform-postgres
-#     environment:
-#       POSTGRES_DB: dataplatform
-#       POSTGRES_USER: postgres
-#       POSTGRES_PASSWORD: 123456
-#     ports:
-#       - "5433:5432"
-#     volumes:
-#       - postgres_data:/var/lib/postgresql/data
+  # Kafka 消息队列
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: data-platform-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
 
-   # Redis 缓存
-   redis:
-     image: redis:7-alpine
-     container_name: data-platform-redis
-     command: redis-server --requirepass redis_password
-     ports:
-       - "6379:6379"
-     volumes:
-       - redis_data:/data
+  # Nacos 服务注册与配置中心
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: data-platform-nacos
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: host.docker.internal
+      MYSQL_SERVICE_PORT: 5432
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: postgres
+      MYSQL_SERVICE_PASSWORD: 123456
+      MYSQL_SERVICE_DB_PARAM: characterEncoding=utf8&connectTimeout=10000&socketTimeout=30000&autoReconnect=true&useSSL=false
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    volumes:
+      - nacos_logs:/home/nacos/logs
+      - nacos_data:/home/nacos/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/readiness"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
 
- volumes:
-#   postgres_data:
-   redis_data:
+  # Prometheus 监控
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: data-platform-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  # Grafana 可视化
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: data-platform-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  # Elasticsearch 日志存储
+  elasticsearch:
+    image: elasticsearch:8.15.0
+    container_name: data-platform-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+  # Kibana 日志可视化
+  kibana:
+    image: kibana:8.15.0
+    container_name: data-platform-kibana
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  # Filebeat 日志收集
+  filebeat:
+    image: elastic/filebeat:8.15.0
+    container_name: data-platform-filebeat
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml
+      - /var/log/data-platform:/var/log/data-platform
+    depends_on:
+      - elasticsearch
+
+volumes:
+  redis_data:
+  kafka_data:
+  nacos_logs:
+  nacos_data:
+  prometheus_data:
+  grafana_data:
+  es_data:

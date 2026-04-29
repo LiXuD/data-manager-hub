@@ -1,0 +1,58 @@
+<h2>Where should API Configuration live?</h2>
+<p class="subtitle">Two features need placement: Vendor API Config & Data Query Test</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Tabbed Integration</h3>
+      <p>API Config as a tab inside Vendor Management. Query Test as a tab inside Call Records.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Separate Pages</h3>
+      <p>New menu items: "API Config" and "Query Test" as standalone pages with full CRUD.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid</h3>
+      <p>API Config as dialog/section within Vendor details. Query Test as separate page.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Comparison</h3>
+  <table style="width: 100%; border-collapse: collapse;">
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <th style="text-align: left; padding: 8px;">Aspect</th>
+      <th style="text-align: left; padding: 8px;">A: Tabbed</th>
+      <th style="text-align: left; padding: 8px;">B: Separate</th>
+      <th style="text-align: left; padding: 8px;">C: Hybrid</th>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">Navigation</td>
+      <td style="padding: 8px;">Fewer menu items</td>
+      <td style="padding: 8px;">More menu items</td>
+      <td style="padding: 8px;">Balanced</td>
+    </tr>
+    <tr style="border-bottom: 1px solid var(--color-border);">
+      <td style="padding: 8px;">Context</td>
+      <td style="padding: 8px;">Config near vendor info</td>
+      <td style="padding: 8px;">Independent context</td>
+      <td style="padding: 8px;">Config in vendor context</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px;">Development</td>
+      <td style="padding: 8px;">Modify existing pages</td>
+      <td style="padding: 8px;">Create new pages</td>
+      <td style="padding: 8px;">Mix of both</td>
+    </tr>
+  </table>
+</div>
+
+<p style="margin-top: 16px; color: var(--color-text-tertiary);">Click an option to select it, then respond in terminal.</p>
