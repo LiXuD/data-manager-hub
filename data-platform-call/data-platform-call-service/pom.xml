@@ -40,6 +40,22 @@
             <artifactId>data-platform-billing-api</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- 直接依赖其他 service 模块（单体应用模式） -->
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-vendor-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-billing-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-caller-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- Resilience4j 熔断器 -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>
