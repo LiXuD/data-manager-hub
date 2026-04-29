@@ -28,17 +28,11 @@
             <artifactId>data-platform-common</artifactId>
         </dependency>
 
-        <!-- Interface -->
+        <!-- Interface API -->
         <dependency>
             <groupId>com.dataplatform</groupId>
-            <artifactId>data-platform-interface</artifactId>
+            <artifactId>data-platform-interface-api</artifactId>
             <version>${project.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.springframework.boot</groupId>
-                    <artifactId>spring-boot-starter-web</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <!-- Spring Boot Web -->
