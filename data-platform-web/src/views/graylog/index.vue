@@ -292,7 +292,7 @@ interface GraylogListResponse {
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<GraylogListResponse>('/api/v1/graylog/list', {
+    const res = await request.get<GraylogListResponse>('/graylog/list', {
       params: {
         page: pagination.currentPage,
         pageSize: pagination.pageSize,

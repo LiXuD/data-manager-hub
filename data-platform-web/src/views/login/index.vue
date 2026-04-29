@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { request } from '@/utils/request'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -23,23 +24,29 @@ const rules: FormRules = {
 const handleLogin = async () => {
   if (!loginFormRef.value) return
 
-  await loginFormRef.value.validate((valid) => {
+  await loginFormRef.value.validate(async (valid) => {
     if (valid) {
       loading.value = true
-
-      setTimeout(() => {
-        const mockToken = 'mock-token-' + Date.now()
-        userStore.login(mockToken, {
-          id: '1',
+      try {
+        const res = await request.post<{ token: string; username: string; userId: string }>('/auth/login', {
           username: loginForm.value.username,
-          nickname: loginForm.value.username,
+          password: loginForm.value.password
+        })
+
+        userStore.login(res.token, {
+          id: res.userId,
+          username: res.username,
+          nickname: res.username,
           roles: ['admin']
         })
 
         ElMessage.success('登录成功')
-        loading.value = false
         router.push('/dashboard')
-      }, 800)
+      } catch (error) {
+        console.error('登录失败:', error)
+      } finally {
+        loading.value = false
+      }
     }
   })
 }

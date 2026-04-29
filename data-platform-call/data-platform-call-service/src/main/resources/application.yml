@@ -1,59 +1,8 @@
 server:
-  port: 8084
+  port: 8083
 
 spring:
+  profiles:
+    active: @profiles.active@
   application:
-    name: data-platform-call
-  cloud:
-    nacos:
-      discovery:
-        enabled: false
-      config:
-        enabled: false
-  datasource:
-    url: jdbc:postgresql://localhost:5432/dataplatform
-    username: postgres
-    password: 123456
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 3
-      minimum-idle: 1
-      idle-timeout: 30000
-      connection-timeout: 10000
-      max-lifetime: 600000
-
-spring.data.redis:
-  host: localhost
-  port: 6379
-  password: redis_password
-  database: 0
-
-mybatis-plus:
-  configuration:
-    map-underscore-to-camel-case: true
-  mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.dataplatform.call.entity
-
-spring.cloud.nacos.config.import-check.enabled: false
-
-# Resilience4j 配置
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 30s
-        permitted-number-of-calls-in-half-open-state: 5
-        sliding-window-type: count_based
-        sliding-window-size: 10
-    instances:
-      vendor_default:
-        base-config: default
-  retry:
-    configs:
-      default:
-        max-attempts: 3
-        wait-duration: 500ms
-    instances:
-      vendor_default:
-        base-config: default
+    name: @artifactId@

@@ -1,9 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
-// Use relative path when Vite proxy is configured (dev mode)
-// All /api/* requests will be proxied to target in vite.config.ts
-const baseURL = import.meta.env.PROD ? import.meta.env.VITE_API_BASE_URL : ''
+const baseURL = import.meta.env.PROD ? import.meta.env.VITE_API_BASE_URL : '/api/v1'
 
 const instance: AxiosInstance = axios.create({
   baseURL,

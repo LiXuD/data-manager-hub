@@ -52,17 +52,11 @@ services:
   # Nacos 服务注册与配置中心
   nacos:
     image: nacos/nacos-server:v2.3.2
+    platform: linux/amd64
     container_name: data-platform-nacos
     environment:
       MODE: standalone
       PREFER_HOST_MODE: hostname
-      SPRING_DATASOURCE_PLATFORM: mysql
-      MYSQL_SERVICE_HOST: host.docker.internal
-      MYSQL_SERVICE_PORT: 5432
-      MYSQL_SERVICE_DB_NAME: nacos_config
-      MYSQL_SERVICE_USER: postgres
-      MYSQL_SERVICE_PASSWORD: 123456
-      MYSQL_SERVICE_DB_PARAM: characterEncoding=utf8&connectTimeout=10000&socketTimeout=30000&autoReconnect=true&useSSL=false
       JVM_XMS: 512m
       JVM_XMX: 512m
       JVM_XMN: 256m
@@ -100,7 +94,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin123
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
-      - "3000:3000"
+      - "3100:3100"
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:

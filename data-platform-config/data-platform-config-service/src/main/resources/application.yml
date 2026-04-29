@@ -2,24 +2,7 @@ server:
   port: 8091
 
 spring:
+  profiles:
+    active: @profiles.active@
   application:
-    name: data-platform-config
-  datasource:
-    url: jdbc:postgresql://localhost:5432/dataplatform
-    username: postgres
-    password: 123456
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 3
-      minimum-idle: 1
-      idle-timeout: 30000
-      connection-timeout: 10000
-      max-lifetime: 600000
-
-mybatis-plus:
-  configuration:
-    map-underscore-to-camel-case: true
-
-nacos:
-  discovery:
-    enabled: false
+    name: @artifactId@

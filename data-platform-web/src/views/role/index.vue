@@ -116,7 +116,7 @@ interface RoleListResponse {
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<RoleListResponse>('/api/v1/role/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
+    const res = await request.get<RoleListResponse>('/role/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
     const data = res.data
     if (data && 'records' in data && Array.isArray(data.records)) {
       tableData.value = data.records

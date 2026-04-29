@@ -181,24 +181,22 @@ data-platform/
 
 ---
 
-## Git 提交记录
+## Git 提交规范
 
-| 日期 | 提交 | 说明 |
-|------|------|------|
-| 2026-04-19 | init | 初始项目结构 |
-| 2026-04-19 | feat: 完善DDL和基础模块 | 15张表+7个模块 |
-| 2026-04-20 | feat: 完善前端页面布局 | 登录页+侧边栏导航 |
-| 2026-04-20 | fix: 修复前端布局问题 | 布局结构修复 |
-| 2026-04-20 | fix: 数据库添加updated_by | 字段修复 |
-| 2026-04-20 | feat: 添加用户管理等页面 | 新增页面 |
-| 2026-04-20 | fix: 修复v-model绑定问题 | TypeScript修复 |
-| 2026-04-20 | feat: 新增user模块 | 8087端口 |
-| 2026-04-20 | feat: 完善role和datatype后端模块 | 后端模块完善 |
-| 2026-04-20 | fix: 修复datatype模块类名 | Bug修复 |
-| 2026-04-20 | feat: 完善计费管理和监控页面 | 前端页面完善 |
-| 2026-04-20 | feat: 新增操作日志模块 | log模块+数据库表 |
-| 2026-04-21 | feat: 新增配置中心和灰度发布模块 | config+graylog模块 |
+## 1. commit message格式
 
----
+`<type>(<scope>): <summary>`
+`<正文：描述本次变更的背景与动机>`
+`Agent-Task: <原始任务描述或任务 ID>Agent-Model: <使用的模型，如 gpt-4o、gemini-2.5-pro>Agent-Decision: <关键设计决策及理由>Agent-Limitation: <已知局限或后续 TODO>`
 
-*最后更新: 2026-04-21 08:46*
+## 2.在完成以下关键节点时，执行一次 git commit：
+`完成数据模型/接口定义`
+
+`完成核心逻辑实现`
+
+`完成测试编写`
+
+``完成文档更新``
+
+`每个 checkpoint commit 的 message 以 [WIP] 开头，最终完成后执行 git commit --amend 或通过 rebase 整理历史。`
+

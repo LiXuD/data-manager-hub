@@ -233,20 +233,12 @@ interface HealthListResponse {
 const fetchHealth = async () => {
   loading.value = true
   try {
-    const res = await request.get<HealthListResponse>('/api/v1/monitor/health', {
+    const res = await request.get<HealthListResponse>('/alert/health', {
       params: { ...searchForm }
     })
     tableData.value = res.data || []
   } catch {
-    // 错误时使用 mock 数据
-    tableData.value = [
-      { id: 1, serviceName: 'API网关', status: 'healthy', responseTime: 25, uptime: 99.9, lastCheck: '2026-04-20 21:00:00' },
-      { id: 2, serviceName: '用户服务', status: 'healthy', responseTime: 45, uptime: 99.8, lastCheck: '2026-04-20 21:00:00' },
-      { id: 3, serviceName: '厂商服务', status: 'healthy', responseTime: 38, uptime: 99.7, lastCheck: '2026-04-20 21:00:00' },
-      { id: 4, serviceName: '调用服务', status: 'unhealthy', responseTime: 5000, uptime: 95.0, lastCheck: '2026-04-20 21:00:00' },
-      { id: 5, serviceName: '计费服务', status: 'healthy', responseTime: 52, uptime: 99.9, lastCheck: '2026-04-20 21:00:00' },
-      { id: 6, serviceName: '租户服务', status: 'healthy', responseTime: 30, uptime: 99.95, lastCheck: '2026-04-20 21:00:00' }
-    ]
+    tableData.value = []
   } finally {
     loading.value = false
   }

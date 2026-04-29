@@ -2,5 +2,7 @@ server:
   port: 8094
 
 spring:
+  profiles:
+    active: @profiles.active@
   application:
-    name: data-platform-security
+    name: @artifactId@

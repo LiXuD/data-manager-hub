@@ -1,0 +1,167 @@
+server:
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+
+spring:
+  main:
+    web-application-type: reactive
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.jdbc.DataSourceHealthContributorAutoConfiguration
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+        namespace: dev
+        group: DEFAULT_GROUP
+        enabled: true
+      config:
+        enabled: false
+    gateway:
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origin-patterns: "*"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowed-headers:
+              - "*"
+            allow-credentials: true
+            max-age: 3600
+      routes:
+        - id: vendor-service
+          uri: lb://data-platform-vendor
+          predicates:
+            - Path=/api/v1/vendor/**
+          filters:
+            - StripPrefix=2
+        - id: caller-service
+          uri: lb://data-platform-caller
+          predicates:
+            - Path=/api/v1/caller/**
+          filters:
+            - StripPrefix=2
+        - id: billing-service
+          uri: lb://data-platform-billing
+          predicates:
+            - Path=/api/v1/billing/**
+          filters:
+            - StripPrefix=2
+        - id: call-service
+          uri: lb://data-platform-call
+          predicates:
+            - Path=/api/v1/data/**,/api/v1/call-record/**
+          filters:
+            - StripPrefix=2
+        - id: monitor-service
+          uri: lb://data-platform-monitor
+          predicates:
+            - Path=/api/v1/alert/**
+          filters:
+            - StripPrefix=2
+        - id: tenant-service
+          uri: lb://data-platform-tenant
+          predicates:
+            - Path=/api/v1/tenant/**
+          filters:
+            - StripPrefix=2
+        - id: user-service
+          uri: lb://data-platform-user
+          predicates:
+            - Path=/api/v1/user/**,/api/v1/auth/**
+          filters:
+            - StripPrefix=2
+        - id: role-service
+          uri: lb://data-platform-role
+          predicates:
+            - Path=/api/v1/role/**
+          filters:
+            - StripPrefix=2
+        - id: datatype-service
+          uri: lb://data-platform-datatype
+          predicates:
+            - Path=/api/v1/data-type/**,/api/v1/datatype/**
+          filters:
+            - StripPrefix=2
+        - id: log-service
+          uri: lb://data-platform-log
+          predicates:
+            - Path=/api/v1/log/**
+          filters:
+            - StripPrefix=2
+        - id: config-service
+          uri: lb://data-platform-config
+          predicates:
+            - Path=/api/v1/config/**
+          filters:
+            - StripPrefix=2
+        - id: graylog-service
+          uri: lb://data-platform-graylog
+          predicates:
+            - Path=/api/v1/graylog/**
+          filters:
+            - StripPrefix=2
+        - id: sdk-service
+          uri: lb://data-platform-sdk
+          predicates:
+            - Path=/api/v1/sdk/**
+          filters:
+            - StripPrefix=2
+        - id: security-service
+          uri: lb://data-platform-security
+          predicates:
+            - Path=/api/v1/security/**
+          filters:
+            - StripPrefix=2
+        - id: trace-service
+          uri: lb://data-platform-trace
+          predicates:
+            - Path=/api/v1/trace/**
+          filters:
+            - StripPrefix=2
+        - id: quality-service
+          uri: lb://data-platform-quality
+          predicates:
+            - Path=/api/v1/quality/**
+          filters:
+            - StripPrefix=2
+        - id: interface-service
+          uri: lb://data-platform-interface
+          predicates:
+            - Path=/api/v1/interface/**
+          filters:
+            - StripPrefix=2
+
+sa-token:
+  token-name: Authorization
+  timeout: 7200
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+
+spring.data.redis:
+  host: localhost
+  port: 6379
+  password: redis_password
+  database: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  health:
+    db:
+      enabled: false

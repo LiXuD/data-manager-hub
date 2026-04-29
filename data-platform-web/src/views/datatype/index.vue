@@ -149,7 +149,7 @@ interface DataTypeListResponse {
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<DataTypeListResponse>('/api/v1/data-type/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
+    const res = await request.get<DataTypeListResponse>('/data-type/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
     const data = res.data
     if (data && 'records' in data && Array.isArray(data.records)) {
       tableData.value = data.records

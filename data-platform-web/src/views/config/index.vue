@@ -213,7 +213,7 @@ interface LogListResponse {
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<LogListResponse>('/api/v1/log/list', {
+    const res = await request.get<LogListResponse>('/log/list', {
       params: {
         page: pagination.currentPage,
         pageSize: pagination.pageSize,

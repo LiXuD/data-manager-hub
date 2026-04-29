@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS vendor_info (
     contact_person VARCHAR(50),
     contact_phone VARCHAR(20),
     contact_email VARCHAR(100),
+    secret_key VARCHAR(128),
     contract_start DATE,
     contract_end DATE,
     created_by BIGINT,
@@ -378,6 +379,15 @@ VALUES
     ('TENANT_ADMIN', '租户管理员', '管理租户内的所有资源'),
     ('OPERATOR', '操作员', '可以进行日常操作'),
     ('VIEWER', '只读用户', '只能查看数据');
+
+-- 默认管理员用户 (密码: Test123456)
+INSERT INTO user_info (username, nickname, password, real_name, email, status, tenant_id)
+VALUES 
+    ('admin', '系统管理员', 'Test123456', '管理员', 'admin@example.com', 'active', 1);
+
+-- 用户角色关联
+INSERT INTO user_role (user_id, role_id)
+VALUES (1, 1);
 
 -- 告警规则示例
 INSERT INTO alert_rule (rule_name, rule_type, metric_name, condition, threshold, time_window, severity, notification_channels, status)
