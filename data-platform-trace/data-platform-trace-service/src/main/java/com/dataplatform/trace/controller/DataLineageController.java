@@ -1,5 +1,6 @@
 package com.dataplatform.trace.controller;
 
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.trace.entity.DataLineage;
 import com.dataplatform.trace.service.DataLineageService;
@@ -17,6 +18,7 @@ public class DataLineageController {
     @Autowired
     private DataLineageService dataLineageService;
 
+    @OperationLog(module = "数据血缘管理", operation = "记录数据血缘")
     @PostMapping
     public ResponseEntity<Result<Boolean>> recordLineage(
             @RequestParam(required = false) String sourceType,

@@ -1,5 +1,6 @@
 package com.dataplatform.iam.controller;
 
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.iam.entity.Role;
@@ -38,6 +39,7 @@ public class RoleController {
         return ResponseEntity.ok(Result.success(role));
     }
 
+    @OperationLog(module = "角色管理", operation = "新增角色")
     @PostMapping
     public ResponseEntity<Result<Role>> create(@RequestBody Role role) {
         if (role.getRoleCode() == null || role.getRoleCode().trim().isEmpty()) {
@@ -61,6 +63,7 @@ public class RoleController {
         return ResponseEntity.ok(Result.success(role));
     }
 
+    @OperationLog(module = "角色管理", operation = "更新角色")
     @PutMapping("/{id}")
     public ResponseEntity<Result<Role>> update(@PathVariable Long id, @RequestBody Role role) {
         Role existing = roleService.getById(id);
@@ -73,6 +76,7 @@ public class RoleController {
         return ResponseEntity.ok(Result.success(roleService.getById(id)));
     }
 
+    @OperationLog(module = "角色管理", operation = "删除角色")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
         Role existing = roleService.getById(id);
@@ -84,6 +88,7 @@ public class RoleController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "角色管理", operation = "更新角色状态")
     @PatchMapping("/{id}/status")
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");

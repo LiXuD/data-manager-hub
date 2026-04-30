@@ -1,6 +1,7 @@
 package com.dataplatform.monitor.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.monitor.entity.AlertRule;
@@ -44,6 +45,7 @@ public class AlertController {
         return ResponseEntity.ok(Result.success(rule));
     }
 
+    @OperationLog(module = "告警规则管理", operation = "新增告警规则")
     @PostMapping("/rule")
     public ResponseEntity<Result<AlertRule>> createRule(@RequestBody AlertRule rule) {
         // 兼容测试用例格式: 使用 metric 作为 targetType, condition 作为 conditionType
@@ -79,6 +81,7 @@ public class AlertController {
         return ResponseEntity.ok(Result.success(rule));
     }
 
+    @OperationLog(module = "告警规则管理", operation = "更新告警规则")
     @PutMapping("/rule/{id}")
     public ResponseEntity<Result<AlertRule>> updateRule(@PathVariable Long id, @RequestBody AlertRule rule) {
         // 检查是否存在
@@ -92,6 +95,7 @@ public class AlertController {
         return ResponseEntity.ok(Result.success(alertService.getRuleById(id)));
     }
 
+    @OperationLog(module = "告警规则管理", operation = "删除告警规则")
     @DeleteMapping("/rule/{id}")
     public ResponseEntity<Result<Void>> deleteRule(@PathVariable Long id) {
         // 检查是否存在
@@ -115,6 +119,7 @@ public class AlertController {
         return alertService.listRecords(status, level, page, pageSize);
     }
 
+    @OperationLog(module = "告警记录管理", operation = "处理告警")
     @PostMapping("/record/{id}/resolve")
     public ResponseEntity<Result<Void>> resolveRecord(@PathVariable Long id, @RequestBody Map<String, String> body) {
         // 检查是否存在

@@ -1,4 +1,4 @@
-package com.dataplatform.config.entity;
+package com.dataplatform.vendor.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;

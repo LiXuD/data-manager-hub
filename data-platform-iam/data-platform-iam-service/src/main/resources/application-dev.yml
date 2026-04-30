@@ -1,22 +1,32 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/example_db
-    username: admin
-    password: password
+    url: jdbc:postgresql://localhost:5432/dataplatform
+    username: postgres
+    password: 123456
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      idle-timeout: 30000
+      connection-timeout: 10000
+      max-lifetime: 600000
+
+spring.data.redis:
+  host: localhost
+  port: 6379
+  password: redis_password
+  database: 0
 
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.dataplatform.iam.entity
   global-config:
     db-config:
-      id-type: auto
-      table-underline: true
-
-redisson:
-  single-server-config:
-    address: redis://localhost:6379
+      logic-delete-field: deleted
+      logic-delete-value: true
+      logic-not-delete-value: false
 
 logging:
   level:

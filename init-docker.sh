@@ -44,11 +44,14 @@ scrape_configs:
           - 'host.docker.internal:8085'
           - 'host.docker.internal:8086'
           - 'host.docker.internal:8087'
-          - 'host.docker.internal:8088'
-          - 'host.docker.internal:8089'
           - 'host.docker.internal:8090'
-          - 'host.docker.internal:8091'
           - 'host.docker.internal:8092'
+          - 'host.docker.internal:8093'
+          - 'host.docker.internal:8094'
+          - 'host.docker.internal:8095'
+          - 'host.docker.internal:8096'
+          - 'host.docker.internal:8097'
+          - 'host.docker.internal:8888'
 EOF
     echo "✅ Prometheus 配置文件创建成功"
 fi
@@ -111,11 +114,14 @@ scrape_configs:
           - 'host.docker.internal:8085'
           - 'host.docker.internal:8086'
           - 'host.docker.internal:8087'
-          - 'host.docker.internal:8088'
-          - 'host.docker.internal:8089'
           - 'host.docker.internal:8090'
-          - 'host.docker.internal:8091'
           - 'host.docker.internal:8092'
+          - 'host.docker.internal:8093'
+          - 'host.docker.internal:8094'
+          - 'host.docker.internal:8095'
+          - 'host.docker.internal:8096'
+          - 'host.docker.internal:8097'
+          - 'host.docker.internal:8888'
 EOF
     echo "✅ 已修复 prometheus.yml"
 fi

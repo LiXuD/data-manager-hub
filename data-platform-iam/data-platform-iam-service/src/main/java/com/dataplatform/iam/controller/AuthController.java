@@ -1,6 +1,7 @@
 package com.dataplatform.iam.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.iam.entity.User;
 import com.dataplatform.iam.mapper.UserMapper;
@@ -18,6 +19,7 @@ public class AuthController {
     @Autowired
     private UserMapper userMapper;
 
+    @OperationLog(module = "认证管理", operation = "用户登录")
     @PostMapping("/login")
     public Result<Map<String, String>> login(@RequestBody Map<String, String> credentials) {
         String username = credentials.get("username");

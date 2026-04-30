@@ -1,6 +1,7 @@
 package com.dataplatform.tenant.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.tenant.entity.TenantInfo;
@@ -51,6 +52,7 @@ public class TenantController {
         return ResponseEntity.ok(Result.success(tenant));
     }
 
+    @OperationLog(module = "租户管理", operation = "新增租户")
     @PostMapping
     public ResponseEntity<Result<TenantInfo>> create(@RequestBody TenantInfo tenant) {
         // 校验必填字段
@@ -76,6 +78,7 @@ public class TenantController {
         return ResponseEntity.ok(Result.success(tenant));
     }
 
+    @OperationLog(module = "租户管理", operation = "更新租户")
     @PutMapping("/{id}")
     public ResponseEntity<Result<TenantInfo>> update(@PathVariable(name = "id") Long id, @RequestBody TenantInfo tenant) {
         // 检查是否存在
@@ -89,6 +92,7 @@ public class TenantController {
         return ResponseEntity.ok(Result.success(tenantService.getById(id)));
     }
 
+    @OperationLog(module = "租户管理", operation = "删除租户")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable(name = "id") Long id) {
         // 检查是否存在
@@ -101,6 +105,7 @@ public class TenantController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "租户管理", operation = "更新租户状态")
     @PatchMapping("/{id}/status")
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable(name = "id") Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");

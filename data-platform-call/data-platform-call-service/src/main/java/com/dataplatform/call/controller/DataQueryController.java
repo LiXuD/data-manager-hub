@@ -7,6 +7,7 @@ import com.dataplatform.call.vo.ApiQueryReqVO;
 import com.dataplatform.call.vo.BatchQueryReqVO;
 import com.dataplatform.caller.api.dto.ApiKeyDTO;
 import com.dataplatform.caller.api.feign.CallerFeignClient;
+import com.dataplatform.common.log.OperationLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -108,6 +109,7 @@ public class DataQueryController {
         return apiKeyEntity;
     }
 
+    @OperationLog(module = "数据查询", operation = "清除缓存")
     @PostMapping("/cache/clear")
     public Result<Void> clearCache(@RequestBody ApiQueryReqVO request) {
         dataQueryService.clearCache(

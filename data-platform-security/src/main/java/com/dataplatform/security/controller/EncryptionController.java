@@ -1,5 +1,6 @@
 package com.dataplatform.security.controller;
 
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.security.service.EncryptionService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,7 @@ public class EncryptionController {
     @Autowired
     private EncryptionService encryptionService;
 
+    @OperationLog(module = "安全加密", operation = "数据加密")
     @PostMapping("/encrypt")
     public Result<String> encrypt(
             @RequestParam(required = false) String plainText,
@@ -27,6 +29,7 @@ public class EncryptionController {
         return Result.success(encrypted);
     }
 
+    @OperationLog(module = "安全加密", operation = "数据解密")
     @PostMapping("/decrypt")
     public Result<String> decrypt(
             @RequestParam(required = false) String encryptedText,
@@ -42,6 +45,7 @@ public class EncryptionController {
         return Result.success(decrypted);
     }
 
+    @OperationLog(module = "安全加密", operation = "密钥轮换")
     @PostMapping("/rotate/{tableName}")
     public Result<Boolean> rotateKey(@PathVariable String tableName) {
         if (tableName == null || tableName.trim().isEmpty()) {

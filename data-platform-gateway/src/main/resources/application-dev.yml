@@ -96,7 +96,7 @@ spring:
           filters:
             - StripPrefix=2
         - id: config-service
-          uri: lb://data-platform-config
+          uri: lb://data-platform-vendor
           predicates:
             - Path=/api/v1/config/**
           filters:

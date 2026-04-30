@@ -3,8 +3,8 @@
 ## 项目概述
 
 - **项目名称**: 数据管理平台 (Data Management Platform)
-- **项目路径**: `/Users/lixd/.openclaw/workspace/data-platform/`
-- **设计文档**: `/Users/lixd/.openclaw/workspace/data-platform/docs/design-2026-04-17.md`
+- **项目路径**: `/Users/lixd/IdeaProjects/Git/traesoloproj/data-manager-hub/`
+- **技术栈**: Java 21 + Spring Boot 3.4 + Spring Cloud 2024.0.0 + MyBatis-Plus 3.5.7
 
 ---
 
@@ -17,133 +17,107 @@
 | 阶段3: 监控告警 | ✅ 100% | 2026-04-19 |
 | 阶段4: 前端完善 | ✅ 100% | 2026-04-20 |
 | 阶段5: 配置与日志 | ✅ 100% | 2026-04-21 |
+| 阶段6: 模块合并优化 | ✅ 100% | 2026-04-30 |
 
 ---
 
-## 今日开发 (2026-04-21)
+## 模块合并记录 (2026-04-30)
 
-### 完成项
+### 合并完成的模块
 
-1. **新增配置中心模块** (data-platform-config, 端口8091)
-   - 厂商动态配置管理
-   - 前端页面: /config
+| 原模块 | 合并到 | 说明 |
+|--------|--------|------|
+| data-platform-datatype | data-platform-vendor | 数据类型功能合并到厂商管理 |
+| data-platform-config | data-platform-vendor | 配置中心功能合并到厂商管理 |
+| data-platform-user | data-platform-iam | 用户管理合并到IAM |
+| data-platform-role | data-platform-iam | 角色管理合并到IAM |
 
-2. **新增灰度发布模块** (data-platform-graylog, 端口8092)
-   - 灰度发布规则管理
-   - 前端页面: /graylog
-   - 数据库表: gray_rule
+### 新增功能
 
-3. **新增操作日志模块** (data-platform-log, 端口8090)
-   - 前端页面: /audit
-   - 数据库表: operation_log, billing_rule, alert_record, vendor_config_extended
+1. **操作日志注解功能**
+   - 新增 `@OperationLog` 注解，支持声明式操作日志记录
+   - 自动记录操作人、IP、参数、返回结果、耗时等信息
+   - 所有Controller写操作已添加注解
 
-4. **完善计费管理页面**
-   - 账单记录 + 计费规则 + 报表分析
+2. **CircuitBreaker自动配置**
+   - 新增熔断器自动配置，支持按需加载
 
-5. **完善监控告警页面**
-   - 服务健康状态 + 告警规则 + 监控图表
+---
 
-6. **新增/完善后端模块**
-   - role (8088): 角色管理
-   - datatype (8089): 数据类型
-
-### 已完成
-
-- [x] 后端模块：vendor(8081), caller(8082), call(8083), billing(8084), monitor(8085)
-- [x] 后端模块：tenant(8086), user(8087), role(8088), datatype(8089), log(8090)
-- [x] 后端模块：config(8091), graylog(8092)
-- [x] 前端页面：vendor, tenant, user, role, datatype, call
-- [x] 前端页面：billing (账单+规则+报表)
-- [x] 前端页面：monitor (健康状态+告警规则+图表)
-- [x] 前端页面：caller (调用方+API Key管理)
-- [x] 前端页面：audit (操作日志)
-- [x] 前端页面：config (配置中心)
-- [x] 前端页面：graylog (灰度发布)
-
-### 后端模块端口
+## 后端模块端口
 
 | 服务 | 端口 | 说明 |
 |------|------|------|
 | Gateway | 8888 | API网关 |
-| vendor | 8081 | 数据接入 |
+| vendor | 8081 | 厂商管理（含配置中心、数据类型） |
 | caller | 8082 | API管理 |
 | call | 8083 | 调用记录 |
 | billing | 8084 | 计费管理 |
-| monitor | 8085 | 数据质量 |
+| monitor | 8085 | 监控告警 |
 | tenant | 8086 | 多租户 |
-| user | 8087 | 用户管理 |
-| role | 8088 | 角色管理 |
-| datatype | 8089 | 数据类型 |
+| sdk | 8087 | SDK生成 |
 | log | 8090 | 操作日志 |
-| config | 8091 | 配置中心 |
 | graylog | 8092 | 灰度发布 |
-
-### 页面路由
-
-| 路径 | 页面 | 模块 |
-|------|------|------|
-| /vendor | 厂商管理 | vendor |
-| /caller | 调用方管理 | caller |
-| /call | 调用记录 | call |
-| /billing | 计费管理 | billing |
-| /monitor | 监控告警 | monitor |
-| /tenant | 租户管理 | tenant |
-| /user | 用户管理 | user |
-| /role | 角色管理 | role |
-| /datatype | 数据类型 | datatype |
-| /audit | 操作日志 | log |
-| /config | 配置中心 | config |
-| /graylog | 灰度发布 | graylog |
+| iam | 8093 | 用户权限管理（含用户、角色） |
+| security | 8094 | 数据安全 |
+| trace | 8095 | 数据血缘 |
+| quality | 8096 | 数据质量 |
+| interface | 8097 | 接口管理 |
 
 ---
 
 ## 模块结构
 
 ```
-data-platform/
-├── sql/
-│   └── init.sql                   # DDL脚本
-├── pom.xml                         # 父POM
-├── docker-compose.yml             # 基础设施 (Redis)
-├── data-platform-common/           # 公共模块
-├── data-platform-gateway/          # 网关 (8888)
-├── data-platform-vendor/           # 厂商管理 (8081)
-├── data-platform-caller/           # 调用方管理 (8082)
-├── data-platform-call/             # 调用服务 (8083)
-├── data-platform-billing/          # 计费服务 (8084)
-├── data-platform-monitor/          # 监控告警 (8085)
-├── data-platform-tenant/           # 租户管理 (8086)
-├── data-platform-user/             # 用户管理 (8087)
-├── data-platform-role/             # 角色管理 (8088)
-├── data-platform-datatype/         # 数据类型 (8089)
-├── data-platform-log/              # 操作日志 (8090)
-├── data-platform-config/           # 配置中心 (8091)
-├── data-platform-graylog/          # 灰度发布 (8092)
-└── data-platform-web/              # 前端 (3000)
+data-manager-hub/
+├── pom.xml                              # 父POM
+├── docker-compose.yml                   # 基础设施 (Redis)
+├── AGENTS.md                            # 项目文档
+├── data-platform-api/                   # 公共API契约
+├── data-platform-common/                # 公共模块
+│   ├── result/                          # 统一响应封装
+│   ├── exception/                       # 异常处理
+│   ├── log/                             # 操作日志注解
+│   └── circuitbreaker/                  # 熔断器配置
+├── data-platform-gateway/               # 网关 (8888)
+├── data-platform-vendor/                # 厂商管理 (8081)
+│   ├── data-platform-vendor-api/
+│   └── data-platform-vendor-service/
+├── data-platform-caller/                # 调用方管理 (8082)
+├── data-platform-call/                  # 调用服务 (8083)
+├── data-platform-billing/               # 计费服务 (8084)
+├── data-platform-monitor/               # 监控告警 (8085)
+├── data-platform-tenant/                # 租户管理 (8086)
+├── data-platform-sdk/                   # SDK生成 (8087)
+├── data-platform-log/                   # 操作日志 (8090)
+├── data-platform-graylog/               # 灰度发布 (8092)
+├── data-platform-iam/                   # 用户权限管理 (8093)
+│   ├── data-platform-iam-api/
+│   └── data-platform-iam-service/
+├── data-platform-security/              # 数据安全 (8094)
+├── data-platform-trace/                 # 数据血缘 (8095)
+├── data-platform-quality/               # 数据质量 (8096)
+├── data-platform-interface/             # 接口管理 (8097)
+└── data-platform-web/                   # 前端 (3000)
 ```
 
 ---
 
-## 服务状态
+## 页面路由
 
-| 服务 | 端口 | 状态 |
-|------|------|------|
-| Gateway | 8888 | ✅ 运行中 |
-| Vendor | 8081 | ✅ 运行中 |
-| Caller | 8082 | ✅ 运行中 |
-| Call | 8083 | ✅ 运行中 |
-| Billing | 8084 | ✅ 运行中 |
-| Monitor | 8085 | ✅ 运行中 |
-| Tenant | 8086 | ✅ 运行中 |
-| User | 8087 | ✅ 运行中 |
-| Role | 8088 | ✅ 运行中 |
-| Datatype | 8089 | ✅ 运行中 |
-| Log | 8090 | ✅ 运行中 |
-| Config | 8091 | ✅ 运行中 |
-| Graylog | 8092 | ✅ 运行中 |
-| PostgreSQL | 5432 | ✅ 本地 |
-| Redis | 6379 | ✅ 本地 |
-| 前端 | 3000 | ✅ 运行中 |
+| 路径 | 页面 | 后端模块 |
+|------|------|----------|
+| /vendor | 厂商管理 | vendor |
+| /caller | 调用方管理 | caller |
+| /call | 调用记录 | call |
+| /billing | 计费管理 | billing |
+| /monitor | 监控告警 | monitor |
+| /tenant | 租户管理 | tenant |
+| /user | 用户管理 | iam |
+| /role | 角色管理 | iam |
+| /audit | 操作日志 | log |
+| /config | 配置中心 | vendor |
+| /graylog | 灰度发布 | graylog |
 
 ---
 
@@ -154,49 +128,65 @@ data-platform/
 | 1 | tenant_info | 租户信息 |
 | 2 | vendor_info | 厂商信息 |
 | 3 | data_type | 数据类型 |
-| 4 | vendor_config | 厂商配置 |
-| 5 | caller_info | 调用方信息 |
-| 6 | api_key | API Key |
-| 7 | call_record | 调用记录 (按月分区) |
-| 8 | billing_daily | 日账单 |
-| 9 | billing_rule | 计费规则 |
-| 10 | user_info | 用户 |
-| 11 | role_info | 角色 |
-| 12 | user_role | 用户角色关联 |
-| 13 | alert_rule | 告警规则 |
-| 14 | alert_record | 告警记录 |
-| 15 | circuit_breaker | 熔断记录 |
-| 16 | operation_log | 操作日志 |
-| 17 | gray_rule | 灰度规则 |
+| 4 | vendor_config | 厂商API配置 |
+| 5 | vendor_config_extended | 厂商扩展配置 |
+| 6 | config_version | 配置版本历史 |
+| 7 | caller_info | 调用方信息 |
+| 8 | api_key | API Key |
+| 9 | call_record | 调用记录 (按月分区) |
+| 10 | billing_daily | 日账单 |
+| 11 | billing_rule | 计费规则 |
+| 12 | user_info | 用户 |
+| 13 | role_info | 角色 |
+| 14 | user_role | 用户角色关联 |
+| 15 | alert_rule | 告警规则 |
+| 16 | alert_record | 告警记录 |
+| 17 | circuit_breaker | 熔断记录 |
+| 18 | operation_log | 操作日志 |
+| 19 | gray_rule | 灰度规则 |
 
 ---
 
 ## 技术栈
 
-- **后端**: Java 21 + Spring Boot 3.4 + Spring Cloud 2023.0.x + MyBatis-Plus 3.5
+- **后端**: Java 21 + Spring Boot 3.4.0 + Spring Cloud 2024.0.0 + MyBatis-Plus 3.5.7
 - **数据库**: PostgreSQL 16 (localhost:5432)
-- **缓存**: Redis 7 (Redisson)
-- **服务发现**: Nacos (本地配置模式)
+- **缓存**: Redis 7 (Redisson 3.27.0)
+- **服务发现**: Nacos 2023.0.1.0 (本地配置模式)
+- **认证**: Sa-Token 1.37.0
 - **前端**: Vue3 + TypeScript + Element Plus + Vite + Pinia
 
 ---
 
 ## Git 提交规范
 
-## 1. commit message格式
+### commit message格式
 
-`<type>(<scope>): <summary>`
-`<正文：描述本次变更的背景与动机>`
-`Agent-Task: <原始任务描述或任务 ID>Agent-Model: <使用的模型，如 gpt-4o、gemini-2.5-pro>Agent-Decision: <关键设计决策及理由>Agent-Limitation: <已知局限或后续 TODO>`
+```
+<type>(<scope>): <summary>
 
-## 2.在完成以下关键节点时，执行一次 git commit：
-`完成数据模型/接口定义`
+<正文：描述本次变更的背景与动机>
 
-`完成核心逻辑实现`
+Agent-Task: <原始任务描述或任务 ID>
+Agent-Model: <使用的模型，如 gpt-4o、gemini-2.5-pro>
+Agent-Decision: <关键设计决策及理由>
+Agent-Limitation: <已知局限或后续 TODO>
+```
 
-`完成测试编写`
+### 提交类型
 
-``完成文档更新``
+- `feat`: 新功能
+- `fix`: 修复bug
+- `refactor`: 重构
+- `docs`: 文档更新
+- `style`: 代码格式
+- `test`: 测试相关
+- `chore`: 构建/工具相关
 
-`每个 checkpoint commit 的 message 以 [WIP] 开头，最终完成后执行 git commit --amend 或通过 rebase 整理历史。`
+### 提交节点
 
+在完成以下关键节点时执行 git commit：
+- 完成数据模型/接口定义
+- 完成核心逻辑实现
+- 完成测试编写
+- 完成文档更新

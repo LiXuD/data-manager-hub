@@ -1,6 +1,7 @@
 package com.dataplatform.caller.controller;
 
 import com.dataplatform.common.constant.StatusConstants;
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.caller.entity.ApiKey;
@@ -44,6 +45,7 @@ public class CallerController {
         return ResponseEntity.ok(Result.success(caller));
     }
 
+    @OperationLog(module = "调用方管理", operation = "新增调用方")
     @PostMapping
     public ResponseEntity<Result<CallerInfo>> create(@RequestBody CallerInfo caller) {
         // 校验必填字段
@@ -65,6 +67,7 @@ public class CallerController {
         return ResponseEntity.ok(Result.success(caller));
     }
 
+    @OperationLog(module = "调用方管理", operation = "更新调用方")
     @PutMapping("/{id}")
     public ResponseEntity<Result<CallerInfo>> update(@PathVariable Long id, @RequestBody CallerInfo caller) {
         // 检查是否存在
@@ -78,6 +81,7 @@ public class CallerController {
         return ResponseEntity.ok(Result.success(callerService.getById(id)));
     }
 
+    @OperationLog(module = "调用方管理", operation = "删除调用方")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
         // 检查是否存在
@@ -92,6 +96,7 @@ public class CallerController {
 
     // ==================== API Key 管理 ====================
 
+    @OperationLog(module = "API Key管理", operation = "新增API Key")
     @PostMapping("/{callerId}/api-key")
     public ResponseEntity<Result<Map<String, Object>>> createApiKey(@PathVariable Long callerId, @RequestBody Map<String, Object> params) {
         CallerInfo caller = callerService.getById(callerId);
@@ -121,6 +126,7 @@ public class CallerController {
         return ResponseEntity.ok(Result.success(result));
     }
 
+    @OperationLog(module = "API Key管理", operation = "更新API Key状态")
     @PatchMapping("/api-key/{id}/status")
     public ResponseEntity<Result<Void>> updateApiKeyStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
@@ -139,6 +145,7 @@ public class CallerController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "调用方管理", operation = "更新调用方状态")
     @PatchMapping("/{id}/status")
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");

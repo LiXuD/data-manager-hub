@@ -8,20 +8,18 @@ cd "$SCRIPT_DIR"
 declare -A SERVICES=(
     [8081]="data-platform-vendor"
     [8082]="data-platform-caller"
-    [8083]="data-platform-billing"
-    [8084]="data-platform-call"
+    [8083]="data-platform-call"
+    [8084]="data-platform-billing"
     [8085]="data-platform-monitor"
     [8086]="data-platform-tenant"
-    [8087]="data-platform-user"
-    [8088]="data-platform-role"
-    [8089]="data-platform-datatype"
+    [8087]="data-platform-sdk"
     [8090]="data-platform-log"
-    [8091]="data-platform-config"
     [8092]="data-platform-graylog"
-    [8093]="data-platform-sdk"
+    [8093]="data-platform-iam"
     [8094]="data-platform-security"
     [8095]="data-platform-trace"
     [8096]="data-platform-quality"
+    [8097]="data-platform-interface"
     [8888]="data-platform-gateway"
 )
 
@@ -41,7 +39,7 @@ done
 sleep 2
 
 # 按顺序启动服务（Gateway最后启动）
-start_order=(8081 8082 8083 8084 8085 8086 8087 8088 8089 8090 8091 8092 8093 8094 8095 8096 8888)
+start_order=(8081 8082 8083 8084 8085 8086 8087 8090 8092 8093 8094 8095 8096 8097 8888)
 
 for port in "${start_order[@]}"; do
     module="${SERVICES[$port]}"

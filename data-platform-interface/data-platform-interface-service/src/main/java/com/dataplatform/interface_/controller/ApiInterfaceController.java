@@ -1,6 +1,7 @@
 package com.dataplatform.interface_.controller;
 
 import com.dataplatform.common.constant.StatusConstants;
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.interface_.entity.ApiInterface;
@@ -49,6 +50,7 @@ public class ApiInterfaceController {
         return Result.success(apiInterfaceService.listByDataTypeId(dataTypeId));
     }
 
+    @OperationLog(module = "接口管理", operation = "新增接口")
     @PostMapping
     public ResponseEntity<Result<ApiInterface>> create(@RequestBody ApiInterface apiInterface) {
         if (apiInterface.getInterfaceCode() == null || apiInterface.getInterfaceCode().trim().isEmpty()) {
@@ -77,6 +79,7 @@ public class ApiInterfaceController {
         return ResponseEntity.ok(Result.success(apiInterface));
     }
 
+    @OperationLog(module = "接口管理", operation = "更新接口")
     @PutMapping("/{id}")
     public ResponseEntity<Result<ApiInterface>> update(@PathVariable Long id, @RequestBody ApiInterface apiInterface) {
         ApiInterface existing = apiInterfaceService.getById(id);
@@ -89,6 +92,7 @@ public class ApiInterfaceController {
         return ResponseEntity.ok(Result.success(apiInterfaceService.getById(id)));
     }
 
+    @OperationLog(module = "接口管理", operation = "删除接口")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
         ApiInterface existing = apiInterfaceService.getById(id);
@@ -100,6 +104,7 @@ public class ApiInterfaceController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "接口管理", operation = "更新接口状态")
     @PatchMapping("/{id}/status")
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
@@ -131,6 +136,7 @@ public class ApiInterfaceController {
         return ResponseEntity.ok(Result.success(schema));
     }
 
+    @OperationLog(module = "接口管理", operation = "更新接口Schema")
     @PutMapping("/{id}/schema")
     public ResponseEntity<Result<Void>> updateSchema(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String requestSchema = body.get("requestSchema");
@@ -154,6 +160,7 @@ public class ApiInterfaceController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "接口管理", operation = "验证Schema")
     @PostMapping("/schema/validate")
     public Result<Map<String, Object>> validateSchema(@RequestBody Map<String, String> body) {
         String schema = body.get("schema");

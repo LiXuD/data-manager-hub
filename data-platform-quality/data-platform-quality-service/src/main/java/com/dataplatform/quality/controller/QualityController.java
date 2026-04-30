@@ -1,5 +1,6 @@
 package com.dataplatform.quality.controller;
 
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.quality.entity.QualityRule;
 import com.dataplatform.quality.entity.QualityScore;
@@ -18,6 +19,7 @@ public class QualityController {
     @Autowired
     private QualityService qualityService;
 
+    @OperationLog(module = "数据质量管理", operation = "新增质量规则")
     @PostMapping("/rules")
     public ResponseEntity<Result<QualityRule>> addRule(@RequestBody QualityRule rule) {
         // 参数验证
@@ -44,6 +46,7 @@ public class QualityController {
         return ResponseEntity.ok(Result.success(rules));
     }
 
+    @OperationLog(module = "数据质量管理", operation = "质量检查")
     @PostMapping("/check")
     public ResponseEntity<Result<QualityScore>> checkQuality(
             @RequestParam(required = false) String dataType,

@@ -1,4 +1,4 @@
-package com.dataplatform.config.entity;
+package com.dataplatform.vendor.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 
 @TableName("vendor_config_extended")
-public class VendorConfig {
+public class VendorExtendedConfig {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long vendorId;

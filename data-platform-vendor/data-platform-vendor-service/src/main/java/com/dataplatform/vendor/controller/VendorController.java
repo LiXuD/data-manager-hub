@@ -1,5 +1,6 @@
 package com.dataplatform.vendor.controller;
 
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.vendor.entity.VendorInfo;
@@ -37,6 +38,7 @@ public class VendorController {
         return ResponseEntity.ok(Result.success(vendor));
     }
 
+    @OperationLog(module = "厂商管理", operation = "新增厂商")
     @PostMapping
     public ResponseEntity<Result<VendorInfo>> create(@RequestBody VendorInfo vendor) {
         // 校验必填字段
@@ -65,6 +67,7 @@ public class VendorController {
         return ResponseEntity.ok(Result.success(vendor));
     }
 
+    @OperationLog(module = "厂商管理", operation = "更新厂商")
     @PutMapping("/{id}")
     public ResponseEntity<Result<VendorInfo>> update(@PathVariable Long id, @RequestBody VendorInfo vendor) {
         // 检查是否存在
@@ -78,6 +81,7 @@ public class VendorController {
         return ResponseEntity.ok(Result.success(vendorService.getById(id)));
     }
 
+    @OperationLog(module = "厂商管理", operation = "删除厂商")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
         // 检查是否存在
@@ -90,6 +94,7 @@ public class VendorController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "厂商管理", operation = "更新厂商状态")
     @PatchMapping("/{id}/status")
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
@@ -118,6 +123,7 @@ public class VendorController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "厂商管理", operation = "测试厂商连接")
     @PostMapping("/{id}/test")
     public ResponseEntity<Result<Map<String, Object>>> testConnection(@PathVariable Long id) {
         // 检查是否存在

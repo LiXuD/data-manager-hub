@@ -1,5 +1,6 @@
 package com.dataplatform.billing.controller;
 
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.billing.entity.BillingDaily;
 import com.dataplatform.billing.entity.BillingRule;
@@ -67,6 +68,7 @@ public class BillingController {
         return Result.success(billingService.listRules());
     }
 
+    @OperationLog(module = "计费规则管理", operation = "新增计费规则")
     @PostMapping("/rule")
     public ResponseEntity<Result<BillingRule>> createRule(@RequestBody BillingRule rule) {
         // 验证必填参数
@@ -84,6 +86,7 @@ public class BillingController {
         return ResponseEntity.ok(Result.success(rule));
     }
 
+    @OperationLog(module = "计费规则管理", operation = "更新计费规则")
     @PutMapping("/rule/{id}")
     public ResponseEntity<Result<BillingRule>> updateRule(@PathVariable Long id, @RequestBody BillingRule rule) {
         BillingRule existing = billingService.getRuleById(id);
@@ -96,6 +99,7 @@ public class BillingController {
         return ResponseEntity.ok(Result.success(billingService.getRuleById(id)));
     }
 
+    @OperationLog(module = "计费规则管理", operation = "删除计费规则")
     @DeleteMapping("/rule/{id}")
     public ResponseEntity<Result<Void>> deleteRule(@PathVariable Long id) {
         BillingRule existing = billingService.getRuleById(id);

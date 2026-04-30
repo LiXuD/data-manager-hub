@@ -2,6 +2,7 @@ package com.dataplatform.vendor.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.vendor.entity.DataType;
@@ -82,6 +83,7 @@ public class DataTypeController {
         return ResponseEntity.ok(Result.success(dataType));
     }
 
+    @OperationLog(module = "数据类型管理", operation = "新增数据类型")
     @PostMapping
     public ResponseEntity<Result<DataType>> create(@RequestBody DataType dataType) {
         if (dataType.getDataTypeCode() == null || dataType.getDataTypeCode().isEmpty()) {
@@ -109,6 +111,7 @@ public class DataTypeController {
         return ResponseEntity.ok(Result.success(dataType));
     }
 
+    @OperationLog(module = "数据类型管理", operation = "更新数据类型")
     @PutMapping("/{id}")
     public ResponseEntity<Result<DataType>> update(@PathVariable Long id, @RequestBody DataType dataType) {
         DataType existing = dataTypeMapper.selectById(id);
@@ -122,6 +125,7 @@ public class DataTypeController {
         return ResponseEntity.ok(Result.success(dataTypeMapper.selectById(id)));
     }
 
+    @OperationLog(module = "数据类型管理", operation = "删除数据类型")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
         DataType existing = dataTypeMapper.selectById(id);
@@ -136,6 +140,7 @@ public class DataTypeController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "数据类型管理", operation = "更新数据类型状态")
     @PatchMapping("/{id}/status")
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");

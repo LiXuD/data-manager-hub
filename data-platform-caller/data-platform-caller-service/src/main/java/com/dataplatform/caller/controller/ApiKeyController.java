@@ -1,6 +1,7 @@
 package com.dataplatform.caller.controller;
 
 import com.dataplatform.common.constant.StatusConstants;
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.caller.entity.ApiKey;
 import com.dataplatform.caller.service.ApiKeyService;
@@ -29,6 +30,7 @@ public class ApiKeyController {
         return Result.success(apiKeyService.getById(id));
     }
 
+    @OperationLog(module = "API Key管理", operation = "新增API Key")
     @PostMapping("/{callerId}")
     public ResponseEntity<Result<ApiKey>> create(@PathVariable Long callerId, @RequestBody Map<String, Object> params) {
         String name = (String) params.get("name");
@@ -45,6 +47,7 @@ public class ApiKeyController {
         return ResponseEntity.ok(Result.success(apiKeyService.getById(apiKey.getId())));
     }
 
+    @OperationLog(module = "API Key管理", operation = "新增API Key")
     @PostMapping("/{callerId}/api-key")
     public ResponseEntity<Result<ApiKey>> createApiKey(@PathVariable Long callerId, @RequestBody Map<String, Object> params) {
         String name = (String) params.get("name");
@@ -61,6 +64,7 @@ public class ApiKeyController {
         return ResponseEntity.ok(Result.success(apiKeyService.getById(apiKey.getId())));
     }
 
+    @OperationLog(module = "API Key管理", operation = "更新API Key状态")
     @PutMapping("/api-key/{id}/status")
     public Result<ApiKey> updateStatus(@PathVariable Long id, @RequestBody Map<String, Object> params) {
         String status = (String) params.get("status");

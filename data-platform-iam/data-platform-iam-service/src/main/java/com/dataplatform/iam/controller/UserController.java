@@ -1,5 +1,6 @@
 package com.dataplatform.iam.controller;
 
+import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.iam.entity.User;
@@ -36,6 +37,7 @@ public class UserController {
         return ResponseEntity.ok(Result.success(user));
     }
 
+    @OperationLog(module = "用户管理", operation = "新增用户")
     @PostMapping
     public ResponseEntity<Result<User>> create(@RequestBody User user) {
         if (user.getUsername() == null || user.getUsername().trim().isEmpty()) {
@@ -65,6 +67,7 @@ public class UserController {
         return ResponseEntity.ok(Result.success(user));
     }
 
+    @OperationLog(module = "用户管理", operation = "更新用户")
     @PutMapping("/{id}")
     public ResponseEntity<Result<User>> update(@PathVariable Long id, @RequestBody User user) {
         User existing = userService.getById(id);
@@ -77,6 +80,7 @@ public class UserController {
         return ResponseEntity.ok(Result.success(userService.getById(id)));
     }
 
+    @OperationLog(module = "用户管理", operation = "删除用户")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
         User existing = userService.getById(id);
@@ -88,6 +92,7 @@ public class UserController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "用户管理", operation = "更新用户状态")
     @PatchMapping("/{id}/status")
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
@@ -114,6 +119,7 @@ public class UserController {
         return ResponseEntity.ok(Result.success(null));
     }
 
+    @OperationLog(module = "用户管理", operation = "重置密码")
     @PostMapping("/{id}/reset-password")
     public ResponseEntity<Result<Void>> resetPassword(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String password = body.get("password");
