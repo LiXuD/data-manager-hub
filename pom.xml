@@ -17,7 +17,6 @@
         <module>data-platform-gateway</module>
         <module>data-platform-common</module>
         <module>data-platform-config</module>
-        <module>data-platform-datatype</module>
         <module>data-platform-vendor</module>
         <module>data-platform-caller</module>
         <module>data-platform-billing</module>
@@ -26,9 +25,8 @@
         <module>data-platform-interface</module>
         <module>data-platform-log</module>
         <module>data-platform-monitor</module>
-        <module>data-platform-role</module>
+        <module>data-platform-iam</module>
         <module>data-platform-tenant</module>
-        <module>data-platform-user</module>
         <module>data-platform-trace</module>
         <module>data-platform-quality</module>
         <module>data-platform-security</module>

@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/example_db
+    username: admin
+    password: password
+    driver-class-name: org.postgresql.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+      table-underline: true
+
+redisson:
+  single-server-config:
+    address: redis://localhost:6379
+
+logging:
+  level:
+    com.dataplatform.iam: INFO

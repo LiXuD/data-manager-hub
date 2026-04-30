@@ -1,9 +1,9 @@
 package com.dataplatform.call.controller;
 
+import com.dataplatform.call.service.CallRecordService;
+import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
-import com.dataplatform.call.entity.CallRecord;
-import com.dataplatform.call.service.CallRecordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 import java.util.Map;
 
 @RestController

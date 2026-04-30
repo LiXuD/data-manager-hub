@@ -1,12 +1,11 @@
 package com.dataplatform.call.service.impl;
 
-import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.dataplatform.call.entity.CallRecord;
 import com.dataplatform.call.mapper.CallRecordMapper;
 import com.dataplatform.call.service.CallRecordService;
+import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.common.result.PageResult;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -21,7 +20,7 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
     implements CallRecordService {
 
     @Override
-    public PageResult<com.dataplatform.call.entity.CallRecord> list(
+    public PageResult<CallRecord> list(
             Long callerId, Long vendorId, String dataType, Boolean success,
             LocalDateTime startTime, LocalDateTime endTime,
             int page, int pageSize) {

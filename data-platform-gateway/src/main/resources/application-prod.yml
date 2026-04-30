@@ -90,7 +90,7 @@ spring:
           filters:
             - StripPrefix=2
         - id: datatype-service
-          uri: lb://data-platform-datatype
+          uri: lb://data-platform-vendor
           predicates:
             - Path=/api/v1/data-type/**,/api/v1/datatype/**
           filters:

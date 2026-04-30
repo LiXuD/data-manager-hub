@@ -4,7 +4,7 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.dataplatform.api.Result;
 import com.dataplatform.billing.api.dto.BillingRuleDTO;
 import com.dataplatform.billing.api.feign.BillingFeignClient;
-import com.dataplatform.call.entity.CallRecord;
+import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.call.service.CallRecordService;
 import com.dataplatform.call.service.DataQueryService;
 import com.dataplatform.call.service.VendorProxyService;
