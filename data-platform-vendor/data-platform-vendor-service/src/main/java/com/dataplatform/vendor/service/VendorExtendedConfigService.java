@@ -1,12 +1,13 @@
 package com.dataplatform.vendor.service;
 
+import com.baomidou.mybatisplus.extension.service.IService;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.vendor.entity.ConfigVersion;
 import com.dataplatform.vendor.entity.VendorExtendedConfig;
 
 import java.util.List;
 
-public interface VendorExtendedConfigService {
+public interface VendorExtendedConfigService extends IService<VendorExtendedConfig> {
 
     PageResult<VendorExtendedConfig> list(Long vendorId, String keyword, int page, int pageSize);
 
