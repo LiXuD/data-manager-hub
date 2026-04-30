@@ -44,7 +44,7 @@ spring:
         - id: vendor-service
           uri: lb://data-platform-vendor-service
           predicates:
-            - Path=/api/v1/vendor/**
+            - Path=/api/v1/vendor/**,/api/v1/config/**
           filters:
             - StripPrefix=2
         - id: caller-service
@@ -99,12 +99,6 @@ spring:
           uri: lb://data-platform-log-service
           predicates:
             - Path=/api/v1/log/**
-          filters:
-            - StripPrefix=2
-        - id: config-service
-          uri: lb://data-platform-config-service
-          predicates:
-            - Path=/api/v1/config/**
           filters:
             - StripPrefix=2
         - id: graylog-service

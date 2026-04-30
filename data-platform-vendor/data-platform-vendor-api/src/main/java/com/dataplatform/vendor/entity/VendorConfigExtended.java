@@ -1,12 +1,11 @@
-package com.dataplatform.config.entity;
+package com.dataplatform.vendor.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import java.time.LocalDateTime;
 
 @TableName("vendor_config_extended")
-public class VendorConfig {
+public class VendorConfigExtended {
+
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long vendorId;
@@ -18,7 +17,11 @@ public class VendorConfig {
     private Boolean isActive;
     private String status;
     private Long updatedBy;
+
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
+
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 
     public Long getId() { return id; }

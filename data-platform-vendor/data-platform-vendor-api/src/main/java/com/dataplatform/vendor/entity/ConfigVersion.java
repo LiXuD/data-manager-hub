@@ -1,8 +1,6 @@
-package com.dataplatform.config.entity;
+package com.dataplatform.vendor.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import java.time.LocalDateTime;
 
 @TableName("config_version")
@@ -15,6 +13,8 @@ public class ConfigVersion {
     private String configValue;
     private Long versionNum;
     private String createdBy;
+
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
     public Long getId() { return id; }

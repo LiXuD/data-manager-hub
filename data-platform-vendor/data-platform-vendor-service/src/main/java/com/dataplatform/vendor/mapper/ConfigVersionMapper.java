@@ -1,7 +1,7 @@
-package com.dataplatform.config.mapper;
+package com.dataplatform.vendor.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.dataplatform.config.entity.ConfigVersion;
+import com.dataplatform.vendor.entity.ConfigVersion;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
