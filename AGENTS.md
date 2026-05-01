@@ -52,6 +52,18 @@
    - IAM 服务新增 Nacos 服务发现
    - Gateway 路由支持 /data-type 和 /datatype 双路径
 
+5. **前端假提交修复** (2026-05-01)
+   - 修复 role/user/datatype/caller/monitor/graylog 页面假提交问题
+   - 所有增删改操作现在真实调用后端 API
+   - 新增 `updateCallerStatus` API
+
+6. **跨服务操作日志** (2026-05-01)
+   - IAM 服务通过 Feign 调用 Log 服务保存操作日志
+   - 新增 LogClient 接口和 InternalLogController 内部 API
+   - 新增 RemoteOperationLogService 实现跨服务日志保存
+   - 新增 IpUtil 工具类（提取公共 IP 获取逻辑）
+   - OperationLogAspect 添加 8KB 日志大小限制
+
 ---
 
 ## 后端模块端口

@@ -136,6 +136,27 @@ data-platform (父聚合模块)
 - API集成测试：IAMApiTest, VendorApiTest, TenantApiTest, CallerApiTest, CallApiTest, BillingApiTest, MonitorApiTest, LogApiTest, GraylogApiTest, SdkApiTest, SecurityApiTest, TraceApiTest, QualityApiTest, InterfaceApiTest
 - 单元测试：SignatureBuilderTest, BillingCalculatorTest, HttpVendorAdapterTest
 
+### 前端假提交修复 (2026-05-01)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| 修复 role/index.vue 假提交 | ✅ 完成 | 2026-05-01 |
+| 修复 user/index.vue 假提交 | ✅ 完成 | 2026-05-01 |
+| 修复 datatype/index.vue 假提交 | ✅ 完成 | 2026-05-01 |
+| 修复 caller/index.vue 假提交 | ✅ 完成 | 2026-05-01 |
+| 修复 monitor/index.vue 假提交 | ✅ 完成 | 2026-05-01 |
+| 修复 graylog/index.vue 假提交 | ✅ 完成 | 2026-05-01 |
+
+### 跨服务操作日志 (2026-05-01)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| 创建 LogClient Feign 接口 | ✅ 完成 | 2026-05-01 |
+| 创建 InternalLogController 内部 API | ✅ 完成 | 2026-05-01 |
+| 创建 RemoteOperationLogService | ✅ 完成 | 2026-05-01 |
+| 创建 IpUtil 工具类 | ✅ 完成 | 2026-05-01 |
+| 添加日志大小限制 (8KB) | ✅ 完成 | 2026-05-01 |
+
 ### 依赖规则
 - **service → api → data-platform-api**
 - 禁止反向依赖
