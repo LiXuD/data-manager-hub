@@ -3,7 +3,7 @@
 ## 项目概述
 
 - **项目名称**: 数据管理平台 (Data Management Platform)
-- **项目路径**: `/Users/lixd/IdeaProjects/Git/traesoloproj/data-manager-hub/`
+- **项目路径**: `https://github.com/LiXuD/data-manager-hub.git`
 - **技术栈**: Java 21 + Spring Boot 3.4 + Spring Cloud 2024.0.0 + MyBatis-Plus 3.5.7
 
 ---

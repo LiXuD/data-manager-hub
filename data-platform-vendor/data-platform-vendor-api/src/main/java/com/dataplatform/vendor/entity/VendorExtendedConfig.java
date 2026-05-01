@@ -4,12 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import java.time.LocalDateTime;
 
 @TableName("vendor_config_extended")
-<<<<<<<< HEAD:data-platform-vendor/data-platform-vendor-api/src/main/java/com/dataplatform/vendor/entity/VendorExtendedConfig.java
 public class VendorExtendedConfig {
-========
-public class VendorConfigExtended {
-
->>>>>>>> ad42169c9e9c75e570e42951b17dbb935cbc5a7f:data-platform-vendor/data-platform-vendor-api/src/main/java/com/dataplatform/vendor/entity/VendorConfigExtended.java
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long vendorId;
