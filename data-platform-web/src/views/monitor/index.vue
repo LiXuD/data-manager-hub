@@ -178,8 +178,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getAlertRuleList } from '@/api/monitor'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getAlertRuleList, deleteAlertRule, updateAlertRuleStatus } from '@/api/monitor'
 import type { AlertRule } from '@/types'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
@@ -240,7 +240,18 @@ const handleSearch = () => { fetchHealth() }
 const handleReset = () => { searchForm.serviceName = ''; searchForm.status = ''; fetchHealth() }
 const handleAddRule = () => { ElMessage.info('新增告警规则') }
 const handleEditRule = (row: AlertRule) => { ElMessage.info(`编辑告警规则: ${row.ruleName}`) }
-const handleDeleteRule = (_row: AlertRule) => { ElMessage.success('删除成功'); fetchAlerts() }
+const handleDeleteRule = async (row: AlertRule) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除告警规则"${row.ruleName}"吗？`, '提示', { type: 'warning' })
+    await deleteAlertRule(row.id!)
+    ElMessage.success('删除成功')
+    fetchAlerts()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
+}
 
 const getStatusTextLocalized = (status: string) => getStatusText('health', status)
 const getLevelType = (level: string) => getTagType('enabled', level)

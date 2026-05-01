@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.Map;
 
-@FeignClient(name = "data-platform-log", contextId = "logClient")
+@FeignClient(name = "data-platform-log-service", contextId = "logClient")
 public interface LogClient {
 
     @PostMapping("/log/internal/save")

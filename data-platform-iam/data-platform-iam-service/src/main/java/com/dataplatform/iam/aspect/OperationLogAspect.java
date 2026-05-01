@@ -8,6 +8,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -18,6 +20,8 @@ import java.time.LocalDateTime;
 @Aspect
 @Component
 public class OperationLogAspect {
+
+    private static final Logger log = LoggerFactory.getLogger(OperationLogAspect.class);
 
     @Autowired
     private OperationLogService operationLogService;
@@ -30,6 +34,8 @@ public class OperationLogAspect {
         long startTime = System.currentTimeMillis();
         OperationLogRecord record = new OperationLogRecord();
         record.setCreatedAt(LocalDateTime.now());
+
+        log.debug("OperationLog aspect triggered: module={}, operation={}", operationLog.module(), operationLog.operation());
 
         try {
             var signature = (org.aspectj.lang.reflect.MethodSignature) point.getSignature();
@@ -73,9 +79,13 @@ public class OperationLogAspect {
             record.setDuration(System.currentTimeMillis() - startTime);
             if (operationLogService != null) {
                 try {
+                    log.debug("Calling operationLogService.save() for: {}", record.getOperation());
                     operationLogService.save(record);
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    log.error("Failed to save operation log: {}", e.getMessage());
                 }
+            } else {
+                log.warn("OperationLogService is null, cannot save log");
             }
         }
     }

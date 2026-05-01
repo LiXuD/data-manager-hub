@@ -333,9 +333,14 @@ const handleEdit = (row: GrayRule) => {
 const handleDelete = async (row: GrayRule) => {
   try {
     await ElMessageBox.confirm(`确定要删除规则"${row.ruleName}"吗？`, '提示', { type: 'warning' })
+    await request.delete(`/graylog/${row.id}`)
     ElMessage.success('删除成功')
     fetchList()
-  } catch (e) {}
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
 }
 
 const handleSubmit = async () => {
@@ -343,9 +348,18 @@ const handleSubmit = async () => {
     ElMessage.warning('请填写完整信息')
     return
   }
-  ElMessage.success('保存成功')
-  dialogVisible.value = false
-  fetchList()
+  try {
+    if (formData.id) {
+      await request.put(`/graylog/${formData.id}`, formData)
+    } else {
+      await request.post('/graylog', formData)
+    }
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    fetchList()
+  } catch (error) {
+    ElMessage.error('保存失败')
+  }
 }
 
 const getStatusType = (status: string) => getTagType('active', status)

@@ -106,7 +106,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -120,6 +120,7 @@ import { request } from '@/utils/request'
 interface DataType { id: number; typeCode: string; typeName: string; category: string; description: string; status: string; createdAt: string }
 
 const loading = ref(false)
+const submitting = ref(false)
 const tableData = ref<DataType[]>([])
 const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
@@ -168,9 +169,51 @@ const handleSearch = () => { pagination.currentPage = 1; fetchList() }
 const handleReset = () => { searchForm.typeName = ''; searchForm.category = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
 const handleAdd = () => { Object.assign(form, { id: null, typeCode: '', typeName: '', category: '', description: '', status: 'active' }); dialogVisible.value = true }
 const handleEdit = (row: DataType) => { Object.assign(form, { ...row }); dialogVisible.value = true }
-const handleDelete = async (row: DataType) => { await ElMessageBox.confirm(`确定要删除数据类型"${row.typeName}"吗？`, '提示', { type: 'warning' }); ElMessage.success('删除成功'); fetchList() }
-const handleSubmit = async () => { if (!form.typeCode || !form.typeName) { ElMessage.warning('请填写类型编码和类型名称'); return } ElMessage.success('保存成功'); dialogVisible.value = false; fetchList() }
-const handleStatusChange = (row: DataType) => { ElMessage.success(row.status === 'active' ? '已启用' : '已禁用') }
+
+const handleDelete = async (row: DataType) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除数据类型"${row.typeName}"吗？`, '提示', { type: 'warning' })
+    await request.delete(`/data-type/${row.id}`)
+    ElMessage.success('删除成功')
+    fetchList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+const handleSubmit = async () => {
+  if (!form.typeCode || !form.typeName) {
+    ElMessage.warning('请填写类型编码和类型名称')
+    return
+  }
+  submitting.value = true
+  try {
+    if (form.id) {
+      await request.put(`/data-type/${form.id}`, form)
+    } else {
+      await request.post('/data-type', form)
+    }
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    fetchList()
+  } catch (error) {
+    ElMessage.error('保存失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const handleStatusChange = async (row: DataType) => {
+  try {
+    await request.patch(`/data-type/${row.id}/status`, { status: row.status })
+    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+  } catch (error) {
+    row.status = row.status === 'active' ? 'inactive' : 'active'
+    ElMessage.error('状态更新失败')
+  }
+}
 
 onMounted(() => { fetchList() })
 </script>

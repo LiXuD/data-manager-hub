@@ -79,7 +79,7 @@
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="form.id ? '编辑用户' : '新增用户'" width="500px" class="form-dialog">
       <el-form :model="form" label-width="80px">
-        <el-form-item label="用户名">
+        <el-form-item label="用户名" required>
           <el-input v-model="form.username" placeholder="请输入用户名" />
         </el-form-item>
         <el-form-item label="昵称">
@@ -100,7 +100,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -114,6 +114,7 @@ import { request } from '@/utils/request'
 interface User { id: number; username: string; nickname: string; email: string; phone: string; status: string; createdAt: string }
 
 const loading = ref(false)
+const submitting = ref(false)
 const tableData = ref<User[]>([])
 const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
@@ -145,19 +146,50 @@ const handleReset = () => { searchForm.username = ''; searchForm.status = ''; pa
 const handleAdd = () => { Object.assign(form, { id: null, username: '', nickname: '', email: '', phone: '', status: 'active' }); dialogVisible.value = true }
 const handleEdit = (row: User) => { Object.assign(form, { ...row }); dialogVisible.value = true }
 
-const handleDelete = async (_row: User) => {
-  await ElMessageBox.confirm('确定要删除该用户吗？', '提示', { type: 'warning' })
-  ElMessage.success('删除成功')
-  fetchList()
+const handleDelete = async (row: User) => {
+  try {
+    await ElMessageBox.confirm('确定要删除该用户吗？', '提示', { type: 'warning' })
+    await request.delete(`/user/${row.id}`)
+    ElMessage.success('删除成功')
+    fetchList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
 }
 
 const handleSubmit = async () => {
-  ElMessage.success('保存成功')
-  dialogVisible.value = false
-  fetchList()
+  if (!form.username) {
+    ElMessage.warning('请填写用户名')
+    return
+  }
+  submitting.value = true
+  try {
+    if (form.id) {
+      await request.put(`/user/${form.id}`, form)
+    } else {
+      await request.post('/user', form)
+    }
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    fetchList()
+  } catch (error) {
+    ElMessage.error('保存失败')
+  } finally {
+    submitting.value = false
+  }
 }
 
-const handleStatusChange = (row: User) => { ElMessage.success(row.status === 'active' ? '已启用' : '已禁用') }
+const handleStatusChange = async (row: User) => {
+  try {
+    await request.patch(`/user/${row.id}/status`, { status: row.status })
+    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+  } catch (error) {
+    row.status = row.status === 'active' ? 'inactive' : 'active'
+    ElMessage.error('状态更新失败')
+  }
+}
 
 onMounted(() => { fetchList() })
 </script>

@@ -104,7 +104,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getCallerList, deleteCaller, getApiKeyList, createApiKey, deleteApiKey } from '@/api/caller'
+import { getCallerList, deleteCaller, getApiKeyList, createApiKey, deleteApiKey, updateCallerStatus } from '@/api/caller'
 import type { Caller, ApiKey } from '@/api/caller'
 
 const searchForm = reactive({ keyword: '', status: '' })
@@ -133,7 +133,15 @@ const handleDelete = async (row: Caller) => { await ElMessageBox.confirm(`确认
 const handleApiKey = async (row: Caller) => { currentCallerId.value = row.id!; const res = await getApiKeyList(row.id!); apiKeyList.value = res.data || []; apiKeyVisible.value = true }
 const handleCreateApiKey = async () => { const res = await createApiKey(currentCallerId.value); ElMessage.success('创建成功: ' + res.apiKey); apiKeyList.value = [...apiKeyList.value, res] }
 const handleDeleteApiKey = async (id: number) => { await deleteApiKey(id); ElMessage.success('删除成功'); apiKeyList.value = apiKeyList.value.filter(k => k.id !== id) }
-const handleStatusChange = (row: Caller) => { ElMessage.success(row.status === 'active' ? '已启用' : '已禁用') }
+const handleStatusChange = async (row: Caller) => {
+  try {
+    await updateCallerStatus(row.id!, row.status as 'active' | 'inactive')
+    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+  } catch (error) {
+    row.status = row.status === 'active' ? 'inactive' : 'active'
+    ElMessage.error('状态更新失败')
+  }
+}
 
 onMounted(() => { loadData() })
 </script>

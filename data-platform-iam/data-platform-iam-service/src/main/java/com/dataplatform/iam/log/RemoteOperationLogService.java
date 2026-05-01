@@ -3,6 +3,8 @@ package com.dataplatform.iam.log;
 import com.dataplatform.common.log.OperationLogRecord;
 import com.dataplatform.common.log.OperationLogService;
 import com.dataplatform.log.api.LogClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -12,15 +14,18 @@ import java.util.Map;
 @Service
 public class RemoteOperationLogService implements OperationLogService {
 
+    private static final Logger log = LoggerFactory.getLogger(RemoteOperationLogService.class);
+
     @Autowired(required = false)
     private LogClient logClient;
 
     @Override
     public void save(OperationLogRecord record) {
         if (logClient == null) {
+            log.warn("LogClient is null, operation log will not be saved");
             return;
         }
-        
+
         Map<String, Object> logData = new HashMap<>();
         if (record.getUserId() != null) {
             logData.put("userId", record.getUserId());
@@ -37,11 +42,13 @@ public class RemoteOperationLogService implements OperationLogService {
             logData.put("duration", record.getDuration());
         }
         logData.put("status", record.getStatus());
-        
+
         try {
+            log.debug("Saving operation log via Feign: module={}, operation={}", record.getModule(), record.getOperation());
             logClient.saveLog(logData);
+            log.debug("Operation log saved successfully");
         } catch (Exception e) {
-            // 日志保存失败不影响业务
+            log.error("Failed to save operation log: {}", e.getMessage(), e);
         }
     }
 }

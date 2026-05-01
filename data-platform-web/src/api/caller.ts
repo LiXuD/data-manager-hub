@@ -48,6 +48,10 @@ export const deleteCaller = (id: number) => {
   return request.delete<void>(`/caller/${id}`)
 }
 
+export const updateCallerStatus = (id: number, status: 'active' | 'inactive') => {
+  return request.patch<void>(`/caller/${id}/status`, { status })
+}
+
 export const getApiKeyList = (callerId: number) => {
   return request.get<ListResponse<ApiKey>>('/caller/' + callerId + '/api-key/list')
 }

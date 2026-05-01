@@ -84,7 +84,21 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 权限配置弹窗 -->
+    <el-dialog v-model="permissionVisible" title="配置权限" width="500px">
+      <el-transfer
+        v-model="selectedPermissions"
+        :data="permissionList"
+        :titles="['可选权限', '已授权限']"
+        :props="{ key: 'id', label: 'permissionName' }"
+      />
+      <template #footer>
+        <el-button @click="permissionVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSavePermissions">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -99,14 +113,21 @@ import SearchBar from '@/components/SearchBar.vue'
 import { USER_STATUS, STATUS_LABELS } from '@/constants'
 
 interface Role { id: number; roleCode: string; roleName: string; description: string; status: string; createdAt: string }
+interface Permission { id: number; permissionCode: string; permissionName: string }
 
 const loading = ref(false)
+const submitting = ref(false)
 const tableData = ref<Role[]>([])
 const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 const searchForm = reactive({ roleName: '', status: '' })
 const dialogVisible = ref(false)
 const form = reactive({ id: null as number | null, roleCode: '', roleName: '', description: '', status: 'active' })
+
+const permissionVisible = ref(false)
+const permissionList = ref<Permission[]>([])
+const selectedPermissions = ref<number[]>([])
+const currentRoleId = ref<number | null>(null)
 
 interface RoleListResponse {
   data?: { records?: Role[]; total?: number } | Role[]
@@ -135,10 +156,80 @@ const handleSearch = () => { pagination.currentPage = 1; fetchList() }
 const handleReset = () => { searchForm.roleName = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
 const handleAdd = () => { Object.assign(form, { id: null, roleCode: '', roleName: '', description: '', status: 'active' }); dialogVisible.value = true }
 const handleEdit = (row: Role) => { Object.assign(form, { ...row }); dialogVisible.value = true }
-const handleDelete = async (row: Role) => { await ElMessageBox.confirm(`确定要删除角色"${row.roleName}"吗？`, '提示', { type: 'warning' }); ElMessage.success('删除成功'); fetchList() }
-const handleSubmit = async () => { if (!form.roleCode || !form.roleName) { ElMessage.warning('请填写角色编码和角色名称'); return } ElMessage.success('保存成功'); dialogVisible.value = false; fetchList() }
-const handlePermission = (row: Role) => { ElMessage.info(`配置角色"${row.roleName}"的权限`) }
-const handleStatusChange = (row: Role) => { ElMessage.success(row.status === 'active' ? '已启用' : '已禁用') }
+
+const handleDelete = async (row: Role) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除角色"${row.roleName}"吗？`, '提示', { type: 'warning' })
+    await request.delete(`/role/${row.id}`)
+    ElMessage.success('删除成功')
+    fetchList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+const handleSubmit = async () => {
+  if (!form.roleCode || !form.roleName) {
+    ElMessage.warning('请填写角色编码和角色名称')
+    return
+  }
+  submitting.value = true
+  try {
+    if (form.id) {
+      await request.put(`/role/${form.id}`, form)
+    } else {
+      await request.post('/role', form)
+    }
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    fetchList()
+  } catch (error) {
+    ElMessage.error('保存失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const handleStatusChange = async (row: Role) => {
+  try {
+    await request.patch(`/role/${row.id}/status`, { status: row.status })
+    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+  } catch (error) {
+    row.status = row.status === 'active' ? 'inactive' : 'active'
+    ElMessage.error('状态更新失败')
+  }
+}
+
+const handlePermission = async (row: Role) => {
+  currentRoleId.value = row.id
+  try {
+    const [permsRes, rolePermsRes] = await Promise.all([
+      request.get<{ data: Permission[] }>('/role/permission/list'),
+      request.get<{ data: number[] }>(`/role/${row.id}/permissions`)
+    ])
+    permissionList.value = permsRes.data || []
+    selectedPermissions.value = rolePermsRes.data || []
+    permissionVisible.value = true
+  } catch (error) {
+    ElMessage.error('加载权限数据失败')
+  }
+}
+
+const handleSavePermissions = async () => {
+  if (!currentRoleId.value) return
+  submitting.value = true
+  try {
+    await request.post(`/role/${currentRoleId.value}/permissions`, { permissionIds: selectedPermissions.value })
+    ElMessage.success('权限配置成功')
+    permissionVisible.value = false
+  } catch (error) {
+    ElMessage.error('权限配置失败')
+  } finally {
+    submitting.value = false
+  }
+}
 
 onMounted(() => { fetchList() })
 </script>
