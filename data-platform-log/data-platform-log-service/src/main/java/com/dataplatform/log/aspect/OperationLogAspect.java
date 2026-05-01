@@ -3,11 +3,14 @@ package com.dataplatform.log.aspect;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.log.OperationLogRecord;
 import com.dataplatform.common.log.OperationLogService;
+import com.dataplatform.common.util.IpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -18,6 +21,9 @@ import java.time.LocalDateTime;
 @Aspect
 @Component
 public class OperationLogAspect {
+
+    private static final Logger log = LoggerFactory.getLogger(OperationLogAspect.class);
+    private static final int MAX_LOG_LENGTH = 8192;
 
     @Autowired
     private OperationLogService operationLogService;
@@ -31,6 +37,8 @@ public class OperationLogAspect {
         OperationLogRecord record = new OperationLogRecord();
         record.setCreatedAt(LocalDateTime.now());
 
+        log.debug("OperationLog aspect triggered: module={}, operation={}", operationLog.module(), operationLog.operation());
+
         try {
             var signature = (org.aspectj.lang.reflect.MethodSignature) point.getSignature();
             record.setModule(operationLog.module());
@@ -41,14 +49,14 @@ public class OperationLogAspect {
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attributes != null) {
                 HttpServletRequest request = attributes.getRequest();
-                record.setIp(getClientIp(request));
+                record.setIp(IpUtil.getClientIp(request));
             }
 
             if (operationLog.saveParams() && objectMapper != null) {
                 try {
                     Object[] args = point.getArgs();
                     if (args != null && args.length > 0) {
-                        record.setParams(objectMapper.writeValueAsString(args));
+                        record.setParams(truncateJson(objectMapper.writeValueAsString(args)));
                     }
                 } catch (Exception ignored) {
                 }
@@ -59,7 +67,7 @@ public class OperationLogAspect {
             record.setStatus("success");
             if (operationLog.saveResult() && objectMapper != null && result != null) {
                 try {
-                    record.setResult(objectMapper.writeValueAsString(result));
+                    record.setResult(truncateJson(objectMapper.writeValueAsString(result)));
                 } catch (Exception ignored) {
                 }
             }
@@ -73,27 +81,21 @@ public class OperationLogAspect {
             record.setDuration(System.currentTimeMillis() - startTime);
             if (operationLogService != null) {
                 try {
+                    log.debug("Calling operationLogService.save() for: {}", record.getOperation());
                     operationLogService.save(record);
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    log.error("Failed to save operation log: {}", e.getMessage());
                 }
+            } else {
+                log.warn("OperationLogService is null, cannot save log");
             }
         }
     }
 
-    private String getClientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("Proxy-Client-IP");
+    private String truncateJson(String json) {
+        if (json != null && json.length() > MAX_LOG_LENGTH) {
+            return json.substring(0, MAX_LOG_LENGTH) + "...[truncated]";
         }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("WL-Proxy-Client-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
+        return json;
     }
 }
