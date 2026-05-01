@@ -157,6 +157,17 @@ data-platform (父聚合模块)
 | 创建 IpUtil 工具类 | ✅ 完成 | 2026-05-01 |
 | 添加日志大小限制 (8KB) | ✅ 完成 | 2026-05-01 |
 
+### 公共组件抽取与优化 (2026-05-01)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| 创建 UserContext 工具类 | ✅ 完成 | 2026-05-01 |
+| OperationLogAspect 移至 common 模块 | ✅ 完成 | 2026-05-01 |
+| 操作日志记录 userId/username | ✅ 完成 | 2026-05-01 |
+| 删除重复的 OperationLogAspect | ✅ 完成 | 2026-05-01 |
+| 所有服务配置 token-prefix: Bearer | ✅ 完成 | 2026-05-01 |
+| StatusConstants 新增 SUCCESS/FAIL | ✅ 完成 | 2026-05-01 |
+
 ### 依赖规则
 - **service → api → data-platform-api**
 - 禁止反向依赖

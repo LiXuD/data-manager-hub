@@ -28,15 +28,16 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
       try {
-        const res = await request.post<{ token: string; username: string; userId: string }>('/auth/login', {
+        const res = await request.post<{ data: { token: string; username: string; userId: number } }>('/auth/login', {
           username: loginForm.value.username,
           password: loginForm.value.password
         })
 
-        userStore.login(res.token, {
-          id: res.userId,
-          username: res.username,
-          nickname: res.username,
+        const data = res.data
+        userStore.login(data.token, {
+          id: String(data.userId),
+          username: data.username,
+          nickname: data.username,
           roles: ['admin']
         })
 

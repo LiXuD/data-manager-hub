@@ -35,7 +35,7 @@ public class InternalLogController {
         }
         log.setStatus((String) logData.get("status"));
         log.setCreatedAt(LocalDateTime.now());
-        
+
         logService.save(log);
         return Result.success(null);
     }

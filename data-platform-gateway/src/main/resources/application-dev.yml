@@ -132,6 +132,7 @@ sa-token:
   is-concurrent: true
   is-share: false
   token-style: uuid
+  token-prefix: Bearer
 
 spring.data.redis:
   host: localhost

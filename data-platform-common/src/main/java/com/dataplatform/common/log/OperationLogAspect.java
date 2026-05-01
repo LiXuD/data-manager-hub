@@ -1,9 +1,8 @@
-package com.dataplatform.log.aspect;
+package com.dataplatform.common.log;
 
-import com.dataplatform.common.log.OperationLog;
-import com.dataplatform.common.log.OperationLogRecord;
-import com.dataplatform.common.log.OperationLogService;
+import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.util.IpUtil;
+import com.dataplatform.common.util.UserContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -37,8 +36,6 @@ public class OperationLogAspect {
         OperationLogRecord record = new OperationLogRecord();
         record.setCreatedAt(LocalDateTime.now());
 
-        log.debug("OperationLog aspect triggered: module={}, operation={}", operationLog.module(), operationLog.operation());
-
         try {
             var signature = (org.aspectj.lang.reflect.MethodSignature) point.getSignature();
             record.setModule(operationLog.module());
@@ -50,6 +47,12 @@ public class OperationLogAspect {
             if (attributes != null) {
                 HttpServletRequest request = attributes.getRequest();
                 record.setIp(IpUtil.getClientIp(request));
+            }
+
+            Long userId = UserContext.getCurrentUserId();
+            if (userId != null) {
+                record.setUserId(userId);
+                record.setUsername(UserContext.getCurrentUsername());
             }
 
             if (operationLog.saveParams() && objectMapper != null) {
@@ -64,7 +67,7 @@ public class OperationLogAspect {
 
             Object result = point.proceed();
 
-            record.setStatus("success");
+            record.setStatus(StatusConstants.SUCCESS);
             if (operationLog.saveResult() && objectMapper != null && result != null) {
                 try {
                     record.setResult(truncateJson(objectMapper.writeValueAsString(result)));
@@ -74,20 +77,17 @@ public class OperationLogAspect {
 
             return result;
         } catch (Throwable e) {
-            record.setStatus("fail");
+            record.setStatus(StatusConstants.FAIL);
             record.setErrorMsg(e.getMessage());
             throw e;
         } finally {
             record.setDuration(System.currentTimeMillis() - startTime);
             if (operationLogService != null) {
                 try {
-                    log.debug("Calling operationLogService.save() for: {}", record.getOperation());
                     operationLogService.save(record);
                 } catch (Exception e) {
                     log.error("Failed to save operation log: {}", e.getMessage());
                 }
-            } else {
-                log.warn("OperationLogService is null, cannot save log");
             }
         }
     }

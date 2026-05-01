@@ -198,19 +198,27 @@ sa-token:
   is-concurrent: true
   is-share: false
   token-style: uuid
+  token-prefix: Bearer
 ```
+
+**关键配置说明**：
+- `token-prefix: Bearer` — 支持 `Authorization: Bearer <token>` 格式，前端需在请求头中携带此格式
 
 需要 Sa-Token 的服务：
 - Gateway (8888)
 - Vendor (8081)
-- IAM (8093)
+- Caller (8082)
+- Call (8083)
+- Billing (8084)
 - Monitor (8085)
+- Tenant (8086)
 - Log (8090)
+- Graylog (8092)
+- IAM (8093)
+- Security (8094)
 - Trace (8095)
 - Quality (8096)
-- Graylog (8092)
 - Interface (8097)
-- Security (8094)
 
 ---
 

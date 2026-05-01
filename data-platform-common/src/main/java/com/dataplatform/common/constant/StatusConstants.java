@@ -13,6 +13,9 @@ public final class StatusConstants {
     public static final String CONFIRMED = "confirmed";
     public static final String ALERTED = "alerted";
 
+    public static final String SUCCESS = "success";
+    public static final String FAIL = "fail";
+
     private StatusConstants() {
     }
 }
