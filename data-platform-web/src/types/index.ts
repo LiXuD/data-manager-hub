@@ -18,6 +18,7 @@ export interface AlertRule {
   threshold?: number
   condition?: string
   level?: string
+  operator?: string
 }
 
 // 告警记录

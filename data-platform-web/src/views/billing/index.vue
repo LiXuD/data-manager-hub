@@ -126,8 +126,8 @@
               </template>
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right">
-              <template #default="{ row }">
-                <el-button type="primary" link>详情</el-button>
+              <template #default="{ row: _row }">
+                <el-button type="primary" link @click="handleViewDetail(_row)">详情</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -244,7 +244,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBillingList } from '@/api/billing'
+import { getBillingList, getBillingRuleList } from '@/api/billing'
 import { extractPageData } from '@/utils/pagination'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
@@ -323,12 +323,12 @@ const fetchList = async () => {
 }
 
 const fetchRules = async () => {
-  ruleData.value = [
-    { id: 1, vendorName: '企查查', dataType: '工商信息', unitPrice: 0.3, tierMin: 0, tierMax: 100000, discount: 1.0, status: 'active' },
-    { id: 2, vendorName: '天眼查', dataType: '企业征信', unitPrice: 2.5, tierMin: 0, tierMax: 50000, discount: 1.0, status: 'active' },
-    { id: 3, vendorName: '企查查', dataType: '工商信息', unitPrice: 0.25, tierMin: 100000, tierMax: 500000, discount: 0.85, status: 'tier' },
-    { id: 4, vendorName: '天眼查', dataType: '企业征信', unitPrice: 2.0, tierMin: 50000, tierMax: 200000, discount: 0.8, status: 'tier' }
-  ]
+  try {
+    const res = await getBillingRuleList({ page: 1, pageSize: 100 })
+    ruleData.value = res.data?.list || []
+  } catch {
+    ruleData.value = []
+  }
 }
 
 const handleSearch = () => {
@@ -354,7 +354,7 @@ const handleEditRule = (row: BillingRule) => {
   dialogVisible.value = true
 }
 
-const handleDeleteRule = async (row: BillingRule) => {
+const handleDeleteRule = async (_row: BillingRule) => {
   try {
     await ElMessageBox.confirm(`确定要删除该计费规则吗？`, '提示', { type: 'warning' })
     ElMessage.success('删除成功')
@@ -374,6 +374,10 @@ const handleSubmitRule = async () => {
 
 const handleExport = () => {
   ElMessage.info('导出功能开发中...')
+}
+
+const handleViewDetail = (row: BillingRecord) => {
+  ElMessage.info(`查看账单详情: ${row.id}`)
 }
 
 const getStatusType = (status: string) => getTagType('billing', status)

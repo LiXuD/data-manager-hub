@@ -179,7 +179,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { request } from '@/utils/request'
+import { getAlertRuleList } from '@/api/monitor'
+import type { AlertRule } from '@/types'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
 interface HealthStatus {
@@ -189,16 +190,6 @@ interface HealthStatus {
   responseTime: number
   uptime: number
   lastCheck: string
-}
-
-interface AlertRule {
-  id: number
-  ruleName: string
-  metric: string
-  threshold: number
-  operator: string
-  level: string
-  status: string
 }
 
 const loading = ref(false)
@@ -218,7 +209,6 @@ const searchForm = reactive({
   status: ''
 })
 
-// 统计卡片
 const statsData = reactive({
   totalServices: 6,
   healthyCount: 5,
@@ -226,17 +216,10 @@ const statsData = reactive({
   avgResponseTime: 528
 })
 
-interface HealthListResponse {
-  data?: HealthStatus[]
-}
-
 const fetchHealth = async () => {
   loading.value = true
   try {
-    const res = await request.get<HealthListResponse>('/alert/health', {
-      params: { ...searchForm }
-    })
-    tableData.value = res.data || []
+    tableData.value = []
   } catch {
     tableData.value = []
   } finally {
@@ -245,13 +228,12 @@ const fetchHealth = async () => {
 }
 
 const fetchAlerts = async () => {
-  alertData.value = [
-    { id: 1, ruleName: '响应时间告警', metric: 'response_time', threshold: 3000, operator: '>', level: 'warning', status: 'active' },
-    { id: 2, ruleName: 'CPU使用率告警', metric: 'cpu_usage', threshold: 80, operator: '>', level: 'critical', status: 'active' },
-    { id: 3, ruleName: '内存使用率告警', metric: 'memory_usage', threshold: 85, operator: '>', level: 'warning', status: 'active' },
-    { id: 4, ruleName: '错误率告警', metric: 'error_rate', threshold: 5, operator: '>', level: 'error', status: 'inactive' },
-    { id: 5, ruleName: '调用量告警', metric: 'call_count', threshold: 10000, operator: '>', level: 'info', status: 'active' }
-  ]
+  try {
+    const res = await getAlertRuleList({ page: 1, pageSize: 100 })
+    alertData.value = res.data?.list || []
+  } catch {
+    alertData.value = []
+  }
 }
 
 const handleSearch = () => { fetchHealth() }

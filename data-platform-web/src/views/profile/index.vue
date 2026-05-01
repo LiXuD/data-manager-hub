@@ -120,14 +120,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useUserStore } from '@/stores/user'
 import { STORAGE_KEYS, THEME_MODE } from '@/constants'
 import { applyTheme, getStoredTheme, setStoredTheme } from '@/composables/useTheme'
 
 const activeTab = ref('info')
-
-type ThemeMode = typeof THEME_MODE[keyof typeof THEME_MODE]
 
 let mediaQuery: MediaQueryList | null = null
 
@@ -138,31 +137,28 @@ const handleMediaQueryChange = () => {
 }
 
 const setupMediaQuery = () => {
-  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  mediaQuery.addEventListener('change', handleMediaQueryChange)
+  if (typeof window !== 'undefined') {
+    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    mediaQuery.addEventListener('change', handleMediaQueryChange)
+  }
 }
 
-onUnmounted(() => {
-  if (mediaQuery) {
-    mediaQuery.removeEventListener('change', handleMediaQueryChange)
-    mediaQuery = null
-  }
-})
+const userStore = useUserStore()
 
-const userInfo = reactive({
-  username: 'admin',
-  role: '超级管理员',
+const userInfo = computed(() => ({
+  username: userStore.userInfo?.username || '未登录',
+  role: userStore.userInfo?.roles?.[0] || '未知角色',
   tenant: '默认租户',
-  email: 'admin@example.com',
-  phone: '138****8888',
-  lastLogin: '2026-04-24 10:30:00'
-})
+  email: userStore.userInfo?.email || '-',
+  phone: userStore.userInfo?.phone ? `${userStore.userInfo.phone.substring(0, 3)}****${userStore.userInfo.phone.substring(7)}` : '-',
+  lastLogin: '-'
+}))
 
 const formData = reactive({
-  username: 'admin',
-  email: 'admin@example.com',
-  phone: '13800138000',
-  nickname: '管理员'
+  username: userStore.userInfo?.username || '',
+  email: userStore.userInfo?.email || '',
+  phone: userStore.userInfo?.phone || '',
+  nickname: userStore.userInfo?.nickname || ''
 })
 
 const passwordForm = reactive({
@@ -214,6 +210,13 @@ const handleSavePreference = () => {
 onMounted(() => {
   applyTheme(preferenceForm.theme)
   setupMediaQuery()
+})
+
+onUnmounted(() => {
+  if (mediaQuery) {
+    mediaQuery.removeEventListener('change', handleMediaQueryChange)
+    mediaQuery = null
+  }
 })
 </script>
 

@@ -229,14 +229,8 @@ const fetchList = async () => {
       total.value = res.total || 0
     }
   } catch {
-    tableData.value = [
-      { id: 1, username: 'admin', module: 'user', operation: '新增用户', method: 'POST /api/v1/user', params: '{"username":"test"}', result: 'success', ip: '192.168.1.100', duration: 150, status: 'success', createdAt: '2026-04-20 21:00:00' },
-      { id: 2, username: 'admin', module: 'tenant', operation: '修改租户', method: 'PUT /api/v1/tenant/1', params: '{"name":"新租户"}', result: 'success', ip: '192.168.1.100', duration: 80, status: 'success', createdAt: '2026-04-20 20:30:00' },
-      { id: 3, username: 'operator', module: 'vendor', operation: '查询厂商', method: 'GET /api/v1/vendor/list', params: '{}', result: 'success', ip: '192.168.1.101', duration: 45, status: 'success', createdAt: '2026-04-20 20:00:00' },
-      { id: 4, username: 'admin', module: 'billing', operation: '导出账单', method: 'POST /api/v1/billing/export', params: '{"date":"2026-04"}', result: 'success', ip: '192.168.1.100', duration: 5200, status: 'success', createdAt: '2026-04-20 19:00:00' },
-      { id: 5, username: 'guest', module: 'user', operation: '查询用户', method: 'GET /api/v1/user/1', params: '{}', result: 'error', ip: '192.168.1.102', duration: 30, status: 'failed', createdAt: '2026-04-20 18:30:00' }
-    ]
-    total.value = 256
+    tableData.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }

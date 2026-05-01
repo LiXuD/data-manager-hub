@@ -145,7 +145,7 @@ const handleReset = () => { searchForm.username = ''; searchForm.status = ''; pa
 const handleAdd = () => { Object.assign(form, { id: null, username: '', nickname: '', email: '', phone: '', status: 'active' }); dialogVisible.value = true }
 const handleEdit = (row: User) => { Object.assign(form, { ...row }); dialogVisible.value = true }
 
-const handleDelete = async (row: User) => {
+const handleDelete = async (_row: User) => {
   await ElMessageBox.confirm('确定要删除该用户吗？', '提示', { type: 'warning' })
   ElMessage.success('删除成功')
   fetchList()

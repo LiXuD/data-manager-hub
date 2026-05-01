@@ -126,13 +126,8 @@ const fetchList = async () => {
       total.value = res.total || 0
     }
   } catch {
-    tableData.value = [
-      { id: 1, roleCode: 'ADMIN', roleName: '系统管理员', description: '拥有所有权限', status: 'active', createdAt: '2026-01-01 10:00:00' },
-      { id: 2, roleCode: 'TENANT_ADMIN', roleName: '租户管理员', description: '租户管理权限', status: 'active', createdAt: '2026-01-02 10:00:00' },
-      { id: 3, roleCode: 'OPERATOR', roleName: '运营人员', description: '日常运营操作', status: 'active', createdAt: '2026-01-03 10:00:00' },
-      { id: 4, roleCode: 'VIEWER', roleName: '只读用户', description: '查看数据权限', status: 'active', createdAt: '2026-01-04 10:00:00' }
-    ]
-    total.value = 4
+    tableData.value = []
+    total.value = 0
   } finally { loading.value = false }
 }
 

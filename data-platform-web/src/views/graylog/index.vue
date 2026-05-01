@@ -308,13 +308,8 @@ const fetchList = async () => {
       total.value = res.total || 0
     }
   } catch {
-    tableData.value = [
-      { id: 1, ruleName: '用户服务V2灰度', serviceName: 'user-service', version: '2.0.0', weight: 20, conditionType: 'random', conditionValue: '', description: '新版本用户服务灰度发布', status: 'active', startTime: '2026-04-15 00:00:00', endTime: '2026-04-30 23:59:59', createdAt: '2026-04-14 10:00:00' },
-      { id: 2, ruleName: '计费服务V1.5', serviceName: 'billing-service', version: '1.5.0', weight: 50, conditionType: 'userId', conditionValue: '1000-5000', description: '特定用户ID范围灰度', status: 'active', startTime: '2026-04-10 00:00:00', endTime: '2026-04-25 23:59:59', createdAt: '2026-04-09 14:00:00' },
-      { id: 3, ruleName: 'API网关V3灰度', serviceName: 'gateway', version: '3.0.0', weight: 10, conditionType: 'ip', conditionValue: '192.168.1.0/24', description: '内网IP灰度', status: 'inactive', startTime: '2026-04-01 00:00:00', endTime: '2026-04-15 23:59:59', createdAt: '2026-03-31 16:00:00' },
-      { id: 4, ruleName: '监控服务升级', serviceName: 'monitor-service', version: '2.1.0', weight: 30, conditionType: 'cookie', conditionValue: 'gray=true', description: 'Cookie标记用户灰度', status: 'expired', startTime: '2026-03-01 00:00:00', endTime: '2026-03-31 23:59:59', createdAt: '2026-02-28 11:00:00' }
-    ]
-    total.value = 12
+    tableData.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }

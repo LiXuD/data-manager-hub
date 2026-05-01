@@ -159,11 +159,8 @@ const fetchList = async () => {
       total.value = res.total || 0
     }
   } catch {
-    tableData.value = [
-      { id: 1, typeCode: 'BUSINESS_INFO', typeName: '工商信息', category: 'business', description: '企业工商信息查询', status: 'active', createdAt: '2026-01-01 10:00:00' },
-      { id: 2, typeCode: 'CREDIT_QUERY', typeName: '企业征信', category: 'financial', description: '企业征信报告查询', status: 'active', createdAt: '2026-01-02 10:00:00' }
-    ]
-    total.value = 2
+    tableData.value = []
+    total.value = 0
   } finally { loading.value = false }
 }
 
