@@ -44,7 +44,7 @@ spring:
         - id: vendor-service
           uri: lb://data-platform-vendor-service
           predicates:
-            - Path=/api/v1/vendor/**,/api/v1/config/**
+            - Path=/api/v1/vendor/**,/api/v1/config/**,/api/v1/data-type/**,/api/v1/datatype/**
           filters:
             - StripPrefix=2
         - id: caller-service
@@ -77,33 +77,10 @@ spring:
             - Path=/api/v1/tenant/**
           filters:
             - StripPrefix=2
-<<<<<<< HEAD
         - id: iam-service
-          uri: lb://data-platform-iam
+          uri: lb://data-platform-iam-service
           predicates:
             - Path=/api/v1/user/**,/api/v1/auth/**,/api/v1/role/**
-          filters:
-            - StripPrefix=2
-        - id: datatype-service
-          uri: lb://data-platform-vendor
-=======
-        - id: user-service
-          uri: lb://data-platform-user-service
-          predicates:
-            - Path=/api/v1/user/**,/api/v1/auth/**
-          filters:
-            - StripPrefix=2
-        - id: role-service
-          uri: lb://data-platform-role-service
-          predicates:
-            - Path=/api/v1/role/**
-          filters:
-            - StripPrefix=2
-        - id: datatype-service
-          uri: lb://data-platform-datatype-service
->>>>>>> ad42169c9e9c75e570e42951b17dbb935cbc5a7f
-          predicates:
-            - Path=/api/v1/data-type/**,/api/v1/datatype/**
           filters:
             - StripPrefix=2
         - id: log-service
@@ -112,15 +89,6 @@ spring:
             - Path=/api/v1/log/**
           filters:
             - StripPrefix=2
-<<<<<<< HEAD
-        - id: config-service
-          uri: lb://data-platform-vendor
-          predicates:
-            - Path=/api/v1/config/**
-          filters:
-            - StripPrefix=2
-=======
->>>>>>> ad42169c9e9c75e570e42951b17dbb935cbc5a7f
         - id: graylog-service
           uri: lb://data-platform-graylog-service
           predicates:
@@ -128,13 +96,13 @@ spring:
           filters:
             - StripPrefix=2
         - id: sdk-service
-          uri: lb://data-platform-sdk-service
+          uri: lb://data-platform-sdk
           predicates:
             - Path=/api/v1/sdk/**
           filters:
             - StripPrefix=2
         - id: security-service
-          uri: lb://data-platform-security-service
+          uri: lb://data-platform-security
           predicates:
             - Path=/api/v1/security/**
           filters:

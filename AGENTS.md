@@ -42,6 +42,16 @@
 2. **CircuitBreaker自动配置**
    - 新增熔断器自动配置，支持按需加载
 
+3. **测试模块重构** (2026-05-01)
+   - 合并 UserApiTest + RoleApiTest → IAMApiTest
+   - 合并 DataTypeApiTest + ConfigApiTest → VendorApiTest
+   - BaseTest 新增通用测试辅助方法
+
+4. **服务认证配置** (2026-05-01)
+   - 所有需要认证的服务统一配置 Sa-Token
+   - IAM 服务新增 Nacos 服务发现
+   - Gateway 路由支持 /data-type 和 /datatype 双路径
+
 ---
 
 ## 后端模块端口

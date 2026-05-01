@@ -15,7 +15,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
             .excludePathPatterns(
                 "/auth/**",
                 "/actuator/**",
-                "/health/**"
+                "/health/**",
+                "/log/internal/**"
             );
     }
 }

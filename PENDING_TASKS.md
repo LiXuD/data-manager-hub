@@ -1,8 +1,8 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-04-29
-**状态**: MVP 已完成, 契约分离架构重构已完成 ✅
+**最后更新**: 2026-05-01
+**状态**: MVP 已完成, 模块合并优化已完成 ✅
 
 ---
 
@@ -51,10 +51,7 @@
 |------|------|----------|
 | data-platform-call | ✅ 完成 | 2026-04-28 |
 | data-platform-caller | ✅ 完成 | 2026-04-28 |
-| data-platform-user | ✅ 完成 | 2026-04-28 |
 | data-platform-tenant | ✅ 完成 | 2026-04-28 |
-| data-platform-role | ✅ 完成 | 2026-04-28 |
-| data-platform-datatype | ✅ 完成 | 2026-04-28 |
 | data-platform-interface | ✅ 完成 | 2026-04-28 |
 | data-platform-log | ✅ 完成 | 2026-04-28 |
 | data-platform-monitor | ✅ 完成 | 2026-04-28 |
@@ -62,7 +59,8 @@
 | data-platform-trace | ✅ 完成 | 2026-04-28 |
 | data-platform-graylog | ✅ 完成 | 2026-04-28 |
 | data-platform-test | ✅ 完成 | 2026-04-28 |
-| data-platform-config | ✅ 完成 | 2026-04-28 |
+
+> **注**: data-platform-datatype 和 data-platform-config 已于 2026-04-30 合并到 data-platform-vendor；data-platform-user 和 data-platform-role 已合并到 data-platform-iam。
 
 **提交记录**: `ccf50d2 refactor: 批量重构业务模块为 api + service 双模块结构`
 
@@ -108,9 +106,35 @@ data-platform (父聚合模块)
 ├── data-platform-sdk
 ├── data-platform-vendor/
 │   ├── data-platform-vendor-api/ (契约层)
-│   └── data-platform-vendor-service/ (业务层)
-├── ... (其他 14 个模块同结构)
+│   └── data-platform-vendor-service/ (业务层，含datatype+config)
+├── data-platform-iam/
+│   ├── data-platform-iam-api/ (契约层)
+│   └── data-platform-iam-service/ (业务层，含user+role)
+├── ... (其他模块同结构)
 ```
+
+### 模块合并记录 (2026-04-30)
+
+| 原模块 | 合并到 | 说明 |
+|--------|--------|------|
+| data-platform-datatype | data-platform-vendor | 数据类型功能 |
+| data-platform-config | data-platform-vendor | 配置中心功能 |
+| data-platform-user | data-platform-iam | 用户管理功能 |
+| data-platform-role | data-platform-iam | 角色管理功能 |
+
+### 测试模块重构 (2026-05-01)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| 更新BaseTest服务端口映射 | ✅ 完成 | 2026-05-01 |
+| 合并UserApiTest + RoleApiTest → IAMApiTest | ✅ 完成 | 2026-05-01 |
+| 合并DataTypeApiTest + ConfigApiTest → VendorApiTest | ✅ 完成 | 2026-05-01 |
+| 删除冗余测试类 | ✅ 完成 | 2026-05-01 |
+| 编译验证 | ✅ 通过 | 2026-05-01 |
+
+**测试类结构**：
+- API集成测试：IAMApiTest, VendorApiTest, TenantApiTest, CallerApiTest, CallApiTest, BillingApiTest, MonitorApiTest, LogApiTest, GraylogApiTest, SdkApiTest, SecurityApiTest, TraceApiTest, QualityApiTest, InterfaceApiTest
+- 单元测试：SignatureBuilderTest, BillingCalculatorTest, HttpVendorAdapterTest
 
 ### 依赖规则
 - **service → api → data-platform-api**
@@ -125,6 +149,9 @@ data-platform (父聚合模块)
 - `ccf50d2` refactor: 批量重构业务模块为 api + service 双模块结构
 - `ae3749c` fix: 修复测试模块依赖问题
 - `e5802d9` fix: 修复契约分离架构重构残留问题
+- `f127f9a` feat: 合并用户与角色模块为IAM，新增操作日志功能
+- `e7749fb` refactor: 合并config模块到vendor，新增操作日志注解功能
+- `9950b45` fix: 解决模块合并后的冲突并优化代码
 
 ---
 

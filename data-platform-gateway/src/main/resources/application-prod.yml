@@ -44,11 +44,11 @@ spring:
         - id: vendor-service
           uri: lb://data-platform-vendor-service
           predicates:
-            - Path=/api/v1/vendor/**,/api/v1/config/**
+            - Path=/api/v1/vendor/**,/api/v1/config/**,/api/v1/data-type/**,/api/v1/datatype/**
           filters:
             - StripPrefix=2
         - id: caller-service
-          uri: lb://data-platform-call-serviceer-service
+          uri: lb://data-platform-caller-service
           predicates:
             - Path=/api/v1/caller/**
           filters:
@@ -77,26 +77,10 @@ spring:
             - Path=/api/v1/tenant/**
           filters:
             - StripPrefix=2
-        - id: user-service
-          uri: lb://data-platform-user-service
+        - id: iam-service
+          uri: lb://data-platform-iam-service
           predicates:
-            - Path=/api/v1/user/**,/api/v1/auth/**
-          filters:
-            - StripPrefix=2
-        - id: role-service
-          uri: lb://data-platform-role-service
-          predicates:
-            - Path=/api/v1/role/**
-          filters:
-            - StripPrefix=2
-        - id: datatype-service
-<<<<<<< HEAD
-          uri: lb://data-platform-vendor
-=======
-          uri: lb://data-platform-datatype-service
->>>>>>> ad42169c9e9c75e570e42951b17dbb935cbc5a7f
-          predicates:
-            - Path=/api/v1/data-type/**,/api/v1/datatype/**
+            - Path=/api/v1/user/**,/api/v1/auth/**,/api/v1/role/**
           filters:
             - StripPrefix=2
         - id: log-service

@@ -25,6 +25,10 @@ public class AlertRule {
     @TableField("notification_channels")
     private String notifyChannels;
     private String status;
+    @TableField("severity")
+    private String severity;
+    @TableField("tenant_id")
+    private Long tenantId;
     private Long createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -60,6 +64,10 @@ public class AlertRule {
     public void setNotifyChannels(String notifyChannels) { this.notifyChannels = notifyChannels; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getSeverity() { return severity; }
+    public void setSeverity(String severity) { this.severity = severity; }
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }

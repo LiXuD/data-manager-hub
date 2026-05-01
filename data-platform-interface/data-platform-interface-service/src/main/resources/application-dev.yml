@@ -26,6 +26,13 @@ spring.data.redis:
   password: redis_password
   database: 0
 
+sa-token:
+  token-name: Authorization
+  timeout: 7200
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true

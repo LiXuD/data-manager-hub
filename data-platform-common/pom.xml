@@ -63,6 +63,13 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Spring AOP (for OperationLog aspect) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- MyBatis-Plus (provided - 使用此依赖的模块需自行引入) -->
         <dependency>
             <groupId>com.baomidou</groupId>

@@ -44,18 +44,32 @@
 
 ```
 data-platform/
-├── data-platform-gateway/      # API网关 (端口 8888)
-├── data-platform-common/       # 公共模块
-├── data-platform-interface/    # 接口管理服务 (新增)
-├── data-platform-vendor/       # 厂商管理服务 (端口 8081)
-├── data-platform-caller/       # 调用方管理服务 (端口 8082)
-├── data-platform-call/         # 调用记录服务 (端口 8083)
-├── data-platform-billing/      # 计费管理服务 (端口 8084)
-├── data-platform-monitor/      # 监控告警服务 (端口 8085)
-├── data-platform-tenant/       # 租户管理服务 (端口 8086)
-├── data-platform-test/         # 测试模块
-└── data-platform-web/          # 前端 Vue3 项目
+├── data-platform-api/           # 公共API契约模块
+├── data-platform-common/        # 公共模块
+├── data-platform-gateway/       # API网关 (端口 8888)
+├── data-platform-vendor/        # 厂商管理服务 (端口 8081)
+│   ├── data-platform-vendor-api/
+│   └── data-platform-vendor-service/  # 含数据类型、配置中心功能
+├── data-platform-caller/        # 调用方管理服务 (端口 8082)
+├── data-platform-call/          # 调用记录服务 (端口 8083)
+├── data-platform-billing/       # 计费管理服务 (端口 8084)
+├── data-platform-monitor/       # 监控告警服务 (端口 8085)
+├── data-platform-tenant/        # 租户管理服务 (端口 8086)
+├── data-platform-sdk/           # SDK生成服务 (端口 8087)
+├── data-platform-log/           # 操作日志服务 (端口 8090)
+├── data-platform-graylog/       # 灰度发布服务 (端口 8092)
+├── data-platform-iam/           # 用户权限管理服务 (端口 8093)
+│   ├── data-platform-iam-api/
+│   └── data-platform-iam-service/     # 含用户、角色管理功能
+├── data-platform-security/      # 数据安全服务 (端口 8094)
+├── data-platform-trace/         # 数据血缘服务 (端口 8095)
+├── data-platform-quality/       # 数据质量服务 (端口 8096)
+├── data-platform-interface/     # 接口管理服务 (端口 8097)
+├── data-platform-test/          # 测试模块
+└── data-platform-web/           # 前端 Vue3 项目
 ```
+
+> **模块合并说明**: data-platform-datatype 和 data-platform-config 已合并到 vendor；data-platform-user 和 data-platform-role 已合并到 iam。
 
 ---
 
@@ -180,14 +194,15 @@ docker-compose up -d
 ```
 
 服务端口：
-- PostgreSQL: 5433
+- PostgreSQL: 5432 (本地安装)
 - Redis: 6379
+- Nacos: 8848
 
 ### 2. 初始化数据库
 
 ```bash
 # 执行 DDL 脚本
-psql -h localhost -p 5433 -U postgres -d dataplatform -f sql/init.sql
+psql -h localhost -U postgres -d dataplatform -f sql/init.sql
 ```
 
 ### 3. 编译后端
@@ -232,7 +247,7 @@ npm run dev
 ```bash
 # 数据库配置
 DB_HOST=localhost
-DB_PORT=5433
+DB_PORT=5432
 DB_NAME=dataplatform
 DB_USER=postgres
 DB_PASSWORD=postgres
@@ -240,11 +255,11 @@ DB_PASSWORD=postgres
 # Redis 配置
 REDIS_HOST=localhost
 REDIS_PORT=6379
+REDIS_PASSWORD=redis_password
 
-# 服务端口
-GATEWAY_PORT=8888
-VENDOR_PORT=8081
-CALLER_PORT=8082
+# Nacos 配置
+NACOS_SERVER_ADDR=localhost:8848
+NACOS_NAMESPACE=dev
 ```
 
 ---

@@ -122,12 +122,20 @@ npm run dev
 | 服务 | 端口 | 说明 |
 |------|------|------|
 | Gateway | 8888 | API 网关 |
-| Vendor | 8081 | 厂商管理 |
+| Vendor | 8081 | 厂商管理（含数据类型、配置中心） |
 | Caller | 8082 | 调用方管理 |
 | Call | 8083 | 调用记录 |
 | Billing | 8084 | 计费管理 |
 | Monitor | 8085 | 监控告警 |
 | Tenant | 8086 | 租户管理 |
+| SDK | 8087 | SDK生成 |
+| Log | 8090 | 操作日志 |
+| Graylog | 8092 | 灰度发布 |
+| IAM | 8093 | 用户权限管理（含用户、角色） |
+| Security | 8094 | 数据安全 |
+| Trace | 8095 | 数据血缘 |
+| Quality | 8096 | 数据质量 |
+| Interface | 8097 | 接口管理 |
 | Web | 3000 | 前端界面 |
 
 ---
@@ -174,10 +182,35 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=
 
-# JWT
-JWT_SECRET=your_jwt_secret_key
-JWT_EXPIRATION=86400000
+# Nacos (服务发现)
+NACOS_SERVER_ADDR=localhost:8848
+NACOS_NAMESPACE=dev
 ```
+
+### Sa-Token 认证配置
+
+所有需要认证的服务都配置了 Sa-Token，配置示例：
+
+```yaml
+sa-token:
+  token-name: Authorization
+  timeout: 7200
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+```
+
+需要 Sa-Token 的服务：
+- Gateway (8888)
+- Vendor (8081)
+- IAM (8093)
+- Monitor (8085)
+- Log (8090)
+- Trace (8095)
+- Quality (8096)
+- Graylog (8092)
+- Interface (8097)
+- Security (8094)
 
 ---
 

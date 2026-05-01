@@ -1,15 +1,64 @@
 # 测试进度报告
 
 **生成时间**: 2026-04-25 10:53
+**最后更新**: 2026-05-01
 
-## 测试结果概览
+> **注**: 以下测试结果为模块合并前的数据。模块合并后（2026-04-30），DataTypeApiTest 和 ConfigApiTest 相关测试已合并到 VendorApiTest；UserApiTest 和 RoleApiTest 相关测试已合并到 IAMApiTest。
+
+## 模块合并后测试结果 (2026-05-01)
+
+| 指标 | 数值 |
+|-----|------|
+| 总测试数 | 252 |
+| 通过 | 183 (72.6%) |
+| 失败 | 69 |
+| 跳过 | 13 |
+
+### 完全通过的测试类
+
+| 测试类 | 测试数 |
+|--------|--------|
+| HttpVendorAdapterTest | 13 |
+| TenantApiTest | 13 |
+| BillingCalculatorTest | 22 |
+| SignatureBuilderTest | 12 |
+
+### 部分通过的测试类
+
+| 测试类 | 通过 | 失败 | 主要问题 |
+|--------|------|------|----------|
+| VendorApiTest | 30 | 1 | 参数验证 |
+| CallerApiTest | 19 | 2 | API Key 创建 |
+| IAMApiTest | 15 | 10 | 服务内部错误 |
+| QualityApiTest | 6 | 2 | 500 错误 |
+| TraceApiTest | 4 | 4 | 500 错误 |
+| MonitorApiTest | 4 | 12 | 500 错误 |
+| CallApiTest | 7 | 6 | 500 错误 |
+| LogApiTest | 1 | 6 | 500 错误 |
+| InterfaceApiTest | 11 | 8 | 500 错误 |
+| BillingApiTest | 13 | 4 | 参数问题 |
+| GraylogApiTest | 5 | 9 | 500 错误 |
+| SecurityApiTest | 3 | 4 | 参数验证不生效 |
+| SdkApiTest | 5 | 1 | 参数验证不生效 |
+
+### 问题分类
+
+1. **500 内部错误** - Monitor, Trace, Quality, Log, Graylog, Interface, IAM 服务需要检查内部异常
+2. **参数验证不生效** - Security, Sdk 服务需要添加 @Valid 注解
+3. **其他** - Billing, Call, Caller 需要具体分析
+
+---
+
+## 历史测试结果 (模块合并前)
+
+### 测试结果概览
 
 | 指标 | 数值 |
 |-----|------|
 | 总测试数 | 210 |
 | 通过 | 208 (99%) |
 | 失败 | 2 |
-| 跳过 | 1 |
+| 跳过 | 1 | |
 
 ## 第十五轮修复 (2026-04-25 10:53)
 
@@ -30,6 +79,10 @@
 | 失败数 | 14 | 2 |
 
 ## 各模块测试结果 (第十五轮修复后)
+
+> **模块合并说明** (2026-04-30):
+> - DataTypeApiTest, ConfigApiTest → 已合并到 VendorApiTest
+> - UserApiTest, RoleApiTest → 已合并到 IMApiTest
 
 | 模块 | 总数 | 通过 | 失败 | 跳过 | 通过率 |
 |------|------|------|------|------|--------|

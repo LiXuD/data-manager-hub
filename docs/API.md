@@ -37,6 +37,107 @@ Content-Type: application/json
 
 ---
 
+## 数据类型管理 (/data-type)
+
+> 数据类型功能已合并到厂商服务 (vendor-service)
+
+### 获取数据类型列表
+
+```http
+GET /data-type/list?page=1&pageSize=10
+Authorization: Bearer {token}
+```
+
+### 获取数据类型详情
+
+```http
+GET /data-type/{id}
+Authorization: Bearer {token}
+```
+
+### 创建数据类型
+
+```http
+POST /data-type
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "datatypeCode": "PERSONAL_INFO",
+  "datatypeName": "个人信息",
+  "description": "个人基本信息查询"
+}
+```
+
+### 更新数据类型
+
+```http
+PUT /data-type/{id}
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "datatypeName": "个人信息查询"
+}
+```
+
+### 删除数据类型
+
+```http
+DELETE /data-type/{id}
+Authorization: Bearer {token}
+```
+
+### 更新数据类型状态
+
+```http
+PATCH /data-type/{id}/status
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "status": "inactive"
+}
+```
+
+---
+
+## 配置管理 (/config)
+
+> 配置中心功能已合并到厂商服务 (vendor-service)
+
+### 获取配置列表
+
+```http
+GET /config/list?page=1&pageSize=10
+Authorization: Bearer {token}
+```
+
+### 创建配置
+
+```http
+POST /config
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "vendorId": 1,
+  "configKey": "api_endpoint",
+  "configValue": "https://api.example.com",
+  "configType": "string",
+  "description": "API端点配置"
+}
+```
+
+### 按厂商查询配置
+
+```http
+GET /config/vendor/{vendorId}
+Authorization: Bearer {token}
+```
+
+---
+
 ## 厂商管理 (/vendor)
 
 ### 获取厂商列表
