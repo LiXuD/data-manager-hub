@@ -1,5 +1,7 @@
 package com.dataplatform.common.adapter;
 
+import com.dataplatform.common.auth.AuthHandler;
+import com.dataplatform.common.auth.AuthHandlerFactory;
 import com.dataplatform.common.security.SignatureBuilder;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -7,6 +9,7 @@ import okhttp3.*;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -21,9 +24,15 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
 
     private final String vendorCode;
     private final OkHttpClient httpClient;
+    private final AuthHandlerFactory authHandlerFactory;
 
     public HttpVendorAdapter(String vendorCode) {
+        this(vendorCode, new AuthHandlerFactory());
+    }
+
+    public HttpVendorAdapter(String vendorCode, AuthHandlerFactory authHandlerFactory) {
         this.vendorCode = vendorCode;
+        this.authHandlerFactory = authHandlerFactory;
         this.httpClient = new OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -101,6 +110,9 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
             }
         }
 
+        // 应用认证配置
+        applyAuth(builder, config);
+
         // 设置请求方法
         if ("GET".equals(method)) {
             HttpUrl httpUrl = HttpUrl.parse(url);
@@ -117,6 +129,24 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         }
 
         return builder.build();
+    }
+
+    /**
+     * 应用认证配置
+     */
+    private void applyAuth(Request.Builder builder, VendorAdapterConfig config) {
+        String authType = config.getAuthType();
+        Map<String, Object> authConfig = config.getAuthConfig();
+
+        if (!StringUtils.hasText(authType) || authConfig == null) {
+            return;
+        }
+
+        AuthHandler handler = authHandlerFactory.getHandler(authType);
+        if (handler != null) {
+            handler.applyAuth(builder, authConfig, Collections.singletonMap("vendorCode", vendorCode));
+            log.debug("应用认证: type={}", authType);
+        }
     }
 
     /**

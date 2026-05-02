@@ -19,6 +19,10 @@ public class VendorAdapterConfig {
     private String signType;
     private String secretKey;
 
+    // 认证配置
+    private String authType;
+    private Map<String, Object> authConfig;
+
     // Getters and Setters
     public String getVendorCode() { return vendorCode; }
     public void setVendorCode(String vendorCode) { this.vendorCode = vendorCode; }
@@ -42,4 +46,8 @@ public class VendorAdapterConfig {
     public void setSignType(String signType) { this.signType = signType; }
     public String getSecretKey() { return secretKey; }
     public void setSecretKey(String secretKey) { this.secretKey = secretKey; }
+    public String getAuthType() { return authType; }
+    public void setAuthType(String authType) { this.authType = authType; }
+    public Map<String, Object> getAuthConfig() { return authConfig; }
+    public void setAuthConfig(Map<String, Object> authConfig) { this.authConfig = authConfig; }
 }

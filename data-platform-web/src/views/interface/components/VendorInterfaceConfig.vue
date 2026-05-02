@@ -19,12 +19,14 @@ import type {
   HeaderConfigItem,
   MappingItem,
   AuthConfig,
-  SignConfig
+  SignConfig,
+  ContentType
 } from '@/types'
 import HeaderEditor from './config/HeaderEditor.vue'
 import ParamsMappingEditor from './config/ParamsMappingEditor.vue'
 import AuthConfigComponent from './config/AuthConfig.vue'
 import SignConfigComponent from './config/SignConfig.vue'
+import RequestBodyEditor from './config/RequestBodyEditor.vue'
 
 interface Props {
   modelValue: boolean
@@ -62,6 +64,8 @@ const form = ref({
   circuitTimeout: 60,
   // 请求配置
   headerList: [] as HeaderConfigItem[],
+  requestBody: '',
+  contentType: 'application/json' as ContentType,
   // 参数映射
   requestMapping: [] as MappingItem[],
   responseMapping: [] as MappingItem[],
@@ -140,6 +144,8 @@ const handleAdd = () => {
     circuitThreshold: 5,
     circuitTimeout: 60,
     headerList: [],
+    requestBody: '',
+    contentType: 'application/json',
     requestMapping: [],
     responseMapping: [],
     signConfig: { type: 'NONE' },
@@ -162,6 +168,8 @@ const handleEdit = (config: VendorInterfaceConfig) => {
   let responseMapping: MappingItem[] = []
   let authConfig: AuthConfig = { type: 'NONE' }
   let signConfig: SignConfig = { type: 'NONE' }
+  let requestBody = ''
+  let contentType: ContentType = 'application/json'
 
   try {
     if (config.headerConfig) {
@@ -181,6 +189,12 @@ const handleEdit = (config: VendorInterfaceConfig) => {
   try {
     if (config.requestTemplate) {
       const parsed = JSON.parse(config.requestTemplate)
+      // 检查是否是新的请求体格式
+      if (parsed.body) {
+        requestBody = typeof parsed.body === 'string' ? parsed.body : JSON.stringify(parsed.body, null, 2)
+        contentType = parsed.contentType || 'application/json'
+      }
+      // 兼容旧格式
       if (parsed.request) {
         requestMapping = Object.entries(parsed.request).map(([source, target]) => ({
           sourceField: source,
@@ -214,6 +228,8 @@ const handleEdit = (config: VendorInterfaceConfig) => {
     circuitThreshold: config.circuitThreshold,
     circuitTimeout: config.circuitTimeout,
     headerList,
+    requestBody,
+    contentType,
     requestMapping,
     responseMapping,
     signConfig,
@@ -302,6 +318,25 @@ const handleSubmit = async () => {
         return acc
       }, {} as Record<string, string>)
 
+    // 构建 requestTemplate，包含请求体和参数映射
+    const requestTemplate: Record<string, unknown> = {}
+    const hasRequestMapping = Object.keys(requestMappingObj).length > 0
+    const hasResponseMapping = Object.keys(responseMappingObj).length > 0
+
+    if (hasRequestMapping) {
+      requestTemplate.request = requestMappingObj
+    }
+    if (hasResponseMapping) {
+      requestTemplate.response = responseMappingObj
+    }
+    if (form.value.requestBody) {
+      requestTemplate.body = form.value.requestBody
+      requestTemplate.contentType = form.value.contentType
+    }
+
+    const hasHeaderConfig = Object.keys(headerConfig).length > 0
+    const hasRequestTemplate = Object.keys(requestTemplate).length > 0
+
     const data = {
       vendorId: form.value.vendorId,
       dataTypeId: form.value.dataTypeId,
@@ -313,10 +348,8 @@ const handleSubmit = async () => {
       circuitThreshold: form.value.circuitThreshold,
       circuitTimeout: form.value.circuitTimeout,
       signType: form.value.signConfig.type === 'NONE' ? undefined : form.value.signConfig.type,
-      headerConfig: Object.keys(headerConfig).length > 0 ? JSON.stringify(headerConfig) : undefined,
-      requestTemplate: (Object.keys(requestMappingObj).length > 0 || Object.keys(responseMappingObj).length > 0)
-        ? JSON.stringify({ request: requestMappingObj, response: responseMappingObj })
-        : undefined,
+      headerConfig: hasHeaderConfig ? JSON.stringify(headerConfig) : undefined,
+      requestTemplate: hasRequestTemplate ? JSON.stringify(requestTemplate) : undefined,
       authType: form.value.authConfig.type === 'NONE' ? undefined : form.value.authConfig.type,
       authConfig: form.value.authConfig.type !== 'NONE' ? JSON.stringify(form.value.authConfig) : undefined,
       fallbackVendorId: form.value.fallbackVendorId || undefined,
@@ -553,6 +586,11 @@ const handleSubmit = async () => {
             <HeaderEditor
               v-model="form.headerList"
               @change="form.headerList = $event"
+            />
+            <div class="section-divider"></div>
+            <RequestBodyEditor
+              v-model="form.requestBody"
+              v-model:content-type="form.contentType"
             />
           </el-tab-pane>
 
@@ -858,6 +896,12 @@ const handleSubmit = async () => {
 
 .fallback-section {
   padding: 16px 0;
+}
+
+.section-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 24px 0;
 }
 
 .form-drawer :deep(.el-divider__text) {

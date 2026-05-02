@@ -264,6 +264,21 @@ Content-Type: application/json
 | signType | string | 否 | 签名类型: MD5, SHA256, HMAC_SHA256 |
 | encryptType | string | 否 | 加密类型: AES, RSA |
 | fallbackVendorId | long | 否 | 降级厂商ID |
+| authType | string | 否 | 认证类型: NONE, BASIC, BEARER, API_KEY |
+| authConfig | string | 否 | JSON格式认证配置 |
+
+**authConfig 格式**:
+
+```json
+// Basic Auth
+{"username": "user", "password": "pass"}
+
+// Bearer Token (支持变量)
+{"token": "${token}"}
+
+// API Key
+{"apiKeyName": "X-API-Key", "apiKeyValue": "${apiKey}", "apiKeyLocation": "header"}
+```
 
 ### 更新配置
 

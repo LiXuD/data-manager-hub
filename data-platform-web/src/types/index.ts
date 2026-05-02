@@ -401,6 +401,9 @@ export type AuthType = 'NONE' | 'BASIC' | 'BEARER' | 'API_KEY'
 // 签名类型
 export type SignType = 'NONE' | 'HMAC_SHA256' | 'MD5'
 
+// Content-Type 类型
+export type ContentType = 'application/json' | 'application/x-www-form-urlencoded' | 'text/plain' | 'raw'
+
 // API 配置
 export interface ApiConfig {
   url: string

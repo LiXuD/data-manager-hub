@@ -27,6 +27,11 @@ public class VendorConfig {
     private String requestTemplate;
     private String responseMapping;
     private Long fallbackVendorId;
+
+    // 认证配置
+    private String authType;      // NONE, BASIC, BEARER, API_KEY
+    private String authConfig;    // JSON 格式认证配置
+
     private CommonStatus status;
     
     @TableField(fill = FieldFill.INSERT)
@@ -79,6 +84,10 @@ public class VendorConfig {
     public void setResponseMapping(String responseMapping) { this.responseMapping = responseMapping; }
     public Long getFallbackVendorId() { return fallbackVendorId; }
     public void setFallbackVendorId(Long fallbackVendorId) { this.fallbackVendorId = fallbackVendorId; }
+    public String getAuthType() { return authType; }
+    public void setAuthType(String authType) { this.authType = authType; }
+    public String getAuthConfig() { return authConfig; }
+    public void setAuthConfig(String authConfig) { this.authConfig = authConfig; }
     public CommonStatus getStatus() { return status; }
     public void setStatus(CommonStatus status) { this.status = status; }
     public Long getCreatedBy() { return createdBy; }
