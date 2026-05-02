@@ -90,11 +90,8 @@ const rules: FormRules = {
   circuitTimeout: [{ required: true, message: '请输入熔断时间', trigger: 'blur' }]
 }
 
-// 过滤数据类型选项
-const filteredDataTypeOptions = computed(() => {
-  if (!form.value.vendorId) return dataTypeOptions.value
-  return dataTypeOptions.value.filter(dt => dt.vendorId === form.value.vendorId)
-})
+// 数据类型选项（不再按厂商过滤，因为 DataType 与 Vendor 无关联）
+const filteredDataTypeOptions = computed(() => dataTypeOptions.value)
 
 // 降级厂商选项
 const fallbackVendorOptions = computed(() => {
@@ -525,7 +522,7 @@ const handleSubmit = async () => {
                 <el-option
                   v-for="dt in filteredDataTypeOptions"
                   :key="dt.id"
-                  :label="dt.typeName"
+                  :label="dt.dataTypeName"
                   :value="dt.id"
                 />
               </el-select>
@@ -583,10 +580,7 @@ const handleSubmit = async () => {
 
           <!-- 请求配置 Tab -->
           <el-tab-pane label="请求配置" name="request">
-            <HeaderEditor
-              v-model="form.headerList"
-              @change="form.headerList = $event"
-            />
+            <HeaderEditor v-model="form.headerList" />
             <div class="section-divider"></div>
             <RequestBodyEditor
               v-model="form.requestBody"
@@ -604,18 +598,12 @@ const handleSubmit = async () => {
 
           <!-- 签名配置 Tab -->
           <el-tab-pane label="签名配置" name="sign">
-            <SignConfigComponent
-              v-model="form.signConfig"
-              @change="form.signConfig = $event"
-            />
+            <SignConfigComponent v-model="form.signConfig" />
           </el-tab-pane>
 
           <!-- 认证配置 Tab -->
           <el-tab-pane label="认证配置" name="auth">
-            <AuthConfigComponent
-              v-model="form.authConfig"
-              @change="form.authConfig = $event"
-            />
+            <AuthConfigComponent v-model="form.authConfig" />
           </el-tab-pane>
 
           <!-- 降级配置 Tab -->

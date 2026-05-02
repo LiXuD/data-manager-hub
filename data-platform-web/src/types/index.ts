@@ -270,16 +270,17 @@ export interface ListResponse<T> {
   pageSize?: number
 }
 
-// 数据类型
+// 数据类型 - 字段名与后端 DataType 实体对齐
 export interface DataType {
   id: number
-  typeCode: string
-  typeName: string
-  description: string
-  vendorId: number
-  vendorName: string
-  schema?: string
+  dataTypeCode: string    // 后端: dataTypeCode
+  dataTypeName: string    // 后端: dataTypeName
+  dataCategory?: string   // 后端: dataCategory
+  description?: string
+  pricingModel?: string
+  unitPrice?: number
   status: string
+  createdBy?: number
   createdAt: string
   updatedAt: string
 }

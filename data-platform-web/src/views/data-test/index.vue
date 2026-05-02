@@ -49,7 +49,7 @@
             <el-option
               v-for="dt in filteredDataTypeList"
               :key="dt.id"
-              :label="dt.typeName"
+              :label="dt.dataTypeName"
               :value="dt.id"
             />
           </el-select>
@@ -180,11 +180,8 @@ const jsonError = ref('')
 const loading = ref(false)
 const result = ref<DataQueryResponse | null>(null)
 
-// 计算属性: 根据选中的厂商过滤数据类型
-const filteredDataTypeList = computed(() => {
-  if (!selectedVendorId.value) return []
-  return dataTypeList.value.filter(dt => dt.vendorId === selectedVendorId.value)
-})
+// 计算属性: 数据类型列表（不再按厂商过滤，因为 DataType 与 Vendor 无关联）
+const filteredDataTypeList = computed(() => dataTypeList.value)
 
 // 是否可以执行查询
 const canExecute = computed(() => {
@@ -306,7 +303,7 @@ const handleExecute = async () => {
   try {
     const res = await executeQuery({
       vendorCode: vendor.vendorCode,
-      dataTypeCode: dataType.typeCode,
+      dataTypeCode: dataType.dataTypeCode,
       interfaceCode: intf?.interfaceCode,
       params
     })

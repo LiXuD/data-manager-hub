@@ -35,7 +35,7 @@
           <el-option
             v-for="dt in datatypeOptions"
             :key="dt.id"
-            :label="dt.typeName"
+            :label="dt.dataTypeName"
             :value="dt.id"
           />
         </el-select>
@@ -71,7 +71,7 @@ interface Props {
   formData?: ApiInterface | null
   mode: 'add' | 'edit'
   vendorOptions: Vendor[]
-  datatypeOptions: { id: number; typeName: string }[]
+  datatypeOptions: { id: number; dataTypeName: string }[]
 }
 
 const props = defineProps<Props>()

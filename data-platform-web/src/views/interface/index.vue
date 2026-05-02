@@ -30,7 +30,7 @@
             <el-option
               v-for="dt in dataTypeOptions"
               :key="dt.id"
-              :label="dt.typeName"
+              :label="dt.dataTypeName"
               :value="dt.id"
             />
           </el-select>

@@ -1,8 +1,31 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-05-02
+**最后更新**: 2026-05-03
 **状态**: MVP 已完成, 模块合并优化已完成 ✅
+
+---
+
+## 🐛 前端问题修复 (2026-05-03)
+
+### ✅ 已完成
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| DataType 字段名对齐 (typeName → dataTypeName) | ✅ 完成 | 2026-05-03 |
+| 修复接口配置数据类型下拉显示数字问题 | ✅ 完成 | 2026-05-03 |
+| 修复配置中心/操作日志页面内容互换问题 | ✅ 完成 | 2026-05-03 |
+
+**问题说明**：
+- 前端 DataType 接口使用 `typeName`，后端返回 `dataTypeName`，导致下拉框显示数字而非名称
+- `config/index.vue` 和 `audit/index.vue` 文件内容被互换，导致菜单显示错误
+
+**涉及文件**：
+- `data-platform-web/src/types/index.ts` - DataType 接口定义
+- `data-platform-web/src/views/interface/components/VendorInterfaceConfig.vue`
+- `data-platform-web/src/views/datatype/index.vue`
+- `data-platform-web/src/views/config/index.vue`
+- `data-platform-web/src/views/audit/index.vue`
 
 ---
 
@@ -217,6 +240,32 @@ data-platform (父聚合模块)
 | 前端 status.ts 常量定义 | ✅ 完成 | 2026-05-02 |
 | Vue 组件改用常量 | ✅ 完成 | 2026-05-02 |
 | 编译验证 | ✅ 通过 | 2026-05-02 |
+
+### 接口配置页面完善 (2026-05-02)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| RequestBodyEditor.vue 组件 | ✅ 完成 | 2026-05-02 |
+| AuthConfig.vue 认证配置组件 | ✅ 完成 | 2026-05-02 |
+| SignConfig.vue 签名配置组件 | ✅ 完成 | 2026-05-02 |
+| HeaderEditor.vue 请求头编辑器 | ✅ 完成 | 2026-05-02 |
+| ParamsMappingEditor.vue 参数映射编辑器 | ✅ 完成 | 2026-05-02 |
+| VendorConfig 添加 authType/authConfig 字段 | ✅ 完成 | 2026-05-02 |
+| AuthHandler 认证处理器实现 | ✅ 完成 | 2026-05-02 |
+| 数据库迁移脚本 V005 | ✅ 完成 | 2026-05-02 |
+
+**认证处理器**：支持 NONE、BASIC、BEARER、API_KEY 四种认证类型，通过策略模式实现。
+
+### API 路径规范化 (2026-05-02)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| DataTypeController 路径 `/data-type` → `/datatype` | ✅ 完成 | 2026-05-02 |
+| 前端 datatype/index.vue 改用 API 模块 | ✅ 完成 | 2026-05-02 |
+| 测试类 VendorApiTest 路径更新 | ✅ 完成 | 2026-05-02 |
+| API 文档更新 | ✅ 完成 | 2026-05-02 |
+| SQL 迁移脚本 PostgreSQL 语法修复 | ✅ 完成 | 2026-05-02 |
+| LogService 添加 @Primary 解决 Bean 冲突 | ✅ 完成 | 2026-05-02 |
 
 ### 依赖规则
 - **service → api → data-platform-api**
@@ -557,5 +606,5 @@ BUILD SUCCESS
 ---
 
 **文档维护**: 按版本更新
-**最后更新**: 2026-04-26
+**最后更新**: 2026-05-03
 **当前版本**: V1.0 MVP

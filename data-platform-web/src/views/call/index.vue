@@ -150,8 +150,8 @@ const statusOptions = [
 const cacheStore = useCacheStore()
 const dataTypeOptions = computed(() =>
   cacheStore.dataTypeOptions.map(dt => ({
-    label: dt.typeName,
-    value: dt.typeCode
+    label: dt.dataTypeName,
+    value: dt.dataTypeCode
   }))
 )
 
