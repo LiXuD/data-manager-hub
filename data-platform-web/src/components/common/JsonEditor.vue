@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 interface Props {
@@ -22,26 +22,16 @@ const emit = defineEmits<{
   'validate': [valid: boolean, error?: string]
 }>()
 
-const content = ref(props.modelValue)
+// 直接使用 computed
+const content = computed(() => props.modelValue)
+
+// 本地状态
 const error = ref('')
 const isFormatted = ref(false)
 
-// 同步外部值
-watch(() => props.modelValue, (val) => {
-  content.value = val
-  validateJson()
-}, { immediate: true })
-
-// 同步内部值
-watch(content, (val) => {
-  emit('update:modelValue', val)
-  emit('change', val)
-  validateJson()
-})
-
 // 验证 JSON
-const validateJson = () => {
-  if (!content.value.trim()) {
+function validateJson(value: string): boolean {
+  if (!value.trim()) {
     error.value = ''
     isFormatted.value = false
     emit('validate', true)
@@ -49,7 +39,7 @@ const validateJson = () => {
   }
 
   try {
-    JSON.parse(content.value)
+    JSON.parse(value)
     error.value = ''
     emit('validate', true)
     return true
@@ -64,13 +54,22 @@ const validateJson = () => {
   }
 }
 
+// 更新内容
+function updateContent(value: string) {
+  emit('update:modelValue', value)
+  emit('change', value)
+  validateJson(value)
+}
+
 // 格式化 JSON
-const formatJson = () => {
+function formatJson() {
   if (!content.value.trim()) return
 
   try {
     const parsed = JSON.parse(content.value)
-    content.value = JSON.stringify(parsed, null, 2)
+    const formatted = JSON.stringify(parsed, null, 2)
+    emit('update:modelValue', formatted)
+    emit('change', formatted)
     isFormatted.value = true
     ElMessage.success('格式化成功')
   } catch {
@@ -79,12 +78,14 @@ const formatJson = () => {
 }
 
 // 压缩 JSON
-const minifyJson = () => {
+function minifyJson() {
   if (!content.value.trim()) return
 
   try {
     const parsed = JSON.parse(content.value)
-    content.value = JSON.stringify(parsed)
+    const minified = JSON.stringify(parsed)
+    emit('update:modelValue', minified)
+    emit('change', minified)
     isFormatted.value = false
     ElMessage.success('压缩成功')
   } catch {
@@ -93,14 +94,15 @@ const minifyJson = () => {
 }
 
 // 清空
-const clearContent = () => {
-  content.value = ''
+function clearContent() {
+  emit('update:modelValue', '')
+  emit('change', '')
   error.value = ''
   isFormatted.value = false
 }
 
 // 获取解析后的对象
-const getParsedJson = (): unknown => {
+function getParsedJson(): unknown {
   if (!content.value.trim()) return null
   try {
     return JSON.parse(content.value)
@@ -110,12 +112,10 @@ const getParsedJson = (): unknown => {
 }
 
 // 设置内容
-const setContent = (value: string | object) => {
-  if (typeof value === 'string') {
-    content.value = value
-  } else {
-    content.value = JSON.stringify(value, null, 2)
-  }
+function setContent(value: string | object) {
+  const newContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+  emit('update:modelValue', newContent)
+  emit('change', newContent)
 }
 
 // 暴露方法
@@ -123,7 +123,7 @@ defineExpose({
   formatJson,
   minifyJson,
   clearContent,
-  validateJson,
+  validateJson: () => validateJson(content.value),
   getParsedJson,
   setContent
 })
@@ -192,12 +192,13 @@ defineExpose({
     <!-- 编辑器 -->
     <div class="json-content" :class="{ 'has-error': error }">
       <textarea
-        v-model="content"
+        :value="content"
         :placeholder="placeholder"
         :rows="rows"
         :readonly="readonly"
         class="json-textarea"
         spellcheck="false"
+        @input="(e) => updateContent((e.target as HTMLTextAreaElement).value)"
       />
       <div class="line-numbers" aria-hidden="true">
         <span v-for="n in Math.max(rows, content.split('\n').length)" :key="n">{{ n }}</span>

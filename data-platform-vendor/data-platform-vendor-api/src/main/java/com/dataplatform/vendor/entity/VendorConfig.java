@@ -4,16 +4,14 @@ import com.baomidou.mybatisplus.annotation.*;
 import com.dataplatform.common.enums.CommonStatus;
 import java.time.LocalDateTime;
 
-
 @TableName("vendor_config")
 public class VendorConfig {
-    
+
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     private Long vendorId;
     private Long dataTypeId;
-    private String dataTypeCode;
     private Long interfaceId;
     private String apiUrl;
     private String method;
@@ -27,25 +25,20 @@ public class VendorConfig {
     private String requestTemplate;
     private String responseMapping;
     private Long fallbackVendorId;
-
-    // 认证配置
-    private String authType;      // NONE, BASIC, BEARER, API_KEY
-    private String authConfig;    // JSON 格式认证配置
+    private String authType;
+    private String authConfig;
 
     private CommonStatus status;
-    
+
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
-    
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
-    
-    @TableField(fill = FieldFill.INSERT_UPDATE)
-    private Long updatedBy;
-    
+
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
-    
+
     @TableLogic
     private Boolean deleted;
 
@@ -56,8 +49,6 @@ public class VendorConfig {
     public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
     public Long getDataTypeId() { return dataTypeId; }
     public void setDataTypeId(Long dataTypeId) { this.dataTypeId = dataTypeId; }
-    public String getDataTypeCode() { return dataTypeCode; }
-    public void setDataTypeCode(String dataTypeCode) { this.dataTypeCode = dataTypeCode; }
     public Long getInterfaceId() { return interfaceId; }
     public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
     public String getApiUrl() { return apiUrl; }
@@ -94,8 +85,6 @@ public class VendorConfig {
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    public Long getUpdatedBy() { return updatedBy; }
-    public void setUpdatedBy(Long updatedBy) { this.updatedBy = updatedBy; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public Boolean getDeleted() { return deleted; }

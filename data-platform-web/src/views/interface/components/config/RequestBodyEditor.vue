@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed } from 'vue'
 import { ElRadioGroup, ElRadioButton, ElFormItem } from 'element-plus'
 import JsonEditor from '@/components/common/JsonEditor.vue'
 import KeyValueEditor from '@/components/common/KeyValueEditor.vue'
@@ -22,43 +22,11 @@ const emit = defineEmits<{
   'change': [value: string, contentType: ContentType]
 }>()
 
-const currentContentType = ref<ContentType>(props.contentType)
-const jsonContent = ref('')
-const formItems = ref<KeyValueItem[]>([])
-const rawContent = ref('')
-
-// 同步外部值
-watch(() => props.modelValue, (val) => {
-  parseContent(val)
-}, { immediate: true })
-
-watch(() => props.contentType, (val) => {
-  currentContentType.value = val
-}, { immediate: true })
-
-// 解析内容
-const parseContent = (content: string) => {
-  if (!content) {
-    jsonContent.value = ''
-    formItems.value = []
-    rawContent.value = ''
-    return
-  }
-
-  switch (currentContentType.value) {
-    case 'application/json':
-      jsonContent.value = content
-      break
-    case 'application/x-www-form-urlencoded':
-      formItems.value = parseUrlEncoded(content)
-      break
-    default:
-      rawContent.value = content
-  }
-}
+// 当前内容类型
+const currentContentType = computed(() => props.contentType)
 
 // 解析 URL 编码格式
-const parseUrlEncoded = (content: string): KeyValueItem[] => {
+function parseUrlEncoded(content: string): KeyValueItem[] {
   if (!content) return []
   return content.split('&').map(pair => {
     const [key, value = ''] = pair.split('=')
@@ -70,65 +38,107 @@ const parseUrlEncoded = (content: string): KeyValueItem[] => {
   }).filter(item => item.key)
 }
 
-// 监听内容类型变化
-watch(currentContentType, (newType) => {
-  emit('update:contentType', newType)
-  // 切换类型时转换内容
-  convertContent(newType)
+// 计算属性：JSON 内容
+const jsonContent = computed(() => {
+  if (props.contentType === 'application/json') {
+    return props.modelValue
+  }
+  return ''
 })
 
-// 监听内容变化
-watch([jsonContent, formItems, rawContent], () => {
-  const content = serializeContent()
-  emit('update:modelValue', content)
-  emit('change', content, currentContentType.value)
-}, { deep: true })
+// 计算属性：表单项
+const formItems = computed(() => {
+  if (props.contentType === 'application/x-www-form-urlencoded') {
+    return parseUrlEncoded(props.modelValue)
+  }
+  return []
+})
+
+// 计算属性：原始内容
+const rawContent = computed(() => {
+  if (props.contentType !== 'application/json' && props.contentType !== 'application/x-www-form-urlencoded') {
+    return props.modelValue
+  }
+  return ''
+})
 
 // 序列化内容
-const serializeContent = (): string => {
-  switch (currentContentType.value) {
+function serializeContent(type: ContentType, json: string, form: KeyValueItem[], raw: string): string {
+  switch (type) {
     case 'application/json':
-      return jsonContent.value
+      return json
     case 'application/x-www-form-urlencoded':
-      return formItems.value
+      return form
         .filter(item => item.enabled && item.key)
         .map(item => `${encodeURIComponent(item.key)}=${encodeURIComponent(item.value)}`)
         .join('&')
     default:
-      return rawContent.value
+      return raw
   }
 }
 
-// 转换内容格式
-const convertContent = (targetType: ContentType) => {
-  const currentContent = serializeContent()
+// 更新内容类型
+function updateContentType(newType: ContentType) {
+  // 切换类型时转换内容
+  const currentContent = serializeContent(currentContentType.value, jsonContent.value, formItems.value, rawContent.value)
+  let newContent = currentContent
 
-  if (!currentContent) return
-
-  try {
-    if (targetType === 'application/json') {
-      // 从 form-urlencoded 转换到 JSON
-      if (formItems.value.length > 0) {
-        const obj: Record<string, string> = {}
-        formItems.value.filter(i => i.enabled && i.key).forEach(item => {
-          obj[item.key] = item.value
-        })
-        jsonContent.value = JSON.stringify(obj, null, 2)
+  if (currentContent) {
+    try {
+      if (newType === 'application/json') {
+        // 从 form-urlencoded 转换到 JSON
+        if (formItems.value.length > 0) {
+          const obj: Record<string, string> = {}
+          formItems.value.filter(i => i.enabled && i.key).forEach(item => {
+            obj[item.key] = item.value
+          })
+          newContent = JSON.stringify(obj, null, 2)
+        }
+      } else if (newType === 'application/x-www-form-urlencoded') {
+        // 从 JSON 转换到 form-urlencoded
+        if (jsonContent.value) {
+          const obj = JSON.parse(jsonContent.value)
+          const items = Object.entries(obj).map(([key, value]) => ({
+            key,
+            value: String(value),
+            enabled: true
+          }))
+          newContent = items
+            .filter(item => item.enabled && item.key)
+            .map(item => `${encodeURIComponent(item.key)}=${encodeURIComponent(item.value)}`)
+            .join('&')
+        }
       }
-    } else if (targetType === 'application/x-www-form-urlencoded') {
-      // 从 JSON 转换到 form-urlencoded
-      if (jsonContent.value) {
-        const obj = JSON.parse(jsonContent.value)
-        formItems.value = Object.entries(obj).map(([key, value]) => ({
-          key,
-          value: String(value),
-          enabled: true
-        }))
-      }
+    } catch {
+      // 转换失败，保留原值
     }
-  } catch {
-    // 转换失败，保留原值
   }
+
+  emit('update:contentType', newType)
+  emit('update:modelValue', newContent)
+  emit('change', newContent, newType)
+}
+
+// 更新 JSON 内容
+function updateJsonContent(value: string) {
+  emit('update:modelValue', value)
+  emit('change', value, currentContentType.value)
+}
+
+// 更新表单内容
+function updateFormItems(items: KeyValueItem[]) {
+  const content = items
+    .filter(item => item.enabled && item.key)
+    .map(item => `${encodeURIComponent(item.key)}=${encodeURIComponent(item.value)}`)
+    .join('&')
+  emit('update:modelValue', content)
+  emit('change', content, currentContentType.value)
+}
+
+// 更新原始内容
+function updateRawContent(value: string) {
+  emit('update:modelValue', value)
+  emit('change', value, currentContentType.value)
 }
 
 // Content-Type 选项
@@ -166,28 +176,8 @@ const variableHints = [
   { name: '${callback}', desc: '回调地址' }
 ]
 
-// 获取当前内容
-const getContent = () => serializeContent()
-
-// 设置内容
-const setContent = (content: string, contentType?: ContentType) => {
-  if (contentType) {
-    currentContentType.value = contentType
-  }
-  parseContent(content)
-}
-
-// 清空内容
-const clearContent = () => {
-  jsonContent.value = ''
-  formItems.value = []
-  rawContent.value = ''
-}
-
+// 暴露方法
 defineExpose({
-  getContent,
-  setContent,
-  clearContent,
   currentContentType
 })
 </script>
@@ -201,7 +191,7 @@ defineExpose({
 
     <!-- Content-Type 选择 -->
     <el-form-item label="Content-Type">
-      <el-radio-group v-model="currentContentType">
+      <el-radio-group :model-value="currentContentType" @update:model-value="(val) => updateContentType(val as ContentType)">
         <el-radio-button
           v-for="opt in contentTypeOptions"
           :key="opt.value"
@@ -217,9 +207,10 @@ defineExpose({
     <template v-if="currentContentType === 'application/json'">
       <div class="body-section">
         <JsonEditor
-          v-model="jsonContent"
+          :model-value="jsonContent"
           placeholder='{"key": "value"}'
           :rows="10"
+          @update:model-value="updateJsonContent"
         />
       </div>
     </template>
@@ -228,10 +219,11 @@ defineExpose({
     <template v-else-if="currentContentType === 'application/x-www-form-urlencoded'">
       <div class="body-section">
         <KeyValueEditor
-          v-model="formItems"
+          :model-value="formItems"
           :placeholder="{ key: '字段名', value: '字段值' }"
           :preset-options="presetBodyFields"
           :value-templates="variableTemplates"
+          @update:model-value="updateFormItems"
         />
       </div>
     </template>
@@ -240,10 +232,11 @@ defineExpose({
     <template v-else>
       <div class="body-section">
         <textarea
-          v-model="rawContent"
+          :value="rawContent"
           class="raw-textarea"
           placeholder="输入原始请求体内容"
           rows="10"
+          @input="(e) => updateRawContent((e.target as HTMLTextAreaElement).value)"
         />
       </div>
     </template>

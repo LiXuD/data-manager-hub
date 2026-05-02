@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { ElButton, ElInput, ElSelect, ElOption, ElTabs, ElTabPane, ElMessage } from 'element-plus'
 import type { MappingItem } from '@/types'
 
@@ -20,29 +20,19 @@ const emit = defineEmits<{
 
 const activeTab = ref('request')
 
-// 请求参数映射
-const requestItems = ref<MappingItem[]>([])
+// 直接使用 computed，不维护内部副本
+const requestItems = computed(() => props.requestMapping || [])
+const responseItems = computed(() => props.responseMapping || [])
 
-// 响应字段映射
-const responseItems = ref<MappingItem[]>([])
+// 更新请求映射
+function updateRequestMapping(newItems: MappingItem[]) {
+  emit('update:requestMapping', newItems)
+}
 
-// 同步外部值
-watch(() => props.requestMapping, (val) => {
-  requestItems.value = val ? [...val] : []
-}, { immediate: true, deep: true })
-
-watch(() => props.responseMapping, (val) => {
-  responseItems.value = val ? [...val] : []
-}, { immediate: true, deep: true })
-
-// 监听内部变化并同步
-watch(requestItems, (val) => {
-  emit('update:requestMapping', val)
-}, { deep: true })
-
-watch(responseItems, (val) => {
-  emit('update:responseMapping', val)
-}, { deep: true })
+// 更新响应映射
+function updateResponseMapping(newItems: MappingItem[]) {
+  emit('update:responseMapping', newItems)
+}
 
 // 转换类型选项
 const transformOptions = [
@@ -52,35 +42,50 @@ const transformOptions = [
 ]
 
 // 添加请求映射项
-const addRequestMappingItem = () => {
-  requestItems.value.push({
+function addRequestMappingItem() {
+  const newItems = [...requestItems.value, {
     sourceField: '',
     targetField: '',
-    transformType: 'none'
-  })
+    transformType: 'none' as const
+  }]
+  updateRequestMapping(newItems)
 }
 
 // 添加响应映射项
-const addResponseMappingItem = () => {
-  responseItems.value.push({
+function addResponseMappingItem() {
+  const newItems = [...responseItems.value, {
     sourceField: '',
     targetField: '',
-    transformType: 'none'
-  })
+    transformType: 'none' as const
+  }]
+  updateResponseMapping(newItems)
+}
+
+// 更新映射项字段（通用方法）
+function updateItemField(type: 'request' | 'response', index: number, field: keyof MappingItem, value: string) {
+  const items = type === 'request' ? requestItems.value : responseItems.value
+  const updater = type === 'request' ? updateRequestMapping : updateResponseMapping
+  const newItems = [...items]
+  newItems[index] = { ...newItems[index], [field]: value }
+  updater(newItems)
 }
 
 // 删除请求映射项
-const removeRequestMappingItem = (index: number) => {
-  requestItems.value.splice(index, 1)
+function removeRequestMappingItem(index: number) {
+  const newItems = [...requestItems.value]
+  newItems.splice(index, 1)
+  updateRequestMapping(newItems)
 }
 
 // 删除响应映射项
-const removeResponseMappingItem = (index: number) => {
-  responseItems.value.splice(index, 1)
+function removeResponseMappingItem(index: number) {
+  const newItems = [...responseItems.value]
+  newItems.splice(index, 1)
+  updateResponseMapping(newItems)
 }
 
 // 导出 JSON
-const exportMapping = () => {
+function exportMapping() {
   const mapping = {
     request: requestItems.value.reduce((acc, item) => {
       if (item.sourceField && item.targetField) {
@@ -106,7 +111,7 @@ const exportMapping = () => {
 }
 
 // 从 JSON 导入
-const importMapping = () => {
+function importMapping() {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = '.json'
@@ -117,18 +122,20 @@ const importMapping = () => {
       const text = await file.text()
       const json = JSON.parse(text)
       if (json.request) {
-        requestItems.value = Object.entries(json.request).map(([source, target]) => ({
+        const newItems = Object.entries(json.request).map(([source, target]) => ({
           sourceField: source,
           targetField: String(target),
           transformType: 'none' as const
         }))
+        updateRequestMapping(newItems)
       }
       if (json.response) {
-        responseItems.value = Object.entries(json.response).map(([source, target]) => ({
+        const newItems = Object.entries(json.response).map(([source, target]) => ({
           sourceField: source,
           targetField: String(target),
           transformType: 'none' as const
         }))
+        updateResponseMapping(newItems)
       }
       ElMessage.success('导入成功')
     } catch {
@@ -139,7 +146,7 @@ const importMapping = () => {
 }
 
 // 获取 JSON 格式输出
-const getMappingJson = () => {
+function getMappingJson() {
   return {
     request: requestItems.value.reduce((acc, item) => {
       if (item.sourceField && item.targetField) {
@@ -211,7 +218,12 @@ defineExpose({
 
             <div v-for="(item, index) in requestItems" :key="index" class="mapping-row">
               <div class="col-source">
-                <el-input v-model="item.sourceField" placeholder="如: companyName" size="small" />
+                <el-input
+                  :model-value="item.sourceField"
+                  placeholder="如: companyName"
+                  size="small"
+                  @update:model-value="(val: string) => updateItemField('request', index, 'sourceField', val)"
+                />
               </div>
               <div class="col-arrow">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -219,7 +231,12 @@ defineExpose({
                 </svg>
               </div>
               <div class="col-target">
-                <el-input v-model="item.targetField" placeholder="如: entName" size="small" />
+                <el-input
+                  :model-value="item.targetField"
+                  placeholder="如: entName"
+                  size="small"
+                  @update:model-value="(val: string) => updateItemField('request', index, 'targetField', val)"
+                />
               </div>
               <div class="col-actions">
                 <el-button link size="small" type="danger" @click="removeRequestMappingItem(index)">
@@ -263,7 +280,12 @@ defineExpose({
 
             <div v-for="(item, index) in responseItems" :key="index" class="mapping-row">
               <div class="col-source">
-                <el-input v-model="item.sourceField" placeholder="如: data.result" size="small" />
+                <el-input
+                  :model-value="item.sourceField"
+                  placeholder="如: data.result"
+                  size="small"
+                  @update:model-value="(val: string) => updateItemField('response', index, 'sourceField', val)"
+                />
               </div>
               <div class="col-arrow">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -271,10 +293,20 @@ defineExpose({
                 </svg>
               </div>
               <div class="col-target">
-                <el-input v-model="item.targetField" placeholder="如: result" size="small" />
+                <el-input
+                  :model-value="item.targetField"
+                  placeholder="如: result"
+                  size="small"
+                  @update:model-value="(val: string) => updateItemField('response', index, 'targetField', val)"
+                />
               </div>
               <div class="col-transform">
-                <el-select v-model="item.transformType" size="small" style="width: 100%">
+                <el-select
+                  :model-value="item.transformType"
+                  size="small"
+                  style="width: 100%"
+                  @update:model-value="(val: string) => updateItemField('response', index, 'transformType', val)"
+                >
                   <el-option
                     v-for="opt in transformOptions"
                     :key="opt.value"

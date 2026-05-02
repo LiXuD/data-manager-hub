@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/data-type")
+@RequestMapping("/datatype")
 public class DataTypeController {
 
     @Autowired

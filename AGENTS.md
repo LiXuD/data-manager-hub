@@ -50,7 +50,7 @@
 4. **服务认证配置** (2026-05-01)
    - 所有需要认证的服务统一配置 Sa-Token
    - IAM 服务新增 Nacos 服务发现
-   - Gateway 路由支持 /data-type 和 /datatype 双路径
+   - API 路径规范化：DataTypeController 使用 `/datatype`
 
 5. **前端假提交修复** (2026-05-01)
    - 修复 role/user/datatype/caller/monitor/graylog 页面假提交问题
@@ -140,6 +140,8 @@ data-manager-hub/
 | /audit | 操作日志 | log |
 | /config | 配置中心 | vendor |
 | /graylog | 灰度发布 | graylog |
+| /datatype | 数据类型 | vendor |
+| /interface | 接口管理 | interface |
 
 ---
 
@@ -155,17 +157,18 @@ data-manager-hub/
 | 6 | config_version | 配置版本历史 |
 | 7 | caller_info | 调用方信息 |
 | 8 | api_key | API Key |
-| 9 | call_record | 调用记录 (按月分区) |
-| 10 | billing_daily | 日账单 |
-| 11 | billing_rule | 计费规则 |
-| 12 | user_info | 用户 |
-| 13 | role_info | 角色 |
-| 14 | user_role | 用户角色关联 |
-| 15 | alert_rule | 告警规则 |
-| 16 | alert_record | 告警记录 |
-| 17 | circuit_breaker | 熔断记录 |
-| 18 | operation_log | 操作日志 |
-| 19 | gray_rule | 灰度规则 |
+| 9 | api_interface | 接口定义 |
+| 10 | call_record | 调用记录 (按月分区) |
+| 11 | billing_daily | 日账单 |
+| 12 | billing_rule | 计费规则 |
+| 13 | user_info | 用户 |
+| 14 | role_info | 角色 |
+| 15 | user_role | 用户角色关联 |
+| 16 | alert_rule | 告警规则 |
+| 17 | alert_record | 告警记录 |
+| 18 | circuit_breaker | 熔断记录 |
+| 19 | operation_log | 操作日志 |
+| 20 | gray_rule | 灰度规则 |
 
 ---
 

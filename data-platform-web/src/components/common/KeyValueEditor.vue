@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { computed } from 'vue'
 import { ElButton, ElInput, ElSwitch, ElSelect, ElOption, ElTooltip, ElMessage } from 'element-plus'
 
 export interface KeyValueItem {
@@ -37,18 +37,14 @@ const emit = defineEmits<{
   'change': [value: KeyValueItem[]]
 }>()
 
-const items = ref<KeyValueItem[]>([])
+// 直接使用 computed，不维护内部副本
+const items = computed(() => props.modelValue || [])
 
-// 同步外部值
-watch(() => props.modelValue, (val) => {
-  items.value = val ? [...val] : []
-}, { immediate: true, deep: true })
-
-// 监听内部变化并同步
-watch(items, (val) => {
-  emit('update:modelValue', val)
-  emit('change', val)
-}, { deep: true })
+// 通知父组件更新
+function updateItems(newItems: KeyValueItem[]) {
+  emit('update:modelValue', newItems)
+  emit('change', newItems)
+}
 
 // 检查是否有重复键
 const duplicateKeys = computed(() => {
@@ -61,38 +57,49 @@ const duplicateKeys = computed(() => {
   return Object.keys(keyCounts).filter(key => keyCounts[key] > 1)
 })
 
+// 更新单项字段
+function updateItemField(index: number, field: 'key' | 'value' | 'enabled', value: string | boolean) {
+  const newItems = [...items.value]
+  newItems[index] = { ...newItems[index], [field]: value }
+  updateItems(newItems)
+}
+
 // 添加新项
-const addItem = () => {
+function addItem() {
   if (items.value.length >= props.maxItems) {
     ElMessage.warning(`最多添加 ${props.maxItems} 项`)
     return
   }
-  items.value.push({
+  updateItems([...items.value, {
     key: '',
     value: '',
     enabled: true,
     description: ''
-  })
+  }])
 }
 
 // 删除项
-const removeItem = (index: number) => {
-  items.value.splice(index, 1)
+function removeItem(index: number) {
+  const newItems = [...items.value]
+  newItems.splice(index, 1)
+  updateItems(newItems)
 }
 
 // 复制项
-const copyItem = (index: number) => {
-  const item = items.value[index]
-  items.value.splice(index + 1, 0, { ...item })
+function copyItem(index: number) {
+  const newItems = [...items.value]
+  const item = newItems[index]
+  newItems.splice(index + 1, 0, { ...item })
+  updateItems(newItems)
 }
 
 // 清空所有
-const clearAll = () => {
-  items.value = []
+function clearAll() {
+  updateItems([])
 }
 
 // 导入 JSON
-const importJson = () => {
+function importJson() {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = '.json'
@@ -103,11 +110,12 @@ const importJson = () => {
       const text = await file.text()
       const json = JSON.parse(text)
       if (typeof json === 'object' && json !== null) {
-        items.value = Object.entries(json).map(([key, value]) => ({
+        const newItems = Object.entries(json).map(([key, value]) => ({
           key,
           value: String(value),
           enabled: true
         }))
+        updateItems(newItems)
         ElMessage.success('导入成功')
       }
     } catch {
@@ -118,7 +126,7 @@ const importJson = () => {
 }
 
 // 导出 JSON
-const exportJson = () => {
+function exportJson() {
   const json: Record<string, string> = {}
   items.value.filter(item => item.enabled).forEach(item => {
     json[item.key] = item.value
@@ -133,7 +141,7 @@ const exportJson = () => {
 }
 
 // 获取 JSON 字符串
-const getJsonString = () => {
+function getJsonString() {
   const json: Record<string, string> = {}
   items.value.filter(item => item.enabled && item.key).forEach(item => {
     json[item.key] = item.value
@@ -141,17 +149,6 @@ const getJsonString = () => {
   return JSON.stringify(json)
 }
 
-// 预设键选择
-const handlePresetKey = (index: number, value: string) => {
-  items.value[index].key = value
-}
-
-// 值模板选择
-const handleValueTemplate = (index: number, value: string) => {
-  items.value[index].value = value
-}
-
-// 暴露方法
 defineExpose({
   getJsonString,
   clearAll,
@@ -215,12 +212,12 @@ defineExpose({
         <div class="col-key">
           <el-select
             v-if="presetOptions && presetOptions.length > 0"
-            v-model="item.key"
+            :model-value="item.key"
             filterable
             allow-create
             placeholder="选择或输入"
             size="small"
-            @change="(val: string) => handlePresetKey(index, val)"
+            @update:model-value="(val: string) => updateItemField(index, 'key', val)"
           >
             <el-option
               v-for="opt in presetOptions"
@@ -231,9 +228,10 @@ defineExpose({
           </el-select>
           <el-input
             v-else
-            v-model="item.key"
+            :model-value="item.key"
             :placeholder="placeholder.key || '键'"
             size="small"
+            @update:model-value="(val: string) => updateItemField(index, 'key', val)"
           />
           <el-tooltip v-if="duplicateKeys.includes(item.key) && !allowDuplicateKeys" content="存在重复键" placement="top">
             <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -247,12 +245,12 @@ defineExpose({
         <div class="col-value">
           <el-select
             v-if="valueTemplates && valueTemplates.length > 0"
-            v-model="item.value"
+            :model-value="item.value"
             filterable
             allow-create
             placeholder="选择或输入"
             size="small"
-            @change="(val: string) => handleValueTemplate(index, val)"
+            @update:model-value="(val: string) => updateItemField(index, 'value', val)"
           >
             <el-option
               v-for="opt in valueTemplates"
@@ -263,15 +261,20 @@ defineExpose({
           </el-select>
           <el-input
             v-else
-            v-model="item.value"
+            :model-value="item.value"
             :placeholder="placeholder.value || '值'"
             size="small"
+            @update:model-value="(val: string) => updateItemField(index, 'value', val)"
           />
         </div>
 
         <!-- 启用开关 -->
         <div v-if="showEnable" class="col-enabled">
-          <el-switch v-model="item.enabled" size="small" />
+          <el-switch
+            :model-value="item.enabled"
+            size="small"
+            @update:model-value="(val) => updateItemField(index, 'enabled', val as boolean)"
+          />
         </div>
 
         <!-- 操作按钮 -->

@@ -8,12 +8,14 @@ import com.dataplatform.common.log.OperationLogService;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.log.entity.OperationLog;
 import com.dataplatform.log.mapper.OperationLogMapper;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
 @Service
+@Primary
 public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> implements OperationLogService {
 
     public PageResult<OperationLog> list(String keyword, String module, String operation,

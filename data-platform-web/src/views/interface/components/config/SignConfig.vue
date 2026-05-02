@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { computed } from 'vue'
 import { ElInput, ElRadioGroup, ElRadioButton, ElFormItem, ElCheckbox, ElCheckboxGroup, ElMessage } from 'element-plus'
 import type { SignType } from '@/types'
 
@@ -24,28 +24,50 @@ const emit = defineEmits<{
   'change': [value: SignConfigData]
 }>()
 
-const config = ref<SignConfigData>({ ...props.modelValue })
+// 直接使用 computed，不维护内部副本
+const config = computed(() => props.modelValue)
 
-// 同步外部值
-watch(() => props.modelValue, (val) => {
-  config.value = { ...val }
-}, { immediate: true, deep: true })
+// 更新配置
+function updateConfig(updates: Partial<SignConfigData>) {
+  const newConfig = { ...config.value, ...updates }
+  emit('update:modelValue', newConfig)
+  emit('change', newConfig)
+}
 
-// 监听内部变化并同步
-watch(config, (val) => {
-  emit('update:modelValue', val)
-  emit('change', val)
-}, { deep: true })
-
-// 认证类型变更时重置配置
-watch(() => config.value.type, (newType) => {
+// 更新类型（重置其他字段）
+function updateType(newType: SignType) {
   const base: SignConfigData = { type: newType }
   if (newType !== 'NONE') {
     base.secretKey = ''
     base.signFields = []
   }
-  config.value = base
-})
+  emit('update:modelValue', base)
+  emit('change', base)
+}
+
+// 更新签名字段
+function updateSignFields(fields: string[]) {
+  updateConfig({ signFields: fields })
+}
+
+// 移除签名字段
+function removeField(field: string) {
+  const newFields = config.value.signFields?.filter(f => f !== field) || []
+  updateConfig({ signFields: newFields })
+}
+
+// 自定义字段输入（本地状态，不影响父组件）
+const customFieldInput = ref('')
+function addCustomField() {
+  if (!customFieldInput.value.trim()) return
+  if (config.value.signFields?.includes(customFieldInput.value)) {
+    ElMessage.warning('字段已存在')
+    return
+  }
+  const newFields = [...(config.value.signFields || []), customFieldInput.value.trim()]
+  updateConfig({ signFields: newFields })
+  customFieldInput.value = ''
+}
 
 // 签名类型选项
 const signTypeOptions = [
@@ -78,24 +100,6 @@ const selectableFields = computed(() => {
   })
   return fields
 })
-
-// 添加自定义字段
-const customField = ref('')
-const addCustomField = () => {
-  if (!customField.value.trim()) return
-  if (config.value.signFields?.includes(customField.value)) {
-    ElMessage.warning('字段已存在')
-    return
-  }
-  config.value.signFields = config.value.signFields || []
-  config.value.signFields.push(customField.value.trim())
-  customField.value = ''
-}
-
-// 移除字段
-const removeField = (field: string) => {
-  config.value.signFields = config.value.signFields?.filter(f => f !== field) || []
-}
 
 // 生成签名示例
 const generateSignExample = computed(() => {
@@ -142,7 +146,7 @@ const generateSignExample = computed(() => {
 
     <!-- 签名类型选择 -->
     <el-form-item label="签名方式">
-      <el-radio-group v-model="config.type">
+      <el-radio-group :model-value="config.type" @update:model-value="(val) => updateType(val as SignType)">
         <el-radio-button
           v-for="opt in signTypeOptions"
           :key="opt.value"
@@ -160,9 +164,10 @@ const generateSignExample = computed(() => {
         <!-- 密钥配置 -->
         <el-form-item label="密钥">
           <el-input
-            v-model="config.secretKey"
+            :model-value="config.secretKey"
             :placeholder="config.type === 'HMAC_SHA256' ? '输入密钥或使用变量 ${vendor.sign.key}' : '输入盐值或使用变量 ${salt}'"
             show-password
+            @update:model-value="(val: string) => updateConfig({ secretKey: val })"
           />
           <div class="form-hint">
             支持从配置中心引用变量：${vendor.sign.key}、${salt}
@@ -190,7 +195,10 @@ const generateSignExample = computed(() => {
 
             <!-- 快捷选择 -->
             <div class="quick-select">
-              <el-checkbox-group v-model="config.signFields">
+              <el-checkbox-group
+                :model-value="config.signFields || []"
+                @update:model-value="(val) => updateSignFields(val as string[])"
+              >
                 <el-checkbox
                   v-for="item in selectableFields"
                   :key="item.value"
@@ -204,7 +212,7 @@ const generateSignExample = computed(() => {
             <!-- 自定义添加 -->
             <div class="custom-field">
               <el-input
-                v-model="customField"
+                v-model="customFieldInput"
                 placeholder="自定义字段名"
                 size="small"
                 @keyup.enter="addCustomField"

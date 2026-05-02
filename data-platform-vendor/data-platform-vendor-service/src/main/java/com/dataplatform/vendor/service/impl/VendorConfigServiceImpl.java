@@ -28,6 +28,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
 
     private static final String SECRET_KEY_CACHE_PREFIX = "vendor:secret:";
     private static final String VENDOR_INFO_CACHE_PREFIX = "vendor:info:";
+    private static final String DATA_TYPE_CACHE_PREFIX = "vendor:dataType:";
     private static final long CACHE_TTL_SECONDS = 300;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -54,9 +55,14 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
 
     @Override
     public VendorConfig getByVendorAndDataType(Long vendorId, String dataType) {
+        DataType dataTypeEntity = getDataTypeByCode(dataType);
+        if (dataTypeEntity == null) {
+            return null;
+        }
+
         return getOne(new LambdaQueryWrapper<VendorConfig>()
             .eq(VendorConfig::getVendorId, vendorId)
-            .eq(VendorConfig::getDataTypeCode, dataType)
+            .eq(VendorConfig::getDataTypeId, dataTypeEntity.getId())
             .eq(VendorConfig::getStatus, StatusConstants.ACTIVE));
     }
 
@@ -67,10 +73,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
             return null;
         }
 
-        DataType dataType = dataTypeMapper.selectOne(
-            new LambdaQueryWrapper<DataType>()
-                .eq(DataType::getDataTypeCode, dataTypeCode)
-        );
+        DataType dataType = getDataTypeByCode(dataTypeCode);
         if (dataType == null) {
             return null;
         }
@@ -112,9 +115,14 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
 
     @Override
     public VendorConfig getByVendorIdAndDataTypeCode(Long vendorId, String dataTypeCode) {
+        DataType dataType = getDataTypeByCode(dataTypeCode);
+        if (dataType == null) {
+            return null;
+        }
+
         return getOne(new LambdaQueryWrapper<VendorConfig>()
             .eq(VendorConfig::getVendorId, vendorId)
-            .eq(VendorConfig::getDataTypeCode, dataTypeCode)
+            .eq(VendorConfig::getDataTypeId, dataType.getId())
             .eq(VendorConfig::getStatus, StatusConstants.ACTIVE));
     }
 
@@ -140,37 +148,55 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
         return null;
     }
 
-    private VendorInfo getVendorInfoByCode(String vendorCode) {
-        if (!StringUtils.hasText(vendorCode)) {
-            return null;
-        }
-
-        String cacheKey = VENDOR_INFO_CACHE_PREFIX + vendorCode;
+    /**
+     * 通用缓存查询方法
+     */
+    private <T> T getWithCache(String cacheKey, Class<T> type, java.util.function.Supplier<T> dbLoader) {
         String cached = redisTemplate.opsForValue().get(cacheKey);
         if (cached != null) {
             try {
-                return objectMapper.readValue(cached, VendorInfo.class);
+                return objectMapper.readValue(cached, type);
             } catch (Exception e) {
                 // Cache parse error, fall through to DB
             }
         }
 
-        VendorInfo vendorInfo = vendorInfoMapper.selectOne(
-            new LambdaQueryWrapper<VendorInfo>()
-                .eq(VendorInfo::getVendorCode, vendorCode)
-                .eq(VendorInfo::getStatus, StatusConstants.ACTIVE)
-        );
-
-        if (vendorInfo != null) {
+        T entity = dbLoader.get();
+        if (entity != null) {
             try {
                 redisTemplate.opsForValue().set(cacheKey,
-                    objectMapper.writeValueAsString(vendorInfo),
+                    objectMapper.writeValueAsString(entity),
                     CACHE_TTL_SECONDS, TimeUnit.SECONDS);
             } catch (Exception e) {
                 // Cache write error, ignore
             }
         }
 
-        return vendorInfo;
+        return entity;
+    }
+
+    private DataType getDataTypeByCode(String dataTypeCode) {
+        if (!StringUtils.hasText(dataTypeCode)) {
+            return null;
+        }
+        return getWithCache(DATA_TYPE_CACHE_PREFIX + dataTypeCode, DataType.class, () ->
+            dataTypeMapper.selectOne(
+                new LambdaQueryWrapper<DataType>()
+                    .eq(DataType::getDataTypeCode, dataTypeCode)
+            )
+        );
+    }
+
+    private VendorInfo getVendorInfoByCode(String vendorCode) {
+        if (!StringUtils.hasText(vendorCode)) {
+            return null;
+        }
+        return getWithCache(VENDOR_INFO_CACHE_PREFIX + vendorCode, VendorInfo.class, () ->
+            vendorInfoMapper.selectOne(
+                new LambdaQueryWrapper<VendorInfo>()
+                    .eq(VendorInfo::getVendorCode, vendorCode)
+                    .eq(VendorInfo::getStatus, StatusConstants.ACTIVE)
+            )
+        );
     }
 }

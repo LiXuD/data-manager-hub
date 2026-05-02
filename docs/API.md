@@ -37,28 +37,28 @@ Content-Type: application/json
 
 ---
 
-## 数据类型管理 (/data-type)
+## 数据类型管理 (/datatype)
 
 > 数据类型功能已合并到厂商服务 (vendor-service)
 
 ### 获取数据类型列表
 
 ```http
-GET /data-type/list?page=1&pageSize=10
+GET /datatype/list?page=1&pageSize=10
 Authorization: Bearer {token}
 ```
 
 ### 获取数据类型详情
 
 ```http
-GET /data-type/{id}
+GET /datatype/{id}
 Authorization: Bearer {token}
 ```
 
 ### 创建数据类型
 
 ```http
-POST /data-type
+POST /datatype
 Authorization: Bearer {token}
 Content-Type: application/json
 
@@ -72,7 +72,7 @@ Content-Type: application/json
 ### 更新数据类型
 
 ```http
-PUT /data-type/{id}
+PUT /datatype/{id}
 Authorization: Bearer {token}
 Content-Type: application/json
 
@@ -84,14 +84,14 @@ Content-Type: application/json
 ### 删除数据类型
 
 ```http
-DELETE /data-type/{id}
+DELETE /datatype/{id}
 Authorization: Bearer {token}
 ```
 
 ### 更新数据类型状态
 
 ```http
-PATCH /data-type/{id}/status
+PATCH /datatype/{id}/status
 Authorization: Bearer {token}
 Content-Type: application/json
 

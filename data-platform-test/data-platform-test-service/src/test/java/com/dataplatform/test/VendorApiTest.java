@@ -230,7 +230,7 @@ public class VendorApiTest extends BaseTest {
             .queryParam("page", 1)
             .queryParam("pageSize", 10)
             .when()
-            .get("/data-type/list");
+            .get("/datatype/list");
 
         verifySuccess(response);
     }
@@ -243,7 +243,7 @@ public class VendorApiTest extends BaseTest {
     public void testGetDataTypeList_Unauthorized() {
         given()
             .when()
-            .get("/data-type/list")
+            .get("/datatype/list")
             .then()
             .statusCode(401);
     }
@@ -256,7 +256,7 @@ public class VendorApiTest extends BaseTest {
     public void testGetDataTypeById_Success() {
         Response response = getAuthRequest()
             .when()
-            .get("/data-type/1");
+            .get("/datatype/1");
 
         if (response.getStatusCode() == 200) {
             verifySuccess(response);
@@ -273,7 +273,7 @@ public class VendorApiTest extends BaseTest {
     public void testGetDataTypeById_NotFound() {
         Response response = getAuthRequest()
             .when()
-            .get("/data-type/" + NON_EXISTENT_ID);
+            .get("/datatype/" + NON_EXISTENT_ID);
 
         response.then().statusCode(anyOf(is(404), is(400)));
     }
@@ -292,7 +292,7 @@ public class VendorApiTest extends BaseTest {
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .post("/data-type");
+            .post("/datatype");
 
         verifySuccess(response);
 
@@ -314,7 +314,7 @@ public class VendorApiTest extends BaseTest {
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .post("/data-type");
+            .post("/datatype");
 
         response.then().statusCode(anyOf(is(400), is(500)));
     }
@@ -332,7 +332,7 @@ public class VendorApiTest extends BaseTest {
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .post("/data-type");
+            .post("/datatype");
 
         response.then().statusCode(anyOf(is(400), is(409)));
     }
@@ -354,7 +354,7 @@ public class VendorApiTest extends BaseTest {
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .put("/data-type/" + testDataTypeId);
+            .put("/datatype/" + testDataTypeId);
 
         verifySuccess(response);
     }
@@ -372,7 +372,7 @@ public class VendorApiTest extends BaseTest {
 
         Response response = getAuthRequest()
             .when()
-            .delete("/data-type/" + testDataTypeId);
+            .delete("/datatype/" + testDataTypeId);
 
         response.then().statusCode(anyOf(is(200), is(204)));
     }
@@ -386,7 +386,7 @@ public class VendorApiTest extends BaseTest {
         Response response = getAuthRequest()
             .body(Map.of("status", "inactive"))
             .when()
-            .patch("/data-type/1/status");
+            .patch("/datatype/1/status");
 
         if (response.getStatusCode() == 200) {
             verifySuccess(response);

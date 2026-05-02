@@ -2,10 +2,10 @@
 -- 支持多种认证方式：无认证、Basic Auth、Bearer Token、API Key
 
 ALTER TABLE vendor_config
-ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20) DEFAULT 'NONE' COMMENT '认证类型: NONE, BASIC, BEARER, API_KEY';
+ADD COLUMN IF NOT EXISTS auth_type VARCHAR(20) DEFAULT 'NONE';
 
 ALTER TABLE vendor_config
-ADD COLUMN IF NOT EXISTS auth_config TEXT COMMENT 'JSON格式认证配置';
+ADD COLUMN IF NOT EXISTS auth_config TEXT;
 
 -- 添加注释说明
 COMMENT ON COLUMN vendor_config.auth_type IS '认证类型: NONE-无认证, BASIC-Basic Auth, BEARER-Bearer Token, API_KEY-API密钥';

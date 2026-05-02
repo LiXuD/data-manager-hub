@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { computed } from 'vue'
 import { ElInput, ElRadioGroup, ElRadioButton, ElFormItem } from 'element-plus'
 import type { AuthConfig, AuthType } from '@/types'
 
@@ -16,18 +16,18 @@ const emit = defineEmits<{
   'change': [value: AuthConfig]
 }>()
 
-const config = ref<AuthConfig>({ ...props.modelValue })
+// 直接使用 computed，不维护内部副本
+const config = computed(() => props.modelValue)
 
-watch(() => props.modelValue, (val) => {
-  config.value = { ...val }
-}, { immediate: true, deep: true })
+// 更新配置
+function updateConfig(updates: Partial<AuthConfig>) {
+  const newConfig = { ...config.value, ...updates }
+  emit('update:modelValue', newConfig)
+  emit('change', newConfig)
+}
 
-watch(config, (val) => {
-  emit('update:modelValue', val)
-  emit('change', val)
-}, { deep: true })
-
-watch(() => config.value.type, (newType) => {
+// 更新类型（重置其他字段）
+function updateType(newType: AuthType) {
   const base: AuthConfig = { type: newType }
   switch (newType) {
     case 'BASIC':
@@ -43,8 +43,9 @@ watch(() => config.value.type, (newType) => {
       base.apiKeyLocation = 'header'
       break
   }
-  config.value = base
-})
+  emit('update:modelValue', base)
+  emit('change', base)
+}
 
 const authTypeOptions: { label: string; value: AuthType; desc: string }[] = [
   { label: '无认证', value: 'NONE', desc: '不需要任何认证' },
@@ -89,6 +90,7 @@ const getPreviewString = computed(() => {
       return ''
   }
 })
+
 </script>
 
 <template>
@@ -99,7 +101,7 @@ const getPreviewString = computed(() => {
     </div>
 
     <el-form-item label="认证方式">
-      <el-radio-group v-model="config.type">
+      <el-radio-group :model-value="config.type" @update:model-value="(val) => updateType(val as AuthType)">
         <el-radio-button
           v-for="opt in authTypeOptions"
           :key="opt.value"
@@ -114,14 +116,19 @@ const getPreviewString = computed(() => {
     <template v-if="config.type === 'BASIC'">
       <div class="auth-form">
         <el-form-item label="用户名">
-          <el-input v-model="config.username" placeholder="请输入用户名" />
+          <el-input
+            :model-value="config.username"
+            placeholder="请输入用户名"
+            @update:model-value="(val: string) => updateConfig({ username: val })"
+          />
         </el-form-item>
         <el-form-item label="密码">
           <el-input
-            v-model="config.password"
+            :model-value="config.password"
             type="password"
             placeholder="请输入密码"
             show-password
+            @update:model-value="(val: string) => updateConfig({ password: val })"
           />
         </el-form-item>
       </div>
@@ -131,10 +138,11 @@ const getPreviewString = computed(() => {
       <div class="auth-form">
         <el-form-item label="Token">
           <el-input
-            v-model="config.token"
+            :model-value="config.token"
             type="textarea"
             :rows="3"
             placeholder="请输入 Bearer Token，支持变量 ${token}"
+            @update:model-value="(val: string) => updateConfig({ token: val })"
           />
         </el-form-item>
         <div class="form-hint">
@@ -146,17 +154,25 @@ const getPreviewString = computed(() => {
     <template v-else-if="config.type === 'API_KEY'">
       <div class="auth-form">
         <el-form-item label="Key 名称">
-          <el-input v-model="config.apiKeyName" placeholder="如: X-API-Key" />
+          <el-input
+            :model-value="config.apiKeyName"
+            placeholder="如: X-API-Key"
+            @update:model-value="(val: string) => updateConfig({ apiKeyName: val })"
+          />
         </el-form-item>
         <el-form-item label="Key 值">
           <el-input
-            v-model="config.apiKeyValue"
+            :model-value="config.apiKeyValue"
             placeholder="请输入 API Key 值，支持变量 ${apiKey}"
             show-password
+            @update:model-value="(val: string) => updateConfig({ apiKeyValue: val })"
           />
         </el-form-item>
         <el-form-item label="传递位置">
-          <el-radio-group v-model="config.apiKeyLocation">
+          <el-radio-group
+            :model-value="config.apiKeyLocation"
+            @update:model-value="(val) => updateConfig({ apiKeyLocation: val as 'header' | 'query' })"
+          >
             <el-radio-button
               v-for="opt in apiKeyLocationOptions"
               :key="opt.value"
