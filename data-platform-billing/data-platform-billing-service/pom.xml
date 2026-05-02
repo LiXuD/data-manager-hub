@@ -57,6 +57,11 @@
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- Sa-Token (required for UserContext in common) -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+        </dependency>
         <!-- OpenFeign for RemoteOperationLogService -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>

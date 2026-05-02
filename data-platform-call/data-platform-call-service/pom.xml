@@ -99,6 +99,11 @@
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
         </dependency>
+        <!-- Sa-Token (required for UserContext in common) -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+        </dependency>
         <!-- Log API for operation logging -->
         <dependency>
             <groupId>com.dataplatform</groupId>

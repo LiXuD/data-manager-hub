@@ -85,6 +85,12 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- Sa-Token (required for UserContext in common) -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
