@@ -1,5 +1,6 @@
 package com.dataplatform.iam.controller;
 
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
@@ -10,8 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -58,7 +57,7 @@ public class RoleController {
         }
 
         role.setId(null);
-        role.setStatus("active");
+        role.setStatus(CommonStatus.ACTIVE);
         roleService.save(role);
         return ResponseEntity.ok(Result.success(role));
     }
@@ -93,15 +92,10 @@ public class RoleController {
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
 
-        if (status == null || status.trim().isEmpty()) {
+        CommonStatus statusEnum = CommonStatus.fromCode(status);
+        if (statusEnum == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Result.error(400, "状态不能为空"));
-        }
-
-        List<String> validStatuses = Arrays.asList("active", "inactive");
-        if (!validStatuses.contains(status)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Result.error(400, "无效的状态值"));
+                .body(Result.error(400, "无效的状态值，必须是active或inactive"));
         }
 
         Role existing = roleService.getById(id);
@@ -112,7 +106,7 @@ public class RoleController {
 
         Role role = new Role();
         role.setId(id);
-        role.setStatus(status);
+        role.setStatus(statusEnum);
         roleService.updateById(role);
         return ResponseEntity.ok(Result.success(null));
     }

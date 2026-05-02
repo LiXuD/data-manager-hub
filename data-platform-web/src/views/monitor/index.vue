@@ -179,7 +179,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAlertRuleList, deleteAlertRule, updateAlertRuleStatus } from '@/api/monitor'
+import { getAlertRuleList, deleteAlertRule } from '@/api/monitor'
 import type { AlertRule } from '@/types'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 

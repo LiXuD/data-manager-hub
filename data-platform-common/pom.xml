@@ -63,11 +63,10 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Spring AOP (for OperationLog aspect) -->
+        <!-- Spring AOP (for OperationLog aspect) - 必须传递给使用 common 的服务 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
-            <scope>provided</scope>
         </dependency>
 
         <!-- Sa-Token (provided - 使用此依赖的模块需自行引入) -->

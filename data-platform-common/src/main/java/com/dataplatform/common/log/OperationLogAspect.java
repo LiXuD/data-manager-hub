@@ -24,7 +24,7 @@ public class OperationLogAspect {
     private static final Logger log = LoggerFactory.getLogger(OperationLogAspect.class);
     private static final int MAX_LOG_LENGTH = 8192;
 
-    @Autowired
+    @Autowired(required = false)
     private OperationLogService operationLogService;
 
     @Autowired(required = false)

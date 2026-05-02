@@ -1,6 +1,7 @@
 package com.dataplatform.caller.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.enums.ApiKeyStatus;
 import java.time.LocalDateTime;
 
 
@@ -17,7 +18,7 @@ public class ApiKey {
     private Integer rateLimit;
     private Long quotaLimit;
     private Long quotaUsed;
-    private String status;
+    private ApiKeyStatus status;
     private LocalDateTime expireTime;
     
     @TableField(fill = FieldFill.INSERT)
@@ -46,8 +47,8 @@ public class ApiKey {
     public void setQuotaLimit(Long quotaLimit) { this.quotaLimit = quotaLimit; }
     public Long getQuotaUsed() { return quotaUsed; }
     public void setQuotaUsed(Long quotaUsed) { this.quotaUsed = quotaUsed; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public ApiKeyStatus getStatus() { return status; }
+    public void setStatus(ApiKeyStatus status) { this.status = status; }
     public LocalDateTime getExpireTime() { return expireTime; }
     public void setExpireTime(LocalDateTime expireTime) { this.expireTime = expireTime; }
     public LocalDateTime getCreatedAt() { return createdAt; }

@@ -91,6 +91,12 @@
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- Log API for operation logging -->
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-log-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <build>

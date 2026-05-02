@@ -88,7 +88,7 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'active' ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
+            <el-tag :type="row.status === COMMON_STATUS.ACTIVE ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="80">
@@ -106,6 +106,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCallerList, deleteCaller, getApiKeyList, createApiKey, deleteApiKey, updateCallerStatus } from '@/api/caller'
 import type { Caller, ApiKey } from '@/api/caller'
+import { COMMON_STATUS } from '@/constants'
 
 const searchForm = reactive({ keyword: '', status: '' })
 const tableData = ref<Caller[]>([])
@@ -135,10 +136,10 @@ const handleCreateApiKey = async () => { const res = await createApiKey(currentC
 const handleDeleteApiKey = async (id: number) => { await deleteApiKey(id); ElMessage.success('删除成功'); apiKeyList.value = apiKeyList.value.filter(k => k.id !== id) }
 const handleStatusChange = async (row: Caller) => {
   try {
-    await updateCallerStatus(row.id!, row.status as 'active' | 'inactive')
-    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+    await updateCallerStatus(row.id!, row.status as typeof COMMON_STATUS.ACTIVE | typeof COMMON_STATUS.INACTIVE)
+    ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
   } catch (error) {
-    row.status = row.status === 'active' ? 'inactive' : 'active'
+    row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
     ElMessage.error('状态更新失败')
   }
 }

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.dataplatform.common.enums.AlertStatus;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -24,7 +25,7 @@ public class AlertRule {
     private Integer timeWindowMinutes;
     @TableField("notification_channels")
     private String notifyChannels;
-    private String status;
+    private AlertStatus status;
     @TableField("severity")
     private String severity;
     @TableField("tenant_id")
@@ -62,8 +63,8 @@ public class AlertRule {
     public void setTimeWindowMinutes(Integer timeWindowMinutes) { this.timeWindowMinutes = timeWindowMinutes; }
     public String getNotifyChannels() { return notifyChannels; }
     public void setNotifyChannels(String notifyChannels) { this.notifyChannels = notifyChannels; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public AlertStatus getStatus() { return status; }
+    public void setStatus(AlertStatus status) { this.status = status; }
     public String getSeverity() { return severity; }
     public void setSeverity(String severity) { this.severity = severity; }
     public Long getTenantId() { return tenantId; }

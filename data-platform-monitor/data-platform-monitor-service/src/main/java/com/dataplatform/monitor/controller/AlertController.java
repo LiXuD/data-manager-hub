@@ -1,6 +1,7 @@
 package com.dataplatform.monitor.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.dataplatform.common.enums.AlertStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
@@ -76,7 +77,7 @@ public class AlertController {
         }
 
         rule.setId(null);
-        rule.setStatus("active");
+        rule.setStatus(AlertStatus.ACTIVE);
         alertService.saveRule(rule);
         return ResponseEntity.ok(Result.success(rule));
     }

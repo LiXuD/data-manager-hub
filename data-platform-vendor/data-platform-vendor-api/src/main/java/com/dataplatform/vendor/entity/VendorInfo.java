@@ -1,6 +1,7 @@
 package com.dataplatform.vendor.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.enums.CommonStatus;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -15,7 +16,7 @@ public class VendorInfo {
     private String vendorCode;
     private String vendorName;
     private String vendorType;
-    private String status;
+    private CommonStatus status;
     private String contactPerson;
     private String contactPhone;
     private String contactEmail;
@@ -49,8 +50,8 @@ public class VendorInfo {
     public void setVendorName(String vendorName) { this.vendorName = vendorName; }
     public String getVendorType() { return vendorType; }
     public void setVendorType(String vendorType) { this.vendorType = vendorType; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public CommonStatus getStatus() { return status; }
+    public void setStatus(CommonStatus status) { this.status = status; }
     public String getContactPerson() { return contactPerson; }
     public void setContactPerson(String contactPerson) { this.contactPerson = contactPerson; }
     public String getContactPhone() { return contactPhone; }

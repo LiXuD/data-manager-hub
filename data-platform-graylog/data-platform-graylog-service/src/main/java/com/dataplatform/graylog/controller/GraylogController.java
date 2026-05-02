@@ -1,5 +1,6 @@
 package com.dataplatform.graylog.controller;
 
+import com.dataplatform.common.enums.GrayRuleStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
@@ -18,8 +19,6 @@ import java.util.Map;
 public class GraylogController {
     @Autowired
     private GraylogService graylogService;
-
-    private static final List<String> VALID_STATUSES = List.of("active", "inactive", "pending");
 
     @GetMapping("/list")
     public PageResult<GrayRule> list(
@@ -49,7 +48,7 @@ public class GraylogController {
                     .body(Result.error(400, "ruleName不能为空"));
         }
         rule.setId(null);
-        rule.setStatus("active");
+        rule.setStatus(GrayRuleStatus.ACTIVE);
         graylogService.save(rule);
         return ResponseEntity.ok(Result.success(rule));
     }
@@ -95,9 +94,10 @@ public class GraylogController {
         String status = body.get("status");
 
         // 验证状态值
-        if (status == null || !VALID_STATUSES.contains(status)) {
+        GrayRuleStatus statusEnum = GrayRuleStatus.fromCode(status);
+        if (statusEnum == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Result.error(400, "无效的状态值，有效值: " + VALID_STATUSES));
+                    .body(Result.error(400, "无效的状态值，有效值: active, inactive, expired, pending"));
         }
 
         GrayRule existing = graylogService.getById(id);
@@ -108,7 +108,7 @@ public class GraylogController {
 
         GrayRule rule = new GrayRule();
         rule.setId(id);
-        rule.setStatus(status);
+        rule.setStatus(statusEnum);
         graylogService.updateById(rule);
         return ResponseEntity.ok(Result.success(null));
     }

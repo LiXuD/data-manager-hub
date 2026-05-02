@@ -2,6 +2,7 @@ package com.dataplatform.vendor.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
@@ -102,7 +103,7 @@ public class DataTypeController {
         
         dataType.setId(null);
         if (dataType.getStatus() == null) {
-            dataType.setStatus("active");
+            dataType.setStatus(CommonStatus.ACTIVE);
         }
         dataType.setDeleted(false);
         dataType.setCreatedAt(LocalDateTime.now());
@@ -158,7 +159,7 @@ public class DataTypeController {
 
         DataType dataType = new DataType();
         dataType.setId(id);
-        dataType.setStatus(status);
+        dataType.setStatus(CommonStatus.fromCode(status));
         dataType.setUpdatedAt(LocalDateTime.now());
         dataTypeMapper.updateById(dataType);
         return ResponseEntity.ok(Result.success(null));

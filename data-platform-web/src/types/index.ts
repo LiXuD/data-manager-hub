@@ -390,6 +390,116 @@ export interface QualityScore {
   checkedAt: string
 }
 
+// ===================== 接口配置相关类型 =====================
+
+// HTTP 方法类型
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
+
+// 认证类型
+export type AuthType = 'NONE' | 'BASIC' | 'BEARER' | 'API_KEY'
+
+// 签名类型
+export type SignType = 'NONE' | 'HMAC_SHA256' | 'MD5'
+
+// API 配置
+export interface ApiConfig {
+  url: string
+  method: HttpMethod
+  timeout: number
+  retryCount: number
+}
+
+// 请求头配置项
+export interface HeaderConfigItem {
+  key: string
+  value: string
+  enabled: boolean
+  description?: string
+}
+
+// 请求头配置（键值对形式）
+export type HeaderConfig = Record<string, string>
+
+// 参数映射配置
+export interface ParamsMapping {
+  request: Record<string, string>   // 内部字段 -> 厂商字段
+  response: Record<string, string>  // 厂商字段 -> 内部字段
+}
+
+// 映射项
+export interface MappingItem {
+  sourceField: string
+  targetField: string
+  transformType?: 'none' | 'jsonPath' | 'expression'
+  transformExpr?: string
+  defaultValue?: string
+}
+
+// 签名配置
+export interface SignConfig {
+  type: SignType
+  secretKey?: string
+  signFields?: string[]
+}
+
+// 认证配置
+export interface AuthConfig {
+  type: AuthType
+  // Basic Auth
+  username?: string
+  password?: string
+  // Bearer Token
+  token?: string
+  // API Key
+  apiKeyName?: string
+  apiKeyValue?: string
+  apiKeyLocation?: 'header' | 'query'
+}
+
+// 降级配置
+export interface FallbackConfig {
+  enabled: boolean
+  fallbackVendorId?: number
+  fallbackVendorCode?: string
+}
+
+// 熔断配置
+export interface CircuitBreakerConfig {
+  threshold: number      // 熔断阈值（连续失败次数）
+  timeout: number        // 熔断时间（秒）
+}
+
+// 厂商接口配置 - 关联厂商、数据类型和接口
+export interface VendorInterfaceConfig {
+  id: number
+  vendorId: number
+  vendorName?: string
+  dataTypeId: number
+  dataTypeName?: string
+  dataTypeCode?: string
+  interfaceId: number
+  interfaceName?: string
+  apiUrl: string
+  method: HttpMethod
+  timeout: number
+  retryCount: number
+  circuitThreshold: number
+  circuitTimeout: number
+  signType?: string
+  encryptType?: string
+  headerConfig?: string
+  requestTemplate?: string
+  responseMapping?: string
+  fallbackVendorId?: number
+  fallbackVendorName?: string
+  // 扩展字段
+  authType?: AuthType
+  authConfig?: string
+  status: 'active' | 'inactive'
+  createdAt: string
+  updatedAt: string
+}
+
 // 字段加密
 export interface EncryptedField {
   id: number

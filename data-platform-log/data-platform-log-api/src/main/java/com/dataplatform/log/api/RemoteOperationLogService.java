@@ -1,8 +1,7 @@
-package com.dataplatform.iam.log;
+package com.dataplatform.log.api;
 
 import com.dataplatform.common.log.OperationLogRecord;
 import com.dataplatform.common.log.OperationLogService;
-import com.dataplatform.log.api.LogClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +10,10 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Remote operation log service that sends logs to the log service via Feign.
+ * Auto-configured when LogClient is available.
+ */
 @Service
 public class RemoteOperationLogService implements OperationLogService {
 

@@ -116,6 +116,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { request } from '@/utils/request'
+import { COMMON_STATUS } from '@/constants'
 
 interface DataType { id: number; typeCode: string; typeName: string; category: string; description: string; status: string; createdAt: string }
 
@@ -126,7 +127,7 @@ const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 const searchForm = reactive({ typeName: '', category: '', status: '' })
 const dialogVisible = ref(false)
-const form = reactive({ id: null as number | null, typeCode: '', typeName: '', category: '', description: '', status: 'active' })
+const form = reactive({ id: null as number | null, typeCode: '', typeName: '', category: '', description: '', status: COMMON_STATUS.ACTIVE })
 
 const categoryOptions = [
   { label: '工商信息', value: 'business' },
@@ -208,9 +209,9 @@ const handleSubmit = async () => {
 const handleStatusChange = async (row: DataType) => {
   try {
     await request.patch(`/data-type/${row.id}/status`, { status: row.status })
-    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+    ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
   } catch (error) {
-    row.status = row.status === 'active' ? 'inactive' : 'active'
+    row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
     ElMessage.error('状态更新失败')
   }
 }

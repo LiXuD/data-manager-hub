@@ -2,10 +2,17 @@
  * 全局常量定义
  */
 
-// 用户状态
+// 从状态常量文件导出
+export * from './status'
+export * from './dataType'
+
+// 导入用于本地定义
+import { COMMON_STATUS } from './status'
+
+// 用户状态（兼容旧代码，推荐使用 COMMON_STATUS）
 export const USER_STATUS = {
-  ACTIVE: 'active',
-  INACTIVE: 'inactive'
+  ACTIVE: COMMON_STATUS.ACTIVE,
+  INACTIVE: COMMON_STATUS.INACTIVE
 } as const
 
 // 厂商类型

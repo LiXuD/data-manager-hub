@@ -1,5 +1,6 @@
 package com.dataplatform.vendor.controller;
 
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
@@ -62,7 +63,7 @@ public class VendorController {
         }
 
         vendor.setId(null);
-        vendor.setStatus("active");
+        vendor.setStatus(CommonStatus.ACTIVE);
         vendorService.save(vendor);
         return ResponseEntity.ok(Result.success(vendor));
     }
@@ -118,7 +119,7 @@ public class VendorController {
 
         VendorInfo vendor = new VendorInfo();
         vendor.setId(id);
-        vendor.setStatus(status);
+        vendor.setStatus(CommonStatus.fromCode(status));
         vendorService.updateById(vendor);
         return ResponseEntity.ok(Result.success(null));
     }

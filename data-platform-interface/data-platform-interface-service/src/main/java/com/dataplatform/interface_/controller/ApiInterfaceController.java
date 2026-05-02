@@ -1,6 +1,6 @@
 package com.dataplatform.interface_.controller;
 
-import com.dataplatform.common.constant.StatusConstants;
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
@@ -22,8 +22,6 @@ public class ApiInterfaceController {
 
     @Autowired
     private ApiInterfaceService apiInterfaceService;
-
-    private static final List<String> VALID_STATUSES = List.of(StatusConstants.ACTIVE, StatusConstants.INACTIVE);
 
     @GetMapping("/list")
     public PageResult<ApiInterface> list(
@@ -70,7 +68,7 @@ public class ApiInterfaceController {
 
         apiInterface.setId(null);
         if (apiInterface.getStatus() == null) {
-            apiInterface.setStatus(StatusConstants.ACTIVE);
+            apiInterface.setStatus(CommonStatus.ACTIVE);
         }
         if (apiInterface.getSort() == null) {
             apiInterface.setSort(0);
@@ -108,9 +106,10 @@ public class ApiInterfaceController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
-        if (status == null || !VALID_STATUSES.contains(status)) {
+        CommonStatus statusEnum = CommonStatus.fromCode(status);
+        if (statusEnum == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Result.error(400, "无效的状态值，有效值: " + VALID_STATUSES));
+                    .body(Result.error(400, "无效的状态值，有效值: active, inactive"));
         }
 
         ApiInterface existing = apiInterfaceService.getById(id);
@@ -121,7 +120,7 @@ public class ApiInterfaceController {
 
         ApiInterface apiInterface = new ApiInterface();
         apiInterface.setId(id);
-        apiInterface.setStatus(status);
+        apiInterface.setStatus(statusEnum);
         apiInterfaceService.updateById(apiInterface);
         return ResponseEntity.ok(Result.success(null));
     }

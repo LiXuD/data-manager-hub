@@ -2,7 +2,7 @@
 import { RouterView, useRouter, useRoute } from 'vue-router'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import { ElConfigProvider, ElMenu, ElMenuItem, ElSubMenu, ElAvatar, ElDropdown, ElDropdownItem, ElDropdownMenu, ElButton, ElBadge } from 'element-plus'
+import { ElConfigProvider, ElMenu, ElMenuItem, ElSubMenu, ElDropdown, ElDropdownItem, ElDropdownMenu, ElBadge } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { STORAGE_KEYS, THEME_MODE } from '@/constants'
 import { applyTheme, getStoredTheme } from '@/composables/useTheme'
@@ -59,7 +59,8 @@ const menuItems = [
     children: [
       { path: '/vendor', title: '厂商管理' },
       { path: '/caller', title: '调用方管理' },
-      { path: '/datatype', title: '数据类型' }
+      { path: '/datatype', title: '数据类型' },
+      { path: '/interface', title: '接口管理' }
     ]
   },
   {
@@ -122,12 +123,6 @@ const IconRelease = {
 }
 const IconDocument = {
   template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`
-}
-const IconFold = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>`
-}
-const IconUser = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
 }
 
 const icons: Record<string, { template: string }> = {

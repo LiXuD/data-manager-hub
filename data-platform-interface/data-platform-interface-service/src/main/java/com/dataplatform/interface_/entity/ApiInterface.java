@@ -1,6 +1,7 @@
 package com.dataplatform.interface_.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.enums.CommonStatus;
 import java.time.LocalDateTime;
 
 @TableName("api_interface")
@@ -17,7 +18,7 @@ public class ApiInterface {
     private String requestSchema;
     private String responseSchema;
     private Integer sort;
-    private String status;
+    private CommonStatus status;
 
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
@@ -53,8 +54,8 @@ public class ApiInterface {
     public void setResponseSchema(String responseSchema) { this.responseSchema = responseSchema; }
     public Integer getSort() { return sort; }
     public void setSort(Integer sort) { this.sort = sort; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public CommonStatus getStatus() { return status; }
+    public void setStatus(CommonStatus status) { this.status = status; }
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }

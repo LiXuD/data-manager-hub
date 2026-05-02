@@ -1,6 +1,7 @@
 package com.dataplatform.caller.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.enums.CommonStatus;
 import java.time.LocalDateTime;
 
 
@@ -15,7 +16,7 @@ public class CallerInfo {
     private Long tenantId;
     private String callerType;
     private String description;
-    private String status;
+    private CommonStatus status;
 
     @TableField(exist = false)
     private String contactPerson;
@@ -51,8 +52,8 @@ public class CallerInfo {
     public void setCallerType(String callerType) { this.callerType = callerType; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public CommonStatus getStatus() { return status; }
+    public void setStatus(CommonStatus status) { this.status = status; }
     public String getContactPerson() { return contactPerson; }
     public void setContactPerson(String contactPerson) { this.contactPerson = contactPerson; }
     public String getContactPhone() { return contactPhone; }

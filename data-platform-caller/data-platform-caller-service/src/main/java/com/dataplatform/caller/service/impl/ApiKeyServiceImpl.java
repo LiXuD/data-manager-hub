@@ -1,5 +1,6 @@
 package com.dataplatform.caller.service.impl;
 
+import com.dataplatform.common.enums.ApiKeyStatus;
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -26,7 +27,7 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         apiKey.setRateLimit(100);
         apiKey.setQuotaLimit(100000L);
         apiKey.setQuotaUsed(0L);
-        apiKey.setStatus("active");
+        apiKey.setStatus(ApiKeyStatus.ACTIVE);
         apiKey.setExpireTime(LocalDateTime.now().plusYears(1));
         save(apiKey);
         return apiKey;

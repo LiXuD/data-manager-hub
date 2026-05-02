@@ -1,6 +1,6 @@
 package com.dataplatform.caller.controller;
 
-import com.dataplatform.common.constant.StatusConstants;
+import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.caller.entity.ApiKey;
@@ -42,7 +42,7 @@ public class ApiKeyController {
         ApiKey apiKey = new ApiKey();
         apiKey.setCallerId(callerId);
         apiKey.setKeyName(name);
-        apiKey.setStatus(StatusConstants.ACTIVE);
+        apiKey.setStatus(ApiKeyStatus.ACTIVE);
         apiKeyService.save(apiKey);
         return ResponseEntity.ok(Result.success(apiKeyService.getById(apiKey.getId())));
     }
@@ -59,7 +59,7 @@ public class ApiKeyController {
         ApiKey apiKey = new ApiKey();
         apiKey.setCallerId(callerId);
         apiKey.setKeyName(name);
-        apiKey.setStatus(StatusConstants.ACTIVE);
+        apiKey.setStatus(ApiKeyStatus.ACTIVE);
         apiKeyService.save(apiKey);
         return ResponseEntity.ok(Result.success(apiKeyService.getById(apiKey.getId())));
     }
@@ -68,15 +68,16 @@ public class ApiKeyController {
     @PutMapping("/api-key/{id}/status")
     public Result<ApiKey> updateStatus(@PathVariable Long id, @RequestBody Map<String, Object> params) {
         String status = (String) params.get("status");
-        if (status == null || (!status.equals(StatusConstants.ACTIVE) && !status.equals(StatusConstants.INACTIVE))) {
-            return Result.error(400, "status必须是active或inactive");
+        ApiKeyStatus statusEnum = ApiKeyStatus.fromCode(status);
+        if (statusEnum == null) {
+            return Result.error(400, "status必须是active、expired或revoked");
         }
         ApiKey apiKey = apiKeyService.getById(id);
         if (apiKey == null) {
             return Result.error(404, "API Key不存在");
         }
-        apiKey.setStatus(status);
+        apiKey.setStatus(statusEnum);
         apiKeyService.updateById(apiKey);
-        return Result.success(apiKeyService.getById(id));
+        return Result.success(apiKey);
     }
 }

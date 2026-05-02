@@ -3,6 +3,7 @@ package com.dataplatform.graylog.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.dataplatform.common.enums.GrayRuleStatus;
 import java.time.LocalDateTime;
 
 @TableName("gray_rule")
@@ -16,7 +17,7 @@ public class GrayRule {
     private String conditionType;
     private String conditionValue;
     private String description;
-    private String status;
+    private GrayRuleStatus status;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private LocalDateTime createdAt;
@@ -38,8 +39,8 @@ public class GrayRule {
     public void setConditionValue(String conditionValue) { this.conditionValue = conditionValue; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public GrayRuleStatus getStatus() { return status; }
+    public void setStatus(GrayRuleStatus status) { this.status = status; }
     public LocalDateTime getStartTime() { return startTime; }
     public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
     public LocalDateTime getEndTime() { return endTime; }

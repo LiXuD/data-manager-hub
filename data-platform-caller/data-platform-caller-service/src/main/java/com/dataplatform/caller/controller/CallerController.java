@@ -1,6 +1,7 @@
 package com.dataplatform.caller.controller;
 
-import com.dataplatform.common.constant.StatusConstants;
+import com.dataplatform.common.enums.ApiKeyStatus;
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
@@ -62,7 +63,7 @@ public class CallerController {
         }
 
         caller.setId(null);
-        caller.setStatus(StatusConstants.ACTIVE);
+        caller.setStatus(CommonStatus.ACTIVE);
         callerService.save(caller);
         return ResponseEntity.ok(Result.success(caller));
     }
@@ -114,14 +115,14 @@ public class CallerController {
         ApiKey apiKey = new ApiKey();
         apiKey.setCallerId(callerId);
         apiKey.setKeyName(name);
-        apiKey.setStatus(StatusConstants.ACTIVE);
+        apiKey.setStatus(ApiKeyStatus.ACTIVE);
         apiKeyService.save(apiKey);
 
         Map<String, Object> result = new HashMap<>();
         result.put("id", apiKey.getId());
         result.put("callerId", callerId);
         result.put("keyName", name);
-        result.put("status", StatusConstants.ACTIVE);
+        result.put("status", ApiKeyStatus.ACTIVE.getCode());
 
         return ResponseEntity.ok(Result.success(result));
     }
@@ -130,9 +131,10 @@ public class CallerController {
     @PatchMapping("/api-key/{id}/status")
     public ResponseEntity<Result<Void>> updateApiKeyStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
-        if (status == null || (!status.equals(StatusConstants.ACTIVE) && !status.equals(StatusConstants.INACTIVE))) {
+        ApiKeyStatus statusEnum = ApiKeyStatus.fromCode(status);
+        if (statusEnum == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Result.error(400, "status必须是active或inactive"));
+                .body(Result.error(400, "status必须是有效的API Key状态"));
         }
 
         ApiKey apiKey = apiKeyService.getById(id);
@@ -140,7 +142,7 @@ public class CallerController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Result.error(404, "API Key不存在"));
         }
-        apiKey.setStatus(status);
+        apiKey.setStatus(statusEnum);
         apiKeyService.updateById(apiKey);
         return ResponseEntity.ok(Result.success(null));
     }
@@ -149,18 +151,12 @@ public class CallerController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
-
-        // 校验status有效性
-        if (status == null || status.trim().isEmpty()) {
+        CommonStatus statusEnum = CommonStatus.fromCode(status);
+        if (statusEnum == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Result.error(400, "状态不能为空"));
-        }
-        if (!status.equals(StatusConstants.ACTIVE) && !status.equals(StatusConstants.INACTIVE) && !status.equals(StatusConstants.SUSPENDED)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Result.error(400, "无效的状态值"));
+                .body(Result.error(400, "无效的状态值，必须是active或inactive"));
         }
 
-        // 检查是否存在
         CallerInfo existing = callerService.getById(id);
         if (existing == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -169,7 +165,7 @@ public class CallerController {
 
         CallerInfo caller = new CallerInfo();
         caller.setId(id);
-        caller.setStatus(status);
+        caller.setStatus(statusEnum);
         callerService.updateById(caller);
         return ResponseEntity.ok(Result.success(null));
     }

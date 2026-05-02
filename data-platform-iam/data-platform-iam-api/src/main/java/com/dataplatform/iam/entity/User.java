@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.dataplatform.common.enums.CommonStatus;
 import java.time.LocalDateTime;
 
 @TableName("user_info")
@@ -16,7 +17,7 @@ public class User {
     private String password;
     private String email;
     private String phone;
-    private String status;
+    private CommonStatus status;
     private Long tenantId;
     private Long createdBy;
     private LocalDateTime createdAt;
@@ -40,8 +41,8 @@ public class User {
     public void setEmail(String email) { this.email = email; }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public CommonStatus getStatus() { return status; }
+    public void setStatus(CommonStatus status) { this.status = status; }
     public Long getTenantId() { return tenantId; }
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
     public Long getCreatedBy() { return createdBy; }

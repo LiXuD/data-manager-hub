@@ -1,2 +1,5 @@
-export { default as PageHeader } from './PageHeader.vue'
-export { default as SearchBar } from './SearchBar.vue'
+import StatCard from './StatCard.vue'
+import PageHeader from './PageHeader.vue'
+import SearchBar from './SearchBar.vue'
+
+export { StatCard, PageHeader, SearchBar }

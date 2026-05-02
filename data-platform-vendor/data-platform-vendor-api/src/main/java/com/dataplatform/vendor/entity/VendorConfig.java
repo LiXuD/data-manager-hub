@@ -1,6 +1,7 @@
 package com.dataplatform.vendor.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.enums.CommonStatus;
 import java.time.LocalDateTime;
 
 
@@ -26,7 +27,7 @@ public class VendorConfig {
     private String requestTemplate;
     private String responseMapping;
     private Long fallbackVendorId;
-    private String status;
+    private CommonStatus status;
     
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
@@ -78,8 +79,8 @@ public class VendorConfig {
     public void setResponseMapping(String responseMapping) { this.responseMapping = responseMapping; }
     public Long getFallbackVendorId() { return fallbackVendorId; }
     public void setFallbackVendorId(Long fallbackVendorId) { this.fallbackVendorId = fallbackVendorId; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public CommonStatus getStatus() { return status; }
+    public void setStatus(CommonStatus status) { this.status = status; }
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }

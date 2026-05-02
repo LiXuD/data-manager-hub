@@ -16,8 +16,8 @@
     <SearchBar @search="handleSearch" @reset="handleReset">
       <el-input v-model="searchForm.roleName" placeholder="搜索角色名称" clearable class="search-input" @keyup.enter="handleSearch" />
       <el-select v-model="searchForm.status" placeholder="状态" clearable class="search-select">
-        <el-option :label="STATUS_LABELS[USER_STATUS.ACTIVE]" :value="USER_STATUS.ACTIVE" />
-        <el-option :label="STATUS_LABELS[USER_STATUS.INACTIVE]" :value="USER_STATUS.INACTIVE" />
+        <el-option :label="STATUS_LABELS[COMMON_STATUS.ACTIVE]" :value="COMMON_STATUS.ACTIVE" />
+        <el-option :label="STATUS_LABELS[COMMON_STATUS.INACTIVE]" :value="COMMON_STATUS.INACTIVE" />
       </el-select>
     </SearchBar>
 
@@ -34,7 +34,7 @@
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-switch v-model="row.status" :active-value="USER_STATUS.ACTIVE" :inactive-value="USER_STATUS.INACTIVE" @change="handleStatusChange(row)" />
+            <el-switch v-model="row.status" :active-value="COMMON_STATUS.ACTIVE" :inactive-value="COMMON_STATUS.INACTIVE" @change="handleStatusChange(row)" />
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170">
@@ -110,7 +110,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { request } from '@/utils/request'
 import PageHeader from '@/components/PageHeader.vue'
 import SearchBar from '@/components/SearchBar.vue'
-import { USER_STATUS, STATUS_LABELS } from '@/constants'
+import { COMMON_STATUS, STATUS_LABELS } from '@/constants'
 
 interface Role { id: number; roleCode: string; roleName: string; description: string; status: string; createdAt: string }
 interface Permission { id: number; permissionCode: string; permissionName: string }
@@ -122,7 +122,7 @@ const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 const searchForm = reactive({ roleName: '', status: '' })
 const dialogVisible = ref(false)
-const form = reactive({ id: null as number | null, roleCode: '', roleName: '', description: '', status: 'active' })
+const form = reactive({ id: null as number | null, roleCode: '', roleName: '', description: '', status: COMMON_STATUS.ACTIVE })
 
 const permissionVisible = ref(false)
 const permissionList = ref<Permission[]>([])
@@ -195,9 +195,9 @@ const handleSubmit = async () => {
 const handleStatusChange = async (row: Role) => {
   try {
     await request.patch(`/role/${row.id}/status`, { status: row.status })
-    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+    ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
   } catch (error) {
-    row.status = row.status === 'active' ? 'inactive' : 'active'
+    row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
     ElMessage.error('状态更新失败')
   }
 }

@@ -1,5 +1,4 @@
 import request from '@/utils/request'
-import type { PageParams } from '@/types'
 
 export interface DataLineage {
   id: number

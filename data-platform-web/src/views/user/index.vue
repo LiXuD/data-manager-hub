@@ -110,6 +110,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { request } from '@/utils/request'
+import { COMMON_STATUS } from '@/constants/status'
 
 interface User { id: number; username: string; nickname: string; email: string; phone: string; status: string; createdAt: string }
 
@@ -120,7 +121,7 @@ const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 const searchForm = reactive({ username: '', status: '' })
 const dialogVisible = ref(false)
-const form = reactive({ id: null as number | null, username: '', nickname: '', email: '', phone: '', status: 'active' })
+const form = reactive({ id: null as number | null, username: '', nickname: '', email: '', phone: '', status: COMMON_STATUS.ACTIVE })
 
 interface UserListResponse {
   data?: User[]
@@ -184,9 +185,9 @@ const handleSubmit = async () => {
 const handleStatusChange = async (row: User) => {
   try {
     await request.patch(`/user/${row.id}/status`, { status: row.status })
-    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+    ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
   } catch (error) {
-    row.status = row.status === 'active' ? 'inactive' : 'active'
+    row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
     ElMessage.error('状态更新失败')
   }
 }

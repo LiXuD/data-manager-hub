@@ -15,6 +15,13 @@
     <description>公共API契约模块 - 统一返回结果、异常定义、基础DTO</description>
 
     <dependencies>
+        <!-- Data Platform Common (枚举等公共类) -->
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Spring Web (用于 @RestController 注解) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -1,5 +1,6 @@
 package com.dataplatform.iam.controller;
 
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
@@ -62,7 +63,7 @@ public class UserController {
         }
 
         user.setId(null);
-        user.setStatus("active");
+        user.setStatus(CommonStatus.ACTIVE);
         userService.save(user);
         return ResponseEntity.ok(Result.success(user));
     }
@@ -114,7 +115,7 @@ public class UserController {
 
         User user = new User();
         user.setId(id);
-        user.setStatus(status);
+        user.setStatus(CommonStatus.fromCode(status));
         userService.updateById(user);
         return ResponseEntity.ok(Result.success(null));
     }

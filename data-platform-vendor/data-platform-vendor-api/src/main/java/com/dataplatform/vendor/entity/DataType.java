@@ -1,6 +1,7 @@
 package com.dataplatform.vendor.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.enums.CommonStatus;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -17,7 +18,7 @@ public class DataType {
     private String description;
     private String pricingModel;
     private BigDecimal unitPrice;
-    private String status;
+    private CommonStatus status;
     
     @TableField(fill = FieldFill.INSERT)
     private Long createdBy;
@@ -46,8 +47,8 @@ public class DataType {
     public void setPricingModel(String pricingModel) { this.pricingModel = pricingModel; }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public CommonStatus getStatus() { return status; }
+    public void setStatus(CommonStatus status) { this.status = status; }
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }

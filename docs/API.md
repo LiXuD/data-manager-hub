@@ -185,13 +185,135 @@ Authorization: Bearer {token}
 Content-Type: application/json
 
 {
-  "status": "1"
+  "status": "active"
 }
 ```
 
 **状态值**:
-- `1`: 启用
-- `0`: 禁用
+- `active`: 启用
+- `inactive`: 禁用
+
+---
+
+## 厂商接口配置 (/vendor/config)
+
+> 为接口配置厂商实现，支持多厂商路由、熔断降级等高级配置
+
+### 按接口查询配置
+
+```http
+GET /vendor/config/interface/{interfaceId}
+Authorization: Bearer {token}
+```
+
+**响应**:
+```json
+{
+  "code": 0,
+  "data": [
+    {
+      "id": 1,
+      "vendorId": 1,
+      "interfaceId": 1,
+      "apiUrl": "https://api.vendor.com/v1/query",
+      "method": "POST",
+      "timeout": 30000,
+      "retryCount": 3,
+      "circuitThreshold": 5,
+      "circuitTimeout": 60,
+      "status": "active"
+    }
+  ]
+}
+```
+
+### 创建配置
+
+```http
+POST /vendor/config
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "vendorId": 1,
+  "dataTypeId": 1,
+  "interfaceId": 1,
+  "apiUrl": "https://api.vendor.com/v1/query",
+  "method": "POST",
+  "timeout": 30000,
+  "retryCount": 3,
+  "circuitThreshold": 5,
+  "circuitTimeout": 60,
+  "signType": "HMAC_SHA256",
+  "encryptType": "AES",
+  "status": "active"
+}
+```
+
+**参数说明**:
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| vendorId | long | 是 | 厂商ID |
+| interfaceId | long | 是 | 接口ID |
+| apiUrl | string | 是 | API地址 |
+| method | string | 否 | 请求方法，默认POST |
+| timeout | int | 否 | 超时时间(ms)，默认30000 |
+| retryCount | int | 否 | 重试次数，默认3 |
+| circuitThreshold | int | 否 | 熔断阈值，默认5 |
+| circuitTimeout | int | 否 | 熔断时间(s)，默认60 |
+| signType | string | 否 | 签名类型: MD5, SHA256, HMAC_SHA256 |
+| encryptType | string | 否 | 加密类型: AES, RSA |
+| fallbackVendorId | long | 否 | 降级厂商ID |
+
+### 更新配置
+
+```http
+PUT /vendor/config/{id}
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "apiUrl": "https://api.vendor.com/v2/query",
+  "timeout": 60000
+}
+```
+
+### 更新配置状态
+
+```http
+PATCH /vendor/config/{id}/status
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "status": "inactive"
+}
+```
+
+### 测试连接
+
+```http
+POST /vendor/config/{id}/test
+Authorization: Bearer {token}
+```
+
+**响应**:
+```json
+{
+  "code": 0,
+  "data": {
+    "success": true,
+    "latency": 245
+  }
+}
+```
+
+### 删除配置
+
+```http
+DELETE /vendor/config/{id}
+Authorization: Bearer {token}
+```
 
 ---
 
