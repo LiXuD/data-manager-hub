@@ -1,18 +1,8 @@
 import request from '@/utils/request'
-import type { PageParams } from '@/types'
+import type { PageParams, DataType } from '@/types'
 
-export interface DataType {
-  id: number
-  typeCode: string
-  typeName: string
-  description: string
-  vendorId: number
-  vendorName: string
-  schema?: string
-  status: string
-  createdAt: string
-  updatedAt: string
-}
+// 重新导出类型，保持向后兼容
+export type { DataType }
 
 export const getDataTypeList = (params: PageParams & { keyword?: string; vendorId?: number; status?: string }) => {
   return request.get('/datatype/list', { params })

@@ -3,6 +3,7 @@ package com.dataplatform.interface_.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.interface_.entity.ApiInterface;
+import com.dataplatform.interface_.entity.ApiInterfaceVO;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -10,7 +11,7 @@ import java.util.Map;
 
 public interface ApiInterfaceService extends IService<ApiInterface> {
 
-    PageResult<ApiInterface> list(Long vendorId, Long dataTypeId, String status, int page, int pageSize);
+    PageResult<ApiInterfaceVO> list(Long vendorId, Long dataTypeId, String status, int page, int pageSize);
 
     List<ApiInterface> listByDataTypeId(Long dataTypeId);
 

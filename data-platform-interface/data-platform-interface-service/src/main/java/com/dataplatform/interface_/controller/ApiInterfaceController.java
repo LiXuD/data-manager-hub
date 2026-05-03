@@ -5,6 +5,7 @@ import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.interface_.entity.ApiInterface;
+import com.dataplatform.interface_.entity.ApiInterfaceVO;
 import com.dataplatform.interface_.service.ApiInterfaceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -24,7 +25,7 @@ public class ApiInterfaceController {
     private ApiInterfaceService apiInterfaceService;
 
     @GetMapping("/list")
-    public PageResult<ApiInterface> list(
+    public PageResult<ApiInterfaceVO> list(
             @RequestParam(name = "vendorId", required = false) Long vendorId,
             @RequestParam(name = "dataTypeId", required = false) Long dataTypeId,
             @RequestParam(name = "status", required = false) String status,

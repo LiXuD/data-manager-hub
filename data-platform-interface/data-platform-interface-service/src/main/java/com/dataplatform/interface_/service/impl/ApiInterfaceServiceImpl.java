@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.interface_.entity.ApiInterface;
+import com.dataplatform.interface_.entity.ApiInterfaceVO;
 import com.dataplatform.interface_.mapper.ApiInterfaceMapper;
 import com.dataplatform.interface_.mapper.InterfaceStatsMapper;
 import com.dataplatform.interface_.service.ApiInterfaceService;
@@ -39,22 +40,10 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
     private StringRedisTemplate redisTemplate;
 
     @Override
-    public PageResult<ApiInterface> list(Long vendorId, Long dataTypeId, String status, int page, int pageSize) {
-        LambdaQueryWrapper<ApiInterface> wrapper = new LambdaQueryWrapper<>();
-
-        if (dataTypeId != null) {
-            wrapper.eq(ApiInterface::getDataTypeId, dataTypeId);
-        }
-        if (StringUtils.hasText(status)) {
-            wrapper.eq(ApiInterface::getStatus, status);
-        }
-        wrapper.eq(ApiInterface::getDeleted, false);
-        wrapper.orderByAsc(ApiInterface::getSort);
-        wrapper.orderByDesc(ApiInterface::getCreatedAt);
-
-        Page<ApiInterface> result = this.page(new Page<>(page, pageSize), wrapper);
-
-        return PageResult.of(result.getRecords(), result.getTotal(), page, pageSize);
+    public PageResult<ApiInterfaceVO> list(Long vendorId, Long dataTypeId, String status, int page, int pageSize) {
+        Page<ApiInterfaceVO> pageParam = new Page<>(page, pageSize);
+        baseMapper.selectListWithNames(vendorId, dataTypeId, status, pageParam);
+        return PageResult.of(pageParam.getRecords(), pageParam.getTotal(), page, pageSize);
     }
 
     @Override

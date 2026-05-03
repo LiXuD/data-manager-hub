@@ -13,6 +13,7 @@ public class ApiInterface {
     private String interfaceCode;
     private String interfaceName;
     private Long dataTypeId;
+    private Long vendorId;
     private String path;
     private String description;
     private String requestSchema;
@@ -44,6 +45,8 @@ public class ApiInterface {
     public void setInterfaceName(String interfaceName) { this.interfaceName = interfaceName; }
     public Long getDataTypeId() { return dataTypeId; }
     public void setDataTypeId(Long dataTypeId) { this.dataTypeId = dataTypeId; }
+    public Long getVendorId() { return vendorId; }
+    public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
     public String getPath() { return path; }
     public void setPath(String path) { this.path = path; }
     public String getDescription() { return description; }

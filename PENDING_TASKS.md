@@ -6,6 +6,43 @@
 
 ---
 
+## 🐛 接口管理编辑功能修复 (2026-05-03)
+
+### ✅ 已完成
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| 数据库迁移添加 api_interface.vendor_id 字段 | ✅ 完成 | 2026-05-03 |
+| ApiInterface 实体添加 vendorId 字段 | ✅ 完成 | 2026-05-03 |
+| 创建 ApiInterfaceVO 视图对象（含名称字段） | ✅ 完成 | 2026-05-03 |
+| 修改 Mapper 添加关联查询方法 | ✅ 完成 | 2026-05-03 |
+| 列表查询关联厂商名称和数据类型名称 | ✅ 完成 | 2026-05-03 |
+| 修复前端 api/datatype.ts 类型定义 | ✅ 完成 | 2026-05-03 |
+
+**问题说明**：
+- 接口编辑弹窗中所属厂商下拉框为空
+- 数据类型显示为数字而非名称
+- 数据类型下拉框为空
+- 提交后显示成功但实际未保存 vendorId
+
+**根本原因**：
+1. `api_interface` 表缺少 `vendor_id` 字段
+2. 后端 `ApiInterface` 实体缺少 `vendorId` 字段
+3. 列表查询未关联 `vendor_info` 和 `data_type` 表获取名称
+4. 前端 `api/datatype.ts` 中 DataType 类型定义与后端返回字段不匹配
+
+**涉及文件**：
+- `sql/migrations/V006__add_vendor_id_to_interface.sql` - 数据库迁移
+- `data-platform-interface/.../entity/ApiInterface.java` - 实体类
+- `data-platform-interface/.../entity/ApiInterfaceVO.java` - 视图对象
+- `data-platform-interface/.../mapper/ApiInterfaceMapper.java` - Mapper
+- `data-platform-interface/.../service/ApiInterfaceService.java` - 服务接口
+- `data-platform-interface/.../service/impl/ApiInterfaceServiceImpl.java` - 服务实现
+- `data-platform-interface/.../controller/ApiInterfaceController.java` - 控制器
+- `data-platform-web/src/api/datatype.ts` - 前端类型定义
+
+---
+
 ## 🐛 前端问题修复 (2026-05-03)
 
 ### ✅ 已完成
