@@ -1,6 +1,7 @@
 package com.dataplatform.interface_.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.common.constant.StatusConstants;
@@ -42,8 +43,8 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
     @Override
     public PageResult<ApiInterfaceVO> list(Long vendorId, Long dataTypeId, String status, int page, int pageSize) {
         Page<ApiInterfaceVO> pageParam = new Page<>(page, pageSize);
-        baseMapper.selectListWithNames(vendorId, dataTypeId, status, pageParam);
-        return PageResult.of(pageParam.getRecords(), pageParam.getTotal(), page, pageSize);
+        IPage<ApiInterfaceVO> result = baseMapper.selectListWithNames(pageParam, vendorId, dataTypeId, status);
+        return PageResult.of(result.getRecords(), result.getTotal(), page, pageSize);
     }
 
     @Override
