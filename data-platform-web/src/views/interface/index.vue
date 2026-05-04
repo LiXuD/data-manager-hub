@@ -146,7 +146,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getInterfaceList,
@@ -164,8 +164,8 @@ const cacheStore = useCacheStore()
 
 // 搜索表单
 const searchForm = reactive({
-  vendorId: undefined as number | undefined,
-  dataTypeId: undefined as number | undefined,
+  vendorId: undefined as number | string | undefined,
+  dataTypeId: undefined as number | string | undefined,
   status: ''
 })
 
@@ -180,9 +180,15 @@ const pagination = reactive({
   total: 0
 })
 
-// 从缓存获取下拉选项
-const vendorOptions = cacheStore.vendorOptions
-const dataTypeOptions = cacheStore.dataTypeOptions
+// 从缓存获取下拉选项（使用computed确保响应式更新）
+const vendorOptions = computed(() => {
+  console.log('vendorOptions 更新:', cacheStore.vendorOptions)
+  return cacheStore.vendorOptions
+})
+const dataTypeOptions = computed(() => {
+  console.log('dataTypeOptions 更新:', cacheStore.dataTypeOptions)
+  return cacheStore.dataTypeOptions
+})
 
 // 表单
 const formVisible = ref(false)
@@ -202,13 +208,27 @@ const loadData = async () => {
     const params = {
       page: pagination.page,
       pageSize: pagination.pageSize,
-      vendorId: searchForm.vendorId,
-      dataTypeId: searchForm.dataTypeId,
+      vendorId: searchForm.vendorId != null ? Number(searchForm.vendorId) : undefined,
+      dataTypeId: searchForm.dataTypeId != null ? Number(searchForm.dataTypeId) : undefined,
       status: searchForm.status as typeof COMMON_STATUS.ACTIVE | typeof COMMON_STATUS.INACTIVE | undefined
     }
     const res = await getInterfaceList(params)
-    tableData.value = res.data || []
+    // 处理不同格式的响应
+    let list: ApiInterface[] = []
+    if (res) {
+      if (Array.isArray(res.data)) {
+        list = res.data
+      } else if (res.data && Array.isArray(res.data.records)) {
+        list = res.data.records
+      } else if (Array.isArray(res.records)) {
+        list = res.records
+      } else if (Array.isArray(res)) {
+        list = res
+      }
+    }
+    tableData.value = list
     pagination.total = res.total || 0
+    console.log('加载接口列表成功:', tableData.value)
   } catch (error) {
     console.error('加载失败:', error)
     ElMessage.error('加载数据失败，请稍后重试')
@@ -241,6 +261,7 @@ const handleAdd = () => {
 
 // 编辑
 const handleEdit = (row: ApiInterface) => {
+  console.log('编辑接口:', row)
   currentRow.value = { ...row }
   formMode.value = 'edit'
   formVisible.value = true
@@ -299,10 +320,12 @@ const handleConfigSuccess = () => {
 }
 
 onMounted(async () => {
-  await Promise.all([
-    cacheStore.loadAll(),
-    loadData()
-  ])
+  console.log('接口管理页面加载...')
+  // 先确保缓存数据加载完成
+  await cacheStore.loadAll()
+  await loadData()
+  console.log('vendorOptions:', vendorOptions.value)
+  console.log('dataTypeOptions:', dataTypeOptions.value)
 })
 </script>
 

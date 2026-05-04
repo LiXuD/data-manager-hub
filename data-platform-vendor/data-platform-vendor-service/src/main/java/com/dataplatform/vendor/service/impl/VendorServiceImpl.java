@@ -55,4 +55,12 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper, VendorInfo> imp
             .eq(VendorInfo::getVendorCode, vendorCode)
             .eq(VendorInfo::getDeleted, false));
     }
+
+    @Override
+    public List<VendorInfo> listAllActive() {
+        return this.list(new LambdaQueryWrapper<VendorInfo>()
+            .eq(VendorInfo::getStatus, "active")
+            .eq(VendorInfo::getDeleted, false)
+            .orderByAsc(VendorInfo::getVendorCode));
+    }
 }

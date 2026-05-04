@@ -8,6 +8,10 @@ export const getDataTypeList = (params: PageParams & { keyword?: string; vendorI
   return request.get('/datatype/list', { params })
 }
 
+export const getDataTypeAll = () => {
+  return request.get('/datatype/all')
+}
+
 export const getDataTypeById = (id: number) => {
   return request.get(`/datatype/${id}`)
 }

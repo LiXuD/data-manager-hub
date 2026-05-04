@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -135,5 +136,11 @@ public class VendorController {
         }
         // TODO: 实现厂商连通性测试
         return ResponseEntity.ok(Result.success(Map.of("success", true, "message", "连接正常")));
+    }
+
+    @GetMapping("/all")
+    public ResponseEntity<Result<List<VendorInfo>>> listAll() {
+        List<VendorInfo> list = vendorService.listAllActive();
+        return ResponseEntity.ok(Result.success(list));
     }
 }

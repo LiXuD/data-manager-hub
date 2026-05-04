@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getVendorList } from '@/api/vendor'
-import { getDataTypeList } from '@/api/datatype'
+import { getVendorAll } from '@/api/vendor'
+import { getDataTypeAll } from '@/api/datatype'
 import type { Vendor, DataType } from '@/types'
 
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
@@ -37,10 +37,16 @@ export const useCacheStore = defineStore('cache', () => {
       return vendorsPromise
     }
 
-    vendorsPromise = getVendorList({ page: 1, pageSize: 1000, status: 'active' })
+    vendorsPromise = getVendorAll()
       .then(res => {
-        vendorOptions.value = res.data || []
+        // 使用简单的 /all 端点，响应格式是 { code: 0, data: [...] }
+        let list: Vendor[] = []
+        if (res && Array.isArray(res.data)) {
+          list = res.data
+        }
+        vendorOptions.value = list
         vendorsLoadedAt.value = Date.now()
+        console.log('加载厂商成功:', vendorOptions.value)
         return vendorOptions.value
       })
       .catch(error => {
@@ -64,10 +70,16 @@ export const useCacheStore = defineStore('cache', () => {
       return dataTypesPromise
     }
 
-    dataTypesPromise = getDataTypeList({ page: 1, pageSize: 1000, status: 'active' })
+    dataTypesPromise = getDataTypeAll()
       .then(res => {
-        dataTypeOptions.value = res.data || []
+        // 使用简单的 /all 端点，响应格式是 { code: 0, data: [...] }
+        let list: DataType[] = []
+        if (res && Array.isArray(res.data)) {
+          list = res.data
+        }
+        dataTypeOptions.value = list
         dataTypesLoadedAt.value = Date.now()
+        console.log('加载数据类型成功:', dataTypeOptions.value)
         return dataTypeOptions.value
       })
       .catch(error => {
