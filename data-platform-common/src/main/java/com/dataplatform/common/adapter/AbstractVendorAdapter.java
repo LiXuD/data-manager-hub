@@ -1,21 +1,25 @@
 package com.dataplatform.common.adapter;
 
+import com.dataplatform.common.mapping.RequestMappingItem;
+import com.dataplatform.common.mapping.RequestMappingProcessor;
+import com.dataplatform.common.mapping.ResponseMappingItem;
+import com.dataplatform.common.mapping.ResponseMappingProcessor;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-/**
- * 厂商适配器抽象基类
- * 提供通用的参数转换和响应处理逻辑
- */
 public abstract class AbstractVendorAdapter implements VendorAdapter {
 
     protected final Logger log = LoggerFactory.getLogger(getClass());
     protected final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final RequestMappingProcessor requestMappingProcessor = new RequestMappingProcessor();
+    private final ResponseMappingProcessor responseMappingProcessor = new ResponseMappingProcessor();
 
     @Override
     public Map<String, Object> transformRequest(Map<String, Object> params, String mapping) {
@@ -24,18 +28,23 @@ public abstract class AbstractVendorAdapter implements VendorAdapter {
         }
 
         try {
-            Map<String, String> fieldMapping = objectMapper.readValue(mapping,
-                new TypeReference<Map<String, String>>() {});
-
-            Map<String, Object> transformed = new HashMap<>();
-            for (Map.Entry<String, Object> entry : params.entrySet()) {
-                String targetField = fieldMapping.getOrDefault(entry.getKey(), entry.getKey());
-                transformed.put(targetField, entry.getValue());
+            List<RequestMappingItem> items = objectMapper.readValue(mapping,
+                new TypeReference<List<RequestMappingItem>>() {});
+            return requestMappingProcessor.mapRequest(params, items);
+        } catch (Exception e1) {
+            try {
+                Map<String, String> fieldMapping = objectMapper.readValue(mapping,
+                    new TypeReference<Map<String, String>>() {});
+                Map<String, Object> transformed = new HashMap<>();
+                for (Map.Entry<String, Object> entry : params.entrySet()) {
+                    String targetField = fieldMapping.getOrDefault(entry.getKey(), entry.getKey());
+                    transformed.put(targetField, entry.getValue());
+                }
+                return transformed;
+            } catch (Exception e2) {
+                log.warn("请求参数转换失败, 使用原始参数: {}", e2.getMessage());
+                return new HashMap<>(params);
             }
-            return transformed;
-        } catch (Exception e) {
-            log.warn("请求参数转换失败, 使用原始参数: {}", e.getMessage());
-            return new HashMap<>(params);
         }
     }
 
@@ -46,29 +55,30 @@ public abstract class AbstractVendorAdapter implements VendorAdapter {
         }
 
         try {
-            Map<String, String> fieldMapping = objectMapper.readValue(mapping,
-                new TypeReference<Map<String, String>>() {});
-
-            Map<String, Object> transformed = new HashMap<>();
-            for (Map.Entry<String, String> entry : fieldMapping.entrySet()) {
-                String sourcePath = entry.getKey();
-                String targetField = entry.getValue();
-                Object value = getNestedValue(response, sourcePath);
-                if (value != null) {
-                    transformed.put(targetField, value);
+            List<ResponseMappingItem> items = objectMapper.readValue(mapping,
+                new TypeReference<List<ResponseMappingItem>>() {});
+            return responseMappingProcessor.mapResponse(response, items);
+        } catch (Exception e1) {
+            try {
+                Map<String, String> fieldMapping = objectMapper.readValue(mapping,
+                    new TypeReference<Map<String, String>>() {});
+                Map<String, Object> transformed = new HashMap<>();
+                for (Map.Entry<String, String> entry : fieldMapping.entrySet()) {
+                    String sourcePath = entry.getKey();
+                    String targetField = entry.getValue();
+                    Object value = getNestedValue(response, sourcePath);
+                    if (value != null) {
+                        transformed.put(targetField, value);
+                    }
                 }
+                return transformed;
+            } catch (Exception e2) {
+                log.warn("响应数据转换失败, 使用原始响应: {}", e2.getMessage());
+                return new HashMap<>(response);
             }
-            return transformed;
-        } catch (Exception e) {
-            log.warn("响应数据转换失败, 使用原始响应: {}", e.getMessage());
-            return new HashMap<>(response);
         }
     }
 
-    /**
-     * 从嵌套Map中获取值
-     * 支持路径: "data.result.name"
-     */
     protected Object getNestedValue(Map<String, Object> map, String path) {
         if (map == null || path == null) {
             return null;

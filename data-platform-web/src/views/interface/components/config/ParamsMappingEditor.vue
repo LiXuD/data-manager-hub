@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElButton, ElInput, ElSelect, ElOption, ElTabs, ElTabPane, ElMessage } from 'element-plus'
-import type { MappingItem } from '@/types'
+import { ElButton, ElInput, ElSelect, ElOption, ElTabs, ElTabPane, ElSwitch, ElMessage } from 'element-plus'
+import type { RequestMappingItem, ResponseMappingItem } from '@/types'
 
 interface Props {
-  requestMapping: MappingItem[]
-  responseMapping: MappingItem[]
+  requestMapping: RequestMappingItem[]
+  responseMapping: ResponseMappingItem[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -14,93 +14,90 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  'update:requestMapping': [value: MappingItem[]]
-  'update:responseMapping': [value: MappingItem[]]
+  'update:requestMapping': [value: RequestMappingItem[]]
+  'update:responseMapping': [value: ResponseMappingItem[]]
 }>()
 
 const activeTab = ref('request')
 
-// 直接使用 computed，不维护内部副本
 const requestItems = computed(() => props.requestMapping || [])
 const responseItems = computed(() => props.responseMapping || [])
 
-// 更新请求映射
-function updateRequestMapping(newItems: MappingItem[]) {
+const requestTransformOptions = [
+  { label: '无转换', value: 'none' },
+  { label: '转大写', value: 'uppercase' },
+  { label: '转小写', value: 'lowercase' },
+  { label: '去空格', value: 'trim' }
+]
+
+const responseTransformOptions = [
+  { label: '无转换', value: 'none' },
+  { label: '转字符串', value: 'toString' },
+  { label: '转数字', value: 'toNumber' }
+]
+
+const sourceTypeOptions = [
+  { label: '普通字段', value: 'field' },
+  { label: 'JSONPath', value: 'jsonPath' }
+]
+
+function updateRequestMapping(newItems: RequestMappingItem[]) {
   emit('update:requestMapping', newItems)
 }
 
-// 更新响应映射
-function updateResponseMapping(newItems: MappingItem[]) {
+function updateResponseMapping(newItems: ResponseMappingItem[]) {
   emit('update:responseMapping', newItems)
 }
 
-// 转换类型选项
-const transformOptions = [
-  { label: '无转换', value: 'none' },
-  { label: 'JSONPath', value: 'jsonPath' },
-  { label: '表达式', value: 'expression' }
-]
-
-// 添加请求映射项
 function addRequestMappingItem() {
   const newItems = [...requestItems.value, {
-    sourceField: '',
     targetField: '',
+    sourceVar: '',
+    required: true,
     transformType: 'none' as const
   }]
   updateRequestMapping(newItems)
 }
 
-// 添加响应映射项
 function addResponseMappingItem() {
   const newItems = [...responseItems.value, {
-    sourceField: '',
     targetField: '',
+    sourcePath: '',
+    sourceType: 'field' as const,
     transformType: 'none' as const
   }]
   updateResponseMapping(newItems)
 }
 
-// 更新映射项字段（通用方法）
-function updateItemField(type: 'request' | 'response', index: number, field: keyof MappingItem, value: string) {
-  const items = type === 'request' ? requestItems.value : responseItems.value
-  const updater = type === 'request' ? updateRequestMapping : updateResponseMapping
-  const newItems = [...items]
+function updateRequestItemField(index: number, field: keyof RequestMappingItem, value: any) {
+  const newItems = [...requestItems.value]
   newItems[index] = { ...newItems[index], [field]: value }
-  updater(newItems)
+  updateRequestMapping(newItems)
 }
 
-// 删除请求映射项
+function updateResponseItemField(index: number, field: keyof ResponseMappingItem, value: any) {
+  const newItems = [...responseItems.value]
+  newItems[index] = { ...newItems[index], [field]: value }
+  updateResponseMapping(newItems)
+}
+
 function removeRequestMappingItem(index: number) {
   const newItems = [...requestItems.value]
   newItems.splice(index, 1)
   updateRequestMapping(newItems)
 }
 
-// 删除响应映射项
 function removeResponseMappingItem(index: number) {
   const newItems = [...responseItems.value]
   newItems.splice(index, 1)
   updateResponseMapping(newItems)
 }
 
-// 导出 JSON
 function exportMapping() {
   const mapping = {
-    request: requestItems.value.reduce((acc, item) => {
-      if (item.sourceField && item.targetField) {
-        acc[item.sourceField] = item.targetField
-      }
-      return acc
-    }, {} as Record<string, string>),
-    response: responseItems.value.reduce((acc, item) => {
-      if (item.sourceField && item.targetField) {
-        acc[item.sourceField] = item.targetField
-      }
-      return acc
-    }, {} as Record<string, string>)
+    requestMapping: requestItems.value,
+    responseMapping: responseItems.value
   }
-
   const blob = new Blob([JSON.stringify(mapping, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -110,7 +107,6 @@ function exportMapping() {
   URL.revokeObjectURL(url)
 }
 
-// 从 JSON 导入
 function importMapping() {
   const input = document.createElement('input')
   input.type = 'file'
@@ -121,21 +117,11 @@ function importMapping() {
     try {
       const text = await file.text()
       const json = JSON.parse(text)
-      if (json.request) {
-        const newItems = Object.entries(json.request).map(([source, target]) => ({
-          sourceField: source,
-          targetField: String(target),
-          transformType: 'none' as const
-        }))
-        updateRequestMapping(newItems)
+      if (json.requestMapping) {
+        updateRequestMapping(json.requestMapping)
       }
-      if (json.response) {
-        const newItems = Object.entries(json.response).map(([source, target]) => ({
-          sourceField: source,
-          targetField: String(target),
-          transformType: 'none' as const
-        }))
-        updateResponseMapping(newItems)
+      if (json.responseMapping) {
+        updateResponseMapping(json.responseMapping)
       }
       ElMessage.success('导入成功')
     } catch {
@@ -144,30 +130,6 @@ function importMapping() {
   }
   input.click()
 }
-
-// 获取 JSON 格式输出
-function getMappingJson() {
-  return {
-    request: requestItems.value.reduce((acc, item) => {
-      if (item.sourceField && item.targetField) {
-        acc[item.sourceField] = item.targetField
-      }
-      return acc
-    }, {} as Record<string, string>),
-    response: responseItems.value.reduce((acc, item) => {
-      if (item.sourceField && item.targetField) {
-        acc[item.sourceField] = item.targetField
-      }
-      return acc
-    }, {} as Record<string, string>)
-  }
-}
-
-defineExpose({
-  getMappingJson,
-  exportMapping,
-  importMapping
-})
 </script>
 
 <template>
@@ -177,7 +139,6 @@ defineExpose({
       <p>配置内部字段与厂商字段的映射关系</p>
     </div>
 
-    <!-- 工具栏 -->
     <div class="mapping-toolbar">
       <el-button size="small" @click="importMapping">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
@@ -198,7 +159,7 @@ defineExpose({
       <el-tab-pane label="请求参数映射" name="request">
         <div class="mapping-section">
           <div class="section-desc">
-            <span class="arrow">内部字段</span>
+            <span class="arrow">内部变量</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="arrow-icon">
               <path d="M5 12h14M12 5l7 7-7 7"/>
             </svg>
@@ -206,9 +167,13 @@ defineExpose({
           </div>
 
           <div class="mapping-table">
-            <div class="mapping-row header">
-              <span class="col-source">内部字段名</span>
+            <div class="mapping-row header request-header">
+              <span class="col-source">内部变量名</span>
+              <span class="col-arrow"></span>
               <span class="col-target">厂商字段名</span>
+              <span class="col-default">默认值</span>
+              <span class="col-required">必填</span>
+              <span class="col-transform">转换</span>
               <span class="col-actions">操作</span>
             </div>
 
@@ -219,10 +184,10 @@ defineExpose({
             <div v-for="(item, index) in requestItems" :key="index" class="mapping-row">
               <div class="col-source">
                 <el-input
-                  :model-value="item.sourceField"
-                  placeholder="如: companyName"
+                  :model-value="item.sourceVar"
+                  placeholder="如: entName"
                   size="small"
-                  @update:model-value="(val: string) => updateItemField('request', index, 'sourceField', val)"
+                  @update:model-value="(val: string) => updateRequestItemField(index, 'sourceVar', val)"
                 />
               </div>
               <div class="col-arrow">
@@ -233,10 +198,40 @@ defineExpose({
               <div class="col-target">
                 <el-input
                   :model-value="item.targetField"
-                  placeholder="如: entName"
+                  placeholder="如: keyword"
                   size="small"
-                  @update:model-value="(val: string) => updateItemField('request', index, 'targetField', val)"
+                  @update:model-value="(val: string) => updateRequestItemField(index, 'targetField', val)"
                 />
+              </div>
+              <div class="col-default">
+                <el-input
+                  :model-value="item.defaultValue"
+                  placeholder="可选"
+                  size="small"
+                  @update:model-value="(val: string) => updateRequestItemField(index, 'defaultValue', val)"
+                />
+              </div>
+              <div class="col-required">
+                <el-switch
+                  :model-value="item.required !== false"
+                  size="small"
+                  @update:model-value="(val: string | number | boolean) => updateRequestItemField(index, 'required', !!val)"
+                />
+              </div>
+              <div class="col-transform">
+                <el-select
+                  :model-value="item.transformType || 'none'"
+                  size="small"
+                  style="width: 100%"
+                  @update:model-value="(val: string) => updateRequestItemField(index, 'transformType', val)"
+                >
+                  <el-option
+                    v-for="opt in requestTransformOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
               </div>
               <div class="col-actions">
                 <el-button link size="small" type="danger" @click="removeRequestMappingItem(index)">
@@ -267,10 +262,13 @@ defineExpose({
           </div>
 
           <div class="mapping-table">
-            <div class="mapping-row header">
-              <span class="col-source">厂商字段名</span>
-              <span class="col-target">内部字段名</span>
-              <span class="col-transform">转换类型</span>
+            <div class="mapping-row header response-header">
+              <span class="col-source">来源路径</span>
+              <span class="col-arrow"></span>
+              <span class="col-target">目标字段名</span>
+              <span class="col-type">类型</span>
+              <span class="col-default">默认值</span>
+              <span class="col-transform">转换</span>
               <span class="col-actions">操作</span>
             </div>
 
@@ -281,10 +279,10 @@ defineExpose({
             <div v-for="(item, index) in responseItems" :key="index" class="mapping-row">
               <div class="col-source">
                 <el-input
-                  :model-value="item.sourceField"
-                  placeholder="如: data.result"
+                  :model-value="item.sourcePath"
+                  :placeholder="item.sourceType === 'jsonPath' ? '如: $.data.name' : '如: ent_name'"
                   size="small"
-                  @update:model-value="(val: string) => updateItemField('response', index, 'sourceField', val)"
+                  @update:model-value="(val: string) => updateResponseItemField(index, 'sourcePath', val)"
                 />
               </div>
               <div class="col-arrow">
@@ -295,20 +293,43 @@ defineExpose({
               <div class="col-target">
                 <el-input
                   :model-value="item.targetField"
-                  placeholder="如: result"
+                  placeholder="如: companyName"
                   size="small"
-                  @update:model-value="(val: string) => updateItemField('response', index, 'targetField', val)"
+                  @update:model-value="(val: string) => updateResponseItemField(index, 'targetField', val)"
+                />
+              </div>
+              <div class="col-type">
+                <el-select
+                  :model-value="item.sourceType || 'field'"
+                  size="small"
+                  style="width: 100%"
+                  @update:model-value="(val: string) => updateResponseItemField(index, 'sourceType', val)"
+                >
+                  <el-option
+                    v-for="opt in sourceTypeOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </div>
+              <div class="col-default">
+                <el-input
+                  :model-value="item.defaultValue"
+                  placeholder="可选"
+                  size="small"
+                  @update:model-value="(val: any) => updateResponseItemField(index, 'defaultValue', val)"
                 />
               </div>
               <div class="col-transform">
                 <el-select
-                  :model-value="item.transformType"
+                  :model-value="item.transformType || 'none'"
                   size="small"
                   style="width: 100%"
-                  @update:model-value="(val: string) => updateItemField('response', index, 'transformType', val)"
+                  @update:model-value="(val: string) => updateResponseItemField(index, 'transformType', val)"
                 >
                   <el-option
-                    v-for="opt in transformOptions"
+                    v-for="opt in responseTransformOptions"
                     :key="opt.value"
                     :label="opt.label"
                     :value="opt.value"
@@ -333,13 +354,12 @@ defineExpose({
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 提示 -->
     <div class="mapping-hints">
       <div class="hint-item">
-        <strong>请求参数映射：</strong>将内部系统使用的字段名转换为厂商要求的字段名
+        <strong>请求参数映射：</strong>将内部系统使用的变量名转换为厂商要求的字段名，支持默认值和值转换
       </div>
       <div class="hint-item">
-        <strong>响应字段映射：</strong>将厂商返回的字段名转换为内部系统统一的字段名，支持 JSONPath 表达式（如 data.result）
+        <strong>响应字段映射：</strong>将厂商返回的字段名转换为内部系统统一的字段名。普通字段支持点号分隔路径（如 data.name），JSONPath 支持 $.data.list[0].name 格式
       </div>
     </div>
   </div>
@@ -415,7 +435,6 @@ defineExpose({
 
 .mapping-row {
   display: grid;
-  grid-template-columns: 1fr auto 1fr auto;
   gap: 8px;
   padding: 8px 12px;
   align-items: center;
@@ -435,8 +454,14 @@ defineExpose({
   letter-spacing: 0.05em;
 }
 
-.mapping-row.header .col-actions {
-  width: 60px;
+.request-header,
+.mapping-row:not(.header):has(.col-required) {
+  grid-template-columns: 1fr 24px 1fr 80px 50px 100px 60px;
+}
+
+.response-header,
+.mapping-row:not(.header):has(.col-type) {
+  grid-template-columns: 1fr 24px 1fr 100px 80px 100px 60px;
 }
 
 .mapping-empty {
@@ -444,15 +469,6 @@ defineExpose({
   text-align: center;
   color: var(--color-text-tertiary);
   font-size: 13px;
-}
-
-.col-source,
-.col-target {
-  flex: 1;
-}
-
-.col-transform {
-  width: 120px;
 }
 
 .col-arrow {
@@ -469,7 +485,6 @@ defineExpose({
 }
 
 .col-actions {
-  width: 60px;
   text-align: right;
 }
 

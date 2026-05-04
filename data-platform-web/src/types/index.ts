@@ -424,19 +424,22 @@ export interface HeaderConfigItem {
 // 请求头配置（键值对形式）
 export type HeaderConfig = Record<string, string>
 
-// 参数映射配置
-export interface ParamsMapping {
-  request: Record<string, string>   // 内部字段 -> 厂商字段
-  response: Record<string, string>  // 厂商字段 -> 内部字段
+// 请求参数映射项
+export interface RequestMappingItem {
+  targetField: string
+  sourceVar: string
+  defaultValue?: string
+  required?: boolean
+  transformType?: 'none' | 'uppercase' | 'lowercase' | 'trim'
 }
 
-// 映射项
-export interface MappingItem {
-  sourceField: string
+// 响应参数映射项
+export interface ResponseMappingItem {
   targetField: string
-  transformType?: 'none' | 'jsonPath' | 'expression'
-  transformExpr?: string
-  defaultValue?: string
+  sourcePath: string
+  sourceType?: 'field' | 'jsonPath'
+  defaultValue?: any
+  transformType?: 'none' | 'toString' | 'toNumber'
 }
 
 // 签名配置

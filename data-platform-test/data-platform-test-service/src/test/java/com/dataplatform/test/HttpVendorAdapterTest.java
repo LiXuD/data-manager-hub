@@ -100,6 +100,37 @@ class HttpVendorAdapterTest {
     }
 
     @Test
+    @DisplayName("转换请求参数 - 结构化映射")
+    void testTransformRequest_StructuredMapping() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("entName", "北京科技");
+        params.put("searchMode", "FUZZY");
+
+        String mapping = "[{\"targetField\":\"keyword\",\"sourceVar\":\"entName\",\"required\":true}," +
+            "{\"targetField\":\"type\",\"sourceVar\":\"searchMode\",\"defaultValue\":\"exact\",\"transformType\":\"lowercase\"}]";
+        Map<String, Object> result = adapter.transformRequest(params, mapping);
+
+        assertEquals("北京科技", result.get("keyword"));
+        assertEquals("fuzzy", result.get("type"));
+        assertNull(result.get("entName"));
+    }
+
+    @Test
+    @DisplayName("转换响应数据 - 结构化映射")
+    void testTransformResponse_StructuredMapping() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("ent_name", "北京科技");
+        response.put("data", Map.of("legalPerson", "张三"));
+
+        String mapping = "[{\"targetField\":\"companyName\",\"sourcePath\":\"ent_name\",\"sourceType\":\"field\"}," +
+            "{\"targetField\":\"legalPerson\",\"sourcePath\":\"$.data.legalPerson\",\"sourceType\":\"jsonPath\"}]";
+        Map<String, Object> result = adapter.transformResponse(response, mapping);
+
+        assertEquals("北京科技", result.get("companyName"));
+        assertEquals("张三", result.get("legalPerson"));
+    }
+
+    @Test
     @DisplayName("执行请求 - 配置为空抛异常")
     void testExecute_NullConfig() {
         Map<String, Object> params = new HashMap<>();

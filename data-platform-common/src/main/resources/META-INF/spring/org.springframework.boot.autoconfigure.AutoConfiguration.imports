@@ -1,2 +1,2 @@
 com.dataplatform.common.config.MybatisPlusConfig
-com.dataplatform.common.config.MyBatisMetaObjectHandler
+com.dataplatform.common.circuitbreaker.CircuitBreakerConfiguration

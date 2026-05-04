@@ -17,7 +17,8 @@ import type {
   VendorInterfaceConfig,
   HttpMethod,
   HeaderConfigItem,
-  MappingItem,
+  RequestMappingItem,
+  ResponseMappingItem,
   AuthConfig,
   SignConfig,
   ContentType
@@ -67,8 +68,8 @@ const form = ref({
   requestBody: '',
   contentType: 'application/json' as ContentType,
   // 参数映射
-  requestMapping: [] as MappingItem[],
-  responseMapping: [] as MappingItem[],
+  requestMapping: [] as RequestMappingItem[],
+  responseMapping: [] as ResponseMappingItem[],
   // 签名配置
   signConfig: { type: 'NONE' as const } as SignConfig,
   // 认证配置
@@ -161,8 +162,8 @@ const handleEdit = (config: VendorInterfaceConfig) => {
 
   // 解析 JSON 配置
   let headerList: HeaderConfigItem[] = []
-  let requestMapping: MappingItem[] = []
-  let responseMapping: MappingItem[] = []
+  let requestMapping: RequestMappingItem[] = []
+  let responseMapping: ResponseMappingItem[] = []
   let authConfig: AuthConfig = { type: 'NONE' }
   let signConfig: SignConfig = { type: 'NONE' }
   let requestBody = ''
@@ -186,23 +187,33 @@ const handleEdit = (config: VendorInterfaceConfig) => {
   try {
     if (config.requestTemplate) {
       const parsed = JSON.parse(config.requestTemplate)
-      // 检查是否是新的请求体格式
       if (parsed.body) {
         requestBody = typeof parsed.body === 'string' ? parsed.body : JSON.stringify(parsed.body, null, 2)
         contentType = parsed.contentType || 'application/json'
       }
-      // 兼容旧格式
-      if (parsed.request) {
+      if (Array.isArray(parsed.requestMapping)) {
+        requestMapping = parsed.requestMapping
+      } else if (parsed.request) {
         requestMapping = Object.entries(parsed.request).map(([source, target]) => ({
-          sourceField: source,
+          sourceVar: source,
           targetField: String(target),
+          required: true,
           transformType: 'none' as const
         }))
       }
-      if (parsed.response) {
-        responseMapping = Object.entries(parsed.response).map(([source, target]) => ({
-          sourceField: source,
+    }
+  } catch {}
+
+  try {
+    if (config.responseMapping) {
+      const parsed = JSON.parse(config.responseMapping)
+      if (Array.isArray(parsed)) {
+        responseMapping = parsed
+      } else {
+        responseMapping = Object.entries(parsed).map(([source, target]) => ({
+          sourcePath: source,
           targetField: String(target),
+          sourceType: 'field' as const,
           transformType: 'none' as const
         }))
       }
@@ -301,30 +312,15 @@ const handleSubmit = async () => {
         return acc
       }, {} as Record<string, string>)
 
-    const requestMappingObj = form.value.requestMapping
-      .filter(m => m.sourceField && m.targetField)
-      .reduce((acc, m) => {
-        acc[m.sourceField] = m.targetField
-        return acc
-      }, {} as Record<string, string>)
+    const validRequestMapping = form.value.requestMapping
+      .filter(m => m.sourceVar && m.targetField)
 
-    const responseMappingObj = form.value.responseMapping
-      .filter(m => m.sourceField && m.targetField)
-      .reduce((acc, m) => {
-        acc[m.sourceField] = m.targetField
-        return acc
-      }, {} as Record<string, string>)
+    const validResponseMapping = form.value.responseMapping
+      .filter(m => m.sourcePath && m.targetField)
 
-    // 构建 requestTemplate，包含请求体和参数映射
     const requestTemplate: Record<string, unknown> = {}
-    const hasRequestMapping = Object.keys(requestMappingObj).length > 0
-    const hasResponseMapping = Object.keys(responseMappingObj).length > 0
-
-    if (hasRequestMapping) {
-      requestTemplate.request = requestMappingObj
-    }
-    if (hasResponseMapping) {
-      requestTemplate.response = responseMappingObj
+    if (validRequestMapping.length > 0) {
+      requestTemplate.requestMapping = validRequestMapping
     }
     if (form.value.requestBody) {
       requestTemplate.body = form.value.requestBody
@@ -333,6 +329,7 @@ const handleSubmit = async () => {
 
     const hasHeaderConfig = Object.keys(headerConfig).length > 0
     const hasRequestTemplate = Object.keys(requestTemplate).length > 0
+    const hasResponseMapping = validResponseMapping.length > 0
 
     const data = {
       vendorId: form.value.vendorId,
@@ -347,6 +344,7 @@ const handleSubmit = async () => {
       signType: form.value.signConfig.type === 'NONE' ? undefined : form.value.signConfig.type,
       headerConfig: hasHeaderConfig ? JSON.stringify(headerConfig) : undefined,
       requestTemplate: hasRequestTemplate ? JSON.stringify(requestTemplate) : undefined,
+      responseMapping: hasResponseMapping ? JSON.stringify(validResponseMapping) : undefined,
       authType: form.value.authConfig.type === 'NONE' ? undefined : form.value.authConfig.type,
       authConfig: form.value.authConfig.type !== 'NONE' ? JSON.stringify(form.value.authConfig) : undefined,
       fallbackVendorId: form.value.fallbackVendorId || undefined,
