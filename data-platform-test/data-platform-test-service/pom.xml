@@ -8,6 +8,11 @@
     <dependencies>
         <dependency><groupId>com.dataplatform</groupId><artifactId>data-platform-test-api</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>com.dataplatform</groupId><artifactId>data-platform-common</artifactId></dependency>
+        <!-- Sa-Token (required by common module's UserContext/OperationLogAspect) -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+        </dependency>
 
         <!-- Spring Boot -->
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>

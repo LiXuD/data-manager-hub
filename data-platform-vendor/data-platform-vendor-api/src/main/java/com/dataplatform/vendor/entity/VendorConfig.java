@@ -1,10 +1,11 @@
 package com.dataplatform.vendor.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.handler.JsonbTypeHandler;
 import com.dataplatform.common.enums.CommonStatus;
 import java.time.LocalDateTime;
 
-@TableName("vendor_config")
+@TableName(value = "vendor_config", autoResultMap = true)
 public class VendorConfig {
 
     @TableId(type = IdType.AUTO)
@@ -21,8 +22,13 @@ public class VendorConfig {
     private Integer circuitTimeout;
     private String signType;
     private String encryptType;
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String headerConfig;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String requestTemplate;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String responseMapping;
     private Long fallbackVendorId;
     private String authType;

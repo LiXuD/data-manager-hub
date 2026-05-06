@@ -28,6 +28,12 @@
             <artifactId>data-platform-common</artifactId>
         </dependency>
 
+        <!-- Sa-Token (required by common module's UserContext/OperationLogAspect) -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+        </dependency>
+
         <!-- Interface API -->
         <dependency>
             <groupId>com.dataplatform</groupId>
