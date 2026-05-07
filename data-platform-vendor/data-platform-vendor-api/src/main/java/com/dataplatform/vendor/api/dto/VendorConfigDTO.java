@@ -47,6 +47,8 @@ public class VendorConfigDTO implements Serializable {
 
     private Long fallbackVendorId;
 
+    private String paramMapping;
+
     private String status;
 
     private LocalDateTime createdAt;

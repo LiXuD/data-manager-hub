@@ -34,6 +34,9 @@ public class VendorConfig {
     private String authType;
     private String authConfig;
 
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String paramMapping;
+
     private CommonStatus status;
 
     @TableField(fill = FieldFill.INSERT)
@@ -85,6 +88,8 @@ public class VendorConfig {
     public void setAuthType(String authType) { this.authType = authType; }
     public String getAuthConfig() { return authConfig; }
     public void setAuthConfig(String authConfig) { this.authConfig = authConfig; }
+    public String getParamMapping() { return paramMapping; }
+    public void setParamMapping(String paramMapping) { this.paramMapping = paramMapping; }
     public CommonStatus getStatus() { return status; }
     public void setStatus(CommonStatus status) { this.status = status; }
     public Long getCreatedBy() { return createdBy; }
