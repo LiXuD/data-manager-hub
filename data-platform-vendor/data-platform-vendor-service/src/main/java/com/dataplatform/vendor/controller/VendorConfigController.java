@@ -169,4 +169,42 @@ public class VendorConfigController {
         }
         return Result.success(result);
     }
+
+    /**
+     * 获取厂商配置的参数映射
+     */
+    @GetMapping("/{id}/mapping")
+    public ResponseEntity<Result<Map<String, Object>>> getParamMapping(@PathVariable Long id) {
+        VendorConfig config = vendorConfigService.getById(id);
+        if (config == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "配置不存在"));
+        }
+        Map<String, Object> result = new HashMap<>();
+        result.put("vendorConfigId", id);
+        result.put("interfaceId", config.getInterfaceId());
+        result.put("paramMapping", config.getParamMapping());
+        return ResponseEntity.ok(Result.success(result));
+    }
+
+    /**
+     * 更新厂商配置的参数映射
+     */
+    @OperationLog(module = "厂商配置管理", operation = "更新参数映射")
+    @PutMapping("/{id}/mapping")
+    public ResponseEntity<Result<Void>> updateParamMapping(@PathVariable Long id,
+                                                             @RequestBody Map<String, String> body) {
+        VendorConfig config = vendorConfigService.getById(id);
+        if (config == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "配置不存在"));
+        }
+        String paramMapping = body.get("paramMapping");
+
+        VendorConfig update = new VendorConfig();
+        update.setId(id);
+        update.setParamMapping(paramMapping);
+        vendorConfigService.updateById(update);
+        return ResponseEntity.ok(Result.success(null));
+    }
 }
