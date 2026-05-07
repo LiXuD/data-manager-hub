@@ -24,7 +24,7 @@ public class InterfaceParamServiceImpl extends ServiceImpl<InterfaceParamMapper,
     }
 
     @Override
-    public void saveParams(Long interfaceId, List<InterfaceParam> params) {
+    public void batchSave(Long interfaceId, List<InterfaceParam> params) {
         // 删除旧参数
         LambdaQueryWrapper<InterfaceParam> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(InterfaceParam::getInterfaceId, interfaceId);
@@ -37,5 +37,13 @@ public class InterfaceParamServiceImpl extends ServiceImpl<InterfaceParamMapper,
             }
             this.saveBatch(params);
         }
+    }
+
+    @Override
+    public InterfaceParam getByInterfaceIdAndParamName(Long interfaceId, String paramName) {
+        LambdaQueryWrapper<InterfaceParam> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(InterfaceParam::getInterfaceId, interfaceId)
+               .eq(InterfaceParam::getParamName, paramName);
+        return this.getOne(wrapper);
     }
 }

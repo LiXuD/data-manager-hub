@@ -18,5 +18,10 @@ public interface InterfaceParamService extends IService<InterfaceParam> {
     /**
      * 批量保存接口参数（先删后增）
      */
-    void saveParams(Long interfaceId, List<InterfaceParam> params);
+    void batchSave(Long interfaceId, List<InterfaceParam> params);
+
+    /**
+     * 根据接口ID和参数名查询
+     */
+    InterfaceParam getByInterfaceIdAndParamName(Long interfaceId, String paramName);
 }
