@@ -28,22 +28,38 @@ public abstract class AbstractVendorAdapter implements VendorAdapter {
         }
 
         try {
-            List<RequestMappingItem> items = objectMapper.readValue(mapping,
-                new TypeReference<List<RequestMappingItem>>() {});
-            return requestMappingProcessor.mapRequest(params, items);
+            // 先尝试解析为复杂包裹格式 {"requestMapping": [...], ...}
+            Map<String, Object> wrapper = objectMapper.readValue(mapping,
+                new TypeReference<Map<String, Object>>() {});
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> rawItems = (List<Map<String, Object>>) wrapper.get("requestMapping");
+            if (rawItems != null) {
+                // 将 requestMapping 数组转换为 RequestMappingItem 列表
+                List<RequestMappingItem> items = objectMapper.convertValue(rawItems,
+                    new TypeReference<List<RequestMappingItem>>() {});
+                return requestMappingProcessor.mapRequest(params, items);
+            }
+            // 没有 requestMapping 字段则使用原始参数
+            return new HashMap<>(params);
         } catch (Exception e1) {
             try {
-                Map<String, String> fieldMapping = objectMapper.readValue(mapping,
-                    new TypeReference<Map<String, String>>() {});
-                Map<String, Object> transformed = new HashMap<>();
-                for (Map.Entry<String, Object> entry : params.entrySet()) {
-                    String targetField = fieldMapping.getOrDefault(entry.getKey(), entry.getKey());
-                    transformed.put(targetField, entry.getValue());
-                }
-                return transformed;
+                List<RequestMappingItem> items = objectMapper.readValue(mapping,
+                    new TypeReference<List<RequestMappingItem>>() {});
+                return requestMappingProcessor.mapRequest(params, items);
             } catch (Exception e2) {
-                log.warn("请求参数转换失败, 使用原始参数: {}", e2.getMessage());
-                return new HashMap<>(params);
+                try {
+                    Map<String, String> fieldMapping = objectMapper.readValue(mapping,
+                        new TypeReference<Map<String, String>>() {});
+                    Map<String, Object> transformed = new HashMap<>();
+                    for (Map.Entry<String, Object> entry : params.entrySet()) {
+                        String targetField = fieldMapping.getOrDefault(entry.getKey(), entry.getKey());
+                        transformed.put(targetField, entry.getValue());
+                    }
+                    return transformed;
+                } catch (Exception e3) {
+                    log.warn("请求参数转换失败, 使用原始参数: {}", e3.getMessage());
+                    return new HashMap<>(params);
+                }
             }
         }
     }

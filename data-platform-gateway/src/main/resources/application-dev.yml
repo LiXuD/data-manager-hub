@@ -44,7 +44,7 @@ spring:
         - id: vendor-service
           uri: lb://data-platform-vendor-service
           predicates:
-            - Path=/api/v1/vendor/**,/api/v1/config/**,/api/v1/data-type/**,/api/v1/datatype/**
+            - Path=/api/v1/vendor/**,/api/v1/config/**,/api/v1/data-type/**,/api/v1/datatype/**,/api/v1/data/**
           filters:
             - StripPrefix=2
         - id: caller-service
@@ -62,7 +62,7 @@ spring:
         - id: call-service
           uri: lb://data-platform-call-service
           predicates:
-            - Path=/api/v1/data/**,/api/v1/call-record/**
+            - Path=/api/v1/call-record/**
           filters:
             - StripPrefix=2
         - id: monitor-service

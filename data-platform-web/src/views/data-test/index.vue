@@ -249,7 +249,7 @@ const handleDataTypeChange = async () => {
   if (selectedDataTypeId.value) {
     try {
       const res = await getInterfacesByDataType(selectedDataTypeId.value)
-      interfaceList.value = res || []
+      interfaceList.value = res.data || []
     } catch (error) {
       console.error('加载接口列表失败:', error)
       interfaceList.value = []

@@ -12,11 +12,18 @@ import com.dataplatform.vendor.mapper.VendorConfigMapper;
 import com.dataplatform.vendor.mapper.VendorInfoMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.dataplatform.interface_.api.dto.ApiInterfaceDTO;
+import com.dataplatform.interface_.api.feign.ApiInterfaceFeignClient;
+import com.dataplatform.api.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -40,6 +47,9 @@ public class DataQueryController {
 
     @Autowired
     private DataTypeMapper dataTypeMapper;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @PostMapping("/query")
     public Map<String, Object> query(@RequestBody Map<String, Object> request) {
@@ -81,9 +91,14 @@ public class DataQueryController {
             .eq(VendorConfig::getDataTypeId, dataType.getId())
             .eq(VendorConfig::getStatus, CommonStatus.ACTIVE);
 
+        // interfaceCode 是接口编码(如 "interface_001")，需要先查 api_interface 表获取 interface_id(bigint)
         if (interfaceCode != null && !interfaceCode.isEmpty()) {
-            // 如果有 interfaceCode，通过 interface_id 过滤
-            configWrapper.eq(VendorConfig::getInterfaceId, interfaceCode);
+            List<Long> ids = jdbcTemplate.queryForList(
+                "SELECT id FROM api_interface WHERE interface_code = ? AND deleted = false",
+                Long.class, interfaceCode);
+            if (!ids.isEmpty()) {
+                configWrapper.eq(VendorConfig::getInterfaceId, ids.get(0));
+            }
         }
 
         VendorConfig config = vendorConfigMapper.selectOne(configWrapper);
