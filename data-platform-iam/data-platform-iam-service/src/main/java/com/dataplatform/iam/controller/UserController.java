@@ -5,12 +5,15 @@ import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.iam.entity.User;
+import com.dataplatform.iam.service.UserCallerService;
+import com.dataplatform.iam.service.UserRoleService;
 import com.dataplatform.iam.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -18,6 +21,10 @@ import java.util.Map;
 public class UserController {
     @Autowired
     private UserService userService;
+    @Autowired
+    private UserCallerService userCallerService;
+    @Autowired
+    private UserRoleService userRoleService;
 
     @GetMapping("/list")
     public PageResult<User> list(
@@ -145,6 +152,52 @@ public class UserController {
         user.setId(id);
         user.setPassword(password);
         userService.updateById(user);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    @GetMapping("/{id}/callers")
+    public ResponseEntity<Result<List<Long>>> getUserCallers(@PathVariable Long id) {
+        User user = userService.getById(id);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "用户不存在"));
+        }
+        List<Long> callerIds = userCallerService.getCallerIdsByUserId(id);
+        return ResponseEntity.ok(Result.success(callerIds));
+    }
+
+    @OperationLog(module = "用户管理", operation = "关联调用方")
+    @PostMapping("/{id}/callers")
+    public ResponseEntity<Result<Void>> assignCallers(@PathVariable Long id, @RequestBody List<Long> callerIds) {
+        User user = userService.getById(id);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "用户不存在"));
+        }
+        userCallerService.assignCallers(id, callerIds);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    @GetMapping("/{id}/roles")
+    public ResponseEntity<Result<List<Long>>> getUserRoles(@PathVariable Long id) {
+        User user = userService.getById(id);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "用户不存在"));
+        }
+        List<Long> roleIds = userRoleService.getRoleIdsByUserId(id);
+        return ResponseEntity.ok(Result.success(roleIds));
+    }
+
+    @OperationLog(module = "用户管理", operation = "分配角色")
+    @PostMapping("/{id}/roles")
+    public ResponseEntity<Result<Void>> assignRoles(@PathVariable Long id, @RequestBody List<Long> roleIds) {
+        User user = userService.getById(id);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "用户不存在"));
+        }
+        userRoleService.assignRoles(id, roleIds);
         return ResponseEntity.ok(Result.success(null));
     }
 }

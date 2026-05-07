@@ -18,6 +18,11 @@ public interface CallerFeignClient {
     @GetMapping("/apiKey/validate/{apiKey}")
     Result<ApiKeyDTO> validateApiKey(@PathVariable("apiKey") String apiKey);
 
+    @GetMapping("/internal/apiKey/{apiKeyId}/hasInterfacePermission/{interfaceId}")
+    Result<Boolean> hasInterfacePermission(
+            @PathVariable("apiKeyId") Long apiKeyId,
+            @PathVariable("interfaceId") Long interfaceId);
+
     @PostMapping
     Result<Long> createCaller(@RequestBody CallerInfoDTO dto);
 

@@ -456,4 +456,163 @@ public class IAMApiTest extends BaseTest {
             verifySuccess(response);
         }
     }
+
+    // ==================== 用户调用方关联测试 ====================
+
+    /**
+     * 测试获取用户调用方列表 - 正常场景
+     */
+    @Test
+    @Order(32)
+    public void testGetUserCallers_Success() {
+        Response response = getAuthRequest()
+            .when()
+            .get("/user/1/callers");
+
+        if (response.getStatusCode() == 200) {
+            verifySuccess(response);
+        }
+    }
+
+    /**
+     * 测试分配用户调用方 - 正常场景
+     */
+    @Test
+    @Order(33)
+    public void testAssignUserCallers_Success() {
+        Response response = getAuthRequest()
+            .body(Map.of("callerIds", new Integer[]{1}))
+            .when()
+            .post("/user/1/callers");
+
+        if (response.getStatusCode() == 200) {
+            verifySuccess(response);
+        }
+    }
+
+    // ==================== 权限管理测试 ====================
+
+    /**
+     * 测试权限列表查询 - 正常场景
+     */
+    @Test
+    @Order(40)
+    public void testGetPermissionList_Success() {
+        Response response = getAuthRequest()
+            .queryParam("page", 1)
+            .queryParam("pageSize", 10)
+            .when()
+            .get("/permission/list");
+
+        verifySuccess(response);
+    }
+
+    /**
+     * 测试权限列表查询 - 未授权
+     */
+    @Test
+    @Order(41)
+    public void testGetPermissionList_Unauthorized() {
+        given()
+            .when()
+            .get("/permission/list")
+            .then()
+            .statusCode(401);
+    }
+
+    /**
+     * 测试权限详情查询 - 正常场景
+     */
+    @Test
+    @Order(42)
+    public void testGetPermissionById_Success() {
+        Response response = getAuthRequest()
+            .when()
+            .get("/permission/1");
+
+        if (response.getStatusCode() == 200) {
+            verifySuccess(response);
+        }
+    }
+
+    /**
+     * 测试创建权限 - 正常场景
+     */
+    @Test
+    @Order(43)
+    public void testCreatePermission_Success() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("permissionCode", "TEST_PERM_" + System.currentTimeMillis());
+        data.put("permissionName", "测试权限");
+        data.put("resource", "test");
+        data.put("action", "view");
+
+        Response response = getAuthRequest()
+            .body(data)
+            .when()
+            .post("/permission");
+
+        verifySuccess(response);
+    }
+
+    /**
+     * 测试创建权限 - 必填参数缺失
+     */
+    @Test
+    @Order(44)
+    public void testCreatePermission_MissingRequired() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("permissionName", "测试权限");
+
+        Response response = getAuthRequest()
+            .body(data)
+            .when()
+            .post("/permission");
+
+        response.then().statusCode(400);
+    }
+
+    /**
+     * 测试更新权限 - 正常场景
+     */
+    @Test
+    @Order(45)
+    public void testUpdatePermission_Success() {
+        Response response = getAuthRequest()
+            .body(Map.of("description", "更新后的描述"))
+            .when()
+            .put("/permission/1");
+
+        if (response.getStatusCode() == 200) {
+            verifySuccess(response);
+        }
+    }
+
+    /**
+     * 测试删除权限 - 正常场景
+     */
+    @Test
+    @Order(46)
+    public void testDeletePermission_Success() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("permissionCode", "TEMP_DELETE_" + System.currentTimeMillis());
+        data.put("permissionName", "临时权限");
+        data.put("resource", "temp");
+        data.put("action", "test");
+
+        Response createResponse = getAuthRequest()
+            .body(data)
+            .when()
+            .post("/permission");
+
+        if (createResponse.getStatusCode() == 200) {
+            Integer id = createResponse.jsonPath().getInt("data.id");
+            if (id != null) {
+                Response deleteResponse = getAuthRequest()
+                    .when()
+                    .delete("/permission/" + id);
+                deleteResponse.then().statusCode(anyOf(is(200), is(204)));
+            }
+        }
+    }
 }

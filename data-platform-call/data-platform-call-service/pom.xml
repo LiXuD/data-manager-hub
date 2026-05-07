@@ -45,6 +45,11 @@
             <artifactId>data-platform-billing-api</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-interface-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- OpenFeign -->
         <dependency>

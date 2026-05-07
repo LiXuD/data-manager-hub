@@ -650,4 +650,20 @@ onUnmounted(() => {
     text-align: left;
   }
 }
+
+/* 减少动画支持 */
+@media (prefers-reduced-motion: reduce) {
+  .stat-card {
+    transition: none;
+  }
+
+  .stat-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .action-item:hover .action-icon {
+    transform: none;
+  }
+}
 </style>

@@ -5,24 +5,30 @@
  * @param options.compact - Use compact notation (K, M) for large numbers
  */
 export function formatNumber(num: number, options?: { compact?: boolean }): string {
+  const locale = 'zh-CN'
+  
   if (options?.compact) {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M'
-    }
-    if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K'
-    }
+    const formatter = new Intl.NumberFormat(locale, {
+      notation: 'compact',
+      maximumFractionDigits: 1
+    })
+    return formatter.format(num)
   }
-  return num.toLocaleString()
+  
+  return num.toLocaleString(locale)
 }
 
 /**
  * Format number as currency
  * @param num - Number to format
- * @param currency - Currency symbol (default: ¥)
+ * @param currency - Currency code (default: CNY)
  */
-export function formatCurrency(num: number, currency = '¥'): string {
-  return `${currency}${num.toLocaleString()}`
+export function formatCurrency(num: number, currency = 'CNY'): string {
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 2
+  }).format(num)
 }
 
 /**

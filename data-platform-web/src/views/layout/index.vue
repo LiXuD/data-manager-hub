@@ -35,71 +35,117 @@ onUnmounted(() => {
 
 const activeMenu = computed(() => route.path)
 
-// 菜单配置
-const menuItems = [
+// 菜单配置，包含权限
+const allMenuItems = [
   {
     path: '/dashboard',
     title: '数据概览',
-    icon: 'dashboard'
+    icon: 'dashboard',
+    permission: 'dashboard:view'
   },
   {
     path: 'system',
     title: '系统管理',
     icon: 'setting',
+    permission: 'system:view',
     children: [
-      { path: '/tenant', title: '租户管理' },
-      { path: '/user', title: '用户管理' },
-      { path: '/role', title: '角色管理' }
+      { path: '/tenant', title: '租户管理', permission: 'tenant:view' },
+      { path: '/user', title: '用户管理', permission: 'user:view' },
+      { path: '/role', title: '角色管理', permission: 'role:view' }
     ]
   },
   {
     path: 'business',
     title: '业务管理',
     icon: 'component',
+    permission: 'business:view',
     children: [
-      { path: '/vendor', title: '厂商管理' },
-      { path: '/caller', title: '调用方管理' },
-      { path: '/datatype', title: '数据类型' },
-      { path: '/interface', title: '接口管理' }
+      { path: '/vendor', title: '厂商管理', permission: 'vendor:view' },
+      { path: '/caller', title: '调用方管理', permission: 'caller:view' },
+      { path: '/datatype', title: '数据类型', permission: 'datatype:view' },
+      { path: '/interface', title: '接口管理', permission: 'interface:view' }
     ]
   },
   {
     path: '/call',
     title: '调用记录',
-    icon: 'connection'
+    icon: 'connection',
+    permission: 'call:view'
   },
   {
     path: '/billing',
     title: '计费管理',
-    icon: 'wallet'
+    icon: 'wallet',
+    permission: 'billing:view'
   },
   {
     path: '/monitor',
     title: '监控告警',
     icon: 'alarm',
-    badge: 3
+    permission: 'monitor:view'
   },
   {
     path: '/config',
     title: '配置中心',
-    icon: 'config'
+    icon: 'config',
+    permission: 'config:view'
   },
   {
     path: '/graylog',
     title: '灰度发布',
-    icon: 'release'
+    icon: 'release',
+    permission: 'graylog:view'
   },
   {
     path: '/audit',
     title: '操作日志',
-    icon: 'document'
-  },
-  {
-    path: '/data-test',
-    title: '数据查询测试',
-    icon: 'play'
+    icon: 'document',
+    permission: 'audit:view'
   }
 ]
+
+// 判断是否为管理员（拥有admin角色）
+const isAdmin = computed(() => {
+  const roles = userStore.userInfo?.roles || []
+  return roles.includes('admin')
+})
+
+// 过滤菜单 - 根据用户权限
+const menuItems = computed(() => {
+  // 管理员显示所有菜单
+  if (isAdmin.value) {
+    return allMenuItems
+  }
+  // 普通用户根据权限过滤
+  return filterMenuItems(allMenuItems)
+})
+
+function filterMenuItems(items: any[]): any[] {
+  return items
+    .map(item => {
+      if (item.children) {
+        const filteredChildren = filterMenuItems(item.children)
+        if (filteredChildren.length > 0) {
+          return { ...item, children: filteredChildren }
+        }
+        // 如果没有子菜单，检查是否有父权限
+        if (hasPermission(item.permission)) {
+          return { ...item, children: [] }
+        }
+        return null
+      }
+      if (hasPermission(item.permission)) {
+        return item
+      }
+      return null
+    })
+    .filter((item): item is any => item !== null)
+}
+
+function hasPermission(permission?: string): boolean {
+  if (!permission) return true
+  return userStore.hasPermission(permission)
+}
 
 // SVG 图标组件
 const IconDashboard = {
@@ -129,9 +175,6 @@ const IconRelease = {
 const IconDocument = {
   template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`
 }
-const IconPlay = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`
-}
 
 const icons: Record<string, { template: string }> = {
   dashboard: IconDashboard,
@@ -142,8 +185,7 @@ const icons: Record<string, { template: string }> = {
   alarm: IconAlarm,
   config: IconConfig,
   release: IconRelease,
-  document: IconDocument,
-  play: IconPlay
+  document: IconDocument
 }
 
 const handleMenuSelect = (path: string) => {
@@ -190,7 +232,7 @@ const toggleSidebar = () => {
           @select="handleMenuSelect"
         >
           <template v-for="item in menuItems" :key="item.path">
-            <el-sub-menu v-if="item.children" :index="String(item.path)">
+            <el-sub-menu v-if="item.children && item.children.length > 0" :index="String(item.path)">
               <template #title>
                 <component :is="icons[item.icon]" class="menu-icon" />
                 <span class="menu-title">{{ item.title }}</span>
@@ -208,7 +250,7 @@ const toggleSidebar = () => {
 
         <!-- 底部折叠按钮 -->
         <div class="sidebar-footer">
-          <button class="collapse-btn" @click="toggleSidebar">
+          <button class="collapse-btn" type="button" :aria-label="isCollapse ? '展开侧边栏' : '收起侧边栏'">
             <svg v-if="isCollapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 18l6-6-6-6"/>
             </svg>
@@ -233,7 +275,7 @@ const toggleSidebar = () => {
 
           <div class="header-right">
             <!-- 搜索按钮 -->
-            <button class="header-btn">
+            <button class="header-btn" type="button" aria-label="搜索">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/>
                 <path d="m21 21-4.35-4.35"/>
@@ -242,7 +284,7 @@ const toggleSidebar = () => {
 
             <!-- 通知 -->
             <el-badge :value="3" :max="99" class="notification-badge" @click="router.push('/monitor')">
-              <button class="header-btn">
+              <button class="header-btn" type="button" aria-label="通知">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                   <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -310,7 +352,7 @@ const toggleSidebar = () => {
 <style scoped>
 .layout-wrapper {
   display: flex;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
   overflow: hidden;
   background: var(--color-bg);
@@ -476,6 +518,11 @@ const toggleSidebar = () => {
   border-color: var(--color-primary);
 }
 
+.collapse-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .collapse-btn svg {
   width: 18px;
   height: 18px;
@@ -553,6 +600,11 @@ const toggleSidebar = () => {
   background: var(--color-surface);
   color: var(--color-text-primary);
   border-color: var(--color-border);
+}
+
+.header-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .header-btn svg {
@@ -683,5 +735,21 @@ const toggleSidebar = () => {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+/* 减少动画支持 */
+@media (prefers-reduced-motion: reduce) {
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: none;
+  }
+
+  .sidebar {
+    transition: none;
+  }
+
+  .main-content {
+    transition: none;
+  }
 }
 </style>

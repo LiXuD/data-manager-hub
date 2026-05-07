@@ -56,8 +56,10 @@
             <span class="time-cell">{{ row.createdAt }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
+            <el-button type="primary" link @click="handleRole(row)">配置角色</el-button>
+            <el-button type="primary" link @click="handleCaller(row)">关联调用方</el-button>
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
@@ -103,6 +105,44 @@
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 角色配置弹窗 -->
+    <el-dialog v-model="roleVisible" title="配置角色" width="800px" class="config-dialog">
+      <div class="config-container">
+        <el-transfer
+          v-model="selectedRoles"
+          :data="roleList"
+          :titles="['可选角色', '已授角色']"
+          :props="{ key: 'id', label: 'roleName' }"
+          class="custom-transfer"
+        />
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="roleVisible = false" size="large">取消</el-button>
+          <el-button type="primary" :loading="submitting" @click="handleSaveRoles" size="large">确定</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 调用方关联弹窗 -->
+    <el-dialog v-model="callerVisible" title="关联调用方" width="800px" class="config-dialog">
+      <div class="config-container">
+        <el-transfer
+          v-model="selectedCallers"
+          :data="callerList"
+          :titles="['可选调用方', '已关联调用方']"
+          :props="{ key: 'id', label: 'callerName' }"
+          class="custom-transfer"
+        />
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="callerVisible = false" size="large">取消</el-button>
+          <el-button type="primary" :loading="submitting" @click="handleSaveCallers" size="large">确定</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -113,6 +153,8 @@ import { request } from '@/utils/request'
 import { COMMON_STATUS } from '@/constants/status'
 
 interface User { id: number; username: string; nickname: string; email: string; phone: string; status: string; createdAt: string }
+interface Role { id: number; roleCode: string; roleName: string }
+interface Caller { id: number; callerCode: string; callerName: string }
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -122,6 +164,15 @@ const pagination = reactive({ currentPage: 1, pageSize: 10 })
 const searchForm = reactive({ username: '', status: '' })
 const dialogVisible = ref(false)
 const form = reactive({ id: null as number | null, username: '', nickname: '', email: '', phone: '', status: COMMON_STATUS.ACTIVE })
+
+const roleVisible = ref(false)
+const roleList = ref<Role[]>([])
+const selectedRoles = ref<number[]>([])
+const currentUserId = ref<number | null>(null)
+
+const callerVisible = ref(false)
+const callerList = ref<Caller[]>([])
+const selectedCallers = ref<number[]>([])
 
 interface UserListResponse {
   data?: User[]
@@ -192,6 +243,64 @@ const handleStatusChange = async (row: User) => {
   }
 }
 
+const handleRole = async (row: User) => {
+  currentUserId.value = row.id
+  try {
+    const [rolesRes, userRolesRes] = await Promise.all([
+      request.get<{ data: Role[] }>('/role/list', { params: { page: 1, pageSize: 100 } }),
+      request.get<{ data: number[] }>(`/user/${row.id}/roles`)
+    ])
+    roleList.value = rolesRes.data || []
+    selectedRoles.value = userRolesRes.data || []
+    roleVisible.value = true
+  } catch (error) {
+    ElMessage.error('加载角色数据失败')
+  }
+}
+
+const handleSaveRoles = async () => {
+  if (!currentUserId.value) return
+  submitting.value = true
+  try {
+    await request.post(`/user/${currentUserId.value}/roles`, selectedRoles.value)
+    ElMessage.success('角色配置成功')
+    roleVisible.value = false
+  } catch (error) {
+    ElMessage.error('角色配置失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const handleCaller = async (row: User) => {
+  currentUserId.value = row.id
+  try {
+    const [callersRes, userCallersRes] = await Promise.all([
+      request.get<{ data: Caller[] }>('/caller/list', { params: { page: 1, pageSize: 100 } }),
+      request.get<{ data: number[] }>(`/user/${row.id}/callers`)
+    ])
+    callerList.value = callersRes.data || []
+    selectedCallers.value = userCallersRes.data || []
+    callerVisible.value = true
+  } catch (error) {
+    ElMessage.error('加载调用方数据失败')
+  }
+}
+
+const handleSaveCallers = async () => {
+  if (!currentUserId.value) return
+  submitting.value = true
+  try {
+    await request.post(`/user/${currentUserId.value}/callers`, selectedCallers.value)
+    ElMessage.success('调用方关联成功')
+    callerVisible.value = false
+  } catch (error) {
+    ElMessage.error('调用方关联失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
 onMounted(() => { fetchList() })
 </script>
 
@@ -212,4 +321,70 @@ onMounted(() => { fetchList() })
 .user-avatar { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--color-primary), #6366F1); border-radius: 8px; color: #0A1628; font-weight: 600; font-size: 14px; }
 .time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
 .pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }
+
+.config-dialog :deep(.el-dialog__header) {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.config-dialog :deep(.el-dialog__title) {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.config-container {
+  padding: 8px 0;
+}
+
+.custom-transfer {
+  --el-transfer-panel-width: 300px;
+}
+
+.custom-transfer :deep(.el-transfer-panel) {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.custom-transfer :deep(.el-transfer-panel__header) {
+  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+  padding: 16px 20px;
+}
+
+.custom-transfer :deep(.el-transfer-panel__header .el-checkbox__label) {
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.custom-transfer :deep(.el-transfer-panel__header .el-checkbox__inner) {
+  border-color: white;
+}
+
+.custom-transfer :deep(.el-transfer-panel__body) {
+  height: 400px;
+}
+
+
+
+.custom-transfer :deep(.el-transfer-panel__item) {
+  border-radius: 8px;
+}
+
+.custom-transfer :deep(.el-transfer__buttons) {
+  padding: 0 24px;
+}
+
+.custom-transfer :deep(.el-transfer__button) {
+  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+}
+
+.dialog-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
 </style>

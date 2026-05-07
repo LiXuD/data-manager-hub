@@ -49,3 +49,11 @@ export const getUserRoles = (userId: number) => {
 export const assignUserRoles = (userId: number, roleIds: number[]) => {
   return request.post(`/user/${userId}/roles`, { roleIds })
 }
+
+export const getUserCallers = (userId: number) => {
+  return request.get(`/user/${userId}/callers`)
+}
+
+export const assignUserCallers = (userId: number, callerIds: number[]) => {
+  return request.post(`/user/${userId}/callers`, { callerIds })
+}

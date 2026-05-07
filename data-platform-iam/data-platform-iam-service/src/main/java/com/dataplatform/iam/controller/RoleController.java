@@ -4,13 +4,16 @@ import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
+import com.dataplatform.iam.entity.Permission;
 import com.dataplatform.iam.entity.Role;
+import com.dataplatform.iam.service.RolePermissionService;
 import com.dataplatform.iam.service.RoleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -18,6 +21,8 @@ import java.util.Map;
 public class RoleController {
     @Autowired
     private RoleService roleService;
+    @Autowired
+    private RolePermissionService rolePermissionService;
 
     @GetMapping("/list")
     public PageResult<Role> list(
@@ -108,6 +113,40 @@ public class RoleController {
         role.setId(id);
         role.setStatus(statusEnum);
         roleService.updateById(role);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    @GetMapping("/{id}/permissions")
+    public ResponseEntity<Result<List<Permission>>> getRolePermissions(@PathVariable Long id) {
+        Role role = roleService.getById(id);
+        if (role == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "角色不存在"));
+        }
+        List<Permission> permissions = rolePermissionService.getPermissionsByRoleId(id);
+        return ResponseEntity.ok(Result.success(permissions));
+    }
+
+    @GetMapping("/{id}/permissionIds")
+    public ResponseEntity<Result<List<Long>>> getRolePermissionIds(@PathVariable Long id) {
+        Role role = roleService.getById(id);
+        if (role == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "角色不存在"));
+        }
+        List<Long> permissionIds = rolePermissionService.getPermissionIdsByRoleId(id);
+        return ResponseEntity.ok(Result.success(permissionIds));
+    }
+
+    @OperationLog(module = "角色管理", operation = "分配权限")
+    @PostMapping("/{id}/permissions")
+    public ResponseEntity<Result<Void>> assignPermissions(@PathVariable Long id, @RequestBody List<Long> permissionIds) {
+        Role role = roleService.getById(id);
+        if (role == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "角色不存在"));
+        }
+        rolePermissionService.assignPermissions(id, permissionIds);
         return ResponseEntity.ok(Result.success(null));
     }
 }

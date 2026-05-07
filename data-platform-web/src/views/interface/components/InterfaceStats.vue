@@ -168,6 +168,7 @@
 import { ref, watch, computed } from 'vue'
 import { getInterfaceStats, getInterfaceDailyStats, type InterfaceStats, type DailyStatItem } from '@/api/interface'
 import type { ApiInterface } from '@/types'
+import { formatNumber } from '@/utils/format'
 
 interface Props {
   modelValue: boolean
@@ -250,16 +251,7 @@ const formatDate = (date: string) => {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-// 格式化数字
-const formatNumber = (num: number) => {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M'
-  }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K'
-  }
-  return num.toString()
-}
+// 使用工具函数格式化数字，避免硬编码
 
 // 加载统计数据
 const loadStats = async () => {

@@ -4,6 +4,7 @@ import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.caller.entity.ApiKey;
+import com.dataplatform.caller.service.ApiKeyInterfaceService;
 import com.dataplatform.caller.service.ApiKeyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,8 @@ public class ApiKeyController {
 
     @Autowired
     private ApiKeyService apiKeyService;
+    @Autowired
+    private ApiKeyInterfaceService apiKeyInterfaceService;
 
     @GetMapping("/list")
     public Result<List<ApiKey>> list() {
@@ -79,5 +82,28 @@ public class ApiKeyController {
         apiKey.setStatus(statusEnum);
         apiKeyService.updateById(apiKey);
         return Result.success(apiKey);
+    }
+
+    @GetMapping("/{id}/interfaces")
+    public ResponseEntity<Result<List<Long>>> getInterfaceIds(@PathVariable Long id) {
+        ApiKey apiKey = apiKeyService.getById(id);
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "API Key不存在"));
+        }
+        List<Long> interfaceIds = apiKeyInterfaceService.getInterfaceIdsByApiKeyId(id);
+        return ResponseEntity.ok(Result.success(interfaceIds));
+    }
+
+    @OperationLog(module = "API Key管理", operation = "分配接口权限")
+    @PostMapping("/{id}/interfaces")
+    public ResponseEntity<Result<Void>> assignInterfaces(@PathVariable Long id, @RequestBody List<Long> interfaceIds) {
+        ApiKey apiKey = apiKeyService.getById(id);
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "API Key不存在"));
+        }
+        apiKeyInterfaceService.assignInterfaces(id, interfaceIds);
+        return ResponseEntity.ok(Result.success(null));
     }
 }

@@ -48,7 +48,7 @@
             <el-switch v-model="row.status" active-value="active" inactive-value="inactive" @change="handleStatusChange(row)" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="primary" link @click="handleApiKey(row)">API Key</el-button>
@@ -91,12 +91,27 @@
             <el-tag :type="row.status === COMMON_STATUS.ACTIVE ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="80">
+        <el-table-column label="操作" width="200">
           <template #default="{ row }">
-            <el-button type="danger" link @click="handleDeleteApiKey(row.id)">删除</el-button>
+            <el-button type="primary" link @click="handleInterfaceAuth(row.id!)">接口授权</el-button>
+            <el-button type="danger" link @click="handleDeleteApiKey(row.id!)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
+    </el-dialog>
+
+    <!-- 接口授权弹窗 -->
+    <el-dialog v-model="interfaceAuthVisible" title="API Key接口授权" width="500px">
+      <el-transfer
+        v-model="selectedInterfaces"
+        :data="interfaceList"
+        :titles="['可选接口', '已授权接口']"
+        :props="{ key: 'id', label: 'interfaceName' }"
+      />
+      <template #footer>
+        <el-button @click="interfaceAuthVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveInterfaceAuth">确定</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -104,17 +119,25 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getCallerList, deleteCaller, getApiKeyList, createApiKey, deleteApiKey, updateCallerStatus } from '@/api/caller'
+import { getCallerList, deleteCaller, getApiKeyList, createApiKey, deleteApiKey, updateCallerStatus, getApiKeyInterfaces, assignApiKeyInterfaces } from '@/api/caller'
 import type { Caller, ApiKey } from '@/api/caller'
+import { request } from '@/utils/request'
 import { COMMON_STATUS } from '@/constants'
+
+interface Interface { id: number; interfaceName: string; interfaceCode: string }
 
 const searchForm = reactive({ keyword: '', status: '' })
 const tableData = ref<Caller[]>([])
 const loading = ref(false)
+const submitting = ref(false)
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const apiKeyVisible = ref(false)
 const currentCallerId = ref<number>(0)
 const apiKeyList = ref<ApiKey[]>([])
+const interfaceAuthVisible = ref(false)
+const interfaceList = ref<Interface[]>([])
+const selectedInterfaces = ref<number[]>([])
+const currentApiKeyId = ref<number | null>(null)
 
 const loadData = async () => {
   loading.value = true
@@ -141,6 +164,35 @@ const handleStatusChange = async (row: Caller) => {
   } catch (error) {
     row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
     ElMessage.error('状态更新失败')
+  }
+}
+
+const handleInterfaceAuth = async (apiKeyId: number) => {
+  currentApiKeyId.value = apiKeyId
+  try {
+    const [interfacesRes, apiKeyInterfacesRes] = await Promise.all([
+      request.get<{ data: Interface[] }>('/interface/list', { params: { page: 1, pageSize: 100 } }),
+      getApiKeyInterfaces(apiKeyId)
+    ])
+    interfaceList.value = interfacesRes.data || []
+    selectedInterfaces.value = apiKeyInterfacesRes.data || []
+    interfaceAuthVisible.value = true
+  } catch (error) {
+    ElMessage.error('加载接口数据失败')
+  }
+}
+
+const handleSaveInterfaceAuth = async () => {
+  if (!currentApiKeyId.value) return
+  submitting.value = true
+  try {
+    await assignApiKeyInterfaces(currentApiKeyId.value, selectedInterfaces.value)
+    ElMessage.success('接口授权成功')
+    interfaceAuthVisible.value = false
+  } catch (error) {
+    ElMessage.error('接口授权失败')
+  } finally {
+    submitting.value = false
   }
 }
 

@@ -28,7 +28,7 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
       try {
-        const res = await request.post<{ data: { token: string; username: string; userId: number } }>('/auth/login', {
+        const res = await request.post<{ data: { token: string; username: string; userId: number; tenantId?: number; permissions?: string[]; roles?: string[] } }>('/auth/login', {
           username: loginForm.value.username,
           password: loginForm.value.password
         })
@@ -38,7 +38,9 @@ const handleLogin = async () => {
           id: String(data.userId),
           username: data.username,
           nickname: data.username,
-          roles: ['admin']
+          roles: data.roles || [],
+          tenantId: data.tenantId,
+          permissions: data.permissions || []
         })
 
         ElMessage.success('登录成功')
@@ -102,6 +104,7 @@ const handleLogin = async () => {
               v-model="loginForm.username"
               placeholder="请输入用户名"
               size="large"
+              autocomplete="username"
             />
           </div>
         </el-form-item>
@@ -118,6 +121,7 @@ const handleLogin = async () => {
               placeholder="请输入密码"
               size="large"
               show-password
+              autocomplete="current-password"
               @keyup.enter="handleLogin"
             />
           </div>
@@ -139,7 +143,7 @@ const handleLogin = async () => {
             @click="handleLogin"
           >
             <span v-if="!loading">立即登录</span>
-            <span v-else>登录中...</span>
+            <span v-else>登录中…</span>
           </el-button>
         </el-form-item>
       </el-form>
@@ -488,6 +492,26 @@ const handleLogin = async () => {
 
   .login-header h1 {
     font-size: 22px;
+  }
+}
+
+/* 减少动画支持 */
+@media (prefers-reduced-motion: reduce) {
+  .bg-glow-1,
+  .bg-glow-2 {
+    animation: none;
+  }
+
+  .particle {
+    animation: none;
+  }
+
+  .login-box {
+    animation: none;
+  }
+
+  .logo-icon {
+    animation: none;
   }
 }
 </style>

@@ -67,3 +67,11 @@ export const updateApiKeyStatus = (id: number, status: 'active' | 'inactive' | '
 export const deleteApiKey = (id: number) => {
   return request.delete<void>(`/caller/api-key/${id}`)
 }
+
+export const getApiKeyInterfaces = (apiKeyId: number) => {
+  return request.get(`/caller/api-key/${apiKeyId}/interfaces`)
+}
+
+export const assignApiKeyInterfaces = (apiKeyId: number, interfaceIds: number[]) => {
+  return request.post(`/caller/api-key/${apiKeyId}/interfaces`, { interfaceIds })
+}

@@ -3,6 +3,7 @@ package com.dataplatform.caller.controller;
 import com.dataplatform.api.Result;
 import com.dataplatform.caller.api.dto.ApiKeyDTO;
 import com.dataplatform.caller.entity.ApiKey;
+import com.dataplatform.caller.service.ApiKeyInterfaceService;
 import com.dataplatform.caller.service.ApiKeyService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,8 @@ public class CallerInternalController {
 
     @Autowired
     private ApiKeyService apiKeyService;
+    @Autowired
+    private ApiKeyInterfaceService apiKeyInterfaceService;
 
     @GetMapping("/apiKey/validate/{apiKey}")
     public Result<ApiKeyDTO> validateApiKey(@PathVariable("apiKey") String apiKey) {
@@ -22,6 +25,14 @@ public class CallerInternalController {
             return Result.success(null);
         }
         return Result.success(toDTO(key));
+    }
+
+    @GetMapping("/apiKey/{apiKeyId}/hasInterfacePermission/{interfaceId}")
+    public Result<Boolean> hasInterfacePermission(
+            @PathVariable("apiKeyId") Long apiKeyId,
+            @PathVariable("interfaceId") Long interfaceId) {
+        boolean hasPermission = apiKeyInterfaceService.hasInterfacePermission(apiKeyId, interfaceId);
+        return Result.success(hasPermission);
     }
 
     private ApiKeyDTO toDTO(ApiKey entity) {

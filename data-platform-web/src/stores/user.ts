@@ -9,6 +9,8 @@ interface UserInfo {
   email?: string
   phone?: string
   roles: string[]
+  tenantId?: number
+  permissions?: string[]
 }
 
 const loadUserInfo = (): UserInfo | null => {
@@ -20,7 +22,13 @@ export const useUserStore = defineStore('user', () => {
   const token = ref<string>(localStorage.getItem(STORAGE_KEYS.TOKEN) || '')
   const userInfo = ref<UserInfo | null>(loadUserInfo())
   const username = computed(() => userInfo.value?.username || '')
+  const tenantId = computed(() => userInfo.value?.tenantId)
+  const permissions = computed(() => userInfo.value?.permissions || [])
   const isLoggedIn = computed(() => !!token.value)
+
+  const hasPermission = (permission: string): boolean => {
+    return permissions.value.includes(permission)
+  }
 
   const setToken = (newToken: string) => {
     if (newToken === token.value) return
@@ -58,10 +66,13 @@ export const useUserStore = defineStore('user', () => {
     token,
     userInfo,
     username,
+    tenantId,
+    permissions,
     isLoggedIn,
     setToken,
     setUserInfo,
     login,
-    logout
+    logout,
+    hasPermission
   }
 })

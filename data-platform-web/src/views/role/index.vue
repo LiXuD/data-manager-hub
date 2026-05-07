@@ -89,16 +89,21 @@
     </el-dialog>
 
     <!-- 权限配置弹窗 -->
-    <el-dialog v-model="permissionVisible" title="配置权限" width="500px">
-      <el-transfer
-        v-model="selectedPermissions"
-        :data="permissionList"
-        :titles="['可选权限', '已授权限']"
-        :props="{ key: 'id', label: 'permissionName' }"
-      />
+    <el-dialog v-model="permissionVisible" title="配置权限" width="800px" class="permission-dialog">
+      <div class="permission-config-container">
+        <el-transfer
+          v-model="selectedPermissions"
+          :data="permissionList"
+          :titles="['可选权限', '已授权限']"
+          :props="{ key: 'id', label: 'permissionName' }"
+          class="custom-transfer"
+        />
+      </div>
       <template #footer>
-        <el-button @click="permissionVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSavePermissions">确定</el-button>
+        <div class="dialog-footer">
+          <el-button @click="permissionVisible = false" size="large">取消</el-button>
+          <el-button type="primary" :loading="submitting" @click="handleSavePermissions" size="large">确定</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -206,8 +211,8 @@ const handlePermission = async (row: Role) => {
   currentRoleId.value = row.id
   try {
     const [permsRes, rolePermsRes] = await Promise.all([
-      request.get<{ data: Permission[] }>('/role/permission/list'),
-      request.get<{ data: number[] }>(`/role/${row.id}/permissions`)
+      request.get<{ data: Permission[] }>('/permission/all'),
+      request.get<{ data: number[] }>(`/role/${row.id}/permissionIds`)
     ])
     permissionList.value = permsRes.data || []
     selectedPermissions.value = rolePermsRes.data || []
@@ -221,7 +226,7 @@ const handleSavePermissions = async () => {
   if (!currentRoleId.value) return
   submitting.value = true
   try {
-    await request.post(`/role/${currentRoleId.value}/permissions`, { permissionIds: selectedPermissions.value })
+    await request.post(`/role/${currentRoleId.value}/permissions`, selectedPermissions.value)
     ElMessage.success('权限配置成功')
     permissionVisible.value = false
   } catch (error) {
@@ -243,4 +248,70 @@ onMounted(() => { fetchList() })
 .code-tag { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); background: var(--color-bg-light); padding: 4px 10px; border-radius: 6px; }
 .time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
 .pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }
+
+.permission-dialog :deep(.el-dialog__header) {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.permission-dialog :deep(.el-dialog__title) {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.permission-config-container {
+  padding: 8px 0;
+}
+
+.custom-transfer {
+  --el-transfer-panel-width: 300px;
+}
+
+.custom-transfer :deep(.el-transfer-panel) {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.custom-transfer :deep(.el-transfer-panel__header) {
+  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+  padding: 16px 20px;
+}
+
+.custom-transfer :deep(.el-transfer-panel__header .el-checkbox__label) {
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.custom-transfer :deep(.el-transfer-panel__header .el-checkbox__inner) {
+  border-color: white;
+}
+
+.custom-transfer :deep(.el-transfer-panel__body) {
+  height: 400px;
+}
+
+
+
+.custom-transfer :deep(.el-transfer-panel__item) {
+  border-radius: 8px;
+}
+
+.custom-transfer :deep(.el-transfer__buttons) {
+  padding: 0 24px;
+}
+
+.custom-transfer :deep(.el-transfer__button) {
+  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+}
+
+.dialog-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
 </style>

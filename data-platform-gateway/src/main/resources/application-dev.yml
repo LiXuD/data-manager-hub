@@ -80,7 +80,7 @@ spring:
         - id: iam-service
           uri: lb://data-platform-iam-service
           predicates:
-            - Path=/api/v1/user/**,/api/v1/auth/**,/api/v1/role/**
+            - Path=/api/v1/user/**,/api/v1/auth/**,/api/v1/role/**,/api/v1/permission/**
           filters:
             - StripPrefix=2
         - id: log-service
