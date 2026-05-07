@@ -6,7 +6,9 @@ import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.interface_.entity.ApiInterface;
 import com.dataplatform.interface_.entity.ApiInterfaceVO;
+import com.dataplatform.interface_.entity.InterfaceParam;
 import com.dataplatform.interface_.service.ApiInterfaceService;
+import com.dataplatform.interface_.service.InterfaceParamService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/interface")
@@ -23,6 +26,9 @@ public class ApiInterfaceController {
 
     @Autowired
     private ApiInterfaceService apiInterfaceService;
+
+    @Autowired
+    private InterfaceParamService interfaceParamService;
 
     @GetMapping("/list")
     public PageResult<ApiInterfaceVO> list(
@@ -191,5 +197,112 @@ public class ApiInterfaceController {
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
         List<Map<String, Object>> stats = apiInterfaceService.getDailyCallStats(id, startTime, endTime);
         return ResponseEntity.ok(Result.success(stats));
+    }
+
+    /**
+     * 获取接口的所有参数定义
+     */
+    @GetMapping("/{id}/params")
+    public ResponseEntity<Result<List<InterfaceParam>>> listParams(@PathVariable Long id) {
+        ApiInterface apiInterface = apiInterfaceService.getById(id);
+        if (apiInterface == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "接口不存在"));
+        }
+        List<InterfaceParam> params = interfaceParamService.listByInterfaceId(id);
+        return ResponseEntity.ok(Result.success(params));
+    }
+
+    /**
+     * 新增一个参数定义
+     */
+    @OperationLog(module = "接口管理", operation = "新增接口参数")
+    @PostMapping("/{id}/params")
+    public ResponseEntity<Result<InterfaceParam>> addParam(@PathVariable Long id,
+                                                            @RequestBody InterfaceParam param) {
+        if (param.getParamName() == null || param.getParamName().trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "参数名不能为空"));
+        }
+        ApiInterface apiInterface = apiInterfaceService.getById(id);
+        if (apiInterface == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "接口不存在"));
+        }
+        InterfaceParam existing = interfaceParamService.getByInterfaceIdAndParamName(id, param.getParamName());
+        if (existing != null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "参数名已存在: " + param.getParamName()));
+        }
+        param.setId(null);
+        param.setInterfaceId(id);
+        if (param.getParamType() == null) {
+            param.setParamType("string");
+        }
+        if (param.getRequired() == null) {
+            param.setRequired(false);
+        }
+        if (param.getSort() == null) {
+            param.setSort(0);
+        }
+        interfaceParamService.save(param);
+        return ResponseEntity.ok(Result.success(param));
+    }
+
+    /**
+     * 批量保存参数定义（覆盖更新）
+     */
+    @OperationLog(module = "接口管理", operation = "批量保存接口参数")
+    @PutMapping("/{id}/params/batch")
+    public ResponseEntity<Result<Void>> batchSaveParams(@PathVariable Long id,
+                                                          @RequestBody List<InterfaceParam> params) {
+        ApiInterface apiInterface = apiInterfaceService.getById(id);
+        if (apiInterface == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "接口不存在"));
+        }
+        if (params != null && !params.isEmpty()) {
+            List<String> paramNames = params.stream()
+                    .map(InterfaceParam::getParamName)
+                    .collect(Collectors.toList());
+            if (paramNames.size() != paramNames.stream().distinct().count()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Result.error(400, "参数名不能重复"));
+            }
+        }
+        interfaceParamService.batchSave(id, params);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    /**
+     * 更新单个参数定义
+     */
+    @OperationLog(module = "接口管理", operation = "更新接口参数")
+    @PutMapping("/params/{paramId}")
+    public ResponseEntity<Result<InterfaceParam>> updateParam(@PathVariable Long paramId,
+                                                                @RequestBody InterfaceParam param) {
+        InterfaceParam existing = interfaceParamService.getById(paramId);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "参数定义不存在"));
+        }
+        param.setId(paramId);
+        interfaceParamService.updateById(param);
+        return ResponseEntity.ok(Result.success(interfaceParamService.getById(paramId)));
+    }
+
+    /**
+     * 删除一个参数定义
+     */
+    @OperationLog(module = "接口管理", operation = "删除接口参数")
+    @DeleteMapping("/params/{paramId}")
+    public ResponseEntity<Result<Void>> deleteParam(@PathVariable Long paramId) {
+        InterfaceParam existing = interfaceParamService.getById(paramId);
+        if (existing == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "参数定义不存在"));
+        }
+        interfaceParamService.removeById(paramId);
+        return ResponseEntity.ok(Result.success(null));
     }
 }
