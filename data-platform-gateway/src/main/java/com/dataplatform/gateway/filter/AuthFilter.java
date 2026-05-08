@@ -47,13 +47,13 @@ public class AuthFilter implements GlobalFilter, Ordered {
         }
 
         return redisTemplate.opsForValue().get(REDIS_KEY_PREFIX + apiKey)
-                .switchIfEmpty(Mono.defer(() -> writeErrorMono(exchange, 401, "API Key 无效或已过期")))
+                .switchIfEmpty(Mono.defer(() -> writeError(exchange, 401, "API Key 无效或已过期")))
                 .flatMap(value -> {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> keyInfo = objectMapper.convertValue(value, Map.class);
                     Integer status = (Integer) keyInfo.get("status");
                     if (status == null || status != 1) {
-                        return writeErrorMono(exchange, 403, "调用方已禁用");
+                        return writeError(exchange, 403, "调用方已禁用");
                     }
                     exchange.getAttributes().put("callerId", keyInfo.get("callerId"));
                     exchange.getAttributes().put("keyId", keyInfo.get("keyId"));
@@ -88,9 +88,6 @@ public class AuthFilter implements GlobalFilter, Ordered {
         }
     }
 
-    private Mono<Void> writeErrorMono(ServerWebExchange exchange, int code, String message) {
-        return writeError(exchange, code, message);
-    }
 
     @Override
     public int getOrder() {
