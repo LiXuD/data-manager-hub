@@ -182,11 +182,9 @@ const pagination = reactive({
 
 // 从缓存获取下拉选项（使用computed确保响应式更新）
 const vendorOptions = computed(() => {
-  console.log('vendorOptions 更新:', cacheStore.vendorOptions)
   return cacheStore.vendorOptions
 })
 const dataTypeOptions = computed(() => {
-  console.log('dataTypeOptions 更新:', cacheStore.dataTypeOptions)
   return cacheStore.dataTypeOptions
 })
 
@@ -216,19 +214,20 @@ const loadData = async () => {
     // 处理不同格式的响应
     let list: ApiInterface[] = []
     if (res) {
-      if (Array.isArray(res.data)) {
-        list = res.data
-      } else if (res.data && Array.isArray(res.data.records)) {
-        list = res.data.records
-      } else if (Array.isArray(res.records)) {
-        list = res.records
+      const data = (res as any).data
+      const records = (res as any).records
+      if (Array.isArray(data)) {
+        list = data
+      } else if (data && Array.isArray(data.records)) {
+        list = data.records
+      } else if (Array.isArray(records)) {
+        list = records
       } else if (Array.isArray(res)) {
         list = res
       }
     }
     tableData.value = list
     pagination.total = res.total || 0
-    console.log('加载接口列表成功:', tableData.value)
   } catch (error) {
     console.error('加载失败:', error)
     ElMessage.error('加载数据失败，请稍后重试')
@@ -261,7 +260,6 @@ const handleAdd = () => {
 
 // 编辑
 const handleEdit = (row: ApiInterface) => {
-  console.log('编辑接口:', row)
   currentRow.value = { ...row }
   formMode.value = 'edit'
   formVisible.value = true
@@ -320,12 +318,9 @@ const handleConfigSuccess = () => {
 }
 
 onMounted(async () => {
-  console.log('接口管理页面加载...')
   // 先确保缓存数据加载完成
   await cacheStore.loadAll()
   await loadData()
-  console.log('vendorOptions:', vendorOptions.value)
-  console.log('dataTypeOptions:', dataTypeOptions.value)
 })
 </script>
 

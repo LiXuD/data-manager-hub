@@ -1,24 +1,5 @@
-import request from '@/utils/request'
-import type { PageParams } from '@/types'
-
-export interface Role {
-  id: number
-  roleCode: string
-  roleName: string
-  description?: string
-  status: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface Permission {
-  id: number
-  permissionCode: string
-  permissionName: string
-  resource: string
-  action: string
-  description?: string
-}
+import { request } from '@/utils/request'
+import type { PageParams, Role, Permission } from '@/types'
 
 export const getRoleList = (params: PageParams & { keyword?: string; status?: string }) => {
   return request.get('/role/list', { params })

@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import { request } from '@/utils/request'
 
 export const generateJavaSDK = (baseUrl: string, apiKey: string) => {
   return request.get('/sdk/java', { params: { baseUrl, apiKey } })

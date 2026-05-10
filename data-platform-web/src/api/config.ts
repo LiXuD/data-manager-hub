@@ -1,20 +1,5 @@
-import request from '@/utils/request'
-import type { PageParams } from '@/types'
-
-export interface Config {
-  id: number
-  vendorId: number
-  vendorName: string
-  configKey: string
-  configValue: string
-  configType: string
-  description?: string
-  isEncrypted: boolean
-  isActive: boolean
-  status?: string
-  createdAt: string
-  updatedAt: string
-}
+import { request } from '@/utils/request'
+import type { PageParams, Config } from '@/types'
 
 export const getConfigList = (params: PageParams & { vendorId?: number; keyword?: string }) => {
   return request.get('/config/list', { params })

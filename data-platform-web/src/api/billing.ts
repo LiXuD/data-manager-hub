@@ -1,37 +1,5 @@
-import request from '@/utils/request'
-import type { PageParams } from '@/types'
-
-export interface BillingRule {
-  id: number
-  vendorId: number
-  vendorName: string
-  dataTypeId: number
-  dataTypeName: string
-  pricePerCall: number
-  minPrice: number
-  maxPrice: number
-  discountThreshold: number
-  discountRate: number
-  status: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface BillingRecord {
-  id: number
-  tenantId: number
-  tenantName: string
-  callerId: number
-  callerName: string
-  vendorId: number
-  vendorName: string
-  dataType: string
-  callCount: number
-  unitPrice: number
-  totalAmount: number
-  billingDate: string
-  status: string
-}
+import { request } from '@/utils/request'
+import type { PageParams, BillingRuleDTO, BillingRecordDTO } from '@/types'
 
 export const getBillingList = (params: PageParams & { vendorId?: number; startDate?: string; endDate?: string }) => {
   return request.get('/billing/list', { params })

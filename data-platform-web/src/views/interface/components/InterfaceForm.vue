@@ -117,9 +117,6 @@ const normalizeId = (id: any): number | string | undefined => {
 }
 
 watch(() => props.formData, (val) => {
-  console.log('InterfaceForm 接收到 formData:', val)
-  console.log('InterfaceForm vendorOptions:', props.vendorOptions)
-  console.log('InterfaceForm datatypeOptions:', props.datatypeOptions)
   
   if (val) {
     form.value = {
@@ -157,10 +154,10 @@ const handleSubmit = async () => {
   loading.value = true
   try {
     // 提交时确保id是number类型
-    const submitData = {
+    const submitData: Partial<ApiInterface> = {
       ...form.value,
-      vendorId: form.value.vendorId != null ? Number(form.value.vendorId) : null,
-      dataTypeId: form.value.dataTypeId != null ? Number(form.value.dataTypeId) : null
+      vendorId: form.value.vendorId != null ? Number(form.value.vendorId) : undefined,
+      dataTypeId: form.value.dataTypeId != null ? Number(form.value.dataTypeId) : undefined
     }
     
     if (props.mode === 'add') {

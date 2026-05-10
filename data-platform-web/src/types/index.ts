@@ -254,14 +254,6 @@ export interface AlertRecordQueryParams {
   level?: string
 }
 
-// 分页响应
-export interface PageResult<T> {
-  list: T[]
-  total: number
-  page: number
-  pageSize: number
-}
-
 // 列表响应 (简化版分页)
 export interface ListResponse<T> {
   data: T[]
@@ -505,6 +497,85 @@ export interface VendorInterfaceConfig {
   status: 'active' | 'inactive'
   createdAt: string
   updatedAt: string
+}
+
+// ===================== API 专用 DTO 类型 =====================
+
+// 调用方 (API DTO)
+export interface CallerDTO {
+  id?: number
+  callerCode: string
+  callerName: string
+  tenantId?: number
+  callerType?: string
+  description?: string
+  contactPerson?: string
+  contactPhone?: string
+  status?: 'active' | 'inactive'
+  createdAt?: string
+  updatedAt?: string
+}
+
+// API Key (API DTO)
+export interface ApiKeyDTO {
+  id?: number
+  callerId: number
+  apiKey: string
+  apiSecret?: string
+  rateLimit?: number
+  quotaLimit?: number
+  quotaUsed?: number
+  status?: 'active' | 'inactive' | 'expired'
+  expireTime?: string
+  createdAt?: string
+}
+
+// 用户 (API DTO)
+export interface UserDTO {
+  id: number
+  username: string
+  realName?: string
+  phone?: string
+  email?: string
+  tenantId?: number
+  tenantName?: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+// 计费规则 (API DTO)
+export interface BillingRuleDTO {
+  id: number
+  vendorId: number
+  vendorName: string
+  dataTypeId: number
+  dataTypeName: string
+  pricePerCall: number
+  minPrice: number
+  maxPrice: number
+  discountThreshold: number
+  discountRate: number
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+// 计费记录 (API DTO)
+export interface BillingRecordDTO {
+  id: number
+  tenantId: number
+  tenantName: string
+  callerId: number
+  callerName: string
+  vendorId: number
+  vendorName: string
+  dataType: string
+  callCount: number
+  unitPrice: number
+  totalAmount: number
+  billingDate: string
+  status: string
 }
 
 // 字段加密

@@ -1,47 +1,20 @@
 import { request } from '@/utils/request'
-import type { PageParams, ListResponse } from '@/types'
-
-export interface Caller {
-  id?: number
-  callerCode: string
-  callerName: string
-  tenantId?: number
-  callerType?: string
-  description?: string
-  contactPerson?: string
-  contactPhone?: string
-  status?: 'active' | 'inactive'
-  createdAt?: string
-  updatedAt?: string
-}
-
-export interface ApiKey {
-  id?: number
-  callerId: number
-  apiKey: string
-  apiSecret?: string
-  rateLimit?: number
-  quotaLimit?: number
-  quotaUsed?: number
-  status?: 'active' | 'inactive' | 'expired'
-  expireTime?: string
-  createdAt?: string
-}
+import type { PageParams, ListResponse, CallerDTO, ApiKeyDTO } from '@/types'
 
 export const getCallerList = (params: PageParams & { keyword?: string; status?: 'active' | 'inactive' }) => {
-  return request.get<ListResponse<Caller>>('/caller/list', { params })
+  return request.get<ListResponse<CallerDTO>>('/caller/list', { params })
 }
 
 export const getCaller = (id: number) => {
-  return request.get<Caller>(`/caller/${id}`)
+  return request.get<CallerDTO>(`/caller/${id}`)
 }
 
-export const createCaller = (data: Caller) => {
-  return request.post<Caller>('/caller', data)
+export const createCaller = (data: CallerDTO) => {
+  return request.post<CallerDTO>('/caller', data)
 }
 
-export const updateCaller = (id: number, data: Caller) => {
-  return request.put<Caller>(`/caller/${id}`, data)
+export const updateCaller = (id: number, data: CallerDTO) => {
+  return request.put<CallerDTO>(`/caller/${id}`, data)
 }
 
 export const deleteCaller = (id: number) => {
@@ -53,11 +26,11 @@ export const updateCallerStatus = (id: number, status: 'active' | 'inactive') =>
 }
 
 export const getApiKeyList = (callerId: number) => {
-  return request.get<ListResponse<ApiKey>>('/caller/' + callerId + '/api-key/list')
+  return request.get<ListResponse<ApiKeyDTO>>('/caller/' + callerId + '/api-key/list')
 }
 
 export const createApiKey = (callerId: number) => {
-  return request.post<ApiKey>('/caller/' + callerId + '/api-key', { keyName: 'default' })
+  return request.post<ApiKeyDTO>('/caller/' + callerId + '/api-key', { keyName: 'default' })
 }
 
 export const updateApiKeyStatus = (id: number, status: 'active' | 'inactive' | 'expired') => {
@@ -69,7 +42,7 @@ export const deleteApiKey = (id: number) => {
 }
 
 export const getApiKeyInterfaces = (apiKeyId: number) => {
-  return request.get(`/caller/api-key/${apiKeyId}/interfaces`)
+  return request.get<{ data: number[] }>(`/caller/api-key/${apiKeyId}/interfaces`)
 }
 
 export const assignApiKeyInterfaces = (apiKeyId: number, interfaceIds: number[]) => {
