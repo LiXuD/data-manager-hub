@@ -2,6 +2,9 @@
 # 启动所有数据平台服务
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOG_DIR"
+
 cd "$SCRIPT_DIR"
 
 # 服务配置: 端口 -> 模块名
@@ -25,6 +28,7 @@ declare -A SERVICES=(
 
 echo "========================================"
 echo "开始启动数据平台服务..."
+echo "日志目录: $LOG_DIR"
 echo "========================================"
 
 # 先停止所有运行中的服务
@@ -43,13 +47,22 @@ start_order=(8081 8082 8083 8084 8085 8086 8087 8090 8092 8093 8094 8095 8096 80
 
 for port in "${start_order[@]}"; do
     module="${SERVICES[$port]}"
-    if [ -d "$SCRIPT_DIR/$module" ]; then
-        echo "启动 $module (端口: $port)..."
-        cd "$SCRIPT_DIR/$module"
-        nohup mvn spring-boot:run -q > "/tmp/${module}.log" 2>&1 &
-        echo "  - $module 已启动 (日志: /tmp/${module}.log)"
+
+    # 确定启动目录：优先使用 service 子模块，否则使用模块根目录
+    if [ -d "$SCRIPT_DIR/$module/${module}-service" ]; then
+        start_dir="$SCRIPT_DIR/$module/${module}-service"
     else
-        echo "  - $module 不存在，跳过"
+        start_dir="$SCRIPT_DIR/$module"
+    fi
+
+    if [ -d "$start_dir" ]; then
+        log_file="$LOG_DIR/${module}.log"
+        echo "启动 $module (端口: $port)..."
+        cd "$start_dir"
+        nohup mvn spring-boot:run -q > "$log_file" 2>&1 &
+        echo "  - $module 已启动 (日志: $log_file)"
+    else
+        echo "  - $module 启动目录不存在 ($start_dir)，跳过"
     fi
 done
 
@@ -66,16 +79,14 @@ echo "========================================"
 
 for port in "${start_order[@]}"; do
     module="${SERVICES[$port]}"
-    if [ -d "$SCRIPT_DIR/$module" ]; then
-        if lsof -i :$port 2>/dev/null | grep -q LISTEN; then
-            echo "✅ 端口 $port ($module) - 运行中"
-        else
-            echo "❌ 端口 $port ($module) - 未运行"
-            # 显示日志
-            if [ -f "/tmp/${module}.log" ]; then
-                echo "   日志最后几行:"
-                tail -5 "/tmp/${module}.log" | sed 's/^/   /'
-            fi
+    log_file="$LOG_DIR/${module}.log"
+    if lsof -i :$port 2>/dev/null | grep -q LISTEN; then
+        echo "✅ 端口 $port ($module) - 运行中"
+    else
+        echo "❌ 端口 $port ($module) - 未运行"
+        if [ -f "$log_file" ]; then
+            echo "   日志最后几行:"
+            tail -5 "$log_file" | sed 's/^/   /'
         fi
     fi
 done

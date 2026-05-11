@@ -3,12 +3,16 @@ package com.dataplatform.test;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static io.restassured.RestAssured.*;
@@ -68,6 +72,31 @@ public class BaseTest {
 
     protected String authToken;
     protected static Long testTenantId;
+
+    /** 清理任务列表，子类通过 registerDeleteById 注册，@AfterAll 逆序执行 */
+    protected static final List<Runnable> cleanupTasks = new ArrayList<>();
+
+    /** 注册按 ID 删除的清理任务 */
+    protected void registerDeleteById(String urlTemplate, Long id) {
+        cleanupTasks.add(() -> {
+            try {
+                given()
+                    .contentType("application/json")
+                    .header("Authorization", "Bearer " + authToken)
+                    .when()
+                    .delete(GATEWAY_URL + "/api/v1" + urlTemplate, id);
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    @AfterAll
+    static void cleanupAll() {
+        List<Runnable> reversed = new ArrayList<>(cleanupTasks);
+        Collections.reverse(reversed);
+        reversed.forEach(Runnable::run);
+        cleanupTasks.clear();
+    }
 
     static {
         // 通过 Gateway 统一入口测试

@@ -73,7 +73,7 @@ data-platform/
 
 ---
 
-## 🗄️ 数据库表 (15张)
+## 🗄️ 数据库表 (21张)
 
 | 序号 | 表名 | 说明 |
 |------|------|------|
@@ -81,17 +81,23 @@ data-platform/
 | 2 | vendor_info | 厂商信息 |
 | 3 | data_type | 数据类型 |
 | 4 | vendor_config | 厂商配置 |
-| 5 | caller_info | 调用方信息 |
-| 6 | api_key | API Key |
-| 7 | call_record | 调用记录 (按月分区) |
-| 8 | billing_daily | 日账单 |
-| 9 | user_info | 用户 |
-| 10 | role_info | 角色 |
-| 11 | user_role | 用户角色关联 |
-| 12 | alert_rule | 告警规则 |
-| 13 | alert_record | 告警记录 |
-| 14 | circuit_breaker | 熔断记录 |
-| 15 | operation_log | 操作日志 |
+| 5 | vendor_config_extended | 厂商扩展配置 |
+| 6 | config_version | 配置版本历史 |
+| 7 | caller_info | 调用方信息 |
+| 8 | api_key | API Key |
+| 9 | api_interface | 接口定义 |
+| 10 | interface_param | 接口参数定义 |
+| 11 | call_record | 调用记录 (按月分区) |
+| 12 | billing_daily | 日账单 |
+| 13 | billing_rule | 计费规则 |
+| 14 | user_info | 用户 |
+| 15 | role_info | 角色 |
+| 16 | user_role | 用户角色关联 |
+| 17 | alert_rule | 告警规则 |
+| 18 | alert_record | 告警记录 |
+| 19 | circuit_breaker | 熔断记录 |
+| 20 | operation_log | 操作日志 |
+| 21 | gray_rule | 灰度规则 |
 
 ---
 
@@ -269,7 +275,7 @@ NACOS_NAMESPACE=dev
 ```
 data-platform/
 ├── sql/
-│   └── init.sql                    # DDL 脚本 (15表)
+│   └── init.sql                    # DDL 脚本 (21表)
 ├── pom.xml                         # 父 POM
 ├── docker-compose.yml              # 基础设施
 ├── data-platform-common/           # 公共模块

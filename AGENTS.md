@@ -59,6 +59,11 @@
 
 6. **跨服务操作日志** (2026-05-01)
    - IAM 服务通过 Feign 调用 Log 服务保存操作日志
+
+7. **业务链路测试扩展** (2026-05-09)
+   - 10 个模块业务链路测试全部通过：Vendor(33) + Tenant(13) + Monitor(15) + Caller(16) + IAM(29) + Interface(26) + Call(11) + Billing(12) + Graylog(15) + Audit(8) = 178 tests
+   - BaseTest 新增共享清理基础设施（static cleanupTasks + @AfterAll）
+   - 修复 3 个后端 bug：CallerController API Key 创建、InterfaceParam 表缺失、Schema jsonb 类型
    - 新增 LogClient 接口和 InternalLogController 内部 API
    - 新增 RemoteOperationLogService 实现跨服务日志保存
    - 新增 IpUtil 工具类（提取公共 IP 获取逻辑）
@@ -100,6 +105,7 @@ data-manager-hub/
 │   ├── result/                          # 统一响应封装
 │   ├── exception/                       # 异常处理
 │   ├── log/                             # 操作日志注解
+│   ├── enums/                           # 状态枚举类
 │   └── circuitbreaker/                  # 熔断器配置
 ├── data-platform-gateway/               # 网关 (8888)
 ├── data-platform-vendor/                # 厂商管理 (8081)
@@ -158,17 +164,18 @@ data-manager-hub/
 | 7 | caller_info | 调用方信息 |
 | 8 | api_key | API Key |
 | 9 | api_interface | 接口定义 |
-| 10 | call_record | 调用记录 (按月分区) |
-| 11 | billing_daily | 日账单 |
-| 12 | billing_rule | 计费规则 |
-| 13 | user_info | 用户 |
-| 14 | role_info | 角色 |
-| 15 | user_role | 用户角色关联 |
-| 16 | alert_rule | 告警规则 |
-| 17 | alert_record | 告警记录 |
-| 18 | circuit_breaker | 熔断记录 |
-| 19 | operation_log | 操作日志 |
-| 20 | gray_rule | 灰度规则 |
+| 10 | interface_param | 接口参数定义 |
+| 11 | call_record | 调用记录 (按月分区) |
+| 12 | billing_daily | 日账单 |
+| 13 | billing_rule | 计费规则 |
+| 14 | user_info | 用户 |
+| 15 | role_info | 角色 |
+| 16 | user_role | 用户角色关联 |
+| 17 | alert_rule | 告警规则 |
+| 18 | alert_record | 告警记录 |
+| 19 | circuit_breaker | 熔断记录 |
+| 20 | operation_log | 操作日志 |
+| 21 | gray_rule | 灰度规则 |
 
 ---
 

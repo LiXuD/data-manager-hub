@@ -20,8 +20,15 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
     @Override
     @Transactional
     public ApiKey createApiKey(Long callerId) {
+        return createApiKey(callerId, null);
+    }
+
+    @Override
+    @Transactional
+    public ApiKey createApiKey(Long callerId, String keyName) {
         ApiKey apiKey = new ApiKey();
         apiKey.setCallerId(callerId);
+        apiKey.setKeyName(keyName);
         apiKey.setApiKey("dp_" + IdUtil.fastSimpleUUID());
         apiKey.setApiSecret(IdUtil.fastSimpleUUID());
         apiKey.setRateLimit(100);

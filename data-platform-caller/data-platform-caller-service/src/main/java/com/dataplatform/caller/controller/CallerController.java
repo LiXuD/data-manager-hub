@@ -107,16 +107,12 @@ public class CallerController {
         }
 
         String name = (String) params.getOrDefault("name", params.get("keyName"));
-        if (name == null || name.toString().isEmpty()) {
+        if (name == null || name.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "name不能为空"));
         }
 
-        ApiKey apiKey = new ApiKey();
-        apiKey.setCallerId(callerId);
-        apiKey.setKeyName(name);
-        apiKey.setStatus(ApiKeyStatus.ACTIVE);
-        apiKeyService.save(apiKey);
+        ApiKey apiKey = apiKeyService.createApiKey(callerId, name);
 
         Map<String, Object> result = new HashMap<>();
         result.put("id", apiKey.getId());

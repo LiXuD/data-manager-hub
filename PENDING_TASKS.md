@@ -1,8 +1,8 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-05-03
-**状态**: MVP 已完成, 模块合并优化已完成 ✅
+**最后更新**: 2026-05-09
+**状态**: MVP 已完成, 业务链路测试全部通过 ✅
 
 ---
 
@@ -218,6 +218,7 @@ data-platform (父聚合模块)
 **测试类结构**：
 - API集成测试：IAMApiTest, VendorApiTest, TenantApiTest, CallerApiTest, CallApiTest, BillingApiTest, MonitorApiTest, LogApiTest, GraylogApiTest, SdkApiTest, SecurityApiTest, TraceApiTest, QualityApiTest, InterfaceApiTest
 - 单元测试：SignatureBuilderTest, BillingCalculatorTest, HttpVendorAdapterTest
+- 业务链路测试：VendorBusinessFlowTest, TenantBusinessFlowTest, MonitorBusinessFlowTest, CallerBusinessFlowTest, IAMBusinessFlowTest, InterfaceBusinessFlowTest, CallBusinessFlowTest, BillingBusinessFlowTest, GraylogBusinessFlowTest, AuditBusinessFlowTest
 
 ### 前端假提交修复 (2026-05-01)
 
@@ -250,6 +251,30 @@ data-platform (父聚合模块)
 | 删除重复的 OperationLogAspect | ✅ 完成 | 2026-05-01 |
 | 所有服务配置 token-prefix: Bearer | ✅ 完成 | 2026-05-01 |
 | StatusConstants 新增 SUCCESS/FAIL | ✅ 完成 | 2026-05-01 |
+
+### 业务链路测试扩展 (2026-05-09)
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| VendorBusinessFlowTest (33 tests) | ✅ 完成 | 2026-05-09 |
+| TenantBusinessFlowTest (13 tests) | ✅ 完成 | 2026-05-09 |
+| MonitorBusinessFlowTest (15 tests) | ✅ 完成 | 2026-05-09 |
+| CallerBusinessFlowTest (16 tests) | ✅ 完成 | 2026-05-09 |
+| IAMBusinessFlowTest (29 tests) | ✅ 完成 | 2026-05-09 |
+| InterfaceBusinessFlowTest (26 tests) | ✅ 完成 | 2026-05-09 |
+| CallBusinessFlowTest (11 tests) | ✅ 完成 | 2026-05-09 |
+| BillingBusinessFlowTest (12 tests) | ✅ 完成 | 2026-05-09 |
+| GraylogBusinessFlowTest (15 tests) | ✅ 完成 | 2026-05-09 |
+| AuditBusinessFlowTest (8 tests) | ✅ 完成 | 2026-05-09 |
+| BaseTest 共享清理基础设施抽取 | ✅ 完成 | 2026-05-09 |
+| 修复 CallerController API Key 创建 bug | ✅ 完成 | 2026-05-09 |
+| 创建 interface_param 表 | ✅ 完成 | 2026-05-09 |
+| 修复 Schema jsonb 类型更新 bug | ✅ 完成 | 2026-05-09 |
+| 修复 call_record 表缺失列 (data_type_code, response_time, result, created_at) | ✅ 完成 | 2026-05-09 |
+| 修复 billing_rule 表缺失列 (billing_type) | ✅ 完成 | 2026-05-09 |
+| 修复 Nacos 服务 IP 注册问题 | ✅ 完成 | 2026-05-09 |
+
+**测试结果**：178 tests, 0 failures, 9 skipped（边界测试正常跳过）
 
 ### 操作日志跨服务支持 (2026-05-02)
 
@@ -617,7 +642,7 @@ BUILD SUCCESS
 
 ## 七、版本规划
 
-### V1.0 (当前 - MVP) ✅
+### V1.0 (MVP) ✅
 
 - [x] 厂商适配器核心功能
 - [x] 签名认证
@@ -627,8 +652,10 @@ BUILD SUCCESS
 - [x] 接口管理
 - [x] 基础测试覆盖
 
-### V1.1 (计划)
+### V1.1 (当前) ✅
 
+- [x] 10 模块业务链路测试 (178 tests, 0 failures)
+- [x] BaseTest 共享清理基础设施
 - [ ] Gateway增强
 - [ ] 自动对账完善
 - [ ] 前端页面完善
@@ -643,5 +670,5 @@ BUILD SUCCESS
 ---
 
 **文档维护**: 按版本更新
-**最后更新**: 2026-05-03
-**当前版本**: V1.0 MVP
+**最后更新**: 2026-05-09
+**当前版本**: V1.1 业务链路测试

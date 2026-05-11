@@ -8,6 +8,8 @@ import java.util.List;
 public interface ApiKeyService extends IService<ApiKey> {
     
     ApiKey createApiKey(Long callerId);
+
+    ApiKey createApiKey(Long callerId, String keyName);
     
     List<ApiKey> listByCaller(Long callerId);
     
