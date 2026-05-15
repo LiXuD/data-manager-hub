@@ -112,7 +112,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { request } from '@/utils/request'
+import { getRoleList, createRole, updateRole, deleteRole, updateRoleStatus, assignPermissions, getRolePermissionIds } from '@/api/role'
+import { getAllPermissions } from '@/api/permission'
 import PageHeader from '@/components/PageHeader.vue'
 import SearchBar from '@/components/SearchBar.vue'
 import { COMMON_STATUS, STATUS_LABELS } from '@/constants'
@@ -134,15 +135,10 @@ const permissionList = ref<Permission[]>([])
 const selectedPermissions = ref<number[]>([])
 const currentRoleId = ref<number | null>(null)
 
-interface RoleListResponse {
-  data?: { records?: Role[]; total?: number } | Role[]
-  total?: number
-}
-
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<RoleListResponse>('/role/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
+    const res = await getRoleList({ page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm })
     const data = res.data
     if (data && 'records' in data && Array.isArray(data.records)) {
       tableData.value = data.records
@@ -159,13 +155,13 @@ const fetchList = async () => {
 
 const handleSearch = () => { pagination.currentPage = 1; fetchList() }
 const handleReset = () => { searchForm.roleName = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
-const handleAdd = () => { Object.assign(form, { id: null, roleCode: '', roleName: '', description: '', status: 'active' }); dialogVisible.value = true }
+const handleAdd = () => { Object.assign(form, { id: null, roleCode: '', roleName: '', description: '', status: COMMON_STATUS.ACTIVE }); dialogVisible.value = true }
 const handleEdit = (row: Role) => { Object.assign(form, { ...row }); dialogVisible.value = true }
 
 const handleDelete = async (row: Role) => {
   try {
     await ElMessageBox.confirm(`确定要删除角色"${row.roleName}"吗？`, '提示', { type: 'warning' })
-    await request.delete(`/role/${row.id}`)
+    await deleteRole(row.id)
     ElMessage.success('删除成功')
     fetchList()
   } catch (error) {
@@ -183,9 +179,9 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     if (form.id) {
-      await request.put(`/role/${form.id}`, form)
+      await updateRole(form.id, form)
     } else {
-      await request.post('/role', form)
+      await createRole(form)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
@@ -199,7 +195,7 @@ const handleSubmit = async () => {
 
 const handleStatusChange = async (row: Role) => {
   try {
-    await request.patch(`/role/${row.id}/status`, { status: row.status })
+    await updateRoleStatus(row.id, row.status)
     ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
   } catch (error) {
     row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
@@ -211,8 +207,8 @@ const handlePermission = async (row: Role) => {
   currentRoleId.value = row.id
   try {
     const [permsRes, rolePermsRes] = await Promise.all([
-      request.get<{ data: Permission[] }>('/permission/all'),
-      request.get<{ data: number[] }>(`/role/${row.id}/permissionIds`)
+      getAllPermissions(),
+      getRolePermissionIds(row.id)
     ])
     permissionList.value = permsRes.data || []
     selectedPermissions.value = rolePermsRes.data || []
@@ -226,7 +222,7 @@ const handleSavePermissions = async () => {
   if (!currentRoleId.value) return
   submitting.value = true
   try {
-    await request.post(`/role/${currentRoleId.value}/permissions`, selectedPermissions.value)
+    await assignPermissions(currentRoleId.value, selectedPermissions.value)
     ElMessage.success('权限配置成功')
     permissionVisible.value = false
   } catch (error) {

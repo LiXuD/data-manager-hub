@@ -103,10 +103,29 @@ onMounted(() => { Promise.all([fetchHealth(), fetchAlerts()]) })
 aed6839 refactor(web): cleanup unused code and use shared utilities
 ```
 
+### 2026-05-10 修复
+
+#### P0: 紧急修复
+
+**问题**: 后端接口响应结构调整（`code` 字段含义变化），导致 401 未授权无法正确触发跳转登录页
+
+**解决方案**:
+- `src/utils/request.ts` — 响应拦截器 success 条件从 `res.code === 0` 改为 `res.code === 200`；401 时调用 `useUserStore().logout()` 清理 token 并跳转 `/login`
+- `src/api/user.ts` — 修正 `User` → `UserDTO` 类型引用（编译错误）
+- `src/stores/cache.ts` — 移除开发期遗留的 `console.log`
+
+#### P2-P3: 建议项修复
+
+- `src/views/user/index.vue` — 移除局部 `User` 接口，改用 `UserDTO`；模板 `nickname` → `realName`；`request.*` 全部替换为类型化 API 函数；删除无用导入
+- `src/api/user.ts` — 新增 `getRoleList()`、`getCallerList()` API 函数
+- `src/api/monitor.ts` — `PageResult` → `PageResponse` 类型统一
+- `src/types/index.ts` — 删除与 `PageResponse` 重复的 `PageResult` 接口
+
 ### 遗留问题
 
 1. **TS6133 警告**: 部分文件存在未使用的导入/变量警告（非阻塞）
 2. **TS6196 警告**: `views/profile/index.vue` 中 `ThemeMode` 类型声明但未使用
+3. **CSS !important**: `styles/index.scss` 存在 116 处 `!important`（系统级重构）
 
 ### 后续建议
 

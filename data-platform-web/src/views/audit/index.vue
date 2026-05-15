@@ -116,8 +116,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { request } from '@/utils/request'
-import { getLogStats } from '@/api/log'
+import { getLogList, getLogStats } from '@/api/log'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
 interface OperationLog {
@@ -180,20 +179,13 @@ const fetchStats = async () => {
   }
 }
 
-interface LogListResponse {
-  data?: { records?: OperationLog[]; total?: number } | OperationLog[]
-  total?: number
-}
-
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<LogListResponse>('/log/list', {
-      params: {
-        page: pagination.currentPage,
-        pageSize: pagination.pageSize,
-        ...searchForm
-      }
+    const res = await getLogList({
+      page: pagination.currentPage,
+      pageSize: pagination.pageSize,
+      ...searchForm
     })
     const data = res.data
     if (data && 'records' in data && Array.isArray(data.records)) {

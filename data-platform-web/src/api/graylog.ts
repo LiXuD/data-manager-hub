@@ -63,3 +63,35 @@ export const updateStream = (id: number, data: Partial<GraylogStream>) => {
 export const deleteStream = (id: number) => {
   return request.delete(`/graylog/stream/${id}`)
 }
+
+// 灰度规则
+export interface GrayRule {
+  id: number
+  ruleName: string
+  serviceName: string
+  version: string
+  weight: number
+  conditionType: string
+  conditionValue: string
+  description: string
+  status: string
+  startTime: string
+  endTime: string
+  createdAt: string
+}
+
+export const getGrayRuleList = (params: PageParams & { serviceName?: string; status?: string }) => {
+  return request.get('/graylog/list', { params })
+}
+
+export const createGrayRule = (data: Partial<GrayRule>) => {
+  return request.post('/graylog', data)
+}
+
+export const updateGrayRule = (id: number, data: Partial<GrayRule>) => {
+  return request.put(`/graylog/${id}`, data)
+}
+
+export const deleteGrayRule = (id: number) => {
+  return request.delete(`/graylog/${id}`)
+}

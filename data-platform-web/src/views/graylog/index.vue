@@ -175,25 +175,11 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { request } from '@/utils/request'
+import { getGrayRuleList, createGrayRule, updateGrayRule, deleteGrayRule } from '@/api/graylog'
+import type { GrayRule } from '@/api/graylog'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 // StatCard is globally registered by unplugin-vue-components
 import { GRAY_RULE_STATUS } from '@/constants'
-
-interface GrayRule {
-  id: number
-  ruleName: string
-  serviceName: string
-  version: string
-  weight: number
-  conditionType: string
-  conditionValue: string
-  description: string
-  status: string
-  startTime: string
-  endTime: string
-  createdAt: string
-}
 
 const loading = ref(false)
 const tableData = ref<GrayRule[]>([])
@@ -227,35 +213,13 @@ const conditionTypeOptions = [
   { label: 'Cookie', value: 'cookie' }
 ]
 
-interface GraylogConfig {
-  id: number
-  ruleName: string
-  serviceName: string
-  version: string
-  weight: number
-  conditionType: string
-  conditionValue: string
-  description: string
-  status: string
-  startTime: string
-  endTime: string
-  createdAt: string
-}
-
-interface GraylogListResponse {
-  data?: { records?: GraylogConfig[]; total?: number } | GraylogConfig[]
-  total?: number
-}
-
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<GraylogListResponse>('/graylog/list', {
-      params: {
-        page: pagination.currentPage,
-        pageSize: pagination.pageSize,
-        ...searchForm
-      }
+    const res = await getGrayRuleList({
+      page: pagination.currentPage,
+      pageSize: pagination.pageSize,
+      ...searchForm
     })
     const data = res.data
     if (data && 'records' in data && Array.isArray(data.records)) {
@@ -291,7 +255,7 @@ const handleEdit = (row: GrayRule) => {
 const handleDelete = async (row: GrayRule) => {
   try {
     await ElMessageBox.confirm(`确定要删除规则"${row.ruleName}"吗？`, '提示', { type: 'warning' })
-    await request.delete(`/graylog/${row.id}`)
+    await deleteGrayRule(row.id)
     ElMessage.success('删除成功')
     fetchList()
   } catch (error) {
@@ -308,9 +272,9 @@ const handleSubmit = async () => {
   }
   try {
     if (formData.id) {
-      await request.put(`/graylog/${formData.id}`, formData)
+      await updateGrayRule(formData.id, formData)
     } else {
-      await request.post('/graylog', formData)
+      await createGrayRule(formData)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false

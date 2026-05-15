@@ -31,3 +31,7 @@ export const updatePermission = (id: number, data: Partial<Permission>) => {
 export const deletePermission = (id: number) => {
   return request.delete(`/permission/${id}`)
 }
+
+export const getAllPermissions = () => {
+  return request.get<{ data: Permission[] }>('/permission/all')
+}
