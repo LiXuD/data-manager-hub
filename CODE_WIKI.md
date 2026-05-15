@@ -948,6 +948,7 @@ IAM 服务通过 Feign 调用 Log 服务保存操作日志 (`RemoteOperationLogS
 | Pinia | 2.2.0 | 状态管理 |
 | Axios | 1.7.0 | HTTP客户端 |
 | ECharts | 5.5.0 | 图表可视化 |
+| NProgress | 0.2.0 | 页面加载进度条 |
 | Vite | 6.0.0 | 构建工具 |
 | Sass | 1.99.0 | CSS预处理 |
 
@@ -968,6 +969,7 @@ data-platform-web/src/
 │   ├── graylog.ts          # 灰度API
 │   ├── interface.ts        # 接口API
 │   ├── sdk.ts              # SDK API
+│   ├── auth.ts             # 认证API (login)
 │   ├── security.ts         # 安全API
 │   ├── trace.ts            # 血缘API
 │   ├── quality.ts          # 质量API
@@ -1059,6 +1061,7 @@ data-platform-web/src/
 | `/audit` | 操作日志 | 需登录 |
 | `/data-test` | 数据查询测试 | 需登录 |
 | `/profile` | 个人中心 | 需登录 |
+| `/:pathMatch(.*)*` | 404 页面 | 无需登录 |
 
 ---
 
@@ -1149,7 +1152,8 @@ data-platform-web/src/
 | 7 | caller_info | 调用方信息 | caller |
 | 8 | api_key | API Key | caller |
 | 9 | api_interface | 接口定义 | interface |
-| 10 | call_record | 调用记录 (按月分区) | call |
+| 10 | interface_param | 接口参数定义 | interface |
+| 11 | call_record | 调用记录 (按月分区) | call |
 | 11 | billing_daily | 日账单 | billing |
 | 12 | billing_rule | 计费规则 | billing |
 | 13 | user_info | 用户 | iam |
