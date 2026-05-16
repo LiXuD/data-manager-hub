@@ -70,8 +70,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - **设计文档**: `2026-04-17-data-management-platform-design.md`（项目根目录）
 - **待办追踪**: 每次任务完成需更新 `PENDING_TASKS.md`
-- **服务间通信**: Service 不允许直接依赖，需通过 Feign 调用 API
-- **模块结构**: 业务模块采用 `api + service` 双模块结构（`{module}-api` 定义实体，`{module}-service` 实现业务）
+- **服务间通信**: Service 不允许直接依赖其他域 service；跨域调用只能通过目标域 `api` 中的 OpenFeign 契约
+- **模块结构**: 当前业务域收敛为 `masterdata / access / billing / identity / governance` 五域；每个业务域采用 `api + service` 双模块结构
+- **契约边界**: `*-api` 只放 Feign 接口、DTO/VO/BO、枚举、常量和统一返回契约，不引入数据库、MyBatis、Redis、Nacos 等重型依赖
 
 ## 6. 项目概况
 

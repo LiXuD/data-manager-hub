@@ -1,8 +1,34 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-05-09
-**状态**: MVP 已完成, 业务链路测试全部通过 ✅
+**最后更新**: 2026-05-16
+**状态**: 五域收敛基线已合入 dev，后端与前端构建验证通过 ✅
+
+---
+
+## 🏗️ 五域收敛重构基线 (2026-05-16)
+
+### ✅ 已完成
+
+| 任务 | 状态 | 完成日期 |
+|------|------|----------|
+| 将远程 dev 新提交合入本地五域重构基线 | ✅ 完成 | 2026-05-16 |
+| 解决旧 interface/sdk 文件冲突，保留本地五域边界 | ✅ 完成 | 2026-05-16 |
+| 启动脚本改为 masterdata/access/billing/governance/identity/gateway | ✅ 完成 | 2026-05-16 |
+| 前端路由与 API 类型修复，`npm run build` 通过 | ✅ 完成 | 2026-05-16 |
+| 后端 `mvn validate`、`compile`、`test-compile` 验证通过 | ✅ 完成 | 2026-05-16 |
+
+### 当前有效模块
+
+| 域 | 模块 | 职责 |
+|----|------|------|
+| masterdata | `data-platform-masterdata-api/service` | 厂商、数据类型、接口定义、厂商配置、灰度规则 |
+| access | `data-platform-access-api/service` | 调用方、API Key、数据调用、调用记录 |
+| billing | `data-platform-billing-api/service` | 计费规则、账单、结算/对账 |
+| identity | `data-platform-identity-api/service` | 租户、用户、角色、认证/安全能力 |
+| governance | `data-platform-governance-api/service` | 监控告警、操作日志、质量规则、数据血缘 |
+
+旧 `vendor/caller/call/tenant/iam/log/monitor/trace/quality/interface/graylog/security` 小服务目录已退役，不再作为依赖或启动单元使用。
 
 ---
 

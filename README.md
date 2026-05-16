@@ -44,32 +44,32 @@
 
 ```
 data-platform/
-├── data-platform-api/           # 公共API契约模块
-├── data-platform-common/        # 公共模块
+├── data-platform-common-contract/    # 通用契约：Result/PageResult、错误码、基础枚举/常量
+├── data-platform-common-web/         # Web公共能力：异常、拦截器、MVC配置
+├── data-platform-common-persistence/ # 持久化公共能力：MyBatis配置、审计字段
+├── data-platform-common-runtime/     # 运行时公共能力
 ├── data-platform-gateway/       # API网关 (端口 8888)
-├── data-platform-vendor/        # 厂商管理服务 (端口 8081)
-│   ├── data-platform-vendor-api/
-│   └── data-platform-vendor-service/  # 含数据类型、配置中心功能
-├── data-platform-caller/        # 调用方管理服务 (端口 8082)
-├── data-platform-call/          # 调用记录服务 (端口 8083)
-├── data-platform-billing/       # 计费管理服务 (端口 8084)
-├── data-platform-monitor/       # 监控告警服务 (端口 8085)
-├── data-platform-tenant/        # 租户管理服务 (端口 8086)
-├── data-platform-sdk/           # SDK生成服务 (端口 8087)
-├── data-platform-log/           # 操作日志服务 (端口 8090)
-├── data-platform-graylog/       # 灰度发布服务 (端口 8092)
-├── data-platform-iam/           # 用户权限管理服务 (端口 8093)
-│   ├── data-platform-iam-api/
-│   └── data-platform-iam-service/     # 含用户、角色管理功能
-├── data-platform-security/      # 数据安全服务 (端口 8094)
-├── data-platform-trace/         # 数据血缘服务 (端口 8095)
-├── data-platform-quality/       # 数据质量服务 (端口 8096)
-├── data-platform-interface/     # 接口管理服务 (端口 8097)
+├── data-platform-masterdata/    # 主数据服务 (端口 8081)：vendor/datatype/interface/config/graylog
+│   ├── data-platform-masterdata-api/
+│   └── data-platform-masterdata-service/
+├── data-platform-access/        # 访问服务 (端口 8082)：caller/call/API Key/调用记录
+│   ├── data-platform-access-api/
+│   └── data-platform-access-service/
+├── data-platform-billing/       # 计费服务 (端口 8084)
+│   ├── data-platform-billing-api/
+│   └── data-platform-billing-service/
+├── data-platform-governance/    # 观测治理服务 (端口 8085)：monitor/log/quality/trace
+│   ├── data-platform-governance-api/
+│   └── data-platform-governance-service/
+├── data-platform-identity/      # 身份租户服务 (端口 8086)：tenant/user/role/security
+│   ├── data-platform-identity-api/
+│   └── data-platform-identity-service/
+├── data-platform-sdk/           # SDK客户端/代码生成 Jar，不独立部署
 ├── data-platform-test/          # 测试模块
 └── data-platform-web/           # 前端 Vue3 项目
 ```
 
-> **模块合并说明**: data-platform-datatype 和 data-platform-config 已合并到 vendor；data-platform-user 和 data-platform-role 已合并到 iam。
+> **当前服务边界**: 项目已收敛为 masterdata / access / billing / identity / governance 五个业务域；旧 vendor/caller/call/tenant/iam/log/monitor/trace/quality/interface/graylog/security 小服务已退役。
 
 ---
 
@@ -224,11 +224,12 @@ mvn clean install -DskipTests
 cd data-platform-gateway
 mvn spring-boot:run
 
-# 厂商服务 (端口 8081)
-cd data-platform-vendor
+# 主数据服务 (端口 8081)
+cd data-platform-masterdata/data-platform-masterdata-service
 mvn spring-boot:run
 
-# ... 其他服务类似
+# 或直接使用五域启动脚本
+./start-services.sh
 ```
 
 ### 5. 启动前端
@@ -278,22 +279,18 @@ data-platform/
 │   └── init.sql                    # DDL 脚本 (21表)
 ├── pom.xml                         # 父 POM
 ├── docker-compose.yml              # 基础设施
-├── data-platform-common/           # 公共模块
-│   └── src/main/java/...
+├── data-platform-common-contract/   # 通用契约
+├── data-platform-common-web/        # Web公共能力
+├── data-platform-common-persistence/# 持久化公共能力
+├── data-platform-common-runtime/    # 运行时公共能力
 ├── data-platform-gateway/          # API 网关
-│   └── src/main/java/...
-├── data-platform-vendor/           # 厂商管理
-│   └── src/main/java/...
-├── data-platform-caller/           # 调用方管理
-│   └── src/main/java/...
-├── data-platform-call/             # 调用记录
-│   └── src/main/java/...
-├── data-platform-billing/          # 计费管理
-│   └── src/main/java/...
-├── data-platform-monitor/          # 监控告警
-│   └── src/main/java/...
-├── data-platform-tenant/           # 租户管理
-│   └── src/main/java/...
+├── data-platform-masterdata/        # 主数据域
+├── data-platform-access/            # 访问域
+├── data-platform-billing/           # 计费域
+├── data-platform-identity/          # 身份租户域
+├── data-platform-governance/        # 观测治理域
+├── data-platform-sdk/               # 纯 Jar SDK 模块
+├── data-platform-test/              # 测试聚合模块
 └── data-platform-web/              # 前端 Vue3
     ├── src/
     │   ├── api/                    # API 接口

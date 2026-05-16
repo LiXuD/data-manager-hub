@@ -2,8 +2,10 @@
 
 > **项目名称**: 数据管理平台 (Data Management Platform)
 > **仓库地址**: https://github.com/LiXuD/data-manager-hub.git
-> **文档版本**: 2026-05-05
+> **文档版本**: 2026-05-16
 > **技术栈**: Java 21 + Spring Boot 3.4 + Spring Cloud 2024.0.0 + MyBatis-Plus 3.5.7 + Vue3 + TypeScript
+
+> **五域重构提示**: 当前 dev 分支已收敛为 `masterdata / access / billing / identity / governance` 五个业务域，且每个业务域采用 `api + service` 双模块。本文中保留的 vendor/caller/call/tenant/iam/log/monitor/trace/quality/interface/graylog/security 等旧小服务章节仅作历史功能对照，新增开发与依赖关系以 README 和 PENDING_TASKS 中的五域结构为准。
 
 ---
 
