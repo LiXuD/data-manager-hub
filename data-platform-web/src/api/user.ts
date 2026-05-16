@@ -9,7 +9,7 @@ export const getUserById = (id: number) => {
   return request.get(`/user/${id}`)
 }
 
-export const createUser = (data: Partial<UserDTO> & { password: string }) => {
+export const createUser = (data: Partial<UserDTO> & { password?: string }) => {
   return request.post('/user', data)
 }
 

@@ -1,6 +1,9 @@
 import { request } from '@/utils/request'
 import type { PageParams, ListResponse, CallerDTO, ApiKeyDTO } from '@/types'
 
+export type Caller = CallerDTO
+export type ApiKey = ApiKeyDTO
+
 export const getCallerList = (params: PageParams & { keyword?: string; status?: 'active' | 'inactive' }) => {
   return request.get<ListResponse<CallerDTO>>('/caller/list', { params })
 }

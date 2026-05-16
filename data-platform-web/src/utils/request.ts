@@ -92,23 +92,23 @@ instance.interceptors.response.use(
 export default instance
 
 export const request = {
-  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.get(url, config)
     return response as T
   },
-  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.post(url, data, config)
     return response as T
   },
-  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async put<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.put(url, data, config)
     return response as T
   },
-  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async patch<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.patch(url, data, config)
     return response as T
   },
-  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.delete(url, config)
     return response as T
   }

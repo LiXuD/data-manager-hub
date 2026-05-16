@@ -213,10 +213,11 @@ const handleSubmit = async () => {
   }
   submitting.value = true
   try {
+    const payload = { ...form, id: form.id ?? undefined }
     if (form.id) {
-      await updateUser(form.id, form)
+      await updateUser(form.id, payload)
     } else {
-      await createUser(form)
+      await createUser(payload)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false

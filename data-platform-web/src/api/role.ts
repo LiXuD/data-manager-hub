@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import type { PageParams, Role, Permission } from '@/types'
+import type { PageParams, Role } from '@/types'
 
 export const getRoleList = (params: PageParams & { keyword?: string; status?: string }) => {
   return request.get('/role/list', { params })

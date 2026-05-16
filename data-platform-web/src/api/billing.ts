@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import type { PageParams, BillingRuleDTO, BillingRecordDTO } from '@/types'
+import type { PageParams, BillingRuleDTO } from '@/types'
 
 export const getBillingList = (params: PageParams & { vendorId?: number; startDate?: string; endDate?: string }) => {
   return request.get('/billing/list', { params })
@@ -22,11 +22,11 @@ export const getBillingRuleList = (params: PageParams & { vendorId?: number; dat
   return request.get('/billing/rule/list', { params })
 }
 
-export const createBillingRule = (data: Partial<BillingRule>) => {
+export const createBillingRule = (data: Partial<BillingRuleDTO>) => {
   return request.post('/billing/rule', data)
 }
 
-export const updateBillingRule = (id: number, data: Partial<BillingRule>) => {
+export const updateBillingRule = (id: number, data: Partial<BillingRuleDTO>) => {
   return request.put(`/billing/rule/${id}`, data)
 }
 

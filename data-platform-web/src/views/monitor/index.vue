@@ -230,7 +230,7 @@ const fetchHealth = async () => {
 const fetchAlerts = async () => {
   try {
     const res = await getAlertRuleList({ page: 1, pageSize: 100 })
-    alertData.value = res.data?.list || []
+    alertData.value = (res as any).data?.list || res.list || []
   } catch {
     alertData.value = []
   }

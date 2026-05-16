@@ -121,6 +121,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/not-found/index.vue'),
     meta: { title: '404' }
   }
+]
 
 const router = createRouter({
   history: createWebHistory(),
