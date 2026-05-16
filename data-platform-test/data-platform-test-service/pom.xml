@@ -7,7 +7,8 @@
 
     <dependencies>
         <dependency><groupId>com.dataplatform</groupId><artifactId>data-platform-test-api</artifactId><version>${project.version}</version></dependency>
-        <dependency><groupId>com.dataplatform</groupId><artifactId>data-platform-common</artifactId></dependency>
+        <dependency><groupId>com.dataplatform</groupId><artifactId>data-platform-sdk</artifactId><version>${project.version}</version><scope>test</scope></dependency>
+        <dependency><groupId>com.dataplatform</groupId><artifactId>data-platform-common-runtime</artifactId></dependency>
         <!-- Sa-Token (required by common module's UserContext/OperationLogAspect) -->
         <dependency>
             <groupId>cn.dev33</groupId>

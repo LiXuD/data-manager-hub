@@ -27,7 +27,6 @@ import static org.hamcrest.Matchers.*;
  * - billing-service: 8084
  * - monitor-service: 8085
  * - tenant-service: 8086
- * - sdk-service: 8087
  * - log-service: 8090
  * - graylog-service: 8092
  * - iam-service: 8093 (含 user, role)
@@ -53,7 +52,6 @@ public class BaseTest {
     protected static final String BILLING_URL = "http://localhost:8084";
     protected static final String MONITOR_URL = "http://localhost:8085";
     protected static final String TENANT_URL = "http://localhost:8086";
-    protected static final String SDK_URL = "http://localhost:8087";
     protected static final String LOG_URL = "http://localhost:8090";
     protected static final String GRAYLOG_URL = "http://localhost:8092";
     protected static final String IAM_URL = "http://localhost:8093";

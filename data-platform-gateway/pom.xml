@@ -15,10 +15,10 @@
     <description>API网关服务</description>
 
     <dependencies>
-        <!-- Common -->
+        <!-- Common contract -->
         <dependency>
             <groupId>com.dataplatform</groupId>
-            <artifactId>data-platform-common</artifactId>
+            <artifactId>data-platform-common-contract</artifactId>
         </dependency>
 
         <!-- Spring Cloud Gateway -->

@@ -1,111 +1,74 @@
 package com.dataplatform.test;
 
-import io.restassured.response.Response;
+import com.dataplatform.sdk.generator.SDKGenerator;
 import org.junit.jupiter.api.*;
 
-import static io.restassured.RestAssured.*;
 import static org.hamcrest.Matchers.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * SDK生成接口测试
- * 覆盖 4 个接口
+ * SDK 生成器 Jar 测试。
+ *
+ * sdk 已去 Spring Boot 服务化，不再通过 Gateway 暴露 /sdk/** HTTP 接口。
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class SdkApiTest extends BaseTest {
+public class SdkApiTest {
+
+    private final SDKGenerator sdkGenerator = new SDKGenerator();
 
     /**
-     * 测试生成Java SDK - 正常场景
+     * 测试生成 Java SDK - 正常场景
      */
     @Test
     @Order(1)
     public void testGenerateJavaSDK_Success() {
-        Response response = getAuthRequest()
-            .queryParam("baseUrl", "http://localhost:8080")
-            .queryParam("apiKey", "test-api-key")
-            .when()
-            .get("/sdk/java");
+        String code = sdkGenerator.generateJavaSDK("http://localhost:8888");
 
-        if (response.getStatusCode() == 200) {
-            verifySuccess(response);
-        }
+        assertThat(code, containsString("class DataPlatformClient"));
+        assertThat(code, containsString("X-API-Key"));
     }
 
     /**
-     * 测试生成Java SDK - 缺少参数
+     * 测试生成 SDK - 缺少 baseUrl
      */
     @Test
     @Order(2)
-    public void testGenerateJavaSDK_MissingParams() {
-        Response response = getAuthRequest()
-            .queryParam("baseUrl", "http://localhost:8080")
-            .when()
-            .get("/sdk/java");
-
-        response.then()
-            .statusCode(400);
+    public void testGenerateSDK_MissingBaseUrl() {
+        assertThrows(IllegalArgumentException.class, () -> sdkGenerator.generateJavaSDK(" "));
     }
 
     /**
-     * 测试生成Python SDK - 正常场景
+     * 测试生成 Python SDK - 正常场景
      */
     @Test
     @Order(3)
     public void testGeneratePythonSDK_Success() {
-        Response response = getAuthRequest()
-            .queryParam("baseUrl", "http://localhost:8080")
-            .queryParam("apiKey", "test-api-key")
-            .when()
-            .get("/sdk/python");
+        String code = sdkGenerator.generatePythonSDK("http://localhost:8888");
 
-        if (response.getStatusCode() == 200) {
-            verifySuccess(response);
-        }
+        assertThat(code, containsString("class DataPlatformClient"));
+        assertThat(code, containsString("requests.Session"));
     }
 
     /**
-     * 测试生成Go SDK - 正常场景
+     * 测试生成 Go SDK - 正常场景
      */
     @Test
     @Order(4)
     public void testGenerateGoSDK_Success() {
-        Response response = getAuthRequest()
-            .queryParam("baseUrl", "http://localhost:8080")
-            .queryParam("apiKey", "test-api-key")
-            .when()
-            .get("/sdk/go");
+        String code = sdkGenerator.generateGoSDK("http://localhost:8888");
 
-        if (response.getStatusCode() == 200) {
-            verifySuccess(response);
-        }
+        assertThat(code, containsString("type Client struct"));
+        assertThat(code, containsString("func NewClient"));
     }
 
     /**
-     * 测试生成所有SDK - 正常场景
+     * 测试生成所有 SDK - 正常场景
      */
     @Test
     @Order(5)
     public void testGenerateAllSDKs_Success() {
-        Response response = getAuthRequest()
-            .queryParam("baseUrl", "http://localhost:8080")
-            .queryParam("apiKey", "test-api-key")
-            .when()
-            .get("/sdk/all");
-
-        if (response.getStatusCode() == 200) {
-            verifySuccess(response);
-        }
-    }
-
-    /**
-     * 测试生成SDK - 未授权
-     */
-    @Test
-    @Order(6)
-    public void testGenerateSDK_Unauthorized() {
-        given()
-            .when()
-            .get("/sdk/java?baseUrl=http://localhost:8080&apiKey=test")
-            .then()
-            .statusCode(401);
+        assertThat(sdkGenerator.generateAllSDKs("http://localhost:8888").keySet(),
+                containsInAnyOrder("java", "python", "go"));
     }
 }

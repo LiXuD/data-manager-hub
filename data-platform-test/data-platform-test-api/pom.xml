@@ -4,9 +4,4 @@
     <parent><groupId>com.dataplatform</groupId><artifactId>data-platform-test</artifactId><version>1.0.0-SNAPSHOT</version></parent>
     <artifactId>data-platform-test-api</artifactId><packaging>jar</packaging>
     <name>Data Platform test API</name><description>test服务 - API契约层</description>
-    <dependencies>
-        <dependency><groupId>com.dataplatform</groupId><artifactId>data-platform-api</artifactId><version>${project.version}</version></dependency>
-        <dependency><groupId>org.projectlombok</groupId><artifactId>lombok</artifactId><optional>true</optional></dependency>
-        <dependency><groupId>org.springframework.cloud</groupId><artifactId>spring-cloud-starter-openfeign</artifactId><scope>provided</scope></dependency>
-    </dependencies>
 </project>

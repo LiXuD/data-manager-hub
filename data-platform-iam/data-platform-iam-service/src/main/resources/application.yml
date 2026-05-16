@@ -1,8 +1,0 @@
-server:
-  port: 8093
-
-spring:
-  profiles:
-    active: @profiles.active@
-  application:
-    name: @artifactId@

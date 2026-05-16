@@ -13,7 +13,7 @@ import static org.hamcrest.Matchers.*;
  * 厂商管理接口测试
  *
  * 整合原 VendorApiTest + DataTypeApiTest + ConfigApiTest
- * 对应 data-platform-vendor-service 服务
+ * 对应 data-platform-masterdata-service 服务
  *
  * 覆盖接口：
  * - 厂商管理：列表、详情、创建、更新、删除、状态修改、测试连接

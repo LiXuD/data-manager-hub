@@ -1,0 +1,43 @@
+package com.dataplatform.masterdata.graylog.api.dto;
+
+import jakarta.validation.constraints.NotBlank;
+
+import java.io.Serializable;
+import java.time.LocalDateTime;
+
+public class GrayRuleCreateReqDTO implements Serializable {
+
+    @NotBlank(message = "灰度规则名称不能为空")
+    private String ruleName;
+
+    private String serviceName;
+    private String version;
+    private Integer weight;
+    private String conditionType;
+    private String conditionValue;
+    private String description;
+    private String status;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
+
+    public String getRuleName() { return ruleName; }
+    public void setRuleName(String ruleName) { this.ruleName = ruleName; }
+    public String getServiceName() { return serviceName; }
+    public void setServiceName(String serviceName) { this.serviceName = serviceName; }
+    public String getVersion() { return version; }
+    public void setVersion(String version) { this.version = version; }
+    public Integer getWeight() { return weight; }
+    public void setWeight(Integer weight) { this.weight = weight; }
+    public String getConditionType() { return conditionType; }
+    public void setConditionType(String conditionType) { this.conditionType = conditionType; }
+    public String getConditionValue() { return conditionValue; }
+    public void setConditionValue(String conditionValue) { this.conditionValue = conditionValue; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public LocalDateTime getStartTime() { return startTime; }
+    public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
+    public LocalDateTime getEndTime() { return endTime; }
+    public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
+}

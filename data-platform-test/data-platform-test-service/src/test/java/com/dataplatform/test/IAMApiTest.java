@@ -12,7 +12,7 @@ import static org.hamcrest.Matchers.*;
 /**
  * IAM 用户权限管理接口测试
  *
- * 整合原 UserApiTest + RoleApiTest，对应 data-platform-iam 服务
+ * 整合原 UserApiTest + RoleApiTest，对应 data-platform-identity 服务
  *
  * 覆盖接口：
  * - 用户管理：列表、详情、创建、更新、删除、状态修改、密码重置、角色获取、角色分配

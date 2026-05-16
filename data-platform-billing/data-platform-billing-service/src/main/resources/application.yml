@@ -5,4 +5,4 @@ spring:
   profiles:
     active: @profiles.active@
   application:
-    name: @artifactId@
+    name: data-platform-billing

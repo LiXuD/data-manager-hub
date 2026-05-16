@@ -22,7 +22,15 @@
         </dependency>
         <dependency>
             <groupId>com.dataplatform</groupId>
-            <artifactId>data-platform-common</artifactId>
+            <artifactId>data-platform-common-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-common-persistence</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-common-runtime</artifactId>
         </dependency>
         <!-- Sa-Token (required by common module's UserContext/OperationLogAspect) -->
         <dependency>
@@ -74,7 +82,7 @@
         <!-- Log API for operation logging -->
         <dependency>
             <groupId>com.dataplatform</groupId>
-            <artifactId>data-platform-log-api</artifactId>
+            <artifactId>data-platform-governance-api</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

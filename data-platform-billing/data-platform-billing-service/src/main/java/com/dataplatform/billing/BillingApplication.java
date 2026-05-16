@@ -7,7 +7,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 @SpringBootApplication
-@EnableFeignClients(basePackages = "com.dataplatform")
+@EnableFeignClients(basePackages = "com.dataplatform.governance.log.api")
 @EnableDiscoveryClient
 @MapperScan("com.dataplatform.billing.mapper")
 public class BillingApplication {

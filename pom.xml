@@ -12,23 +12,22 @@
     <description>银行数据管理平台</description>
 
     <modules>
-        <module>data-platform-api</module>
+        <!-- New shared modules -->
+        <module>data-platform-common-contract</module>
+        <module>data-platform-common-web</module>
+        <module>data-platform-common-persistence</module>
+        <module>data-platform-common-runtime</module>
+
+        <!-- New five-domain skeleton -->
+        <module>data-platform-masterdata</module>
+        <module>data-platform-access</module>
+        <module>data-platform-billing</module>
+        <module>data-platform-identity</module>
+        <module>data-platform-governance</module>
+
+        <!-- Legacy modules retained during controlled migration -->
         <module>data-platform-test</module>
         <module>data-platform-gateway</module>
-        <module>data-platform-common</module>
-        <module>data-platform-vendor</module>
-        <module>data-platform-caller</module>
-        <module>data-platform-billing</module>
-        <module>data-platform-call</module>
-        <module>data-platform-graylog</module>
-        <module>data-platform-interface</module>
-        <module>data-platform-log</module>
-        <module>data-platform-monitor</module>
-        <module>data-platform-iam</module>
-        <module>data-platform-tenant</module>
-        <module>data-platform-trace</module>
-        <module>data-platform-quality</module>
-        <module>data-platform-security</module>
         <module>data-platform-sdk</module>
     </modules>
 
@@ -46,6 +45,8 @@
         <redisson.version>3.27.0</redisson.version>
         <hutool.version>5.8.28</hutool.version>
         <lombok.version>1.18.36</lombok.version>
+        <resilience4j.version>2.2.0</resilience4j.version>
+        <maven.enforcer.version>3.5.0</maven.enforcer.version>
         <profiles.active>dev</profiles.active>
     </properties>
 
@@ -145,7 +146,47 @@
             <!-- Project modules -->
             <dependency>
                 <groupId>com.dataplatform</groupId>
-                <artifactId>data-platform-common</artifactId>
+                <artifactId>data-platform-common-contract</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-common-web</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-common-persistence</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-common-runtime</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-masterdata-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-access-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-billing-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-identity-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-governance-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
@@ -170,22 +211,39 @@
                 </excludes>
             </resource>
         </resources>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                    <configuration>
+                        <source>21</source>
+                        <target>21</target>
+                        <encoding>UTF-8</encoding>
+                        <parameters>true</parameters>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${maven.enforcer.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>${spring-boot.version}</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
-                <configuration>
-                    <source>21</source>
-                    <target>21</target>
-                    <encoding>UTF-8</encoding>
-                    <parameters>true</parameters>
-                </configuration>
             </plugin>
         </plugins>
     </build>

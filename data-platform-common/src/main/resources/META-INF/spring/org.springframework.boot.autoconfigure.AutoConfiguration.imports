@@ -1,2 +1,0 @@
-com.dataplatform.common.config.MybatisPlusConfig
-com.dataplatform.common.circuitbreaker.CircuitBreakerConfiguration
