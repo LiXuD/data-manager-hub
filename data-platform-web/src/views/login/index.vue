@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import { request } from '@/utils/request'
+import { login } from '@/api/auth'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -28,7 +28,7 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
       try {
-        const res = await request.post<{ data: { token: string; username: string; userId: number; tenantId?: number; permissions?: string[]; roles?: string[] } }>('/auth/login', {
+        const res = await login({
           username: loginForm.value.username,
           password: loginForm.value.password
         })

@@ -121,15 +121,7 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
             return false;
         }
 
-        ApiInterface update = new ApiInterface();
-        update.setId(id);
-        if (requestSchema != null) {
-            update.setRequestSchema(requestSchema);
-        }
-        if (responseSchema != null) {
-            update.setResponseSchema(responseSchema);
-        }
-        return this.updateById(update);
+        return baseMapper.updateSchemaById(id, requestSchema, responseSchema) > 0;
     }
 
     @Override

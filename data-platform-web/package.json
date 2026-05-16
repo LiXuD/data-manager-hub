@@ -9,10 +9,12 @@
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx --fix"
   },
   "dependencies": {
+    "@types/nprogress": "^0.2.3",
     "@vueuse/core": "^11.0.0",
     "axios": "^1.7.0",
     "echarts": "^5.5.0",
     "element-plus": "^2.8.0",
+    "nprogress": "^0.2.0",
     "pinia": "^2.2.0",
     "vue": "^3.5.0",
     "vue-router": "^4.5.0"

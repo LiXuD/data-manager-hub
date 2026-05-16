@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import { request } from '@/utils/request'
 import type { PageParams } from '@/types'
 
 export interface Permission {
@@ -30,4 +30,8 @@ export const updatePermission = (id: number, data: Partial<Permission>) => {
 
 export const deletePermission = (id: number) => {
   return request.delete(`/permission/${id}`)
+}
+
+export const getAllPermissions = () => {
+  return request.get<{ data: Permission[] }>('/permission/all')
 }

@@ -43,7 +43,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="nickname" label="昵称" min-width="120" />
+        <el-table-column prop="realName" label="昵称" min-width="120" />
         <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
         <el-table-column prop="phone" label="手机号" width="130" />
         <el-table-column prop="status" label="状态" width="80">
@@ -85,7 +85,7 @@
           <el-input v-model="form.username" placeholder="请输入用户名" />
         </el-form-item>
         <el-form-item label="昵称">
-          <el-input v-model="form.nickname" placeholder="请输入昵称" />
+          <el-input v-model="form.realName" placeholder="请输入昵称" />
         </el-form-item>
         <el-form-item label="邮箱">
           <el-input v-model="form.email" placeholder="请输入邮箱" />
@@ -149,21 +149,21 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { request } from '@/utils/request'
+import { getUserList, createUser, updateUser, deleteUser, updateUserStatus, getUserRoles, assignUserRoles, getRoleList, getUserCallers, assignUserCallers, getCallerList } from '@/api/user'
+import type { UserDTO } from '@/types'
 import { COMMON_STATUS } from '@/constants/status'
 
-interface User { id: number; username: string; nickname: string; email: string; phone: string; status: string; createdAt: string }
 interface Role { id: number; roleCode: string; roleName: string }
 interface Caller { id: number; callerCode: string; callerName: string }
 
 const loading = ref(false)
 const submitting = ref(false)
-const tableData = ref<User[]>([])
+const tableData = ref<UserDTO[]>([])
 const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 const searchForm = reactive({ username: '', status: '' })
 const dialogVisible = ref(false)
-const form = reactive({ id: null as number | null, username: '', nickname: '', email: '', phone: '', status: COMMON_STATUS.ACTIVE })
+const form = reactive({ id: null as number | null, username: '', realName: '', email: '', phone: '', status: COMMON_STATUS.ACTIVE })
 
 const roleVisible = ref(false)
 const roleList = ref<Role[]>([])
@@ -174,17 +174,12 @@ const callerVisible = ref(false)
 const callerList = ref<Caller[]>([])
 const selectedCallers = ref<number[]>([])
 
-interface UserListResponse {
-  data?: User[]
-  total?: number
-}
-
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<UserListResponse>('/user/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
-    tableData.value = res.data || []
-    total.value = res.total || 0
+    const res = await getUserList({ page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm })
+    tableData.value = (res as any)?.data?.data?.records || (res as any)?.data?.data || (res as any)?.data || []
+    total.value = (res as any)?.data?.total || 0
   } catch (e: unknown) {
     console.error('加载用户列表失败:', e)
     tableData.value = []
@@ -195,13 +190,13 @@ const fetchList = async () => {
 const handleSearch = () => { pagination.currentPage = 1; fetchList() }
 const handleReset = () => { searchForm.username = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
 
-const handleAdd = () => { Object.assign(form, { id: null, username: '', nickname: '', email: '', phone: '', status: 'active' }); dialogVisible.value = true }
-const handleEdit = (row: User) => { Object.assign(form, { ...row }); dialogVisible.value = true }
+const handleAdd = () => { Object.assign(form, { id: null, username: '', realName: '', email: '', phone: '', status: 'active' }); dialogVisible.value = true }
+const handleEdit = (row: UserDTO) => { Object.assign(form, { ...row }); dialogVisible.value = true }
 
-const handleDelete = async (row: User) => {
+const handleDelete = async (row: UserDTO) => {
   try {
     await ElMessageBox.confirm('确定要删除该用户吗？', '提示', { type: 'warning' })
-    await request.delete(`/user/${row.id}`)
+    await deleteUser(row.id)
     ElMessage.success('删除成功')
     fetchList()
   } catch (error) {
@@ -219,9 +214,9 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     if (form.id) {
-      await request.put(`/user/${form.id}`, form)
+      await updateUser(form.id, form)
     } else {
-      await request.post('/user', form)
+      await createUser(form)
     }
     ElMessage.success('保存成功')
     dialogVisible.value = false
@@ -233,9 +228,9 @@ const handleSubmit = async () => {
   }
 }
 
-const handleStatusChange = async (row: User) => {
+const handleStatusChange = async (row: UserDTO) => {
   try {
-    await request.patch(`/user/${row.id}/status`, { status: row.status })
+    await updateUserStatus(row.id, row.status)
     ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
   } catch (error) {
     row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
@@ -243,15 +238,15 @@ const handleStatusChange = async (row: User) => {
   }
 }
 
-const handleRole = async (row: User) => {
+const handleRole = async (row: UserDTO) => {
   currentUserId.value = row.id
   try {
     const [rolesRes, userRolesRes] = await Promise.all([
-      request.get<{ data: Role[] }>('/role/list', { params: { page: 1, pageSize: 100 } }),
-      request.get<{ data: number[] }>(`/user/${row.id}/roles`)
+      getRoleList({ page: 1, pageSize: 100 }),
+      getUserRoles(row.id)
     ])
-    roleList.value = rolesRes.data || []
-    selectedRoles.value = userRolesRes.data || []
+    roleList.value = (rolesRes as any)?.data?.data?.records || (rolesRes as any)?.data?.data || []
+    selectedRoles.value = (userRolesRes as any)?.data?.data || []
     roleVisible.value = true
   } catch (error) {
     ElMessage.error('加载角色数据失败')
@@ -262,7 +257,7 @@ const handleSaveRoles = async () => {
   if (!currentUserId.value) return
   submitting.value = true
   try {
-    await request.post(`/user/${currentUserId.value}/roles`, selectedRoles.value)
+    await assignUserRoles(currentUserId.value, selectedRoles.value)
     ElMessage.success('角色配置成功')
     roleVisible.value = false
   } catch (error) {
@@ -272,15 +267,15 @@ const handleSaveRoles = async () => {
   }
 }
 
-const handleCaller = async (row: User) => {
+const handleCaller = async (row: UserDTO) => {
   currentUserId.value = row.id
   try {
     const [callersRes, userCallersRes] = await Promise.all([
-      request.get<{ data: Caller[] }>('/caller/list', { params: { page: 1, pageSize: 100 } }),
-      request.get<{ data: number[] }>(`/user/${row.id}/callers`)
+      getCallerList({ page: 1, pageSize: 100 }),
+      getUserCallers(row.id)
     ])
-    callerList.value = callersRes.data || []
-    selectedCallers.value = userCallersRes.data || []
+    callerList.value = (callersRes as any)?.data?.data?.records || (callersRes as any)?.data?.data || []
+    selectedCallers.value = (userCallersRes as any)?.data?.data || []
     callerVisible.value = true
   } catch (error) {
     ElMessage.error('加载调用方数据失败')
@@ -291,7 +286,7 @@ const handleSaveCallers = async () => {
   if (!currentUserId.value) return
   submitting.value = true
   try {
-    await request.post(`/user/${currentUserId.value}/callers`, selectedCallers.value)
+    await assignUserCallers(currentUserId.value, selectedCallers.value)
     ElMessage.success('调用方关联成功')
     callerVisible.value = false
   } catch (error) {

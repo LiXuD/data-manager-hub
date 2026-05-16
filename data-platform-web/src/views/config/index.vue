@@ -131,31 +131,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getConfigList, createConfig, updateConfig, deleteConfig } from '@/api/config'
+import { getConfigList, createConfig, updateConfig, deleteConfig, updateConfigStatus } from '@/api/config'
+import { useCacheStore } from '@/stores/cache'
 
-interface VendorConfig {
-  id: number
-  vendorId: number
-  vendorName: string
-  configKey: string
-  configValue: string
-  configType: string
-  description: string
-  isEncrypted: boolean
-  isActive: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-interface Vendor {
-  id: number
-  vendorName: string
-}
+// 本地类型 - 直接使用通用 Config 类型
+import type { Config } from '@/types'
 
 const loading = ref(false)
-const tableData = ref<VendorConfig[]>([])
+const tableData = ref<Config[]>([])
 const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 
@@ -164,15 +149,12 @@ const searchForm = reactive({
   configKey: ''
 })
 
-const vendorList = ref<Vendor[]>([
-  { id: 1, vendorName: '企查查' },
-  { id: 2, vendorName: '天眼查' },
-  { id: 3, vendorName: '启信宝' }
-])
+const cacheStore = useCacheStore()
+const vendorList = computed(() => cacheStore.vendorOptions)
 
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
-const formData = reactive<VendorConfig>({
+const formData = reactive<Config>({
   id: 0,
   vendorId: 0,
   vendorName: '',
@@ -221,13 +203,13 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
-const handleEdit = (row: VendorConfig) => {
+const handleEdit = (row: Config) => {
   dialogTitle.value = '编辑配置'
   Object.assign(formData, { ...row })
   dialogVisible.value = true
 }
 
-const handleDelete = async (row: VendorConfig) => {
+const handleDelete = async (row: Config) => {
   try {
     await ElMessageBox.confirm(`确定要删除配置"${row.configKey}"吗？`, '提示', { type: 'warning' })
     await deleteConfig(row.id)
@@ -258,9 +240,15 @@ const handleSubmit = async () => {
   }
 }
 
-const handleToggleStatus = (row: VendorConfig) => {
-  row.isActive = !row.isActive
-  ElMessage.success(row.isActive ? '已启用' : '已禁用')
+const handleToggleStatus = async (row: Config) => {
+  const newStatus = !row.isActive
+  try {
+    await updateConfigStatus(row.id, newStatus ? 'active' : 'inactive')
+    row.isActive = newStatus
+    ElMessage.success(newStatus ? '已启用' : '已禁用')
+  } catch {
+    ElMessage.error('状态更新失败')
+  }
 }
 
 onMounted(() => { fetchList() })

@@ -1,18 +1,5 @@
-import request from '@/utils/request'
-import type { PageParams } from '@/types'
-
-export interface User {
-  id: number
-  username: string
-  realName?: string
-  phone?: string
-  email?: string
-  tenantId?: number
-  tenantName?: string
-  status: string
-  createdAt: string
-  updatedAt: string
-}
+import { request } from '@/utils/request'
+import type { PageParams, UserDTO } from '@/types'
 
 export const getUserList = (params: PageParams & { keyword?: string; status?: string; tenantId?: number }) => {
   return request.get('/user/list', { params })
@@ -22,11 +9,11 @@ export const getUserById = (id: number) => {
   return request.get(`/user/${id}`)
 }
 
-export const createUser = (data: Partial<User> & { password: string }) => {
+export const createUser = (data: Partial<UserDTO> & { password: string }) => {
   return request.post('/user', data)
 }
 
-export const updateUser = (id: number, data: Partial<User>) => {
+export const updateUser = (id: number, data: Partial<UserDTO>) => {
   return request.put(`/user/${id}`, data)
 }
 
@@ -50,10 +37,18 @@ export const assignUserRoles = (userId: number, roleIds: number[]) => {
   return request.post(`/user/${userId}/roles`, { roleIds })
 }
 
+export const getRoleList = (params: PageParams) => {
+  return request.get('/role/list', { params })
+}
+
 export const getUserCallers = (userId: number) => {
   return request.get(`/user/${userId}/callers`)
 }
 
 export const assignUserCallers = (userId: number, callerIds: number[]) => {
   return request.post(`/user/${userId}/callers`, { callerIds })
+}
+
+export const getCallerList = (params: PageParams) => {
+  return request.get('/caller/list', { params })
 }

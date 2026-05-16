@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import { request } from '@/utils/request'
 import type { PageParams, DataType } from '@/types'
 
 // 重新导出类型，保持向后兼容
@@ -9,7 +9,7 @@ export const getDataTypeList = (params: PageParams & { keyword?: string; vendorI
 }
 
 export const getDataTypeAll = () => {
-  return request.get('/datatype/all')
+  return request.get<{ data: DataType[] }>('/datatype/all')
 }
 
 export const getDataTypeById = (id: number) => {

@@ -16,4 +16,8 @@ public interface ApiInterfaceMapper extends BaseMapper<ApiInterface> {
             @Param("vendorId") Long vendorId,
             @Param("dataTypeId") Long dataTypeId,
             @Param("status") String status);
+
+    int updateSchemaById(@Param("id") Long id,
+                         @Param("requestSchema") String requestSchema,
+                         @Param("responseSchema") String responseSchema);
 }

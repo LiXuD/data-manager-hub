@@ -203,9 +203,6 @@ const handleCommand = (command: string) => {
   }
 }
 
-const toggleSidebar = () => {
-  isCollapse.value = !isCollapse.value
-}
 </script>
 
 <template>

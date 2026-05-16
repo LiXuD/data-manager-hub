@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
+import { useUserStore } from '@/stores/user'
 
 const baseURL = import.meta.env.PROD ? import.meta.env.VITE_API_BASE_URL : '/api/v1'
 
@@ -29,7 +30,7 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
-    if (res.code === 0 || res.code === 200 || res.code === null || res.code === undefined) {
+    if (res.code === 200) {
       return res
     }
 
@@ -49,8 +50,8 @@ instance.interceptors.response.use(
           break
         case 401:
           msg = '登录已过期，请重新登录'
-          localStorage.removeItem('token')
-          localStorage.removeItem('username')
+          const userStore = useUserStore()
+          userStore.logout()
           window.location.href = '/login'
           break
         case 403:

@@ -46,7 +46,6 @@ export const useCacheStore = defineStore('cache', () => {
         }
         vendorOptions.value = list
         vendorsLoadedAt.value = Date.now()
-        console.log('加载厂商成功:', vendorOptions.value)
         return vendorOptions.value
       })
       .catch(error => {
@@ -79,7 +78,6 @@ export const useCacheStore = defineStore('cache', () => {
         }
         dataTypeOptions.value = list
         dataTypesLoadedAt.value = Date.now()
-        console.log('加载数据类型成功:', dataTypeOptions.value)
         return dataTypeOptions.value
       })
       .catch(error => {

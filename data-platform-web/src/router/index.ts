@@ -1,5 +1,9 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import NProgress from 'nprogress'
+import 'nprogress/nprogress.css'
+
+NProgress.configure({ showSpinner: false, trickleSpeed: 100 })
 
 const routes: RouteRecordRaw[] = [
   {
@@ -110,8 +114,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '个人中心' }
       }
     ]
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/not-found/index.vue'),
+    meta: { title: '404' }
   }
-]
 
 const router = createRouter({
   history: createWebHistory(),
@@ -120,6 +129,7 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach((to, _from, next) => {
+  NProgress.start()
   const userStore = useUserStore()
 
   if (to.path === '/login') {
@@ -135,6 +145,10 @@ router.beforeEach((to, _from, next) => {
       next('/login')
     }
   }
+})
+
+router.afterEach(() => {
+  NProgress.done()
 })
 
 export default router

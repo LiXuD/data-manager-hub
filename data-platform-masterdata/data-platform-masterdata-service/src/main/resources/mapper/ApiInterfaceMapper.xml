@@ -57,4 +57,16 @@
         ORDER BY i.sort ASC, i.created_at DESC
     </select>
 
+    <update id="updateSchemaById">
+        UPDATE api_interface SET
+            <if test="requestSchema != null">
+                request_schema = #{requestSchema}::jsonb,
+            </if>
+            <if test="responseSchema != null">
+                response_schema = #{responseSchema}::jsonb,
+            </if>
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id} AND deleted = false
+    </update>
+
 </mapper>

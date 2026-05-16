@@ -25,7 +25,7 @@ Content-Type: application/json
 **响应**:
 ```json
 {
-  "code": 0,
+  "code": 200,
   "message": "success",
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -150,7 +150,7 @@ Authorization: Bearer {token}
 **响应**:
 ```json
 {
-  "code": 0,
+  "code": 200,
   "message": "success",
   "data": {
     "records": [...],
@@ -209,7 +209,7 @@ Authorization: Bearer {token}
 **响应**:
 ```json
 {
-  "code": 0,
+  "code": 200,
   "data": [
     {
       "id": 1,
@@ -315,7 +315,7 @@ Authorization: Bearer {token}
 **响应**:
 ```json
 {
-  "code": 0,
+  "code": 200,
   "data": {
     "success": true,
     "latency": 245
@@ -376,7 +376,7 @@ Authorization: Bearer {token}
 **响应**:
 ```json
 {
-  "code": 0,
+  "code": 200,
   "data": {
     "id": 1,
     "interfaceCode": "PERSONAL_QUERY",
@@ -414,7 +414,7 @@ Content-Type: application/json
 **响应**:
 ```json
 {
-  "code": 0,
+  "code": 200,
   "data": {
     "valid": true
   }
@@ -431,7 +431,7 @@ Authorization: Bearer {token}
 **响应**:
 ```json
 {
-  "code": 0,
+  "code": 200,
   "data": {
     "interfaceId": 1,
     "interfaceCode": "PERSONAL_QUERY",
@@ -466,7 +466,7 @@ Content-Type: application/json
 **响应**:
 ```json
 {
-  "code": 0,
+  "code": 200,
   "data": {
     "success": true,
     "data": {
@@ -548,11 +548,61 @@ Authorization: Bearer {token}
 
 ---
 
+## 灰度发布 (/graylog)
+
+### 获取灰度规则列表
+
+```http
+GET /graylog/list?page=1&pageSize=10&serviceName=xxx&status=active
+Authorization: Bearer {token}
+```
+
+### 创建灰度规则
+
+```http
+POST /graylog
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "ruleName": "灰度规则A",
+  "serviceName": "vendor-service",
+  "version": "1.0.0",
+  "weight": 10,
+  "conditionType": "header",
+  "conditionValue": "X-Gray-Test: true",
+  "description": "测试灰度",
+  "status": "active"
+}
+```
+
+### 更新灰度规则
+
+```http
+PUT /graylog/{id}
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "weight": 50,
+  "status": "active"
+}
+```
+
+### 删除灰度规则
+
+```http
+DELETE /graylog/{id}
+Authorization: Bearer {token}
+```
+
+---
+
 ## 错误码说明
 
 | 错误码 | 说明 |
 |--------|------|
-| 0 | 成功 |
+| 200 | 成功 |
 | 400 | 请求参数错误 |
 | 401 | 未授权 |
 | 403 | 无权限 |
@@ -566,7 +616,7 @@ Authorization: Bearer {token}
 
 ```json
 {
-  "code": 0,
+  "code": 200,
   "message": "success",
   "data": { ... }
 }
@@ -575,7 +625,7 @@ Authorization: Bearer {token}
 分页响应:
 ```json
 {
-  "code": 0,
+  "code": 200,
   "message": "success",
   "data": {
     "records": [...],

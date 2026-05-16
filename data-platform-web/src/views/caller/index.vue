@@ -121,7 +121,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCallerList, deleteCaller, getApiKeyList, createApiKey, deleteApiKey, updateCallerStatus, getApiKeyInterfaces, assignApiKeyInterfaces } from '@/api/caller'
 import type { Caller, ApiKey } from '@/api/caller'
-import { request } from '@/utils/request'
+import { getInterfaceList } from '@/api/interface'
 import { COMMON_STATUS } from '@/constants'
 
 interface Interface { id: number; interfaceName: string; interfaceCode: string }
@@ -171,7 +171,7 @@ const handleInterfaceAuth = async (apiKeyId: number) => {
   currentApiKeyId.value = apiKeyId
   try {
     const [interfacesRes, apiKeyInterfacesRes] = await Promise.all([
-      request.get<{ data: Interface[] }>('/interface/list', { params: { page: 1, pageSize: 100 } }),
+      getInterfaceList({ page: 1, pageSize: 100 }),
       getApiKeyInterfaces(apiKeyId)
     ])
     interfaceList.value = interfacesRes.data || []

@@ -12,7 +12,7 @@ export const getVendorList = (params: {
 }
 
 export const getVendorAll = () => {
-  return request.get('/vendor/all')
+  return request.get<{ data: Vendor[] }>('/vendor/all')
 }
 
 export const getVendorDetail = (id: string | number) => {
