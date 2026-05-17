@@ -61,14 +61,14 @@
         <el-table-column prop="vendorName" label="厂商" width="120" />
         <el-table-column prop="dataType" label="数据类型" width="120" />
         <el-table-column prop="apiName" label="API名称" width="150" />
-        <el-table-column prop="requestTime" label="调用时间" width="180">
+        <el-table-column prop="callTime" label="调用时间" width="180">
           <template #default="{ row }">
-            <span class="time-cell">{{ row.requestTime }}</span>
+            <span class="time-cell">{{ row.callTime }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="responseTime" label="耗时" width="100">
           <template #default="{ row }">
-            <span :class="['response-time', { slow: row.responseTime > 1000 }]">{{ row.responseTime }}ms</span>
+            <span :class="['response-time', { slow: row.responseTime > 1000 }]">{{ row.responseTime ?? 0 }}ms</span>
           </template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
@@ -107,23 +107,11 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCallRecordList, getCallStats } from '@/api/call'
+import type { CallRecord } from '@/types'
 import { useCacheStore } from '@/stores/cache'
 import { extractPageData } from '@/utils/pagination'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 // StatCard is globally registered by unplugin-vue-components
-
-interface CallRecord {
-  id: number
-  callerName: string
-  vendorName: string
-  dataType: string
-  apiName: string
-  requestTime: string
-  responseTime: number
-  status: string
-  cost: number
-  traceId: string
-}
 
 const loading = ref(false)
 const tableData = ref<CallRecord[]>([])

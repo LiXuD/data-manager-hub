@@ -13,21 +13,21 @@ export const getDataTypeAll = () => {
 }
 
 export const getDataTypeById = (id: number) => {
-  return request.get(`/datatype/${id}`)
+  return request.get<{ data: DataType }>(`/datatype/${id}`)
 }
 
 export const createDataType = (data: Partial<DataType>) => {
-  return request.post('/datatype', data)
+  return request.post<{ data: DataType }>('/datatype', data)
 }
 
 export const updateDataType = (id: number, data: Partial<DataType>) => {
-  return request.put(`/datatype/${id}`, data)
+  return request.put<{ data: DataType }>(`/datatype/${id}`, data)
 }
 
 export const deleteDataType = (id: number) => {
-  return request.delete(`/datatype/${id}`)
+  return request.delete<void>(`/datatype/${id}`)
 }
 
 export const updateDataTypeStatus = (id: number, status: string) => {
-  return request.patch(`/datatype/${id}/status`, { status })
+  return request.patch<void>(`/datatype/${id}/status`, { status })
 }

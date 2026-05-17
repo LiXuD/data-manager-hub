@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+# smoke-test-api.sh — P1 核心链路 API 冒烟测试
+#
+# 用法:
+#   bash smoke-test-api.sh              # 使用默认凭据登录
+#   TOKEN=Bearer-xxx bash smoke-test-api.sh  # 使用指定 token
+#
+# 前置: 五域服务已启动 (8081/8082/8084/8086)
+
+set -euo pipefail
+
+MASTERDATA="http://localhost:8081"
+ACCESS="http://localhost:8082"
+BILLING="http://localhost:8084"
+IDENTITY="http://localhost:8086"
+
+PASS=0
+FAIL=0
+
+check() {
+    local desc="$1"
+    local http_code="$2"
+    local expected="${3:-200}"
+    if [ "$http_code" = "$expected" ]; then
+        echo "  ✅ $desc (HTTP $http_code)"
+        PASS=$((PASS + 1))
+    else
+        echo "  ❌ $desc (HTTP $http_code, expected $expected)"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+api() {
+    local method="$1" url="$2" data="${3:-}"
+    if [ -n "$data" ]; then
+        curl -s -o /dev/null -w "%{http_code}" -X "$method" "$url" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: $TOKEN" \
+            -d "$data"
+    else
+        curl -s -o /dev/null -w "%{http_code}" -X "$method" "$url" \
+            -H "Authorization: $TOKEN"
+    fi
+}
+
+api_body() {
+    local method="$1" url="$2" data="${3:-}"
+    if [ -n "$data" ]; then
+        curl -s -X "$method" "$url" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: $TOKEN" \
+            -d "$data"
+    else
+        curl -s -X "$method" "$url" \
+            -H "Authorization: $TOKEN"
+    fi
+}
+
+echo "=========================================="
+echo "  P1 核心链路 API 冒烟测试"
+echo "=========================================="
+echo ""
+
+# ============================================================
+# 0. 获取认证 Token
+# ============================================================
+echo "--- 0. 获取认证 Token ---"
+
+if [ -z "${TOKEN:-}" ]; then
+    LOGIN_RESP=$(curl -s -X POST "$IDENTITY/identity/auth/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"${TEST_USER:-admin}\",\"password\":\"${TEST_PASS:-Test123456}\"}" 2>/dev/null || echo '{}')
+
+    TOKEN=$(echo "$LOGIN_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('token',''))" 2>/dev/null || echo "")
+
+    if [ -n "$TOKEN" ]; then
+        TOKEN="Bearer $TOKEN"
+        echo "  ✅ Token 获取成功"
+    else
+        echo "  ❌ Token 获取失败，使用无认证模式测试公开端点"
+        echo "  (提示: 确认服务已重启并确保 /identity/auth/login 端点可访问)"
+        TOKEN="Bearer-test-token-for-validation-only-1234567890"
+    fi
+else
+    echo "  ✅ 使用指定 Token"
+fi
+echo ""
+
+# ============================================================
+# 1. 主数据域 — 厂商 CRUD
+# ============================================================
+echo "--- 1. 厂商 CRUD ---"
+
+VENDOR_CREATE=$(api_body POST "$MASTERDATA/vendor" '{
+    "vendorCode": "TEST_V001",
+    "vendorName": "测试厂商-冒烟",
+    "vendorType": "http",
+    "status": "active"
+}')
+VENDOR_ID=$(echo "$VENDOR_CREATE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null || echo "")
+
+http_code=$(api POST "$MASTERDATA/vendor" '{"vendorCode":"TEST_V002","vendorName":"测试厂商2","vendorType":"http","status":"active"}')
+check "创建厂商" "$http_code"
+
+http_code=$(api GET "$MASTERDATA/vendor/list?pageNum=1&pageSize=10")
+check "厂商列表" "$http_code"
+
+if [ -n "$VENDOR_ID" ] && [ "$VENDOR_ID" != "" ]; then
+    http_code=$(api GET "$MASTERDATA/vendor/$VENDOR_ID")
+    check "厂商详情" "$http_code"
+
+    http_code=$(api PUT "$MASTERDATA/vendor/$VENDOR_ID" '{"vendorName":"测试厂商-已更新","status":"active"}')
+    check "更新厂商" "$http_code"
+fi
+echo ""
+
+# ============================================================
+# 2. 主数据域 — 数据类型 CRUD
+# ============================================================
+echo "--- 2. 数据类型 CRUD ---"
+
+http_code=$(api POST "$MASTERDATA/datatype" '{"dataTypeCode":"TEST_DT01","dataTypeDesc":"测试数据类型","status":"active"}')
+check "创建数据类型" "$http_code"
+
+http_code=$(api GET "$MASTERDATA/datatype/list?pageNum=1&pageSize=10")
+check "数据类型列表" "$http_code"
+
+http_code=$(api GET "$MASTERDATA/datatype/all")
+check "全部数据类型" "$http_code"
+echo ""
+
+# ============================================================
+# 3. 主数据域 — 接口定义
+# ============================================================
+echo "--- 3. 接口定义 ---"
+
+http_code=$(api GET "$MASTERDATA/interface/list?pageNum=1&pageSize=10")
+check "接口列表" "$http_code"
+echo ""
+
+# ============================================================
+# 4. 访问域 — 调用方 CRUD
+# ============================================================
+echo "--- 4. 调用方 CRUD ---"
+
+CALLER_CREATE=$(api_body POST "$ACCESS/caller" '{
+    "callerName": "测试调用方-冒烟",
+    "callerCode": "TEST_C001",
+    "status": "active"
+}')
+CALLER_ID=$(echo "$CALLER_CREATE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null || echo "")
+
+http_code=$(api POST "$ACCESS/caller" '{"callerName":"测试调用方2","callerCode":"TEST_C002","status":"active"}')
+check "创建调用方" "$http_code"
+
+http_code=$(api GET "$ACCESS/caller/list?pageNum=1&pageSize=10")
+check "调用方列表" "$http_code"
+echo ""
+
+# ============================================================
+# 5. 访问域 — API Key 管理
+# ============================================================
+echo "--- 5. API Key 管理 ---"
+
+if [ -n "$CALLER_ID" ] && [ "$CALLER_ID" != "" ]; then
+    http_code=$(api POST "$ACCESS/caller/$CALLER_ID/api-key" '{"name":"冒烟测试Key"}')
+    check "生成 API Key" "$http_code"
+else
+    echo "  ⚠️ 跳过 (调用方 ID 为空)"
+fi
+
+http_code=$(api GET "$ACCESS/caller/apikey/list?pageNum=1&pageSize=10")
+check "API Key 列表" "$http_code"
+echo ""
+
+# ============================================================
+# 6. 计费域 — 计费规则与账单
+# ============================================================
+echo "--- 6. 计费规则与账单 ---"
+
+http_code=$(api GET "$BILLING/billing/rule/list?pageNum=1&pageSize=10")
+check "计费规则列表" "$http_code"
+
+http_code=$(api POST "$BILLING/billing/rule" '{
+    "vendorCode": "TEST_V001",
+    "dataTypeCode": "TEST_DT01",
+    "billingType": "standard",
+    "unitPrice": 0.5,
+    "status": "active"
+}')
+check "创建计费规则" "$http_code"
+
+http_code=$(api GET "$BILLING/billing/list?pageNum=1&pageSize=10")
+check "账单列表" "$http_code"
+
+http_code=$(api GET "$BILLING/billing/stats")
+check "计费统计" "$http_code"
+echo ""
+
+# ============================================================
+# 汇总
+# ============================================================
+echo "=========================================="
+echo "  测试完成: ✅ $PASS 通过, ❌ $FAIL 失败"
+echo "=========================================="
+
+exit "$FAIL"

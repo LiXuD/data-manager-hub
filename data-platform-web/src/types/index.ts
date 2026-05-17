@@ -194,7 +194,7 @@ export interface DataQueryResponse {
   cached?: boolean
 }
 
-// 调用记录相关类型
+// 调用记录相关类型 (与后端 CallRecord 实体对齐)
 export interface CallRecord {
   id: number
   requestId: string
@@ -204,15 +204,20 @@ export interface CallRecord {
   vendorId: number
   vendorCode: string
   dataType: string
+  dataTypeCode?: string
   requestParams: string
   responseData: string
   success: boolean
   errorCode?: string
   errorMsg?: string
   latency: number
+  responseTime?: number
   cost: number
   cached?: boolean
   callTime: string
+  result?: string
+  createdAt?: string
+  deleted?: boolean
 }
 
 // 分页响应

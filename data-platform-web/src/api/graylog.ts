@@ -28,23 +28,23 @@ export const getGraylogConfigList = (params: PageParams & { keyword?: string; st
 }
 
 export const getGraylogConfigById = (id: number) => {
-  return request.get(`/graylog/config/${id}`)
+  return request.get<GraylogConfig>(`/graylog/config/${id}`)
 }
 
 export const createGraylogConfig = (data: Partial<GraylogConfig>) => {
-  return request.post('/graylog/config', data)
+  return request.post<GraylogConfig>('/graylog/config', data)
 }
 
 export const updateGraylogConfig = (id: number, data: Partial<GraylogConfig>) => {
-  return request.put(`/graylog/config/${id}`, data)
+  return request.put<GraylogConfig>(`/graylog/config/${id}`, data)
 }
 
 export const deleteGraylogConfig = (id: number) => {
-  return request.delete(`/graylog/config/${id}`)
+  return request.delete<void>(`/graylog/config/${id}`)
 }
 
 export const testGraylogConnection = (id: number) => {
-  return request.post(`/graylog/config/${id}/test`)
+  return request.post<{ success: boolean; message?: string }>(`/graylog/config/${id}/test`)
 }
 
 // Stream管理
@@ -53,15 +53,15 @@ export const getStreamList = (params: PageParams & { keyword?: string }) => {
 }
 
 export const createStream = (data: Partial<GraylogStream>) => {
-  return request.post('/graylog/stream', data)
+  return request.post<GraylogStream>('/graylog/stream', data)
 }
 
 export const updateStream = (id: number, data: Partial<GraylogStream>) => {
-  return request.put(`/graylog/stream/${id}`, data)
+  return request.put<GraylogStream>(`/graylog/stream/${id}`, data)
 }
 
 export const deleteStream = (id: number) => {
-  return request.delete(`/graylog/stream/${id}`)
+  return request.delete<void>(`/graylog/stream/${id}`)
 }
 
 // 灰度规则
@@ -85,13 +85,13 @@ export const getGrayRuleList = (params: PageParams & { serviceName?: string; sta
 }
 
 export const createGrayRule = (data: Partial<GrayRule>) => {
-  return request.post('/graylog', data)
+  return request.post<GrayRule>('/graylog', data)
 }
 
 export const updateGrayRule = (id: number, data: Partial<GrayRule>) => {
-  return request.put(`/graylog/${id}`, data)
+  return request.put<GrayRule>(`/graylog/${id}`, data)
 }
 
 export const deleteGrayRule = (id: number) => {
-  return request.delete(`/graylog/${id}`)
+  return request.delete<void>(`/graylog/${id}`)
 }

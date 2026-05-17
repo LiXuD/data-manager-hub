@@ -1,26 +1,13 @@
 import { request } from '@/utils/request'
-import type { PageParams } from '@/types'
-
-export interface CallRecord {
-  id: number
-  callerId: number
-  callerName: string
-  vendorId: number
-  vendorName: string
-  dataType: string
-  success: boolean
-  errorCode?: string
-  errorMessage?: string
-  cost: number
-  callTime: string
-  responseTime: number
-}
+import type { PageParams, CallRecord } from '@/types'
 
 export interface CallStats {
   totalCount: number
   successCount: number
   failCount: number
   successRate: number
+  avgResponseTime?: number
+  todayCost?: number
 }
 
 export const getCallRecordList = (params: PageParams & {
@@ -35,11 +22,11 @@ export const getCallRecordList = (params: PageParams & {
 }
 
 export const getCallRecordById = (id: number) => {
-  return request.get(`/call-record/${id}`)
+  return request.get<{ data: CallRecord }>(`/call-record/${id}`)
 }
 
 export const getCallStats = (params: { startTime?: string; endTime?: string }) => {
-  return request.get('/call-record/stats', { params })
+  return request.get<{ data: CallStats }>('/call-record/stats', { params })
 }
 
 export const exportCallRecords = (params: {
@@ -47,5 +34,5 @@ export const exportCallRecords = (params: {
   startTime?: string
   endTime?: string
 }) => {
-  return request.get('/call-record/export', { params })
+  return request.get<void>('/call-record/export', { params })
 }

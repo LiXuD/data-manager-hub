@@ -1,9 +1,12 @@
 # =====================================================
 # 数据管理平台 - Docker Compose 配置
 #
-# 使用说明:
-# - 数据库: 使用本地PostgreSQL (localhost:5432)
-# - 其他中间件: 使用Docker启动
+# 本文件仅启动中间件 (Redis/Kafka/Nacos 等)。
+# 五域 Java 服务通过 ./start-services.sh 以 mvn spring-boot:run 启动。
+#
+# 五域服务:
+#   masterdata (8081), access (8082), billing (8084),
+#   governance (8085), identity (8086), gateway (8888)
 #
 # 启动命令: docker-compose up -d
 # 停止命令: docker-compose down

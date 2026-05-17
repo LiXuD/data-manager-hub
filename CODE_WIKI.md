@@ -19,7 +19,7 @@
   - [3.5 Billing 域](#35-billing-域)
   - [3.6 Identity 域](#36-identity-域)
   - [3.7 Governance 域](#37-governance-域)
-  - [3.8 SDK 模块](#38-sdk-模块)
+  - [3.8 SDK 模块 (Jar)](#38-sdk-模块)
   - [3.9 测试模块](#39-测试模块)
   - [3.10 前端模块](#310-前端模块)
 - [4. 依赖关系](#4-依赖关系)
@@ -80,11 +80,7 @@
    │ 角色权限        │  │ 操作日志           │                 │
    │ 租户管理        │  │ 数据质量           │                 │
    │ 数据加密        │  │ 数据血缘           │                 │
-   └────────────────┘  └────────────────────┘                 │
-                                                          │
-                                              ┌────────────▼──────────┐
-                                              │   data-platform-sdk  │ :8087
-                                              └─────────────────────┘
+   └────────────────┘  └────────────────────┘
 ```
 
 ### 2.2 技术栈总览
@@ -141,7 +137,7 @@ data-manager-hub/
 
 # 网关与辅助模块
 ├── data-platform-gateway/               # API网关 (8888)
-├── data-platform-sdk/                   # SDK生成 (8087)
+├── data-platform-sdk/                   # SDK客户端/代码生成 Jar，不独立部署
 ├── data-platform-test/                  # 集成测试
 └── data-platform-web/                   # 前端 (3000)
 ```
@@ -650,8 +646,8 @@ com.dataplatform.governance/
 ### 3.8 SDK 模块
 
 > **路径**: `data-platform-sdk/`
-> **端口**: 8087
-> **职责**: 根据接口定义自动生成SDK代码。
+> **类型**: 普通 Jar 依赖，不作为 Spring Boot 服务独立部署
+> **职责**: SDK 客户端与代码生成工具，供其他模块以 Maven 依赖方式引用。
 
 | 类名 | 说明 |
 |------|------|
@@ -887,7 +883,6 @@ data-platform-web/src/
 | billing | data-platform-billing | 8084 | 计费 |
 | identity | data-platform-identity | 8086 | 身份/租户 |
 | governance | data-platform-governance | 8085 | 监控/日志/质量 |
-| - | data-platform-sdk | 8087 | SDK生成 |
 | - | data-platform-web | 3000 | 前端 |
 
 ---

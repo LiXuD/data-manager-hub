@@ -44,7 +44,7 @@ spring:
         - id: vendor-service
           uri: lb://data-platform-masterdata
           predicates:
-            - Path=/api/v1/vendor/**,/api/v1/config/**,/api/v1/data-type/**,/api/v1/datatype/**,/api/v1/data/**
+            - Path=/api/v1/vendor/**,/api/v1/config/**,/api/v1/datatype/**,/api/v1/data/**
           filters:
             - StripPrefix=2
         - id: caller-service
@@ -127,6 +127,9 @@ sa-token:
   is-share: false
   token-style: uuid
   token-prefix: Bearer
+  check-exclude-paths:
+    - /actuator/**
+    - /health/**
 
 spring.data.redis:
   host: localhost

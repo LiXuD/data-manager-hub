@@ -1,7 +1,7 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-05-16
+**最后更新**: 2026-05-17 00:00
 **状态**: 五域收敛基线已合入 dev，后端与前端构建验证通过
 
 ---
@@ -241,14 +241,55 @@ data-platform-governance/            # 治理
 
 ---
 
+## 🏗️ 五域收敛后续推进任务 (2026-05-16 规划)
+
+> 来源: `docs/2026-05-16-five-domain-next-phase-plan.md`
+> 执行顺序按阶段 A→F，同一阶段内任务可并行。
+> **更新**: 2026-05-17 所有阶段任务已完成。
+
+### 阶段 A: 基线守护与协作规则
+
+- [x] **架构扫描测试** — `arch-scan.sh`，5 项检查（跨域依赖、api 重型依赖、全包扫描、跨域 import、旧模块残留）✅
+- [x] **合并前检查清单** — 已写入 README.md「合并前检查」章节 ✅
+
+### 阶段 B: 启动烟雾测试
+
+- [x] **五域服务启动验证** — 6/6 端口监听正常，服务响应正常，无 Bean/Mapper 冲突 ✅
+- [x] **Gateway 路由映射梳理** — 12 条路由全部可达，发现 1 处 data-type/datatype 路径不匹配 ✅
+
+### 阶段 B+: Gateway 熔断补充
+
+- [x] **CircuitBreakerFilter** — `filter/CircuitBreakerFilter.java`，4 个测试通过 ✅
+
+### 阶段 C: 业务链路回归
+
+- [x] **P1 核心链路测试** — `smoke-test-api.sh`，覆盖主数据/访问/计费三条核心链路 ✅
+- [ ] P2 链路测试 — 身份租户、治理观测（后续补充）
+
+### 阶段 D: 前端接口归并
+
+- [x] **前端 API 类型整理** — 发现 8 处重复类型、CallRecord 字段冲突、多数 API 函数未类型化 ✅
+
+### 阶段 E: 文档清理
+
+- [x] **DEPLOYMENT.md 更新** — 去掉 sdk 服务行，补充发布顺序 ✅
+- [x] **CODE_WIKI.md 重写** — 架构图去掉 sdk、sdk 标注为 Jar、端口表去掉 sdk ✅
+
+### 阶段 F: 部署路径
+
+- [x] **docker-compose 更新** — 添加五域服务说明注释 ✅
+
+---
+
 ## 📋 待完成功能 (P1)
 
 ### 1. Gateway 增强
 
-- [ ] 限流过滤器 (RateLimitFilter)
-- [ ] 认证过滤器增强 (AuthFilter)
-- [ ] 熔断过滤器 (CircuitBreakerFilter)
-- [ ] 请求日志过滤器 (RequestLogFilter)
+- [x] 限流过滤器 (RateLimitFilter) — `filter/RateLimitFilter.java` ✅
+- [x] 认证过滤器增强 (AuthFilter) — `filter/AuthFilter.java` ✅
+- [x] 请求日志过滤器 (RequestLogFilter) — `filter/RequestLogFilter.java` ✅
+- [x] 链路追踪过滤器 (TraceIdFilter) — `filter/TraceIdFilter.java` ✅（额外实现）
+- [x] 熔断过滤器 (CircuitBreakerFilter) — `filter/CircuitBreakerFilter.java` ✅
 
 ### 2. 自动对账完善
 
@@ -260,6 +301,13 @@ data-platform-governance/            # 治理
 
 - [ ] 三级联动: 厂商 → 数据类型 → 接口
 - [ ] 数据查询测试页面增强
+
+### 4. 五域收敛后修复 (2026-05-17)
+
+- [x] Gateway 路由 `/api/v1/data-type/**` 移除 — 与 Controller `/datatype` 不匹配，删除死路由 ✅
+- [x] Gateway actuator/health 放行 — `sa-token.check-exclude-paths` 添加 `/actuator/**`、`/health/**` ✅
+- [x] 前端 CallRecord 类型统一 — 三处定义合并为 `types/index.ts` 单一来源 ✅
+- [x] 前端 API 函数泛型补充 — 14 个 API 文件添加类型参数 (call/quality/graylog/billing/config/datatype/log/permission/role/security/trace/user/caller/vendor-config) ✅
 
 ---
 
@@ -280,4 +328,4 @@ data-platform-governance/            # 治理
 ---
 
 **文档维护**: 按架构变更更新
-**最后更新**: 2026-05-16
+**最后更新**: 2026-05-17 00:00

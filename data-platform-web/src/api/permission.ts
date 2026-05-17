@@ -1,35 +1,24 @@
 import { request } from '@/utils/request'
-import type { PageParams } from '@/types'
-
-export interface Permission {
-  id: number
-  permissionCode: string
-  permissionName: string
-  resource: string
-  action: string
-  description?: string
-  createdAt?: string
-  updatedAt?: string
-}
+import type { PageParams, Permission, ListResponse } from '@/types'
 
 export const getPermissionList = (params?: PageParams) => {
-  return request.get('/permission/list', { params })
+  return request.get<ListResponse<Permission>>('/permission/list', { params })
 }
 
 export const getPermissionById = (id: number) => {
-  return request.get(`/permission/${id}`)
+  return request.get<Permission>(`/permission/${id}`)
 }
 
 export const createPermission = (data: Partial<Permission>) => {
-  return request.post('/permission', data)
+  return request.post<Permission>('/permission', data)
 }
 
 export const updatePermission = (id: number, data: Partial<Permission>) => {
-  return request.put(`/permission/${id}`, data)
+  return request.put<Permission>(`/permission/${id}`, data)
 }
 
 export const deletePermission = (id: number) => {
-  return request.delete(`/permission/${id}`)
+  return request.delete<void>(`/permission/${id}`)
 }
 
 export const getAllPermissions = () => {

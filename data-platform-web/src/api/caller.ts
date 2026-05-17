@@ -49,5 +49,5 @@ export const getApiKeyInterfaces = (apiKeyId: number) => {
 }
 
 export const assignApiKeyInterfaces = (apiKeyId: number, interfaceIds: number[]) => {
-  return request.post(`/caller/api-key/${apiKeyId}/interfaces`, { interfaceIds })
+  return request.post<void>(`/caller/api-key/${apiKeyId}/interfaces`, { interfaceIds })
 }

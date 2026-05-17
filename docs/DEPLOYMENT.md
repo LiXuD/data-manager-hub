@@ -92,8 +92,9 @@ npm run dev
 | billing | data-platform-billing | 8084 | 计费 |
 | identity | data-platform-identity | 8086 | 身份/租户/安全 |
 | governance | data-platform-governance | 8085 | 监控/日志/质量/血缘 |
-| - | data-platform-sdk | 8087 | SDK 生成 |
 | - | Web | 3000 | 前端界面 |
+
+> **注意**: `data-platform-sdk` 是普通 Jar 依赖，不作为独立服务部署。
 
 ---
 
@@ -183,8 +184,17 @@ Billing (8084)
 ### 启动顺序
 
 ```
-8081 (masterdata) → 8082 (access) → 8084 (billing) → 8085 (governance) → 8086 (identity) → 8888 (gateway)
+1. 基础设施 (PostgreSQL, Redis, Nacos)
+2. identity (8086) — 租户/用户是其他域的基础
+3. masterdata (8081)
+4. billing (8084)
+5. access (8082)
+6. governance (8085)
+7. gateway (8888)
+8. web (3000)
 ```
+
+一键脚本简化为: `./start-services.sh`（已包含步骤 2-7）。
 
 ---
 

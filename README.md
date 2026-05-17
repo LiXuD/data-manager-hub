@@ -322,6 +322,31 @@ data-platform/
 
 ---
 
+## ✅ 合并前检查
+
+PR 合入 `dev` 前必须全部通过：
+
+```bash
+# 1. Maven 依赖校验
+mvn -q validate
+
+# 2. 后端编译
+mvn -q -DskipTests compile
+
+# 3. 测试编译
+mvn -q -DskipTests test-compile
+
+# 4. 前端构建
+cd data-platform-web && npm run build && cd ..
+
+# 5. 架构边界扫描
+bash arch-scan.sh
+```
+
+任一步骤失败不可合入。
+
+---
+
 ## 📄 许可证
 
 MIT

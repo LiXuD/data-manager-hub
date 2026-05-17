@@ -25,17 +25,17 @@ export interface QualityScore {
 }
 
 export const addQualityRule = (data: Partial<QualityRule>) => {
-  return request.post('/quality/rules', data)
+  return request.post<QualityRule>('/quality/rules', data)
 }
 
 export const getQualityRules = (dataType?: string) => {
-  return request.get('/quality/rules', { params: { dataType } })
+  return request.get<{ data: QualityRule[] }>('/quality/rules', { params: { dataType } })
 }
 
 export const checkQuality = (dataType: string, dataId: number) => {
-  return request.post('/quality/check', null, { params: { dataType, dataId } })
+  return request.post<QualityScore>('/quality/check', null, { params: { dataType, dataId } })
 }
 
 export const getQualityHistory = (dataType: string, dataId: number) => {
-  return request.get('/quality/history', { params: { dataType, dataId } })
+  return request.get<{ data: QualityScore[] }>('/quality/history', { params: { dataType, dataId } })
 }
