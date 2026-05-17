@@ -15,6 +15,14 @@ public interface CallRecordService extends IService<CallRecord> {
 
     Map<String, Object> getStats(LocalDateTime startTime, LocalDateTime endTime);
 
+    CallRecord findLatestReusableCache(String apiCode, String requestHash, Long callerId,
+                                       LocalDateTime since, String cacheScope);
+
+    Map<String, Object> getDimensionStats(Long callerId, String productCode, String sceneCode,
+                                          String apiCode, String vendorCode, String dataType,
+                                          Boolean cacheHit, LocalDateTime startTime,
+                                          LocalDateTime endTime);
+
     String export(Long callerId, LocalDateTime startTime, LocalDateTime endTime);
 
     byte[] exportData(Long callerId, LocalDateTime startTime, LocalDateTime endTime);

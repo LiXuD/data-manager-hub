@@ -569,6 +569,141 @@ Authorization: Bearer {token}
 
 ---
 
+## 外部系统统一调用 (/openapi/v1)
+
+外部系统通过 Gateway 统一入口调用，认证方式为 `X-Api-Key` 或 `Authorization: Bearer {apiKey}`。
+
+### 单条查询
+
+```http
+POST /openapi/v1/query
+X-Api-Key: {apiKey}
+Content-Type: application/json
+
+{
+  "requestId": "risk-20260517-0001",
+  "apiCode": "PERSONAL_QUERY",
+  "apiVersion": "v1",
+  "productCode": "loan-risk",
+  "sceneCode": "pre-loan-review",
+  "useCache": true,
+  "cacheDays": 3,
+  "params": {
+    "name": "张三",
+    "idCard": "110101199001011234"
+  }
+}
+```
+
+**响应**:
+```json
+{
+  "code": 200,
+  "msg": "success",
+  "data": {
+    "requestId": "risk-20260517-0001",
+    "platformRequestId": "req_abc123",
+    "apiCode": "PERSONAL_QUERY",
+    "apiVersion": "v1",
+    "productCode": "loan-risk",
+    "sceneCode": "pre-loan-review",
+    "success": true,
+    "cached": true,
+    "cacheSourceRecordId": 123,
+    "requestTime": "2026-05-17T12:00:00",
+    "responseTime": "2026-05-17T12:00:00.120",
+    "durationMs": 120,
+    "cost": 0,
+    "data": {
+      "name": "张三",
+      "age": 35
+    }
+  }
+}
+```
+
+说明：
+- `productCode` 必须属于调用方已配置且启用的产品。
+- API Key 必须被授权访问该产品。
+- `sceneCode` 必须是启用的公共调用场景。
+- `useCache=true` 时 `cacheDays` 必须大于 0；平台会查询指定天数内同 `apiCode + params` 的最新成功记录，命中后不调用厂商且本次费用为 0。
+
+### 批量查询
+
+```http
+POST /openapi/v1/batch-query
+X-Api-Key: {apiKey}
+Content-Type: application/json
+
+{
+  "requestId": "risk-batch-20260517-0001",
+  "apiCode": "PERSONAL_QUERY",
+  "apiVersion": "v1",
+  "productCode": "loan-risk",
+  "sceneCode": "pre-loan-review",
+  "useCache": true,
+  "cacheDays": 3,
+  "items": [
+    {
+      "itemId": "1",
+      "params": {"name": "张三"}
+    },
+    {
+      "itemId": "2",
+      "params": {"name": "李四"}
+    }
+  ]
+}
+```
+
+### 调用方产品配置
+
+```http
+POST /caller/{callerId}/products
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "productCode": "loan-risk",
+  "productName": "信贷风控",
+  "cacheScope": "GLOBAL"
+}
+```
+
+`cacheScope` 支持 `GLOBAL` 和 `CALLER`。`GLOBAL` 表示同接口同参数可复用平台历史结果；`CALLER` 表示只复用本调用方历史结果。
+
+### API Key 产品授权
+
+```http
+POST /caller/apikey/{id}/products
+Authorization: Bearer {token}
+Content-Type: application/json
+
+[1, 2, 3]
+```
+
+### 公共调用场景
+
+```http
+POST /call-scene
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "sceneCode": "pre-loan-review",
+  "sceneName": "贷前审批"
+}
+```
+
+### 多维调用统计
+
+```http
+GET /call-record/dimension-stats?callerId=1&productCode=loan-risk&sceneCode=pre-loan-review
+Authorization: Bearer {token}
+```
+
+---
+
 ## 数据调用 (/data)
 
 ### 数据查询

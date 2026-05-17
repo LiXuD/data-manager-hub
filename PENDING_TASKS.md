@@ -290,6 +290,7 @@ data-platform-governance/            # 治理
 - [x] 请求日志过滤器 (RequestLogFilter) — `filter/RequestLogFilter.java` ✅
 - [x] 链路追踪过滤器 (TraceIdFilter) — `filter/TraceIdFilter.java` ✅（额外实现）
 - [x] 熔断过滤器 (CircuitBreakerFilter) — `filter/CircuitBreakerFilter.java` ✅
+- [x] 外部系统统一入口增强 — 产品/场景归因、API Key 产品授权、历史缓存命中、多维统计；提交前补齐 fresh DB DDL、场景字典网关路由、维度分组统计 ✅
 
 ### 2. 自动对账完善
 

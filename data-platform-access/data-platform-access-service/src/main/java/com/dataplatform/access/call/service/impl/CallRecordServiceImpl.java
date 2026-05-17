@@ -1,6 +1,7 @@
 package com.dataplatform.access.call.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.access.call.mapper.CallRecordMapper;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -88,6 +91,96 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
         stats.put("successRate", totalCount > 0 ? (double) successCount / totalCount * 100 : 0);
 
         return stats;
+    }
+
+    @Override
+    public CallRecord findLatestReusableCache(String apiCode, String requestHash, Long callerId,
+                                             LocalDateTime since, String cacheScope) {
+        LambdaQueryWrapper<CallRecord> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CallRecord::getApiCode, apiCode)
+                .eq(CallRecord::getRequestHash, requestHash)
+                .eq(CallRecord::getSuccess, true)
+                .ge(CallRecord::getCallTime, since);
+        if ("CALLER".equalsIgnoreCase(cacheScope)) {
+            wrapper.eq(CallRecord::getCallerId, callerId);
+        }
+        wrapper.orderByDesc(CallRecord::getCallTime).last("LIMIT 1");
+        return getOne(wrapper, false);
+    }
+
+    @Override
+    public Map<String, Object> getDimensionStats(Long callerId, String productCode, String sceneCode,
+                                                 String apiCode, String vendorCode, String dataType,
+                                                 Boolean cacheHit, LocalDateTime startTime,
+                                                 LocalDateTime endTime) {
+        Map<String, Object> stats = new HashMap<>();
+        stats.putAll(firstStatsRow(queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+                dataType, cacheHit, startTime, endTime, Collections.emptyList())));
+        stats.put("byCaller", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+                dataType, cacheHit, startTime, endTime, List.of("caller_id")));
+        stats.put("byCallerProduct", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+                dataType, cacheHit, startTime, endTime, List.of("caller_id", "product_code")));
+        stats.put("byScene", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+                dataType, cacheHit, startTime, endTime, List.of("scene_code")));
+        stats.put("byCallerProductScene", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+                dataType, cacheHit, startTime, endTime, List.of("caller_id", "product_code", "scene_code")));
+        return stats;
+    }
+
+    private List<Map<String, Object>> queryDimensionStats(Long callerId, String productCode, String sceneCode,
+                                                          String apiCode, String vendorCode, String dataType,
+                                                          Boolean cacheHit, LocalDateTime startTime,
+                                                          LocalDateTime endTime, List<String> dimensions) {
+        QueryWrapper<CallRecord> wrapper = buildDimensionStatsWrapper(callerId, productCode, sceneCode, apiCode,
+                vendorCode, dataType, cacheHit, startTime, endTime);
+        List<String> selects = new ArrayList<>(dimensions);
+        selects.add("COUNT(*) AS \"totalCount\"");
+        selects.add("SUM(CASE WHEN success THEN 1 ELSE 0 END) AS \"successCount\"");
+        selects.add("SUM(CASE WHEN NOT success THEN 1 ELSE 0 END) AS \"failCount\"");
+        selects.add("SUM(CASE WHEN cache_hit THEN 1 ELSE 0 END) AS \"cacheHitCount\"");
+        selects.add("SUM(CASE WHEN NOT cache_hit THEN 1 ELSE 0 END) AS \"realTimeCount\"");
+        selects.add("COALESCE(SUM(cost), 0) AS \"totalCost\"");
+        selects.add("COALESCE(AVG(duration_ms), 0) AS \"averageDurationMs\"");
+        selects.add("COALESCE(MAX(duration_ms), 0) AS \"maxDurationMs\"");
+        selects.add("COALESCE(MIN(duration_ms), 0) AS \"minDurationMs\"");
+        wrapper.select(selects.toArray(new String[0]));
+        if (!dimensions.isEmpty()) {
+            wrapper.groupBy(dimensions);
+        }
+        return baseMapper.selectMaps(wrapper);
+    }
+
+    private QueryWrapper<CallRecord> buildDimensionStatsWrapper(Long callerId, String productCode, String sceneCode,
+                                                                String apiCode, String vendorCode, String dataType,
+                                                                Boolean cacheHit, LocalDateTime startTime,
+                                                                LocalDateTime endTime) {
+        QueryWrapper<CallRecord> wrapper = new QueryWrapper<>();
+        wrapper.eq(callerId != null, "caller_id", callerId);
+        wrapper.eq(StringUtils.hasText(productCode), "product_code", productCode);
+        wrapper.eq(StringUtils.hasText(sceneCode), "scene_code", sceneCode);
+        wrapper.eq(StringUtils.hasText(apiCode), "api_code", apiCode);
+        wrapper.eq(StringUtils.hasText(vendorCode), "vendor_code", vendorCode);
+        wrapper.eq(StringUtils.hasText(dataType), "data_type", dataType);
+        wrapper.eq(cacheHit != null, "cache_hit", cacheHit);
+        wrapper.ge(startTime != null, "call_time", startTime);
+        wrapper.le(endTime != null, "call_time", endTime);
+        return wrapper;
+    }
+
+    private Map<String, Object> firstStatsRow(List<Map<String, Object>> rows) {
+        if (rows.isEmpty()) {
+            return Map.of(
+                    "totalCount", 0,
+                    "successCount", 0,
+                    "failCount", 0,
+                    "cacheHitCount", 0,
+                    "realTimeCount", 0,
+                    "totalCost", 0,
+                    "averageDurationMs", 0,
+                    "maxDurationMs", 0,
+                    "minDurationMs", 0);
+        }
+        return rows.get(0);
     }
 
     @Override

@@ -4,8 +4,11 @@ import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.access.caller.entity.ApiKey;
+import com.dataplatform.access.caller.entity.CallerProduct;
+import com.dataplatform.access.caller.service.ApiKeyProductService;
 import com.dataplatform.access.caller.service.ApiKeyInterfaceService;
 import com.dataplatform.access.caller.service.ApiKeyService;
+import com.dataplatform.access.caller.service.CallerProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +25,10 @@ public class ApiKeyController {
     private ApiKeyService apiKeyService;
     @Autowired
     private ApiKeyInterfaceService apiKeyInterfaceService;
+    @Autowired
+    private ApiKeyProductService apiKeyProductService;
+    @Autowired
+    private CallerProductService callerProductService;
 
     @GetMapping("/list")
     public Result<List<ApiKey>> list() {
@@ -104,6 +111,36 @@ public class ApiKeyController {
                     .body(Result.error(404, "API Key不存在"));
         }
         apiKeyInterfaceService.assignInterfaces(id, interfaceIds);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    @GetMapping("/{id}/products")
+    public ResponseEntity<Result<List<Long>>> getProductIds(@PathVariable Long id) {
+        ApiKey apiKey = apiKeyService.getById(id);
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "API Key不存在"));
+        }
+        return ResponseEntity.ok(Result.success(apiKeyProductService.getProductIdsByApiKeyId(id)));
+    }
+
+    @OperationLog(module = "API Key管理", operation = "分配产品权限")
+    @PostMapping("/{id}/products")
+    public ResponseEntity<Result<Void>> assignProducts(@PathVariable Long id, @RequestBody List<Long> productIds) {
+        ApiKey apiKey = apiKeyService.getById(id);
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "API Key不存在"));
+        }
+        if (productIds != null && !productIds.isEmpty()) {
+            List<CallerProduct> products = callerProductService.listByIds(productIds);
+            if (products.size() != productIds.size()
+                    || products.stream().anyMatch(product -> !apiKey.getCallerId().equals(product.getCallerId()))) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Result.error(400, "产品必须属于该API Key对应调用方"));
+            }
+        }
+        apiKeyProductService.assignProducts(id, productIds);
         return ResponseEntity.ok(Result.success(null));
     }
 }

@@ -73,6 +73,21 @@ public class CallRecordController {
         return Result.success(callRecordService.getStats(startTime, endTime));
     }
 
+    @GetMapping("/dimension-stats")
+    public Result<Map<String, Object>> getDimensionStats(
+            @RequestParam(required = false) Long callerId,
+            @RequestParam(required = false) String productCode,
+            @RequestParam(required = false) String sceneCode,
+            @RequestParam(required = false) String apiCode,
+            @RequestParam(required = false) String vendorCode,
+            @RequestParam(required = false) String dataType,
+            @RequestParam(required = false) Boolean cacheHit,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
+        return Result.success(callRecordService.getDimensionStats(callerId, productCode, sceneCode, apiCode,
+                vendorCode, dataType, cacheHit, startTime, endTime));
+    }
+
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(
             @RequestParam(required = false) Long callerId,

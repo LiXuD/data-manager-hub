@@ -300,6 +300,7 @@ VendorAdapterFactory (工厂类)
 
 | 路由ID | 路径匹配 | 目标服务 | 去除前缀 |
 |--------|----------|----------|----------|
+| openapi-access-service | `/openapi/**` | data-platform-access | - |
 | vendor-service | `/api/v1/vendor/**`, `/api/v1/config/**`, `/api/v1/datatype/**`, `/api/v1/data/**` | data-platform-masterdata | `/api/v1` |
 | caller-service | `/api/v1/caller/**` | data-platform-access | `/api/v1` |
 | billing-service | `/api/v1/billing/**` | data-platform-billing | `/api/v1` |
@@ -322,6 +323,23 @@ VendorAdapterFactory (工厂类)
 | `RateLimitFilter` | 限流过滤器 |
 | `RequestLogFilter` | 请求日志过滤器 |
 | `TraceIdFilter` | 链路追踪ID过滤器 |
+
+**外部系统统一入口**:
+
+| 入口 | 请求格式 | 说明 |
+|------|----------|------|
+| `POST /openapi/v1/query` | `requestId + apiCode + apiVersion + productCode + sceneCode + useCache/cacheDays + params` | 单条数据查询，按 `apiCode` 解析接口和厂商配置 |
+| `POST /openapi/v1/batch-query` | `requestId + apiCode + apiVersion + productCode + sceneCode + useCache/cacheDays + items` | 批量数据查询，逐条记录调用明细 |
+
+**OpenAPI 归因与缓存**:
+
+| 能力 | 说明 |
+|------|------|
+| 调用方产品 | `caller_product`，调用方未配置产品则 OpenAPI 调用失败 |
+| API Key 产品授权 | `api_key_product`，一把 Key 可绑定多个调用方产品 |
+| 公共场景 | `call_scene`，调用时必须传启用的 `sceneCode` |
+| 历史缓存 | `useCache=true` 时按 `apiCode + requestHash` 查询 call_record，命中不调用厂商且费用为 0 |
+| 多维统计 | `/call-record/dimension-stats` 支持 caller/product/scene/api/vendor/dataType/cacheHit 过滤 |
 
 ---
 

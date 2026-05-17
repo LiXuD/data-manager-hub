@@ -41,6 +41,10 @@ spring:
             allow-credentials: true
             max-age: 3600
       routes:
+        - id: openapi-access-service
+          uri: lb://data-platform-access
+          predicates:
+            - Path=/openapi/**
         - id: vendor-service
           uri: lb://data-platform-masterdata
           predicates:
@@ -63,6 +67,12 @@ spring:
           uri: lb://data-platform-access
           predicates:
             - Path=/api/v1/call-record/**
+          filters:
+            - StripPrefix=2
+        - id: call-scene-service
+          uri: lb://data-platform-access
+          predicates:
+            - Path=/api/v1/call-scene/**
           filters:
             - StripPrefix=2
         - id: monitor-service
