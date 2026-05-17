@@ -91,15 +91,17 @@ echo ""
 # ============================================================
 echo "--- 1. 厂商 CRUD ---"
 
-VENDOR_CREATE=$(api_body POST "$MASTERDATA/vendor" '{
-    "vendorCode": "TEST_V001",
-    "vendorName": "测试厂商-冒烟",
-    "vendorType": "http",
-    "status": "active"
-}')
+TIMESTAMP=$(date +%s)
+
+VENDOR_CREATE=$(api_body POST "$MASTERDATA/vendor" "{
+    \"vendorCode\": \"TEST_V_${TIMESTAMP}\",
+    \"vendorName\": \"测试厂商-冒烟\",
+    \"vendorType\": \"http\",
+    \"status\": \"active\"
+}")
 VENDOR_ID=$(echo "$VENDOR_CREATE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null || echo "")
 
-http_code=$(api POST "$MASTERDATA/vendor" '{"vendorCode":"TEST_V002","vendorName":"测试厂商2","vendorType":"http","status":"active"}')
+http_code=$(api POST "$MASTERDATA/vendor" "{\"vendorCode\":\"TEST_V2_${TIMESTAMP}\",\"vendorName\":\"测试厂商2\",\"vendorType\":\"http\",\"status\":\"active\"}")
 check "创建厂商" "$http_code"
 
 http_code=$(api GET "$MASTERDATA/vendor/list?pageNum=1&pageSize=10")
@@ -119,7 +121,7 @@ echo ""
 # ============================================================
 echo "--- 2. 数据类型 CRUD ---"
 
-http_code=$(api POST "$MASTERDATA/datatype" '{"dataTypeCode":"TEST_DT01","dataTypeDesc":"测试数据类型","status":"active"}')
+http_code=$(api POST "$MASTERDATA/datatype" "{\"dataTypeCode\":\"TEST_DT_${TIMESTAMP}\",\"dataTypeName\":\"测试数据类型\",\"dataTypeDesc\":\"测试数据类型\",\"status\":\"active\"}")
 check "创建数据类型" "$http_code"
 
 http_code=$(api GET "$MASTERDATA/datatype/list?pageNum=1&pageSize=10")
@@ -143,14 +145,14 @@ echo ""
 # ============================================================
 echo "--- 4. 调用方 CRUD ---"
 
-CALLER_CREATE=$(api_body POST "$ACCESS/caller" '{
-    "callerName": "测试调用方-冒烟",
-    "callerCode": "TEST_C001",
-    "status": "active"
-}')
+CALLER_CREATE=$(api_body POST "$ACCESS/caller" "{
+    \"callerName\": \"测试调用方-冒烟\",
+    \"callerCode\": \"TEST_C_${TIMESTAMP}\",
+    \"status\": \"active\"
+}")
 CALLER_ID=$(echo "$CALLER_CREATE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null || echo "")
 
-http_code=$(api POST "$ACCESS/caller" '{"callerName":"测试调用方2","callerCode":"TEST_C002","status":"active"}')
+http_code=$(api POST "$ACCESS/caller" "{\"callerName\":\"测试调用方2\",\"callerCode\":\"TEST_C2_${TIMESTAMP}\",\"status\":\"active\"}")
 check "创建调用方" "$http_code"
 
 http_code=$(api GET "$ACCESS/caller/list?pageNum=1&pageSize=10")
@@ -181,13 +183,14 @@ echo "--- 6. 计费规则与账单 ---"
 http_code=$(api GET "$BILLING/billing/rule/list?pageNum=1&pageSize=10")
 check "计费规则列表" "$http_code"
 
-http_code=$(api POST "$BILLING/billing/rule" '{
-    "vendorCode": "TEST_V001",
-    "dataTypeCode": "TEST_DT01",
-    "billingType": "standard",
-    "unitPrice": 0.5,
-    "status": "active"
-}')
+http_code=$(api POST "$BILLING/billing/rule" "{
+    \"ruleName\": \"冒烟测试计费规则\",
+    \"vendorCode\": \"TEST_V_${TIMESTAMP}\",
+    \"dataTypeCode\": \"TEST_DT_${TIMESTAMP}\",
+    \"billingType\": \"standard\",
+    \"unitPrice\": 0.5,
+    \"status\": \"active\"
+}")
 check "创建计费规则" "$http_code"
 
 http_code=$(api GET "$BILLING/billing/list?pageNum=1&pageSize=10")

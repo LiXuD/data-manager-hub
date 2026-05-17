@@ -67,6 +67,8 @@ public class CircuitBreakerFilter implements GlobalFilter, Ordered {
                     } else if (state.isHalfOpen()) {
                         state.reset();
                         log.info("Circuit closed for {} after successful probe", serviceId);
+                    } else {
+                        state.resetFailures();
                     }
                 })
                 .doOnError(e -> {
@@ -124,6 +126,10 @@ public class CircuitBreakerFilter implements GlobalFilter, Ordered {
 
         boolean shouldAttemptReset() {
             return System.currentTimeMillis() - openTimestamp >= resetTimeoutMs;
+        }
+
+        void resetFailures() {
+            failureCount.set(0);
         }
 
         void reset() {
