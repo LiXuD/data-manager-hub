@@ -184,6 +184,17 @@ export interface DataQueryRequest {
   params: Record<string, any>
 }
 
+export interface OpenApiQueryRequest {
+  requestId?: string
+  apiCode: string
+  apiVersion?: string
+  productCode: string
+  sceneCode: string
+  useCache?: boolean
+  cacheDays?: number
+  params: Record<string, any>
+}
+
 // 数据查询响应
 export interface DataQueryResponse {
   success: boolean
@@ -192,6 +203,16 @@ export interface DataQueryResponse {
   errorMsg?: string
   latency?: number
   cached?: boolean
+  requestId?: string
+  platformRequestId?: string
+  apiCode?: string
+  productCode?: string
+  sceneCode?: string
+  cacheSourceRecordId?: number
+  requestTime?: string
+  responseTime?: string
+  durationMs?: number
+  cost?: number
 }
 
 // 调用记录相关类型 (与后端 CallRecord 实体对齐)
@@ -203,6 +224,12 @@ export interface CallRecord {
   apiKeyId?: number
   vendorId: number
   vendorCode: string
+  apiCode?: string
+  productId?: number
+  productCode?: string
+  productName?: string
+  sceneCode?: string
+  sceneName?: string
   dataType: string
   dataTypeCode?: string
   requestParams: string
@@ -211,9 +238,17 @@ export interface CallRecord {
   errorCode?: string
   errorMsg?: string
   latency: number
+  durationMs?: number
   responseTime?: number
   cost: number
   cached?: boolean
+  useCache?: boolean
+  cacheDays?: number
+  cacheHit?: boolean
+  cacheScope?: string
+  cacheSourceRecordId?: number
+  requestTime?: string
+  responseAt?: string
   callTime: string
   result?: string
   createdAt?: string
@@ -533,6 +568,27 @@ export interface ApiKeyDTO {
   status?: 'active' | 'inactive' | 'expired'
   expireTime?: string
   createdAt?: string
+}
+
+export interface CallerProductDTO {
+  id?: number
+  callerId?: number
+  productCode: string
+  productName: string
+  cacheScope?: 'GLOBAL' | 'CALLER'
+  status?: 'active' | 'inactive'
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface CallSceneDTO {
+  id?: number
+  sceneCode: string
+  sceneName: string
+  status?: 'active' | 'inactive'
+  description?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 // 用户 (API DTO)

@@ -13,6 +13,11 @@ public interface CallRecordService extends IService<CallRecord> {
                                 LocalDateTime startTime, LocalDateTime endTime,
                                 int page, int pageSize);
 
+    PageResult<CallRecord> list(Long callerId, Long vendorId, String dataType, Boolean success,
+                                String apiCode, String productCode, String sceneCode, Boolean cacheHit,
+                                LocalDateTime startTime, LocalDateTime endTime,
+                                int page, int pageSize);
+
     Map<String, Object> getStats(LocalDateTime startTime, LocalDateTime endTime);
 
     CallRecord findLatestReusableCache(String apiCode, String requestHash, Long callerId,

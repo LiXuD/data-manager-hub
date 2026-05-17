@@ -72,6 +72,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调用记录' }
       },
       {
+        path: '/call-scene',
+        name: 'CallScene',
+        component: () => import('@/views/call-scene/index.vue'),
+        meta: { title: '场景字典' }
+      },
+      {
         path: '/billing',
         name: 'Billing',
         component: () => import('@/views/billing/index.vue'),

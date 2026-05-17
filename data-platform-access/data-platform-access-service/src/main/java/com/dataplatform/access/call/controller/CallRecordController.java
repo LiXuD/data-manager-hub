@@ -31,11 +31,16 @@ public class CallRecordController {
             @RequestParam(required = false) Long vendorId,
             @RequestParam(required = false) String dataType,
             @RequestParam(required = false) Boolean success,
+            @RequestParam(required = false) String apiCode,
+            @RequestParam(required = false) String productCode,
+            @RequestParam(required = false) String sceneCode,
+            @RequestParam(required = false) Boolean cacheHit,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
-        return callRecordService.list(callerId, vendorId, dataType, success, startTime, endTime, page, pageSize);
+        return callRecordService.list(callerId, vendorId, dataType, success, apiCode, productCode, sceneCode,
+                cacheHit, startTime, endTime, page, pageSize);
     }
 
     @PostMapping("/query")

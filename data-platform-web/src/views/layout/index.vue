@@ -62,6 +62,7 @@ const allMenuItems = [
     children: [
       { path: '/vendor', title: '厂商管理', permission: 'vendor:view' },
       { path: '/caller', title: '调用方管理', permission: 'caller:view' },
+      { path: '/call-scene', title: '场景字典', permission: 'call-scene:view' },
       { path: '/datatype', title: '数据类型', permission: 'datatype:view' },
       { path: '/interface', title: '接口管理', permission: 'interface:view' }
     ]

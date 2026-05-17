@@ -1,8 +1,9 @@
 import { request } from '@/utils/request'
-import type { PageParams, ListResponse, CallerDTO, ApiKeyDTO } from '@/types'
+import type { PageParams, ListResponse, CallerDTO, ApiKeyDTO, CallerProductDTO } from '@/types'
 
 export type Caller = CallerDTO
 export type ApiKey = ApiKeyDTO
+export type CallerProduct = CallerProductDTO
 
 export const getCallerList = (params: PageParams & { keyword?: string; status?: 'active' | 'inactive' }) => {
   return request.get<ListResponse<CallerDTO>>('/caller/list', { params })
@@ -29,11 +30,11 @@ export const updateCallerStatus = (id: number, status: 'active' | 'inactive') =>
 }
 
 export const getApiKeyList = (callerId: number) => {
-  return request.get<ListResponse<ApiKeyDTO>>('/caller/' + callerId + '/api-key/list')
+  return request.get<ListResponse<ApiKeyDTO>>('/caller/apikey/list', { params: { callerId } })
 }
 
 export const createApiKey = (callerId: number) => {
-  return request.post<ApiKeyDTO>('/caller/' + callerId + '/api-key', { keyName: 'default' })
+  return request.post<{ data: ApiKeyDTO }>(`/caller/apikey/${callerId}/api-key`, { name: 'default' })
 }
 
 export const updateApiKeyStatus = (id: number, status: 'active' | 'inactive' | 'expired') => {
@@ -45,9 +46,25 @@ export const deleteApiKey = (id: number) => {
 }
 
 export const getApiKeyInterfaces = (apiKeyId: number) => {
-  return request.get<{ data: number[] }>(`/caller/api-key/${apiKeyId}/interfaces`)
+  return request.get<{ data: number[] }>(`/caller/apikey/${apiKeyId}/interfaces`)
 }
 
 export const assignApiKeyInterfaces = (apiKeyId: number, interfaceIds: number[]) => {
-  return request.post<void>(`/caller/api-key/${apiKeyId}/interfaces`, { interfaceIds })
+  return request.post<void>(`/caller/apikey/${apiKeyId}/interfaces`, interfaceIds)
+}
+
+export const getCallerProducts = (callerId: number) => {
+  return request.get<{ data: CallerProductDTO[] }>(`/caller/${callerId}/products`)
+}
+
+export const createCallerProduct = (callerId: number, data: CallerProductDTO) => {
+  return request.post<{ data: CallerProductDTO }>(`/caller/${callerId}/products`, data)
+}
+
+export const getApiKeyProducts = (apiKeyId: number) => {
+  return request.get<{ data: number[] }>(`/caller/apikey/${apiKeyId}/products`)
+}
+
+export const assignApiKeyProducts = (apiKeyId: number, productIds: number[]) => {
+  return request.post<void>(`/caller/apikey/${apiKeyId}/products`, productIds)
 }

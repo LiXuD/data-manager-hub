@@ -27,6 +27,16 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
             Long callerId, Long vendorId, String dataType, Boolean success,
             LocalDateTime startTime, LocalDateTime endTime,
             int page, int pageSize) {
+        return list(callerId, vendorId, dataType, success, null, null, null, null,
+                startTime, endTime, page, pageSize);
+    }
+
+    @Override
+    public PageResult<CallRecord> list(
+            Long callerId, Long vendorId, String dataType, Boolean success,
+            String apiCode, String productCode, String sceneCode, Boolean cacheHit,
+            LocalDateTime startTime, LocalDateTime endTime,
+            int page, int pageSize) {
 
         LambdaQueryWrapper<CallRecord> wrapper = new LambdaQueryWrapper<>();
 
@@ -41,6 +51,18 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
         }
         if (success != null) {
             wrapper.eq(CallRecord::getSuccess, success);
+        }
+        if (StringUtils.hasText(apiCode)) {
+            wrapper.eq(CallRecord::getApiCode, apiCode);
+        }
+        if (StringUtils.hasText(productCode)) {
+            wrapper.eq(CallRecord::getProductCode, productCode);
+        }
+        if (StringUtils.hasText(sceneCode)) {
+            wrapper.eq(CallRecord::getSceneCode, sceneCode);
+        }
+        if (cacheHit != null) {
+            wrapper.eq(CallRecord::getCacheHit, cacheHit);
         }
         if (startTime != null) {
             wrapper.ge(CallRecord::getCallTime, startTime);
