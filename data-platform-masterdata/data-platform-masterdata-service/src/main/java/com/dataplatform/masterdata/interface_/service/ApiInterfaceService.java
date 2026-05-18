@@ -15,6 +15,8 @@ public interface ApiInterfaceService extends IService<ApiInterface> {
 
     List<ApiInterface> listByDataTypeId(Long dataTypeId);
 
+    List<ApiInterface> listOptions(Long vendorId, Long dataTypeId, String status);
+
     ApiInterface getByInterfaceCode(String interfaceCode);
 
     boolean hasApiConfig(Long interfaceId);

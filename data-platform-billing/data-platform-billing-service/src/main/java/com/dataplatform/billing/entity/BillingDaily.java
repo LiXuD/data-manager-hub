@@ -14,13 +14,10 @@ public class BillingDaily {
 
     private Long callerId;
 
-    @TableField(exist = false)
     private Long tenantId;
 
-    @TableField(exist = false)
     private Long vendorId;
 
-    @TableField(exist = false)
     private String dataType;
 
     @TableField("call_count")

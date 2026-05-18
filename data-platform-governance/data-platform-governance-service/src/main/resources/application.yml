@@ -6,3 +6,9 @@ spring:
     active: @profiles.active@
   application:
     name: data-platform-governance
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

@@ -14,6 +14,8 @@ import com.dataplatform.masterdata.vendor.mapper.VendorInfoMapper;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -22,15 +24,18 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Service
+@RefreshScope
 public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, VendorConfig>
     implements VendorConfigService {
 
     private static final String SECRET_KEY_CACHE_PREFIX = "vendor:secret:";
     private static final String VENDOR_INFO_CACHE_PREFIX = "vendor:info:";
     private static final String DATA_TYPE_CACHE_PREFIX = "vendor:dataType:";
-    private static final long CACHE_TTL_SECONDS = 300;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${masterdata.vendor-config.cache-ttl-seconds:300}")
+    private long cacheTtlSeconds = 300;
 
     @Autowired
     private VendorInfoMapper vendorInfoMapper;
@@ -139,7 +144,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
         VendorInfo vendorInfo = getVendorInfoByCode(vendorCode);
         if (vendorInfo != null && vendorInfo.getSecretKey() != null) {
             redisTemplate.opsForValue().set(cacheKey, vendorInfo.getSecretKey(),
-                CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+                cacheTtlSeconds, TimeUnit.SECONDS);
             return vendorInfo.getSecretKey();
         }
 
@@ -164,7 +169,7 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
             try {
                 redisTemplate.opsForValue().set(cacheKey,
                     objectMapper.writeValueAsString(entity),
-                    CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+                    cacheTtlSeconds, TimeUnit.SECONDS);
             } catch (Exception e) {
                 // Cache write error, ignore
             }

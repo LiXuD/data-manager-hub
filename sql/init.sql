@@ -285,6 +285,11 @@ CREATE TABLE IF NOT EXISTS billing_daily (
 CREATE INDEX idx_billing_date ON billing_daily(billing_date);
 CREATE INDEX idx_billing_tenant ON billing_daily(tenant_id);
 
+CREATE TABLE IF NOT EXISTS billing_daily_event (
+    request_id VARCHAR(64) PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 9. 用户信息表
 CREATE TABLE IF NOT EXISTS user_info (
     id BIGSERIAL PRIMARY KEY,

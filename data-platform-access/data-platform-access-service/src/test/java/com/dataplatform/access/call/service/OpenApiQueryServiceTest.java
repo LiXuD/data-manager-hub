@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 class OpenApiQueryServiceTest {
 
     private CallRecordService callRecordService;
+    private CallRecordEventPublisher callRecordEventPublisher;
     private VendorProxyService vendorProxyService;
     private BillingFeignClient billingFeignClient;
     private OpenApiQueryService service;
@@ -32,9 +33,11 @@ class OpenApiQueryServiceTest {
     @BeforeEach
     void setUp() {
         callRecordService = mock(CallRecordService.class);
+        callRecordEventPublisher = mock(CallRecordEventPublisher.class);
         vendorProxyService = mock(VendorProxyService.class);
         billingFeignClient = mock(BillingFeignClient.class);
-        service = new OpenApiQueryService(callRecordService, vendorProxyService, billingFeignClient);
+        service = new OpenApiQueryService(callRecordService, callRecordEventPublisher,
+                vendorProxyService, billingFeignClient);
     }
 
     @Test
@@ -55,7 +58,7 @@ class OpenApiQueryServiceTest {
         verify(vendorProxyService, never()).callVendor(anyString(), anyString(), any(), any());
 
         ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
-        verify(callRecordService).save(recordCaptor.capture());
+        verify(callRecordEventPublisher).publish(recordCaptor.capture());
         CallRecord savedRecord = recordCaptor.getValue();
         assertTrue(savedRecord.getCacheHit());
         assertEquals(BigDecimal.ZERO, savedRecord.getCost());

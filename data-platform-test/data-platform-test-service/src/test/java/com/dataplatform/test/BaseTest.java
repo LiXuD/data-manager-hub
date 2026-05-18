@@ -25,19 +25,11 @@ import static org.hamcrest.Matchers.*;
  *
  * 服务端口映射（模块合并后）：
  * - Gateway: 8888
- * - vendor-service: 8081 (含 config, datatype)
- * - caller-service: 8082
- * - call-service: 8083
+ * - masterdata: 8081 (vendor, config, datatype, interface, graylog)
+ * - access: 8082 (caller, api-key, call-record, openapi)
  * - billing-service: 8084
- * - monitor-service: 8085
- * - tenant-service: 8086
- * - log-service: 8090
- * - graylog-service: 8092
- * - iam-service: 8093 (含 user, role)
- * - security-service: 8094
- * - trace-service: 8095
- * - quality-service: 8096
- * - interface-service: 8097
+ * - governance: 8085 (alert, log, quality, trace)
+ * - identity: 8086 (tenant, auth, user, role, security)
  */
 public class BaseTest {
 
@@ -52,17 +44,9 @@ public class BaseTest {
     // 各服务直连端口（用于调试）
     protected static final String VENDOR_URL = "http://localhost:8081";
     protected static final String CALLER_URL = "http://localhost:8082";
-    protected static final String CALL_URL = "http://localhost:8083";
     protected static final String BILLING_URL = "http://localhost:8084";
-    protected static final String MONITOR_URL = "http://localhost:8085";
+    protected static final String GOVERNANCE_URL = "http://localhost:8085";
     protected static final String TENANT_URL = "http://localhost:8086";
-    protected static final String LOG_URL = "http://localhost:8090";
-    protected static final String GRAYLOG_URL = "http://localhost:8092";
-    protected static final String IAM_URL = "http://localhost:8093";
-    protected static final String SECURITY_URL = "http://localhost:8094";
-    protected static final String TRACE_URL = "http://localhost:8095";
-    protected static final String QUALITY_URL = "http://localhost:8096";
-    protected static final String INTERFACE_URL = "http://localhost:8097";
 
     protected static final String DB_URL = "jdbc:postgresql://localhost:5432/dataplatform";
     protected static final String DB_USER = "postgres";

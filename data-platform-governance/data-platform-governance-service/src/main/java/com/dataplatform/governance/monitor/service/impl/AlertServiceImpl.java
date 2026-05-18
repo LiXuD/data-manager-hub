@@ -3,6 +3,7 @@ package com.dataplatform.governance.monitor.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.dataplatform.common.enums.AlertStatus;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.governance.monitor.entity.AlertRule;
 import com.dataplatform.governance.monitor.entity.AlertRecord;
@@ -12,6 +13,7 @@ import com.dataplatform.governance.monitor.service.AlertService;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Service
@@ -32,6 +34,20 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
     @Override
     public AlertRecord getRecordById(Long id) {
         return alertRecordMapper.selectById(id);
+    }
+
+    @Override
+    public void saveRecord(AlertRecord record) {
+        if (record.getRuleId() == null) {
+            record.setRuleId(ensureSystemRuleId());
+        }
+        if (record.getStatus() == null) {
+            record.setStatus("pending");
+        }
+        if (record.getAlertTime() == null) {
+            record.setAlertTime(LocalDateTime.now());
+        }
+        alertRecordMapper.insert(record);
     }
 
     @Override
@@ -102,5 +118,27 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
         record.setStatus("resolved");
         record.setResolvedTime(LocalDateTime.now());
         alertRecordMapper.updateById(record);
+    }
+
+    private Long ensureSystemRuleId() {
+        LambdaQueryWrapper<AlertRule> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AlertRule::getRuleName, "计费对账差异告警");
+        wrapper.last("LIMIT 1");
+        AlertRule existing = getOne(wrapper);
+        if (existing != null) {
+            return existing.getId();
+        }
+
+        AlertRule rule = new AlertRule();
+        rule.setRuleName("计费对账差异告警");
+        rule.setRuleType("RECONCILIATION");
+        rule.setTargetType("billing_reconciliation");
+        rule.setConditionType("diff_rate_gt");
+        rule.setThresholdValue(new BigDecimal("0.01"));
+        rule.setStatus(AlertStatus.ACTIVE);
+        rule.setSeverity("warning");
+        rule.setCreatedAt(LocalDateTime.now());
+        save(rule);
+        return rule.getId();
     }
 }

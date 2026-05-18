@@ -19,6 +19,14 @@ export const getInterfacesByDataType = (dataTypeId: number) => {
   return request.get<{ data: ApiInterface[] }>(`/interface/by-data-type/${dataTypeId}`)
 }
 
+export const getInterfaceOptions = (params: {
+  vendorId?: number
+  dataTypeId?: number
+  status?: string
+}) => {
+  return request.get<{ data: ApiInterface[] }>('/interface/options', { params })
+}
+
 export const createInterface = (data: Partial<ApiInterface>) => {
   return request.post<ApiInterface>('/interface', data)
 }

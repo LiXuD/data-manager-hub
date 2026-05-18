@@ -58,6 +58,23 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
     }
 
     @Override
+    public List<ApiInterface> listOptions(Long vendorId, Long dataTypeId, String status) {
+        LambdaQueryWrapper<ApiInterface> wrapper = new LambdaQueryWrapper<>();
+        if (vendorId != null) {
+            wrapper.eq(ApiInterface::getVendorId, vendorId);
+        }
+        if (dataTypeId != null) {
+            wrapper.eq(ApiInterface::getDataTypeId, dataTypeId);
+        }
+        if (StringUtils.hasText(status)) {
+            wrapper.eq(ApiInterface::getStatus, status);
+        }
+        wrapper.eq(ApiInterface::getDeleted, false);
+        wrapper.orderByAsc(ApiInterface::getSort);
+        return this.list(wrapper);
+    }
+
+    @Override
     public ApiInterface getByInterfaceCode(String interfaceCode) {
         if (!StringUtils.hasText(interfaceCode)) {
             return null;

@@ -147,11 +147,16 @@ spring.data.redis:
   password: redis_password
   database: 0
 
+gateway:
+  rate-limit:
+    default-window-sec: 60
+    default-max-requests: 100
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   health:
     db:
       enabled: false

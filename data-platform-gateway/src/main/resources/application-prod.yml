@@ -146,11 +146,16 @@ spring.data.redis:
   password: ${REDIS_PASSWORD:redis_password}
   database: 0
 
+gateway:
+  rate-limit:
+    default-window-sec: ${GATEWAY_RATE_LIMIT_WINDOW_SEC:60}
+    default-max-requests: ${GATEWAY_RATE_LIMIT_MAX_REQUESTS:100}
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   health:
     db:
       enabled: false

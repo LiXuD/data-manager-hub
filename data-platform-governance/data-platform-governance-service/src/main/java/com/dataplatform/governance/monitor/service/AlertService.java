@@ -26,5 +26,7 @@ public interface AlertService extends IService<AlertRule> {
 
     AlertRecord getRecordById(Long id);
 
+    void saveRecord(AlertRecord record);
+
     void resolveRecord(Long id, String resolution);
 }

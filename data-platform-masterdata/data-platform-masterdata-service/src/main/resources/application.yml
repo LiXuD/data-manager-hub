@@ -6,3 +6,13 @@ spring:
     active: @profiles.active@
   application:
     name: data-platform-masterdata
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+masterdata:
+  vendor-config:
+    cache-ttl-seconds: 300

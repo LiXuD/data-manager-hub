@@ -12,6 +12,7 @@ set -euo pipefail
 MASTERDATA="http://localhost:8081"
 ACCESS="http://localhost:8082"
 BILLING="http://localhost:8084"
+GOVERNANCE="http://localhost:8085"
 IDENTITY="http://localhost:8086"
 
 PASS=0
@@ -198,6 +199,60 @@ check "账单列表" "$http_code"
 
 http_code=$(api GET "$BILLING/billing/stats")
 check "计费统计" "$http_code"
+echo ""
+
+# ============================================================
+# 7. 身份租户域 — P2 链路
+# ============================================================
+echo "--- 7. 身份租户域 ---"
+
+http_code=$(api GET "$IDENTITY/tenant/list?page=1&pageSize=10")
+check "租户列表" "$http_code"
+
+TENANT_CREATE=$(api_body POST "$IDENTITY/tenant" "{
+    \"tenantCode\": \"TEST_T_${TIMESTAMP}\",
+    \"tenantName\": \"测试租户-冒烟\",
+    \"tenantType\": \"enterprise\",
+    \"contactPerson\": \"测试联系人\",
+    \"contactPhone\": \"13800138000\"
+}")
+TENANT_ID=$(echo "$TENANT_CREATE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('id',''))" 2>/dev/null || echo "")
+
+http_code=$(api POST "$IDENTITY/tenant" "{\"tenantCode\":\"TEST_T2_${TIMESTAMP}\",\"tenantName\":\"测试租户2\",\"tenantType\":\"enterprise\"}")
+check "创建租户" "$http_code"
+
+if [ -n "$TENANT_ID" ] && [ "$TENANT_ID" != "" ]; then
+    http_code=$(api PATCH "$IDENTITY/tenant/$TENANT_ID/status" '{"status":"inactive"}')
+    check "租户状态切换" "$http_code"
+fi
+echo ""
+
+# ============================================================
+# 8. 治理观测域 — P2 链路
+# ============================================================
+echo "--- 8. 治理观测域 ---"
+
+http_code=$(api GET "$GOVERNANCE/alert/rule/list?page=1&pageSize=10")
+check "告警规则列表" "$http_code"
+
+http_code=$(api POST "$GOVERNANCE/alert/rule" "{
+    \"ruleName\": \"冒烟测试告警规则_${TIMESTAMP}\",
+    \"ruleType\": \"THRESHOLD\",
+    \"targetType\": \"billing\",
+    \"conditionType\": \"gt\",
+    \"thresholdValue\": 80,
+    \"severity\": \"warning\"
+}")
+check "创建告警规则" "$http_code"
+
+http_code=$(api GET "$GOVERNANCE/log/list?page=1&pageSize=10")
+check "操作日志列表" "$http_code"
+
+http_code=$(api GET "$GOVERNANCE/quality/rules")
+check "质量规则列表" "$http_code"
+
+http_code=$(api GET "$GOVERNANCE/trace/lineage/upstream?type=api&id=1")
+check "血缘上游查询" "$http_code"
 echo ""
 
 # ============================================================

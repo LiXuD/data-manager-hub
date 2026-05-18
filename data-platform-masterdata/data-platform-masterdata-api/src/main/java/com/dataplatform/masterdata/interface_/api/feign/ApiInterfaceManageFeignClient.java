@@ -31,6 +31,12 @@ public interface ApiInterfaceManageFeignClient {
     @GetMapping("/interface/by-data-type/{dataTypeId}")
     Result<List<ApiInterfaceDTO>> listByDataType(@PathVariable("dataTypeId") Long dataTypeId);
 
+    @GetMapping("/interface/options")
+    Result<List<ApiInterfaceDTO>> listOptions(
+            @RequestParam(value = "vendorId", required = false) Long vendorId,
+            @RequestParam(value = "dataTypeId", required = false) Long dataTypeId,
+            @RequestParam(value = "status", required = false) String status);
+
     @PostMapping("/interface")
     Result<ApiInterfaceDTO> create(@RequestBody ApiInterfaceCreateReqDTO dto);
 

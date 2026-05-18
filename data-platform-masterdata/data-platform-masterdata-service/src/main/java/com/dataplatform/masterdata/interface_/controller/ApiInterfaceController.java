@@ -71,6 +71,17 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
     }
 
     @Override
+    @GetMapping("/options")
+    public Result<List<ApiInterfaceDTO>> listOptions(
+            @RequestParam(name = "vendorId", required = false) Long vendorId,
+            @RequestParam(name = "dataTypeId", required = false) Long dataTypeId,
+            @RequestParam(name = "status", required = false) String status) {
+        return Result.success(apiInterfaceService.listOptions(vendorId, dataTypeId, status).stream()
+                .map(this::toDTO)
+                .toList());
+    }
+
+    @Override
     @OperationLog(module = "接口管理", operation = "新增接口")
     @PostMapping
     public Result<ApiInterfaceDTO> create(@RequestBody ApiInterfaceCreateReqDTO dto) {

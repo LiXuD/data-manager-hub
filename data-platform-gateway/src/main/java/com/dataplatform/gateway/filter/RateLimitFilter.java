@@ -6,6 +6,8 @@ import java.util.Collections;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -20,12 +22,11 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @Component
+@RefreshScope
 public class RateLimitFilter implements GlobalFilter, Ordered {
 
     private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
     private static final String OPENAPI_PREFIX = "/openapi/";
-    private static final int DEFAULT_WINDOW_SEC = 60;
-    private static final int DEFAULT_MAX_REQUESTS = 100;
 
     private static final String LUA_SCRIPT = """
             local key = KEYS[1]
@@ -40,6 +41,12 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final RedisScript<Long> rateLimitScript;
+
+    @Value("${gateway.rate-limit.default-window-sec:60}")
+    private int defaultWindowSec = 60;
+
+    @Value("${gateway.rate-limit.default-max-requests:100}")
+    private int defaultMaxRequests = 100;
 
     public RateLimitFilter(ReactiveRedisTemplate<String, Object> redisTemplate, ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
@@ -63,9 +70,9 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
         return loadRateLimitConfig(keyId)
                 .flatMap(config -> {
                     int windowSec = config.containsKey("windowSec")
-                            ? ((Number) config.get("windowSec")).intValue() : DEFAULT_WINDOW_SEC;
+                            ? ((Number) config.get("windowSec")).intValue() : defaultWindowSec;
                     int maxReqs = config.containsKey("maxReqs")
-                            ? ((Number) config.get("maxReqs")).intValue() : DEFAULT_MAX_REQUESTS;
+                            ? ((Number) config.get("maxReqs")).intValue() : defaultMaxRequests;
 
                     long now = System.currentTimeMillis();
                     String windowKey = "openapi:window:" + keyId;
@@ -92,7 +99,7 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     private Mono<Map<String, Object>> loadRateLimitConfig(Long keyId) {
         String configKey = "openapi:rate_limit:" + keyId;
         return redisTemplate.opsForValue().get(configKey)
-                .defaultIfEmpty(Map.of("windowSec", DEFAULT_WINDOW_SEC, "maxReqs", DEFAULT_MAX_REQUESTS))
+                .defaultIfEmpty(Map.of("windowSec", defaultWindowSec, "maxReqs", defaultMaxRequests))
                 .map(v -> (Map<String, Object>) v);
     }
 

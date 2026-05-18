@@ -313,23 +313,31 @@ CREATE INDEX IF NOT EXISTS idx_call_record_cache_hit ON call_record(cache_hit);
 -- 8. 日账单表
 CREATE TABLE IF NOT EXISTS billing_daily (
     id BIGSERIAL PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
     caller_id BIGINT NOT NULL,
+    vendor_id BIGINT,
+    data_type VARCHAR(50) NOT NULL,
+    call_count BIGINT NOT NULL DEFAULT 0,
+    success_count BIGINT NOT NULL DEFAULT 0,
+    fail_count BIGINT NOT NULL DEFAULT 0,
+    total_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+    avg_latency INTEGER,
     billing_date DATE NOT NULL,
-    total_calls BIGINT DEFAULT 0,
-    successful_calls BIGINT DEFAULT 0,
-    failed_calls BIGINT DEFAULT 0,
-    total_amount DECIMAL(12, 4) DEFAULT 0,
-    total_cost DECIMAL(12, 4) DEFAULT 0,
-    profit DECIMAL(12, 4) DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_by BIGINT,
+    CONSTRAINT fk_billing_tenant FOREIGN KEY (tenant_id) REFERENCES tenant_info(id),
     CONSTRAINT fk_billing_caller FOREIGN KEY (caller_id) REFERENCES caller_info(id),
-    UNIQUE(caller_id, billing_date)
+    UNIQUE(tenant_id, caller_id, vendor_id, data_type, billing_date)
 );
 
 CREATE INDEX IF NOT EXISTS idx_billing_daily_caller ON billing_daily(caller_id);
 CREATE INDEX IF NOT EXISTS idx_billing_daily_date ON billing_daily(billing_date);
+CREATE INDEX IF NOT EXISTS idx_billing_daily_tenant ON billing_daily(tenant_id);
+
+CREATE TABLE IF NOT EXISTS billing_daily_event (
+    request_id VARCHAR(64) PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- 9. 用户表
 CREATE TABLE IF NOT EXISTS user_info (

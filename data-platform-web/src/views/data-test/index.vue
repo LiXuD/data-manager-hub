@@ -247,7 +247,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getVendorList } from '@/api/vendor'
 import { getDataTypeList } from '@/api/datatype'
-import { getInterfacesByDataType } from '@/api/interface'
+import { getInterfaceOptions } from '@/api/interface'
 import { executeOpenApiQuery } from '@/api/data-query'
 import { getCallerList, getCallerProducts } from '@/api/caller'
 import { getCallSceneList } from '@/api/call-scene'
@@ -259,6 +259,7 @@ type CallerOption = CallerDTO & { id: number }
 const vendorList = ref<Vendor[]>([])
 const dataTypeList = ref<DataType[]>([])
 const interfaceList = ref<ApiInterface[]>([])
+const vendorInterfaceOptions = ref<ApiInterface[]>([])
 const callerList = ref<CallerOption[]>([])
 const productList = ref<CallerProductDTO[]>([])
 const sceneList = ref<CallSceneDTO[]>([])
@@ -282,8 +283,14 @@ const jsonError = ref('')
 const loading = ref(false)
 const result = ref<DataQueryResponse | null>(null)
 
-// 计算属性: 数据类型列表（不再按厂商过滤，因为 DataType 与 Vendor 无关联）
-const filteredDataTypeList = computed(() => dataTypeList.value)
+// 计算属性: 根据厂商可用接口反推数据类型
+const filteredDataTypeList = computed(() => {
+  if (!selectedVendorId.value) {
+    return []
+  }
+  const dataTypeIds = new Set(vendorInterfaceOptions.value.map(item => item.dataTypeId))
+  return dataTypeList.value.filter(item => item.id && dataTypeIds.has(item.id))
+})
 
 // 是否可以执行查询
 const canExecute = computed(() => {
@@ -354,11 +361,20 @@ const loadScenes = async () => {
 }
 
 // 厂商变更处理
-const handleVendorChange = () => {
+const handleVendorChange = async () => {
   selectedDataTypeId.value = null
   selectedInterfaceId.value = null
   interfaceList.value = []
+  vendorInterfaceOptions.value = []
   result.value = null
+
+  if (!selectedVendorId.value) return
+  try {
+    const res = await getInterfaceOptions({ vendorId: selectedVendorId.value, status: 'active' })
+    vendorInterfaceOptions.value = res.data || []
+  } catch (error) {
+    console.error('加载厂商接口选项失败:', error)
+  }
 }
 
 // 数据类型变更处理
@@ -368,7 +384,11 @@ const handleDataTypeChange = async () => {
 
   if (selectedDataTypeId.value) {
     try {
-      const res = await getInterfacesByDataType(selectedDataTypeId.value)
+      const res = await getInterfaceOptions({
+        vendorId: selectedVendorId.value || undefined,
+        dataTypeId: selectedDataTypeId.value,
+        status: 'active'
+      })
       interfaceList.value = res.data || []
     } catch (error) {
       console.error('加载接口列表失败:', error)
@@ -481,6 +501,7 @@ const handleClear = () => {
   jsonError.value = ''
   result.value = null
   interfaceList.value = []
+  vendorInterfaceOptions.value = []
   productList.value = []
 }
 

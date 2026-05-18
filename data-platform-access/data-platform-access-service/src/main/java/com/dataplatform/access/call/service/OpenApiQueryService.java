@@ -24,14 +24,17 @@ public class OpenApiQueryService {
     private static final String DEFAULT_API_VERSION = "v1";
 
     private final CallRecordService callRecordService;
+    private final CallRecordEventPublisher callRecordEventPublisher;
     private final VendorProxyService vendorProxyService;
     private final BillingFeignClient billingFeignClient;
     private final ObjectMapper objectMapper;
 
     public OpenApiQueryService(CallRecordService callRecordService,
+                               CallRecordEventPublisher callRecordEventPublisher,
                                VendorProxyService vendorProxyService,
                                BillingFeignClient billingFeignClient) {
         this.callRecordService = callRecordService;
+        this.callRecordEventPublisher = callRecordEventPublisher;
         this.vendorProxyService = vendorProxyService;
         this.billingFeignClient = billingFeignClient;
         this.objectMapper = new ObjectMapper();
@@ -58,7 +61,7 @@ public class OpenApiQueryService {
                 Map<String, Object> cachedResult = readResponseData(cachedRecord.getResponseData());
                 CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
                         true, duration, BigDecimal.ZERO, true, cachedRecord.getId(), requestTime, responseTime);
-                callRecordService.save(record);
+                callRecordEventPublisher.publish(record);
                 return buildResponse(context, platformRequestId, cachedResult, true,
                         cachedRecord.getId(), requestTime, responseTime, duration, BigDecimal.ZERO);
             }
@@ -80,7 +83,7 @@ public class OpenApiQueryService {
 
         CallRecord record = buildRecord(context, platformRequestId, requestHash, vendorResult,
                 success, duration, cost, false, null, requestTime, responseTime);
-        callRecordService.save(record);
+        callRecordEventPublisher.publish(record);
         return buildResponse(context, platformRequestId, vendorResult, false,
                 null, requestTime, responseTime, duration, cost);
     }

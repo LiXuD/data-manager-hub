@@ -29,4 +29,13 @@ public interface CallRecordMapper extends BaseMapper<CallRecord> {
     List<Map<String, Object>> selectStatisticsByTenantAndDate(
             @Param("tenantId") Long tenantId, 
             @Param("billingDate") LocalDate billingDate);
+
+    @Select("SELECT COUNT(*) AS platform_count, COALESCE(SUM(cost), 0) AS platform_amount " +
+            "FROM call_record " +
+            "WHERE vendor_id = #{vendorId} " +
+            "AND DATE(call_time) = #{billingDate} " +
+            "AND deleted = false")
+    Map<String, Object> selectPlatformSummaryByVendorAndDate(
+            @Param("vendorId") Long vendorId,
+            @Param("billingDate") LocalDate billingDate);
 }

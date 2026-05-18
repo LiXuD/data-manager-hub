@@ -1,10 +1,12 @@
 package com.dataplatform.governance.controller;
 
 import com.dataplatform.api.Result;
+import com.dataplatform.governance.api.dto.AlertRecordCreateDTO;
 import com.dataplatform.governance.api.dto.AlertRuleDTO;
 import com.dataplatform.governance.api.dto.DataLineageDTO;
 import com.dataplatform.governance.api.dto.QualityScoreDTO;
 import com.dataplatform.governance.api.feign.GovernanceFeignClient;
+import com.dataplatform.governance.monitor.entity.AlertRecord;
 import com.dataplatform.governance.monitor.entity.AlertRule;
 import com.dataplatform.governance.monitor.service.AlertService;
 import com.dataplatform.governance.quality.entity.QualityScore;
@@ -47,6 +49,21 @@ public class GovernanceContractController implements GovernanceFeignClient {
                 .map(this::toDataLineageDTO)
                 .toList();
         return Result.success(result);
+    }
+
+    @Override
+    public Result<Void> createAlertRecord(AlertRecordCreateDTO dto) {
+        AlertRecord record = new AlertRecord();
+        record.setRuleId(dto.getRuleId());
+        record.setTenantId(dto.getTenantId());
+        record.setAlertType(dto.getAlertType());
+        record.setAlertTitle(dto.getAlertTitle());
+        record.setLevel(dto.getLevel());
+        record.setAlertMessage(dto.getAlertMessage());
+        record.setTriggeredValue(dto.getTriggeredValue());
+        record.setStatus(dto.getStatus());
+        alertService.saveRecord(record);
+        return Result.success(null);
     }
 
     private AlertRuleDTO toAlertRuleDTO(AlertRule source) {

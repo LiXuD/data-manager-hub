@@ -1,6 +1,7 @@
 package com.dataplatform.billing.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.math.BigDecimal;
@@ -15,11 +16,14 @@ public class BillingReconciliation {
 
     private Long vendorId;
     private String vendorName;
+    @TableField("reconciliation_date")
     private LocalDate billingDate;
 
+    @TableField("platform_call_count")
     private Long platformCount;
     private BigDecimal platformAmount;
 
+    @TableField("vendor_call_count")
     private Long vendorCount;
     private BigDecimal vendorAmount;
 
@@ -31,6 +35,7 @@ public class BillingReconciliation {
     private String remark;
 
     private LocalDateTime createdAt;
+    @TableField("updated_at")
     private LocalDateTime reconciledAt;
 
     public Long getId() { return id; }

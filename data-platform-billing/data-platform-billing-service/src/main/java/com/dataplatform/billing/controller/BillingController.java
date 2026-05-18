@@ -4,13 +4,17 @@ import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.billing.entity.BillingDaily;
 import com.dataplatform.billing.entity.BillingRule;
+import com.dataplatform.billing.entity.BillingReconciliation;
 import com.dataplatform.billing.service.BillingService;
+import com.dataplatform.billing.service.ReconciliationService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.dataplatform.common.constant.StatusConstants;
 
@@ -25,6 +29,9 @@ public class BillingController {
 
     @Autowired
     private BillingService billingService;
+
+    @Autowired
+    private ReconciliationService reconciliationService;
 
     private static final List<String> VALID_STATUSES = List.of(StatusConstants.ACTIVE, StatusConstants.INACTIVE, StatusConstants.PENDING);
 
@@ -109,5 +116,39 @@ public class BillingController {
         }
         billingService.deleteRule(id);
         return ResponseEntity.ok(Result.success(null));
+    }
+
+    @OperationLog(module = "自动对账", operation = "导入厂商账单")
+    @PostMapping(value = "/reconciliation/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Result<Map<String, Object>> importVendorBill(@RequestPart("file") MultipartFile file) throws Exception {
+        int imported = reconciliationService.importVendorBills(new String(file.getBytes()));
+        return Result.success(Map.of("imported", imported));
+    }
+
+    @OperationLog(module = "自动对账", operation = "运行对账")
+    @PostMapping("/reconciliation/run")
+    public Result<Void> runReconciliation(
+            @RequestParam(required = false) Long vendorId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate billingDate) {
+        reconciliationService.reconcile(vendorId, billingDate);
+        return Result.success(null);
+    }
+
+    @GetMapping("/reconciliation/list")
+    public Result<List<BillingReconciliation>> listReconciliation(
+            @RequestParam(required = false) Long vendorId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(reconciliationService.list(vendorId, startDate, endDate, page, pageSize).getRecords());
+    }
+
+    @GetMapping("/reconciliation/diffs")
+    public Result<List<BillingReconciliation>> listReconciliationDiffs(
+            @RequestParam(required = false) Long vendorId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return Result.success(reconciliationService.listDiffs(vendorId, startDate, endDate));
     }
 }

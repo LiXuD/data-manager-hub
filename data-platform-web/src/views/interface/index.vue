@@ -17,7 +17,13 @@
     <el-card class="search-card">
       <div class="search-bar">
         <div class="search-inputs">
-          <el-select v-model="searchForm.vendorId" placeholder="厂商" clearable class="search-select">
+          <el-select
+            v-model="searchForm.vendorId"
+            placeholder="厂商"
+            clearable
+            class="search-select"
+            @change="handleVendorSearchChange"
+          >
             <el-option
               v-for="vendor in vendorOptions"
               :key="vendor.id"
@@ -150,6 +156,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getInterfaceList,
+  getInterfaceOptions,
   deleteInterface,
   updateInterfaceStatus
 } from '@/api/interface'
@@ -172,6 +179,7 @@ const searchForm = reactive({
 // 表格数据
 const tableData = ref<ApiInterface[]>([])
 const loading = ref(false)
+const vendorInterfaceOptions = ref<ApiInterface[]>([])
 
 // 分页
 const pagination = reactive({
@@ -185,7 +193,11 @@ const vendorOptions = computed(() => {
   return cacheStore.vendorOptions
 })
 const dataTypeOptions = computed(() => {
-  return cacheStore.dataTypeOptions
+  if (!searchForm.vendorId) {
+    return cacheStore.dataTypeOptions
+  }
+  const ids = new Set(vendorInterfaceOptions.value.map(item => item.dataTypeId))
+  return cacheStore.dataTypeOptions.filter(item => item.id && ids.has(item.id))
 })
 
 // 表单
@@ -240,6 +252,23 @@ const loadData = async () => {
 const handleSearch = () => {
   pagination.page = 1
   loadData()
+}
+
+const handleVendorSearchChange = async () => {
+  searchForm.dataTypeId = undefined
+  vendorInterfaceOptions.value = []
+  if (!searchForm.vendorId) {
+    return
+  }
+  try {
+    const res = await getInterfaceOptions({
+      vendorId: Number(searchForm.vendorId),
+      status: COMMON_STATUS.ACTIVE
+    })
+    vendorInterfaceOptions.value = res.data || []
+  } catch (error) {
+    console.error('加载厂商接口选项失败:', error)
+  }
 }
 
 // 重置

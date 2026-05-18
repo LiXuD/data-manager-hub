@@ -1,8 +1,8 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-05-17 00:00
-**状态**: 五域收敛基线已合入 dev，后端与前端构建验证通过
+**最后更新**: 2026-05-18 10:05
+**状态**: 五域收敛基线已合入 dev，P2 验收链路与自动对账闭环推进完成
 
 ---
 
@@ -264,7 +264,7 @@ data-platform-governance/            # 治理
 ### 阶段 C: 业务链路回归
 
 - [x] **P1 核心链路测试** — `smoke-test-api.sh`，覆盖主数据/访问/计费三条核心链路 ✅
-- [ ] P2 链路测试 — 身份租户、治理观测（后续补充）
+- [x] **P2 链路测试** — `smoke-test-api.sh` 补充身份租户、治理告警/日志/质量/血缘观测 ✅
 
 ### 阶段 D: 前端接口归并
 
@@ -294,13 +294,13 @@ data-platform-governance/            # 治理
 
 ### 2. 自动对账完善
 
-- [ ] 厂商账单获取 (API或文件)
-- [ ] 差异比对逻辑
-- [ ] 差异告警通知
+- [x] 厂商账单获取 (CSV 文件导入) — `/billing/reconciliation/import` ✅
+- [x] 差异比对逻辑 — `/billing/reconciliation/run|list|diffs`，按平台调用记录与厂商账单的调用量/金额双维度比对 ✅
+- [x] 差异告警通知 — `diff_warning/diff_error` 通过 governance-api 写入告警记录；系统规则补齐必填阈值并避免重复状态告警 ✅
 
 ### 3. 前端完善
 
-- [ ] 三级联动: 厂商 → 数据类型 → 接口
+- [x] 三级联动: 厂商 → 数据类型 → 接口 — 后端 `/interface/options` + 前端 data-test/interface 筛选联动 ✅
 - [x] 统一调用入口前端补齐 — 调用方产品配置、API Key 产品授权、场景字典、OpenAPI 查询测试、调用记录产品/场景/缓存筛选 ✅
 
 ### 4. 五域收敛后修复 (2026-05-17)
@@ -314,9 +314,9 @@ data-platform-governance/            # 治理
 
 ## 📋 后续迭代 (P2)
 
-- [ ] 配置热更新 (Nacos)
-- [ ] Kafka 异步化
-- [ ] Prometheus 指标暴露
+- [x] 配置热更新 (Nacos) — Gateway `CircuitBreakerFilter`、`RateLimitFilter` 与 masterdata 厂商配置缓存 TTL 接入 `@RefreshScope`/配置项热更新样例 ✅
+- [x] Kafka 异步化 — OpenAPI 调用记录写入 Kafka `call-record`，access 消费端落库，billing 消费端按 `request_id` 幂等聚合 `billing_daily`，持久化失败交由 Kafka 重试 ✅
+- [x] Prometheus 指标暴露 — Gateway 与五域服务统一暴露 `/actuator/prometheus` ✅
 
 ---
 
@@ -329,4 +329,4 @@ data-platform-governance/            # 治理
 ---
 
 **文档维护**: 按架构变更更新
-**最后更新**: 2026-05-17 00:00
+**最后更新**: 2026-05-18 10:05
