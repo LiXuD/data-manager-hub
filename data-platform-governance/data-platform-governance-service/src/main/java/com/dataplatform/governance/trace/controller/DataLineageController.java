@@ -21,6 +21,7 @@ public class DataLineageController {
     @OperationLog(module = "数据血缘管理", operation = "记录数据血缘")
     @PostMapping
     public ResponseEntity<Result<Boolean>> recordLineage(
+            @RequestBody(required = false) DataLineage body,
             @RequestParam(required = false) String sourceType,
             @RequestParam(required = false) Long sourceId,
             @RequestParam(required = false) String sourceName,
@@ -29,6 +30,16 @@ public class DataLineageController {
             @RequestParam(required = false) String targetName,
             @RequestParam(required = false) String relationType,
             @RequestParam(required = false) String transformRule) {
+        if (body != null) {
+            sourceType = body.getSourceType();
+            sourceId = body.getSourceId();
+            sourceName = body.getSourceName();
+            targetType = body.getTargetType();
+            targetId = body.getTargetId();
+            targetName = body.getTargetName();
+            relationType = body.getRelationType();
+            transformRule = body.getTransformRule();
+        }
         // 参数验证
         if (sourceType == null || sourceType.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

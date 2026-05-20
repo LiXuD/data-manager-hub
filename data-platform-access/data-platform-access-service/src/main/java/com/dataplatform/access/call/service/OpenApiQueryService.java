@@ -152,6 +152,7 @@ public class OpenApiQueryService {
                                    LocalDateTime requestTime, LocalDateTime responseTime) {
         CallRecord record = new CallRecord();
         record.setRequestId(platformRequestId);
+        record.setTraceId(normalize(context.getTraceId()));
         record.setTenantId(context.getTenantId());
         record.setCallerId(context.getCallerId());
         record.setApiKeyId(context.getApiKeyId());
@@ -213,6 +214,7 @@ public class OpenApiQueryService {
 
     public static class OpenApiCallContext {
         private String externalRequestId;
+        private String traceId;
         private String apiCode;
         private String apiVersion;
         private Long callerId;
@@ -234,6 +236,8 @@ public class OpenApiQueryService {
 
         public String getExternalRequestId() { return externalRequestId; }
         public void setExternalRequestId(String externalRequestId) { this.externalRequestId = externalRequestId; }
+        public String getTraceId() { return traceId; }
+        public void setTraceId(String traceId) { this.traceId = traceId; }
         public String getApiCode() { return apiCode; }
         public void setApiCode(String apiCode) { this.apiCode = apiCode; }
         public String getApiVersion() { return apiVersion; }

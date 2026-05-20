@@ -190,6 +190,7 @@ CREATE INDEX idx_call_scene_status ON call_scene(status);
 CREATE TABLE IF NOT EXISTS call_record (
     id BIGSERIAL,
     request_id VARCHAR(64) NOT NULL,
+    trace_id VARCHAR(128),
     tenant_id BIGINT NOT NULL,
     caller_id BIGINT NOT NULL,
     api_key_id BIGINT NOT NULL,
@@ -225,6 +226,7 @@ CREATE TABLE IF NOT EXISTS call_record (
 ) PARTITION BY RANGE (call_time);
 
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS api_code VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS trace_id VARCHAR(128);
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS product_id BIGINT;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS product_code VARCHAR(64);
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS product_name VARCHAR(100);
@@ -253,6 +255,7 @@ CREATE TABLE IF NOT EXISTS call_record_2026_06 PARTITION OF call_record
 
 -- 索引
 CREATE INDEX idx_call_record_request ON call_record(request_id);
+CREATE INDEX idx_call_record_trace ON call_record(trace_id);
 CREATE INDEX idx_call_record_tenant ON call_record(tenant_id);
 CREATE INDEX idx_call_record_caller ON call_record(caller_id);
 CREATE INDEX idx_call_record_vendor ON call_record(vendor_id);
@@ -545,23 +548,19 @@ CREATE INDEX idx_gray_rule_status ON gray_rule(status);
 -- 数据血缘表（数据溯源用）
 CREATE TABLE IF NOT EXISTS data_lineage (
     id BIGSERIAL PRIMARY KEY,
-    source_system VARCHAR(100) NOT NULL,
-    source_table VARCHAR(100) NOT NULL,
-    source_column VARCHAR(100),
-    target_system VARCHAR(100) NOT NULL,
-    target_table VARCHAR(100) NOT NULL,
-    target_column VARCHAR(100),
-    transformation_type VARCHAR(50),
-    transformation_logic TEXT,
-    lineage_level INTEGER DEFAULT 1,
-    status VARCHAR(20) DEFAULT 'active',
-    created_by BIGINT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    source_type VARCHAR(50) NOT NULL,
+    source_id BIGINT NOT NULL,
+    source_name VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_id BIGINT NOT NULL,
+    target_name VARCHAR(100) NOT NULL,
+    relation_type VARCHAR(50),
+    transform_rule TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_data_lineage_source ON data_lineage(source_system, source_table);
-CREATE INDEX idx_data_lineage_target ON data_lineage(target_system, target_table);
+CREATE INDEX idx_data_lineage_source ON data_lineage(source_type, source_id);
+CREATE INDEX idx_data_lineage_target ON data_lineage(target_type, target_id);
 
 -- 数据质量规则表
 CREATE TABLE IF NOT EXISTS quality_rule (

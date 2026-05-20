@@ -3,6 +3,7 @@ package com.dataplatform.access.call.controller;
 import com.dataplatform.access.call.entity.CallScene;
 import com.dataplatform.access.call.service.CallSceneService;
 import com.dataplatform.access.call.service.OpenApiQueryService;
+import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
 import com.dataplatform.access.call.vo.OpenApiQueryReqVO;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -145,7 +147,7 @@ class OpenApiQueryControllerTest {
         request.setSceneCode("pre-loan-review");
         request.setParams(params);
 
-        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, request);
+        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, "trace-1", request);
 
         assertEquals(200, result.getCode());
         assertEquals("client-req-1", result.getData().getRequestId());
@@ -154,12 +156,14 @@ class OpenApiQueryControllerTest {
         assertTrue(result.getData().getSuccess());
         assertEquals(99, result.getData().getData().get("score"));
         assertEquals(12L, result.getData().getLatency());
-        verify(openApiQueryService).query(any());
+        ArgumentCaptor<OpenApiCallContext> contextCaptor = ArgumentCaptor.forClass(OpenApiCallContext.class);
+        verify(openApiQueryService).query(contextCaptor.capture());
+        assertEquals("trace-1", contextCaptor.getValue().getTraceId());
     }
 
     @Test
     void shouldRejectMissingApiCode() {
-        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, new OpenApiQueryReqVO());
+        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, null, new OpenApiQueryReqVO());
 
         assertEquals(400, result.getCode());
     }

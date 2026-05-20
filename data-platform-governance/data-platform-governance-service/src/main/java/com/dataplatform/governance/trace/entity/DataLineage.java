@@ -1,6 +1,7 @@
 package com.dataplatform.governance.trace.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
@@ -12,15 +13,23 @@ public class DataLineage {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    @TableField("source_type")
     private String sourceType;
+    @TableField("source_id")
     private Long sourceId;
+    @TableField("source_name")
     private String sourceName;
 
+    @TableField("target_type")
     private String targetType;
+    @TableField("target_id")
     private Long targetId;
+    @TableField("target_name")
     private String targetName;
 
+    @TableField("relation_type")
     private String relationType;
+    @TableField("transform_rule")
     private String transformRule;
 
     private LocalDateTime createdAt;

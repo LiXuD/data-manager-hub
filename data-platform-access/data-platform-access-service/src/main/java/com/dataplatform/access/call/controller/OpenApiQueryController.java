@@ -86,6 +86,7 @@ public class OpenApiQueryController {
     public Result<OpenApiQueryRespVO> query(
             @RequestHeader(value = "X-Api-Key", required = false) String apiKeyHeader,
             @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "X-Trace-Id", required = false) String traceId,
             @RequestBody OpenApiQueryReqVO request) {
 
         String apiCode = normalize(request != null ? request.getApiCode() : null);
@@ -137,6 +138,7 @@ public class OpenApiQueryController {
 
         OpenApiCallContext context = buildContext(request, apiKeyEntity, caller, product, scene, route,
                 request.getParams() != null ? request.getParams() : Collections.emptyMap());
+        context.setTraceId(traceId);
         return Result.success(openApiQueryService.query(context));
     }
 
@@ -144,6 +146,7 @@ public class OpenApiQueryController {
     public Result<OpenApiBatchQueryRespVO> batchQuery(
             @RequestHeader(value = "X-Api-Key", required = false) String apiKeyHeader,
             @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "X-Trace-Id", required = false) String traceId,
             @RequestBody OpenApiBatchQueryReqVO request) {
 
         String apiCode = normalize(request != null ? request.getApiCode() : null);
@@ -196,7 +199,7 @@ public class OpenApiQueryController {
             return Result.error(429, "请求过于频繁，请稍后再试");
         }
 
-        return Result.success(buildBatchResp(request, apiKeyEntity, caller, product, scene, route));
+        return Result.success(buildBatchResp(request, apiKeyEntity, caller, product, scene, route, traceId));
     }
 
     private boolean validateCacheRequest(Boolean useCache, Integer cacheDays) {
@@ -275,13 +278,15 @@ public class OpenApiQueryController {
 
     private OpenApiBatchQueryRespVO buildBatchResp(OpenApiBatchQueryReqVO request, ApiKey apiKey,
                                                    CallerInfo caller,
-                                                   CallerProduct product, CallScene scene, ApiRoute route) {
+                                                   CallerProduct product, CallScene scene, ApiRoute route,
+                                                   String traceId) {
         int success = 0;
         int failed = 0;
         List<Map<String, Object>> results = new ArrayList<>();
         for (OpenApiBatchQueryReqVO.QueryItem item : request.getItems()) {
             OpenApiCallContext context = buildContext(request, apiKey, caller, product, scene, route,
                     item.getParams() != null ? item.getParams() : Collections.emptyMap());
+            context.setTraceId(traceId);
             OpenApiQueryRespVO itemResp = openApiQueryService.query(context);
             if (Boolean.TRUE.equals(itemResp.getSuccess())) {
                 success++;

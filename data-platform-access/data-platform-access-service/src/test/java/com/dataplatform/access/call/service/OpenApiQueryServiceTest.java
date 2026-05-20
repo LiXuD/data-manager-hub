@@ -63,11 +63,13 @@ class OpenApiQueryServiceTest {
         assertTrue(savedRecord.getCacheHit());
         assertEquals(BigDecimal.ZERO, savedRecord.getCost());
         assertEquals(100L, savedRecord.getCacheSourceRecordId());
+        assertEquals("trace-1", savedRecord.getTraceId());
     }
 
     private OpenApiCallContext buildContext(boolean useCache, Integer cacheDays) {
         OpenApiCallContext context = new OpenApiCallContext();
         context.setExternalRequestId("client-req-1");
+        context.setTraceId("trace-1");
         context.setApiCode("PERSONAL_QUERY");
         context.setApiVersion("v1");
         context.setTenantId(1L);

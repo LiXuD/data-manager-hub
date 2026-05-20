@@ -11,6 +11,7 @@ public class CallRecord {
     private Long id;
 
     private String requestId;
+    private String traceId;
     private Long tenantId;
     private Long callerId;
     private Long apiKeyId;
@@ -55,6 +56,8 @@ public class CallRecord {
     public void setId(Long id) { this.id = id; }
     public String getRequestId() { return requestId; }
     public void setRequestId(String requestId) { this.requestId = requestId; }
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String traceId) { this.traceId = traceId; }
     public Long getTenantId() { return tenantId; }
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
     public Long getCallerId() { return callerId; }

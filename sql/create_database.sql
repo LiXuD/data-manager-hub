@@ -216,6 +216,7 @@ CREATE TABLE IF NOT EXISTS call_record (
     vendor_id BIGINT NOT NULL,
     vendor_code VARCHAR(50) NOT NULL,
     request_id VARCHAR(64) NOT NULL,
+    trace_id VARCHAR(128),
     api_code VARCHAR(64),
     product_id BIGINT,
     product_code VARCHAR(64),
@@ -251,6 +252,7 @@ CREATE TABLE IF NOT EXISTS call_record (
 ) PARTITION BY RANGE (call_time);
 
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS api_code VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS trace_id VARCHAR(128);
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS tenant_id BIGINT;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS api_key_id BIGINT;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS vendor_code VARCHAR(50);
@@ -302,6 +304,7 @@ SELECT create_monthly_partition(CURRENT_DATE::DATE);
 SELECT create_monthly_partition((CURRENT_DATE + INTERVAL '1 month')::DATE);
 
 CREATE INDEX IF NOT EXISTS idx_call_record_caller ON call_record(caller_id);
+CREATE INDEX IF NOT EXISTS idx_call_record_trace ON call_record(trace_id);
 CREATE INDEX IF NOT EXISTS idx_call_record_vendor ON call_record(vendor_id);
 CREATE INDEX IF NOT EXISTS idx_call_record_time ON call_record(call_time);
 CREATE INDEX IF NOT EXISTS idx_call_record_success ON call_record(success);
@@ -454,7 +457,24 @@ CREATE TABLE IF NOT EXISTS circuit_breaker (
 CREATE INDEX IF NOT EXISTS idx_circuit_vendor ON circuit_breaker(vendor_id);
 CREATE INDEX IF NOT EXISTS idx_circuit_state ON circuit_breaker(state);
 
--- 15. 操作日志表
+-- 15. 数据血缘表
+CREATE TABLE IF NOT EXISTS data_lineage (
+    id BIGSERIAL PRIMARY KEY,
+    source_type VARCHAR(50) NOT NULL,
+    source_id BIGINT NOT NULL,
+    source_name VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_id BIGINT NOT NULL,
+    target_name VARCHAR(100) NOT NULL,
+    relation_type VARCHAR(50),
+    transform_rule TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_data_lineage_source ON data_lineage(source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_data_lineage_target ON data_lineage(target_type, target_id);
+
+-- 16. 操作日志表
 CREATE TABLE IF NOT EXISTS operation_log (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT,

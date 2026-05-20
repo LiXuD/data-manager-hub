@@ -1272,49 +1272,45 @@ Authorization: Bearer {token}
 
 ---
 
-## 数据血缘 (/trace)
-
-### 获取血缘关系列表
-
-```http
-GET /trace?page=1&pageSize=10&sourceType=vendor
-Authorization: Bearer {token}
-```
+## 数据血缘 (/trace/lineage)
 
 ### 创建血缘关系
 
 ```http
-POST /trace
+POST /trace/lineage
 Authorization: Bearer {token}
 Content-Type: application/json
 
 {
   "sourceType": "vendor",
   "sourceId": 1,
+  "sourceName": "厂商A",
   "targetType": "interface",
   "targetId": 1,
-  "relationType": "PROVIDES"
+  "targetName": "企业工商查询",
+  "relationType": "PROVIDES",
+  "transformRule": "SkyWalking traceId=trace-1"
 }
-```
-
-### 删除血缘关系
-
-```http
-DELETE /trace/{id}
-Authorization: Bearer {token}
 ```
 
 ### 获取上游血缘
 
 ```http
-GET /trace/upstream/{type}/{id}
+GET /trace/lineage/upstream?type=interface&id=1
 Authorization: Bearer {token}
 ```
 
 ### 获取下游血缘
 
 ```http
-GET /trace/downstream/{type}/{id}
+GET /trace/lineage/downstream?type=vendor&id=1
+Authorization: Bearer {token}
+```
+
+### 获取完整上游血缘
+
+```http
+GET /trace/lineage/full?type=interface&id=1
 Authorization: Bearer {token}
 ```
 
