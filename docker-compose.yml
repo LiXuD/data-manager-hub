@@ -138,6 +138,35 @@ services:
     depends_on:
       - elasticsearch
 
+  # SkyWalking OAP 链路追踪服务端
+  skywalking-oap:
+    image: apache/skywalking-oap-server:9.4.0
+    container_name: data-platform-skywalking-oap
+    environment:
+      SW_STORAGE: h2
+      SW_STORAGE_H2_URL: "jdbc:h2:mem:skywalking-oap-db"
+      SW_CORE_REST_PORT: 12800
+      SW_CORE_GRPC_PORT: 11800
+    ports:
+      - "11800:11800"
+      - "12800:12800"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:12800/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # SkyWalking UI 链路追踪可视化
+  skywalking-ui:
+    image: apache/skywalking-ui:9.4.0
+    container_name: data-platform-skywalking-ui
+    environment:
+      SW_OAP_ADDRESS: http://skywalking-oap:12800
+    ports:
+      - "8088:8080"
+    depends_on:
+      - skywalking-oap
+
 volumes:
   redis_data:
   kafka_data:

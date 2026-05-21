@@ -1,9 +1,30 @@
 #!/bin/bash
 # 启动所有数据平台服务
+# 可选: 设置 SW_AGENT_ENABLED=true 启用 SkyWalking 链路追踪
+# 示例: SW_AGENT_ENABLED=true ./start-services.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
+
+# SkyWalking Agent 配置
+SW_AGENT_ENABLED="${SW_AGENT_ENABLED:-false}"
+SW_AGENT_DIR="$SCRIPT_DIR/skywalking/agent"
+SW_AGENT_CONFIG="$SCRIPT_DIR/skywalking/agent.config"
+SW_AGENT_JVM_ARGS=""
+
+if [ "$SW_AGENT_ENABLED" = "true" ]; then
+    if [ ! -f "$SW_AGENT_DIR/skywalking-agent.jar" ]; then
+        echo "SkyWalking Agent 未安装，正在下载..."
+        bash "$SCRIPT_DIR/skywalking/setup-agent.sh"
+    fi
+    if [ -f "$SW_AGENT_DIR/skywalking-agent.jar" ]; then
+        SW_AGENT_JVM_ARGS="-javaagent:$SW_AGENT_DIR/skywalking-agent.jar -Dskywalking_config=$SW_AGENT_CONFIG"
+        echo "SkyWalking Agent 已启用"
+    else
+        echo "警告: SkyWalking Agent 下载失败，将以无 Agent 模式启动"
+    fi
+fi
 
 cd "$SCRIPT_DIR"
 
@@ -50,7 +71,19 @@ for port in "${start_order[@]}"; do
         log_file="$LOG_DIR/${module}.log"
         echo "启动 $module (端口: $port)..."
         cd "$start_dir"
-        nohup mvn spring-boot:run -q > "$log_file" 2>&1 &
+
+        # 构建 JVM 参数
+        jvm_args=""
+        if [ -n "$SW_AGENT_JVM_ARGS" ]; then
+            sw_name=$(echo "$module" | sed 's/data-platform-//')
+            jvm_args="$SW_AGENT_JVM_ARGS -Dsw.agent.service_name=$sw_name"
+        fi
+
+        if [ -n "$jvm_args" ]; then
+            nohup mvn spring-boot:run -q -Dspring-boot.run.jvmArguments="$jvm_args" > "$log_file" 2>&1 &
+        else
+            nohup mvn spring-boot:run -q > "$log_file" 2>&1 &
+        fi
         echo "  - $module 已启动 (日志: $log_file)"
     else
         echo "  - $module 启动目录不存在 ($start_dir)，跳过"

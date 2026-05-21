@@ -46,6 +46,7 @@
         <hutool.version>5.8.28</hutool.version>
         <lombok.version>1.18.36</lombok.version>
         <resilience4j.version>2.2.0</resilience4j.version>
+        <byte-buddy.version>1.17.2</byte-buddy.version>
         <maven.enforcer.version>3.5.0</maven.enforcer.version>
         <profiles.active>dev</profiles.active>
     </properties>
@@ -77,6 +78,18 @@
                 <version>${spring-boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+
+            <!-- Override Byte Buddy for Java 25 compatibility -->
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy</artifactId>
+                <version>${byte-buddy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.bytebuddy</groupId>
+                <artifactId>byte-buddy-agent</artifactId>
+                <version>${byte-buddy.version}</version>
             </dependency>
             
             <!-- Spring Cloud -->

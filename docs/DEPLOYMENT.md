@@ -1,6 +1,6 @@
 # 数据管理平台部署文档
 
-**版本**: 2026-05-16
+**版本**: 2026-05-21
 
 ---
 
@@ -22,6 +22,8 @@
 |------|------|------|------|
 | PostgreSQL | 16 | 5432 | 主数据库 |
 | Redis | 7.x | 6379 | 缓存/会话 |
+| SkyWalking OAP | 9.4.0 | 11800/12800 | 链路追踪服务端 (gRPC/HTTP) |
+| SkyWalking UI | 9.4.0 | 8088 | 链路追踪可视化 |
 
 ---
 
@@ -95,6 +97,31 @@ npm run dev
 | - | Web | 3000 | 前端界面 |
 
 > **注意**: `data-platform-sdk` 是普通 Jar 依赖，不作为独立服务部署。
+
+---
+
+## 链路追踪 (SkyWalking)
+
+### 启动 SkyWalking
+
+`docker-compose up -d` 已包含 SkyWalking OAP 和 UI 容器。UI 访问地址: `http://localhost:8088`。
+
+### 启用 Agent
+
+服务默认不附加 SkyWalking Agent。如需启用:
+
+```bash
+SW_AGENT_ENABLED=true ./start-services.sh
+```
+
+首次启用会自动下载 Agent (约 15MB)。Agent 配置位于 `skywalking/agent.config`。
+
+### 追踪传播机制
+
+- **Gateway**: 为每个请求生成/透传 `X-Trace-Id` 头
+- **Feign 调用**: `TraceFeignRequestInterceptor` 自动传播 `X-Trace-Id` 到下游服务
+- **日志关联**: `TraceIdMdcFilter` 将 `X-Trace-Id` 写入 SLF4J MDC，日志 pattern 中通过 `%X{traceId}` 引用
+- **业务关联**: `call_record.trace_id` 列存储请求级 Trace ID，可与 SkyWalking trace 关联
 
 ---
 
@@ -258,6 +285,10 @@ export REDIS_PASSWORD=your_redis_password
 
 # Nacos
 export NACOS_SERVER_ADDR=nacos-server:8848
+
+# SkyWalking
+export SW_AGENT_ENABLED=true
+export SW_OAP_ADDRESS=skywalking-oap:11800
 ```
 
 ### Docker 部署
@@ -344,5 +375,5 @@ psql -h localhost -U postgres dataplatform < backup_20260516.sql
 
 ---
 
-**文档版本**: 2026-05-16
-**最后更新**: 与五域收敛架构同步
+**文档版本**: 2026-05-21
+**最后更新**: SkyWalking 链路追踪集成

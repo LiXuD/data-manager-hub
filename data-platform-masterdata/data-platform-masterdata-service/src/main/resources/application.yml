@@ -16,3 +16,7 @@ management:
 masterdata:
   vendor-config:
     cache-ttl-seconds: 300
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"

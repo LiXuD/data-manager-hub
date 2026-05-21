@@ -253,6 +253,17 @@ check "质量规则列表" "$http_code"
 
 http_code=$(api GET "$GOVERNANCE/trace/lineage/upstream?type=api&id=1")
 check "血缘上游查询" "$http_code"
+
+# 验证 X-Trace-Id 头传播
+TRACE_RESP=$(curl -s -D- -o /dev/null "$MASTERDATA/datatype/list?page=1&pageSize=5" \
+    -H "Authorization: $TOKEN" \
+    -H "X-Trace-Id: smoke-test-trace-$(date +%s)")
+if echo "$TRACE_RESP" | grep -qi "x-trace-id"; then
+    echo "  ✅ X-Trace-Id 响应头存在"
+    PASS=$((PASS + 1))
+else
+    echo "  ⚠️ X-Trace-Id 响应头缺失 (非阻塞)"
+fi
 echo ""
 
 # ============================================================

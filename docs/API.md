@@ -35,6 +35,20 @@
 
 ## 认证
 
+### 请求头
+
+| 头部 | 必填 | 说明 |
+|------|------|------|
+| `Authorization` | 是 | Bearer Token，通过 `/auth/login` 获取 |
+| `X-Trace-Id` | 否 | 链路追踪 ID。如不传，Gateway 自动生成 UUID。响应头中会回传此值，可用于关联调用记录 (`call_record.trace_id`) 和 SkyWalking trace。 |
+
+**示例**:
+```http
+GET /api/v1/datatype/list
+Authorization: Bearer xxx-token
+X-Trace-Id: my-trace-id-12345
+```
+
 ### 登录
 
 ```http

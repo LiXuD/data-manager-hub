@@ -1,7 +1,7 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-05-18 15:10
+**最后更新**: 2026-05-20 18:06
 **状态**: 五域收敛基线已合入 dev，P2 验收链路与自动对账闭环推进完成
 
 ---
@@ -322,11 +322,14 @@ data-platform-governance/            # 治理
 
 ## 📋 V2.0 规划
 
-- [ ] 数据溯源 (SkyWalking) — 第一阶段已对齐 governance trace 血缘实体/DDL/API，支持 JSON body 写入与上下游查询；OpenAPI 调用记录已保存 `X-Trace-Id` 作为 SkyWalking trace 关联基线
+- [ ] 数据溯源 (SkyWalking)
+  - 第一阶段已完成: governance trace 血缘实体/DDL/API 对齐，JSON body 写入与上下游查询；OpenAPI 调用记录已保存 `X-Trace-Id`
+  - 第二阶段已完成: SkyWalking OAP+UI docker-compose 编排、Java Agent 下载/启动脚本、Feign 拦截器 `TraceFeignRequestInterceptor` 跨域传播 `X-Trace-Id`、`TraceIdMdcFilter` 写入 SLF4J MDC、6 服务日志 pattern 注入 `%X{traceId}`
+  - 待验证: 服务启动后 SkyWalking Agent 自动采集链路、`call_record.trace_id` 与 SkyWalking trace 关联
 - [ ] SDK 多语言生成
 - [ ] 灰度发布增强
 
 ---
 
 **文档维护**: 按架构变更更新
-**最后更新**: 2026-05-18 15:10
+**最后更新**: 2026-05-20 18:06
