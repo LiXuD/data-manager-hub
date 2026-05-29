@@ -41,5 +41,12 @@
             <artifactId>feign-core</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- SkyWalking Toolkit Trace API — available at runtime only when agent is loaded -->
+        <dependency>
+            <groupId>org.apache.skywalking</groupId>
+            <artifactId>apm-toolkit-trace</artifactId>
+            <version>9.4.0</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>

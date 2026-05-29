@@ -2,6 +2,7 @@ package com.dataplatform.access.call.controller;
 
 import com.dataplatform.access.call.entity.CallScene;
 import com.dataplatform.access.call.service.CallSceneService;
+import com.dataplatform.access.call.service.GrayVendorResolver;
 import com.dataplatform.access.call.service.OpenApiQueryService;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
@@ -50,6 +51,7 @@ class OpenApiQueryControllerTest {
     private ApiInterfaceFeignClient apiInterfaceFeignClient;
     private VendorConfigFeignClient vendorConfigFeignClient;
     private VendorFeignClient vendorFeignClient;
+    private GrayVendorResolver grayVendorResolver;
     private OpenApiQueryController controller;
 
     @BeforeEach
@@ -65,6 +67,7 @@ class OpenApiQueryControllerTest {
         apiInterfaceFeignClient = mock(ApiInterfaceFeignClient.class);
         vendorConfigFeignClient = mock(VendorConfigFeignClient.class);
         vendorFeignClient = mock(VendorFeignClient.class);
+        grayVendorResolver = mock(GrayVendorResolver.class);
         controller = new OpenApiQueryController(
                 openApiQueryService,
                 rateLimitService,
@@ -76,7 +79,8 @@ class OpenApiQueryControllerTest {
                 callSceneService,
                 apiInterfaceFeignClient,
                 vendorConfigFeignClient,
-                vendorFeignClient);
+                vendorFeignClient,
+                grayVendorResolver);
     }
 
     @Test
@@ -147,7 +151,7 @@ class OpenApiQueryControllerTest {
         request.setSceneCode("pre-loan-review");
         request.setParams(params);
 
-        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, "trace-1", request);
+        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, "trace-1", request, null);
 
         assertEquals(200, result.getCode());
         assertEquals("client-req-1", result.getData().getRequestId());
@@ -163,7 +167,7 @@ class OpenApiQueryControllerTest {
 
     @Test
     void shouldRejectMissingApiCode() {
-        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, null, new OpenApiQueryReqVO());
+        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, null, new OpenApiQueryReqVO(), null);
 
         assertEquals(400, result.getCode());
     }

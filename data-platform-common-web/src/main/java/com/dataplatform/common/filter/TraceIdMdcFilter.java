@@ -1,6 +1,7 @@
 package com.dataplatform.common.filter;
 
 import com.dataplatform.common.constant.TraceConstants;
+import com.dataplatform.common.util.TraceContextBridge;
 import org.slf4j.MDC;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -21,10 +22,13 @@ public class TraceIdMdcFilter extends OncePerRequestFilter {
             MDC.put(TraceConstants.TRACE_ID_MDC_KEY, traceId);
             response.setHeader(TraceConstants.TRACE_ID_HEADER, traceId);
         }
+        // Enrich MDC with SkyWalking trace ID if agent is active (no-op otherwise)
+        TraceContextBridge.enrichMdcWithSkyWalkingTraceId();
         try {
             filterChain.doFilter(request, response);
         } finally {
             MDC.remove(TraceConstants.TRACE_ID_MDC_KEY);
+            MDC.remove(TraceContextBridge.SW_TRACE_ID_MDC_KEY);
         }
     }
 }

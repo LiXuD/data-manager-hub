@@ -4,9 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.common.result.PageResult;
+import com.dataplatform.common.enums.GrayRuleStatus;
 import com.dataplatform.masterdata.graylog.entity.GrayRule;
 import com.dataplatform.masterdata.graylog.mapper.GrayRuleMapper;
-import org.springframework.beans.factory.annotation.Autowired;
+import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -40,7 +41,11 @@ public class GraylogService extends ServiceImpl<GrayRuleMapper, GrayRule> {
     public GrayRule getActiveRule(String serviceName) {
         LambdaQueryWrapper<GrayRule> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(GrayRule::getServiceName, serviceName);
-        wrapper.eq(GrayRule::getStatus, "active");
+        wrapper.eq(GrayRule::getStatus, GrayRuleStatus.ACTIVE.getCode());
+        wrapper.and(w -> w.isNull(GrayRule::getStartTime)
+                .or().le(GrayRule::getStartTime, LocalDateTime.now()));
+        wrapper.and(w -> w.isNull(GrayRule::getEndTime)
+                .or().ge(GrayRule::getEndTime, LocalDateTime.now()));
         return getOne(wrapper);
     }
 }

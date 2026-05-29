@@ -73,6 +73,9 @@ junit/
 .docker/
 docker-compose.override.yml
 
+# SkyWalking agent (downloaded by setup-agent.sh)
+skywalking/agent/
+
 # -------- Maven Release --------
 pom.xml.releaseBackup
 pom.xml.versionsBackup

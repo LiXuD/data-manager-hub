@@ -322,14 +322,25 @@ data-platform-governance/            # 治理
 
 ## 📋 V2.0 规划
 
-- [ ] 数据溯源 (SkyWalking)
-  - 第一阶段已完成: governance trace 血缘实体/DDL/API 对齐，JSON body 写入与上下游查询；OpenAPI 调用记录已保存 `X-Trace-Id`
-  - 第二阶段已完成: SkyWalking OAP+UI docker-compose 编排、Java Agent 下载/启动脚本、Feign 拦截器 `TraceFeignRequestInterceptor` 跨域传播 `X-Trace-Id`、`TraceIdMdcFilter` 写入 SLF4J MDC、6 服务日志 pattern 注入 `%X{traceId}`
-  - 待验证: 服务启动后 SkyWalking Agent 自动采集链路、`call_record.trace_id` 与 SkyWalking trace 关联
-- [ ] SDK 多语言生成
-- [ ] 灰度发布增强
+- [x] 数据溯源 (SkyWalking) ✅
+  - 第一阶段: governance trace 血缘实体/DDL/API 对齐，JSON body 写入与上下游查询；OpenAPI 调用记录已保存 `X-Trace-Id`
+  - 第二阶段: SkyWalking OAP+UI docker-compose 编排、Java Agent 下载/启动脚本、Feign 拦截器 `TraceFeignRequestInterceptor` 跨域传播 `X-Trace-Id`、`TraceIdMdcFilter` 写入 SLF4J MDC、6 服务日志 pattern 注入 `%X{traceId}`
+  - 第三阶段 (2026-05-27): `TraceContextBridge` 桥接工具类（反射检测 SkyWalking 可用性，零硬依赖），`TraceIdMdcFilter` 注入 SkyWalking 原生 trace ID 到 MDC，`verify-trace.sh` 验证脚本，`apm-toolkit-trace:9.4.0` provided 依赖，`.gitignore` 排除 agent 目录
+- [x] SDK 多语言生成 ✅
+  - Freemarker 模板引擎驱动，支持 Java/Python/Go 三语言
+  - `ApiSpec` 模型 + `ApiSpec.fromDefaults()` 硬编码 14 个端点
+  - `SDKCli` 纯 Java CLI 入口（`--lang`、`--base-url`、`--output`）
+  - 6 个 Freemarker 模板：client + model 各 3 语言
+  - 向后兼容旧 `generateJavaSDK(baseUrl)` API
+  - 13 个单元测试通过
+- [x] 灰度发布增强 ✅
+  - `GrayVendorResolver` 核心组件：内置 30s TTL 缓存、条件评估（random/header/caller/ip）、权重随机选择
+  - `GraylogService.getActiveRule()` 增强：加入 startTime/endTime 时间窗口校验
+  - `OpenApiQueryController.resolveApiRoute()` 接入灰度路由：2+ 个 active 配置时按规则选择厂商
+  - 静默降级：Feign 异常时回落稳定厂商，无用户感知
+  - 14 个单元测试覆盖全场景
 
 ---
 
 **文档维护**: 按架构变更更新
-**最后更新**: 2026-05-20 18:06
+**最后更新**: 2026-05-27

@@ -2,6 +2,7 @@ package com.dataplatform.access.call.controller;
 
 import com.dataplatform.access.call.entity.CallScene;
 import com.dataplatform.access.call.service.CallSceneService;
+import com.dataplatform.access.call.service.GrayVendorResolver;
 import com.dataplatform.access.call.service.OpenApiQueryService;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
@@ -32,6 +33,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -57,6 +59,7 @@ public class OpenApiQueryController {
     private final ApiInterfaceFeignClient apiInterfaceFeignClient;
     private final VendorConfigFeignClient vendorConfigFeignClient;
     private final VendorFeignClient vendorFeignClient;
+    private final GrayVendorResolver grayVendorResolver;
 
     public OpenApiQueryController(OpenApiQueryService openApiQueryService,
                                   RateLimitService rateLimitService,
@@ -68,7 +71,8 @@ public class OpenApiQueryController {
                                   CallSceneService callSceneService,
                                   ApiInterfaceFeignClient apiInterfaceFeignClient,
                                   VendorConfigFeignClient vendorConfigFeignClient,
-                                  VendorFeignClient vendorFeignClient) {
+                                  VendorFeignClient vendorFeignClient,
+                                  GrayVendorResolver grayVendorResolver) {
         this.openApiQueryService = openApiQueryService;
         this.rateLimitService = rateLimitService;
         this.apiKeyService = apiKeyService;
@@ -80,6 +84,7 @@ public class OpenApiQueryController {
         this.apiInterfaceFeignClient = apiInterfaceFeignClient;
         this.vendorConfigFeignClient = vendorConfigFeignClient;
         this.vendorFeignClient = vendorFeignClient;
+        this.grayVendorResolver = grayVendorResolver;
     }
 
     @PostMapping("/query")
@@ -87,7 +92,8 @@ public class OpenApiQueryController {
             @RequestHeader(value = "X-Api-Key", required = false) String apiKeyHeader,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestHeader(value = "X-Trace-Id", required = false) String traceId,
-            @RequestBody OpenApiQueryReqVO request) {
+            @RequestBody OpenApiQueryReqVO request,
+            HttpServletRequest httpRequest) {
 
         String apiCode = normalize(request != null ? request.getApiCode() : null);
         if (apiCode == null) {
@@ -125,7 +131,9 @@ public class OpenApiQueryController {
             return Result.error(403, "调用场景不存在或未启用");
         }
 
-        ApiRoute route = resolveApiRoute(apiCode);
+        GrayVendorResolver.GrayRequestContext grayCtx = GrayVendorResolver.fromRequest(httpRequest,
+                apiKeyEntity.getCallerId(), caller.getCallerCode());
+        ApiRoute route = resolveApiRoute(apiCode, grayCtx);
         if (route == null) {
             return Result.error(404, "接口配置不存在");
         }
@@ -147,7 +155,8 @@ public class OpenApiQueryController {
             @RequestHeader(value = "X-Api-Key", required = false) String apiKeyHeader,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestHeader(value = "X-Trace-Id", required = false) String traceId,
-            @RequestBody OpenApiBatchQueryReqVO request) {
+            @RequestBody OpenApiBatchQueryReqVO request,
+            HttpServletRequest httpRequest) {
 
         String apiCode = normalize(request != null ? request.getApiCode() : null);
         if (apiCode == null) {
@@ -188,7 +197,9 @@ public class OpenApiQueryController {
             return Result.error(403, "调用场景不存在或未启用");
         }
 
-        ApiRoute route = resolveApiRoute(apiCode);
+        GrayVendorResolver.GrayRequestContext batchGrayCtx = GrayVendorResolver.fromRequest(httpRequest,
+                apiKeyEntity.getCallerId(), caller.getCallerCode());
+        ApiRoute route = resolveApiRoute(apiCode, batchGrayCtx);
         if (route == null) {
             return Result.error(404, "接口配置不存在");
         }
@@ -243,7 +254,7 @@ public class OpenApiQueryController {
         return rateLimitService.checkRateLimit(apiKeyEntity.getApiKey(), rateLimit);
     }
 
-    private ApiRoute resolveApiRoute(String apiCode) {
+    private ApiRoute resolveApiRoute(String apiCode, GrayVendorResolver.GrayRequestContext grayCtx) {
         Result<ApiInterfaceDTO> interfaceResult = apiInterfaceFeignClient.getByInterfaceCode(apiCode);
         ApiInterfaceDTO apiInterface = interfaceResult != null ? interfaceResult.getData() : null;
         if (apiInterface == null || apiInterface.getId() == null) {
@@ -261,6 +272,13 @@ public class OpenApiQueryController {
         }
 
         VendorConfigDTO config = configs.get(0);
+        if (configs.size() >= 2) {
+            VendorConfigDTO graySelected = grayVendorResolver.resolve(apiCode, configs, grayCtx);
+            if (graySelected != null) {
+                config = graySelected;
+            }
+        }
+
         VendorInfoDTO vendor = getVendor(config.getVendorId());
         if (vendor == null || normalize(vendor.getVendorCode()) == null || normalize(config.getDataTypeCode()) == null) {
             return null;
