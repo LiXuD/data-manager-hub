@@ -1,5 +1,9 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import NProgress from 'nprogress'
+import 'nprogress/nprogress.css'
+
+NProgress.configure({ showSpinner: false, trickleSpeed: 100 })
 
 const routes: RouteRecordRaw[] = [
   {
@@ -68,6 +72,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调用记录' }
       },
       {
+        path: '/call-scene',
+        name: 'CallScene',
+        component: () => import('@/views/call-scene/index.vue'),
+        meta: { title: '场景字典' }
+      },
+      {
         path: '/billing',
         name: 'Billing',
         component: () => import('@/views/billing/index.vue'),
@@ -110,6 +120,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '个人中心' }
       }
     ]
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    component: () => import('@/views/not-found/index.vue'),
+    meta: { title: '404' }
   }
 ]
 
@@ -120,6 +136,7 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach((to, _from, next) => {
+  NProgress.start()
   const userStore = useUserStore()
 
   if (to.path === '/login') {
@@ -135,6 +152,10 @@ router.beforeEach((to, _from, next) => {
       next('/login')
     }
   }
+})
+
+router.afterEach(() => {
+  NProgress.done()
 })
 
 export default router

@@ -1,9 +1,8 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
+import { useUserStore } from '@/stores/user'
 
-// Use relative path when Vite proxy is configured (dev mode)
-// All /api/* requests will be proxied to target in vite.config.ts
-const baseURL = import.meta.env.PROD ? import.meta.env.VITE_API_BASE_URL : ''
+const baseURL = import.meta.env.PROD ? import.meta.env.VITE_API_BASE_URL : '/api/v1'
 
 const instance: AxiosInstance = axios.create({
   baseURL,
@@ -31,7 +30,7 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
-    if (res.code === 0 || res.code === 200 || res.code === null || res.code === undefined) {
+    if (res.code === 200) {
       return res
     }
 
@@ -51,8 +50,8 @@ instance.interceptors.response.use(
           break
         case 401:
           msg = '登录已过期，请重新登录'
-          localStorage.removeItem('token')
-          localStorage.removeItem('username')
+          const userStore = useUserStore()
+          userStore.logout()
           window.location.href = '/login'
           break
         case 403:
@@ -93,23 +92,23 @@ instance.interceptors.response.use(
 export default instance
 
 export const request = {
-  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.get(url, config)
     return response as T
   },
-  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.post(url, data, config)
     return response as T
   },
-  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async put<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.put(url, data, config)
     return response as T
   },
-  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async patch<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.patch(url, data, config)
     return response as T
   },
-  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const response = await instance.delete(url, config)
     return response as T
   }

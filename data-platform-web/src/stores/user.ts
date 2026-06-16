@@ -9,6 +9,8 @@ interface UserInfo {
   email?: string
   phone?: string
   roles: string[]
+  tenantId?: number
+  permissions?: string[]
 }
 
 const loadUserInfo = (): UserInfo | null => {
@@ -18,17 +20,38 @@ const loadUserInfo = (): UserInfo | null => {
 
 export const useUserStore = defineStore('user', () => {
   const token = ref<string>(localStorage.getItem(STORAGE_KEYS.TOKEN) || '')
+  const tokenExpiresAt = ref<number | null>(
+    localStorage.getItem('token_expires_at')
+      ? Number(localStorage.getItem('token_expires_at'))
+      : null
+  )
   const userInfo = ref<UserInfo | null>(loadUserInfo())
   const username = computed(() => userInfo.value?.username || '')
-  const isLoggedIn = computed(() => !!token.value)
+  const tenantId = computed(() => userInfo.value?.tenantId)
+  const permissions = computed(() => userInfo.value?.permissions || [])
+  const isLoggedIn = computed(() => !!token.value && !isTokenExpired.value)
+  const isTokenExpired = computed(() => {
+    if (!tokenExpiresAt.value) return false // 无过期时间则不校验
+    return Date.now() > tokenExpiresAt.value
+  })
 
-  const setToken = (newToken: string) => {
+  const hasPermission = (permission: string): boolean => {
+    return permissions.value.includes(permission)
+  }
+
+  const setToken = (newToken: string, expiresAt?: number) => {
     if (newToken === token.value) return
     token.value = newToken
     if (newToken) {
       localStorage.setItem(STORAGE_KEYS.TOKEN, newToken)
+      if (expiresAt) {
+        tokenExpiresAt.value = expiresAt
+        localStorage.setItem('token_expires_at', String(expiresAt))
+      }
     } else {
       localStorage.removeItem(STORAGE_KEYS.TOKEN)
+      localStorage.removeItem('token_expires_at')
+      tokenExpiresAt.value = null
     }
   }
 
@@ -42,8 +65,8 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  const login = (newToken: string, info?: UserInfo) => {
-    setToken(newToken)
+  const login = (newToken: string, info?: UserInfo, expiresAt?: number) => {
+    setToken(newToken, expiresAt)
     if (info) {
       setUserInfo(info)
     }
@@ -56,12 +79,17 @@ export const useUserStore = defineStore('user', () => {
 
   return {
     token,
+    tokenExpiresAt,
     userInfo,
     username,
+    tenantId,
+    permissions,
     isLoggedIn,
+    isTokenExpired,
     setToken,
     setUserInfo,
     login,
-    logout
+    logout,
+    hasPermission
   }
 })

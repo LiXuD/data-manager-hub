@@ -8,63 +8,18 @@
       </div>
     </div>
 
-    <!-- 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="1" x2="12" y2="23"/>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <div class="stat-label">本月总消费</div>
-            <div class="stat-value">¥{{ statsData.totalCost.toLocaleString() }}</div>
-          </div>
-        </div>
+        <StatCard label="本月总消费" :value="statsData.totalCost" prefix="¥" />
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon success">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <div class="stat-label">本月调用次数</div>
-            <div class="stat-value success">{{ statsData.totalCalls.toLocaleString() }}</div>
-          </div>
-        </div>
+        <StatCard label="本月调用次数" :value="statsData.totalCalls" variant="success" />
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon warning">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <polyline points="12 6 12 12 16 14"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <div class="stat-label">平均单价</div>
-            <div class="stat-value">¥{{ statsData.avgCost.toFixed(2) }}</div>
-          </div>
-        </div>
+        <StatCard label="平均单价" :value="statsData.avgCost.toFixed(2)" prefix="¥" variant="warning" />
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon danger">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <div class="stat-label">逾期账单</div>
-            <div class="stat-value danger">{{ statsData.overdueCount }}笔</div>
-          </div>
-        </div>
+        <StatCard label="逾期账单" :value="statsData.overdueCount" suffix="笔" variant="danger" />
       </el-col>
     </el-row>
 
@@ -126,8 +81,8 @@
               </template>
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right">
-              <template #default="{ row }">
-                <el-button type="primary" link>详情</el-button>
+              <template #default="{ row: _row }">
+                <el-button type="primary" link @click="handleViewDetail(_row)">详情</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -244,9 +199,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBillingList } from '@/api/billing'
+import { getBillingList, getBillingRuleList, getBillingStats } from '@/api/billing'
 import { extractPageData } from '@/utils/pagination'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
+// StatCard is globally registered by unplugin-vue-components
 
 interface BillingRecord {
   id: number
@@ -298,12 +254,28 @@ const ruleForm = reactive({
 const dialogVisible = ref(false)
 
 // 统计卡片数据
-const statsData = reactive({
-  totalCost: 45678,
-  totalCalls: 123456,
-  avgCost: 0.37,
-  overdueCount: 3
+const statsData = ref({
+  totalCost: 0,
+  totalCalls: 0,
+  avgCost: 0,
+  overdueCount: 0
 })
+
+const fetchStats = async () => {
+  try {
+    const res = await getBillingStats({})
+    if (res.data) {
+      statsData.value = {
+        totalCost: res.data.totalAmount || 0,
+        totalCalls: res.data.totalCalls || 0,
+        avgCost: res.data.avgPrice || 0,
+        overdueCount: res.data.overdueCount || 0
+      }
+    }
+  } catch {
+    // Keep default values on error
+  }
+}
 
 const fetchList = async () => {
   loading.value = true
@@ -323,12 +295,12 @@ const fetchList = async () => {
 }
 
 const fetchRules = async () => {
-  ruleData.value = [
-    { id: 1, vendorName: '企查查', dataType: '工商信息', unitPrice: 0.3, tierMin: 0, tierMax: 100000, discount: 1.0, status: 'active' },
-    { id: 2, vendorName: '天眼查', dataType: '企业征信', unitPrice: 2.5, tierMin: 0, tierMax: 50000, discount: 1.0, status: 'active' },
-    { id: 3, vendorName: '企查查', dataType: '工商信息', unitPrice: 0.25, tierMin: 100000, tierMax: 500000, discount: 0.85, status: 'tier' },
-    { id: 4, vendorName: '天眼查', dataType: '企业征信', unitPrice: 2.0, tierMin: 50000, tierMax: 200000, discount: 0.8, status: 'tier' }
-  ]
+  try {
+    const res = await getBillingRuleList({ page: 1, pageSize: 100 })
+    ruleData.value = res.data?.list || []
+  } catch {
+    ruleData.value = []
+  }
 }
 
 const handleSearch = () => {
@@ -354,7 +326,7 @@ const handleEditRule = (row: BillingRule) => {
   dialogVisible.value = true
 }
 
-const handleDeleteRule = async (row: BillingRule) => {
+const handleDeleteRule = async (_row: BillingRule) => {
   try {
     await ElMessageBox.confirm(`确定要删除该计费规则吗？`, '提示', { type: 'warning' })
     ElMessage.success('删除成功')
@@ -376,12 +348,15 @@ const handleExport = () => {
   ElMessage.info('导出功能开发中...')
 }
 
+const handleViewDetail = (row: BillingRecord) => {
+  ElMessage.info(`查看账单详情: ${row.id}`)
+}
+
 const getStatusType = (status: string) => getTagType('billing', status)
 const getStatusTextLocalized = (status: string) => getStatusText('billing', status)
 
-onMounted(() => {
-  fetchList()
-  fetchRules()
+onMounted(async () => {
+  await Promise.all([fetchStats(), fetchList(), fetchRules()])
 })
 </script>
 
@@ -393,38 +368,6 @@ onMounted(() => {
 .header-desc { font-size: 14px; color: var(--color-text-tertiary); margin: 0; }
 
 .stats-row { margin-bottom: 20px; }
-.stat-card {
-  background: var(--color-bg-lighter);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  transition: all 0.3s ease;
-}
-.stat-card:hover { border-color: var(--color-primary); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 212, 170, 0.1); }
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--color-primary), #00A080);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.stat-icon svg { width: 24px; height: 24px; color: #0A1628; }
-.stat-icon.success { background: linear-gradient(135deg, #67C23A, #5Daf34); }
-.stat-icon.warning { background: linear-gradient(135deg, #E6A23C, #d48806); }
-.stat-icon.danger { background: linear-gradient(135deg, #F56C6C, #e04545); }
-
-.stat-info { flex: 1; min-width: 0; }
-.stat-label { font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 6px; }
-.stat-value { font-size: 24px; font-weight: 700; color: var(--color-text-primary); font-family: var(--font-mono); }
-.stat-value.success { color: #67C23A; }
-.stat-value.danger { color: #F56C6C; }
 
 .search-card { margin-bottom: 20px; }
 .search-bar, .tool-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }

@@ -11,6 +11,10 @@ export const getVendorList = (params: {
   return request.get<ListResponse<Vendor>>('/vendor/list', { params })
 }
 
+export const getVendorAll = () => {
+  return request.get<{ data: Vendor[] }>('/vendor/all')
+}
+
 export const getVendorDetail = (id: string | number) => {
   return request.get<Vendor>(`/vendor/${id}`)
 }

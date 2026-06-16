@@ -45,6 +45,15 @@ export const statusTypeMap = {
     pending: 'warning',
     resolved: 'success',
     firing: 'danger'
+  } as Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'>,
+
+  // HTTP methods
+  httpMethod: {
+    GET: 'success',
+    POST: 'primary',
+    PUT: 'warning',
+    DELETE: 'danger',
+    PATCH: 'info'
   } as Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'>
 } as const
 

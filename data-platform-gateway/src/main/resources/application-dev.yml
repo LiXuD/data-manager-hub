@@ -1,0 +1,162 @@
+server:
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+
+spring:
+  main:
+    web-application-type: reactive
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.jdbc.DataSourceHealthContributorAutoConfiguration
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+        namespace: dev
+        group: DEFAULT_GROUP
+        enabled: true
+      config:
+        enabled: false
+    gateway:
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origin-patterns: "*"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowed-headers:
+              - "*"
+            allow-credentials: true
+            max-age: 3600
+      routes:
+        - id: openapi-access-service
+          uri: lb://data-platform-access
+          predicates:
+            - Path=/openapi/**
+        - id: vendor-service
+          uri: lb://data-platform-masterdata
+          predicates:
+            - Path=/api/v1/vendor/**,/api/v1/config/**,/api/v1/datatype/**,/api/v1/data/**
+          filters:
+            - StripPrefix=2
+        - id: caller-service
+          uri: lb://data-platform-access
+          predicates:
+            - Path=/api/v1/caller/**
+          filters:
+            - StripPrefix=2
+        - id: billing-service
+          uri: lb://data-platform-billing
+          predicates:
+            - Path=/api/v1/billing/**
+          filters:
+            - StripPrefix=2
+        - id: call-service
+          uri: lb://data-platform-access
+          predicates:
+            - Path=/api/v1/call-record/**
+          filters:
+            - StripPrefix=2
+        - id: call-scene-service
+          uri: lb://data-platform-access
+          predicates:
+            - Path=/api/v1/call-scene/**
+          filters:
+            - StripPrefix=2
+        - id: monitor-service
+          uri: lb://data-platform-governance
+          predicates:
+            - Path=/api/v1/alert/**
+          filters:
+            - StripPrefix=2
+        - id: tenant-service
+          uri: lb://data-platform-identity
+          predicates:
+            - Path=/api/v1/tenant/**
+          filters:
+            - StripPrefix=2
+        - id: iam-service
+          uri: lb://data-platform-identity
+          predicates:
+            - Path=/api/v1/user/**,/api/v1/auth/**,/api/v1/role/**,/api/v1/permission/**
+          filters:
+            - StripPrefix=2
+        - id: log-service
+          uri: lb://data-platform-governance
+          predicates:
+            - Path=/api/v1/log/**
+          filters:
+            - StripPrefix=2
+        - id: graylog-service
+          uri: lb://data-platform-masterdata
+          predicates:
+            - Path=/api/v1/graylog/**
+          filters:
+            - StripPrefix=2
+        - id: security-service
+          uri: lb://data-platform-identity
+          predicates:
+            - Path=/api/v1/security/**
+          filters:
+            - StripPrefix=2
+        - id: trace-service
+          uri: lb://data-platform-governance
+          predicates:
+            - Path=/api/v1/trace/**
+          filters:
+            - StripPrefix=2
+        - id: quality-service
+          uri: lb://data-platform-governance
+          predicates:
+            - Path=/api/v1/quality/**
+          filters:
+            - StripPrefix=2
+        - id: interface-service
+          uri: lb://data-platform-masterdata
+          predicates:
+            - Path=/api/v1/interface/**
+          filters:
+            - StripPrefix=2
+
+sa-token:
+  token-name: Authorization
+  timeout: 7200
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+  token-prefix: Bearer
+  check-exclude-paths:
+    - /actuator/**
+    - /health/**
+
+spring.data.redis:
+  host: localhost
+  port: 6379
+  password: redis_password
+  database: 0
+
+gateway:
+  rate-limit:
+    default-window-sec: 60
+    default-max-requests: 100
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  health:
+    db:
+      enabled: false

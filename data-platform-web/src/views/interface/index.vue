@@ -17,7 +17,13 @@
     <el-card class="search-card">
       <div class="search-bar">
         <div class="search-inputs">
-          <el-select v-model="searchForm.vendorId" placeholder="厂商" clearable class="search-select">
+          <el-select
+            v-model="searchForm.vendorId"
+            placeholder="厂商"
+            clearable
+            class="search-select"
+            @change="handleVendorSearchChange"
+          >
             <el-option
               v-for="vendor in vendorOptions"
               :key="vendor.id"
@@ -30,7 +36,7 @@
             <el-option
               v-for="dt in dataTypeOptions"
               :key="dt.id"
-              :label="dt.typeName"
+              :label="dt.dataTypeName"
               :value="dt.id"
             />
           </el-select>
@@ -94,10 +100,11 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+              <el-button type="warning" link @click="handleStats(row)">统计</el-button>
               <el-button type="success" link @click="handleConfig(row)">配置</el-button>
               <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
             </div>
@@ -129,39 +136,50 @@
       @success="handleFormSuccess"
     />
 
-    <!-- API配置弹窗 -->
-    <ApiConfigForm
+    <!-- 厂商接口配置弹窗 -->
+    <VendorInterfaceConfig
       v-model="configVisible"
-      :interface-id="currentRow?.id"
+      :interface-data="currentRow"
       @success="handleConfigSuccess"
+    />
+
+    <!-- 统计弹窗 -->
+    <InterfaceStats
+      v-model="statsVisible"
+      :interface-data="currentRow"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getInterfaceList,
+  getInterfaceOptions,
   deleteInterface,
   updateInterfaceStatus
 } from '@/api/interface'
-import { getVendorList } from '@/api/vendor'
-import { getDataTypeList } from '@/api/datatype'
-import type { ApiInterface, Vendor } from '@/types'
+import { useCacheStore } from '@/stores'
+import type { ApiInterface } from '@/types'
 import InterfaceForm from './components/InterfaceForm.vue'
-import ApiConfigForm from './components/ApiConfigForm.vue'
+import VendorInterfaceConfig from './components/VendorInterfaceConfig.vue'
+import InterfaceStats from './components/InterfaceStats.vue'
+import { COMMON_STATUS } from '@/constants'
+
+const cacheStore = useCacheStore()
 
 // 搜索表单
 const searchForm = reactive({
-  vendorId: undefined as number | undefined,
-  dataTypeId: undefined as number | undefined,
+  vendorId: undefined as number | string | undefined,
+  dataTypeId: undefined as number | string | undefined,
   status: ''
 })
 
 // 表格数据
 const tableData = ref<ApiInterface[]>([])
 const loading = ref(false)
+const vendorInterfaceOptions = ref<ApiInterface[]>([])
 
 // 分页
 const pagination = reactive({
@@ -170,9 +188,17 @@ const pagination = reactive({
   total: 0
 })
 
-// 下拉选项
-const vendorOptions = ref<Vendor[]>([])
-const dataTypeOptions = ref<{ id: number; typeName: string }[]>([])
+// 从缓存获取下拉选项（使用computed确保响应式更新）
+const vendorOptions = computed(() => {
+  return cacheStore.vendorOptions
+})
+const dataTypeOptions = computed(() => {
+  if (!searchForm.vendorId) {
+    return cacheStore.dataTypeOptions
+  }
+  const ids = new Set(vendorInterfaceOptions.value.map(item => item.dataTypeId))
+  return cacheStore.dataTypeOptions.filter(item => item.id && ids.has(item.id))
+})
 
 // 表单
 const formVisible = ref(false)
@@ -182,25 +208,8 @@ const currentRow = ref<ApiInterface | null>(null)
 // 配置弹窗
 const configVisible = ref(false)
 
-// 加载厂商列表
-const loadVendors = async () => {
-  try {
-    const res = await getVendorList({ page: 1, pageSize: 1000, status: 'active' })
-    vendorOptions.value = res.data || []
-  } catch (error) {
-    console.error('加载厂商失败:', error)
-  }
-}
-
-// 加载数据类型列表
-const loadDataTypes = async () => {
-  try {
-    const res = await getDataTypeList({ page: 1, pageSize: 1000, status: 'active' })
-    dataTypeOptions.value = res.data || []
-  } catch (error) {
-    console.error('加载数据类型失败:', error)
-  }
-}
+// 统计弹窗
+const statsVisible = ref(false)
 
 // 加载数据
 const loadData = async () => {
@@ -209,12 +218,27 @@ const loadData = async () => {
     const params = {
       page: pagination.page,
       pageSize: pagination.pageSize,
-      vendorId: searchForm.vendorId,
-      dataTypeId: searchForm.dataTypeId,
-      status: searchForm.status as 'active' | 'inactive' | undefined
+      vendorId: searchForm.vendorId != null ? Number(searchForm.vendorId) : undefined,
+      dataTypeId: searchForm.dataTypeId != null ? Number(searchForm.dataTypeId) : undefined,
+      status: searchForm.status as typeof COMMON_STATUS.ACTIVE | typeof COMMON_STATUS.INACTIVE | undefined
     }
     const res = await getInterfaceList(params)
-    tableData.value = res.data || []
+    // 处理不同格式的响应
+    let list: ApiInterface[] = []
+    if (res) {
+      const data = (res as any).data
+      const records = (res as any).records
+      if (Array.isArray(data)) {
+        list = data
+      } else if (data && Array.isArray(data.records)) {
+        list = data.records
+      } else if (Array.isArray(records)) {
+        list = records
+      } else if (Array.isArray(res)) {
+        list = res
+      }
+    }
+    tableData.value = list
     pagination.total = res.total || 0
   } catch (error) {
     console.error('加载失败:', error)
@@ -228,6 +252,23 @@ const loadData = async () => {
 const handleSearch = () => {
   pagination.page = 1
   loadData()
+}
+
+const handleVendorSearchChange = async () => {
+  searchForm.dataTypeId = undefined
+  vendorInterfaceOptions.value = []
+  if (!searchForm.vendorId) {
+    return
+  }
+  try {
+    const res = await getInterfaceOptions({
+      vendorId: Number(searchForm.vendorId),
+      status: COMMON_STATUS.ACTIVE
+    })
+    vendorInterfaceOptions.value = res.data || []
+  } catch (error) {
+    console.error('加载厂商接口选项失败:', error)
+  }
 }
 
 // 重置
@@ -259,6 +300,12 @@ const handleConfig = (row: ApiInterface) => {
   configVisible.value = true
 }
 
+// 统计
+const handleStats = (row: ApiInterface) => {
+  currentRow.value = { ...row }
+  statsVisible.value = true
+}
+
 // 删除
 const handleDelete = async (row: ApiInterface) => {
   try {
@@ -281,10 +328,10 @@ const handleDelete = async (row: ApiInterface) => {
 // 状态切换
 const handleStatusChange = async (row: ApiInterface) => {
   try {
-    await updateInterfaceStatus(row.id, row.status as 'active' | 'inactive')
-    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+    await updateInterfaceStatus(row.id, row.status as typeof COMMON_STATUS.ACTIVE | typeof COMMON_STATUS.INACTIVE)
+    ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
   } catch (error) {
-    row.status = row.status === 'active' ? 'inactive' : 'active'
+    row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
     ElMessage.error('状态更新失败，请稍后重试')
   }
 }
@@ -296,13 +343,13 @@ const handleFormSuccess = () => {
 
 // 配置保存成功
 const handleConfigSuccess = () => {
-  ElMessage.success('配置保存成功')
+  loadData()
 }
 
-onMounted(() => {
-  loadVendors()
-  loadDataTypes()
-  loadData()
+onMounted(async () => {
+  // 先确保缓存数据加载完成
+  await cacheStore.loadAll()
+  await loadData()
 })
 </script>
 

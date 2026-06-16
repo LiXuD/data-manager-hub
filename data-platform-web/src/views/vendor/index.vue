@@ -175,8 +175,8 @@
           </div>
           <div class="detail-item">
             <span class="label">状态</span>
-            <el-tag :type="currentRow?.status === 'active' ? 'success' : 'danger'" size="small">
-              {{ currentRow?.status === 'active' ? '启用' : '禁用' }}
+            <el-tag :type="currentRow?.status === COMMON_STATUS.ACTIVE ? 'success' : 'danger'" size="small">
+              {{ currentRow?.status === COMMON_STATUS.ACTIVE ? '启用' : '禁用' }}
             </el-tag>
           </div>
           <div class="detail-item">
@@ -198,6 +198,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getVendorList, updateVendorStatus, deleteVendor } from '@/api/vendor'
 import type { Vendor } from '@/types'
 import VendorForm from './components/VendorForm.vue'
+import { COMMON_STATUS } from '@/constants/status'
 
 // 搜索表单
 const searchForm = reactive({
@@ -325,10 +326,10 @@ const handleDelete = async (row: Vendor) => {
 // 状态切换
 const handleStatusChange = async (row: Vendor) => {
   try {
-    await updateVendorStatus(String(row.id), row.status as 'active' | 'inactive')
-    ElMessage.success(row.status === 'active' ? '已启用' : '已禁用')
+    await updateVendorStatus(String(row.id), row.status as typeof COMMON_STATUS.ACTIVE | typeof COMMON_STATUS.INACTIVE)
+    ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
   } catch (error) {
-    row.status = row.status === 'active' ? 'inactive' : 'active'
+    row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
     ElMessage.error('状态更新失败，请稍后重试')
   }
 }

@@ -171,8 +171,7 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
 
     @Override
     public void recordDailyBilling(LocalDate billingDate) {
-        // 从call_record聚合数据，写入billing_daily
-        // TODO: 实际应从Kafka消费或查询数据库
+        // Daily aggregation is updated incrementally by BillingDailyEventConsumer.
     }
 
     @Override

@@ -3,23 +3,24 @@ package com.dataplatform.billing.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.dataplatform.billing.entity.BillingDaily;
 import com.dataplatform.billing.entity.BillingReconciliation;
-import com.dataplatform.billing.mapper.BillingDailyMapper;
 import com.dataplatform.billing.mapper.BillingReconciliationMapper;
+import com.dataplatform.billing.mapper.CallRecordMapper;
 import com.dataplatform.billing.service.ReconciliationService;
+import com.dataplatform.governance.api.dto.AlertRecordCreateDTO;
+import com.dataplatform.governance.api.feign.GovernanceFeignClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliationMapper, BillingReconciliation>
@@ -27,76 +28,67 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
 
     private static final Logger log = LoggerFactory.getLogger(ReconciliationServiceImpl.class);
 
-    // 差异率阈值
-    private static final BigDecimal DIFF_RATE_WARNING = new BigDecimal("0.01");   // 1%
-    private static final BigDecimal DIFF_RATE_ERROR = new BigDecimal("0.05");     // 5%
-
     @Autowired
-    private BillingDailyMapper billingDailyMapper;
+    private CallRecordMapper callRecordMapper;
+
+    @Autowired(required = false)
+    private GovernanceFeignClient governanceFeignClient;
 
     @Override
     public void reconcile(Long vendorId, LocalDate billingDate) {
         log.info("开始对账: vendorId={}, date={}", vendorId, billingDate);
 
-        // 1. 获取平台调用数据 (从billing_daily聚合)
-        LambdaQueryWrapper<BillingDaily> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BillingDaily::getBillingDate, billingDate);
+        LambdaQueryWrapper<BillingReconciliation> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BillingReconciliation::getBillingDate, billingDate);
         if (vendorId != null) {
-            wrapper.eq(BillingDaily::getVendorId, vendorId);
+            wrapper.eq(BillingReconciliation::getVendorId, vendorId);
         }
 
-        List<BillingDaily> dailyList = billingDailyMapper.selectList(wrapper);
+        List<BillingReconciliation> rows = list(wrapper);
 
-        for (BillingDaily daily : dailyList) {
-            createReconciliationRecord(daily, billingDate);
+        for (BillingReconciliation row : rows) {
+            reconcileImportedRow(row);
         }
 
-        log.info("对账完成: 共{}条记录", dailyList.size());
+        log.info("对账完成: 共{}条记录", rows.size());
     }
 
-    /**
-     * 创建对账记录
-     */
-    private void createReconciliationRecord(BillingDaily daily, LocalDate billingDate) {
-        Long vendorId = daily.getVendorId();
+    @Override
+    public int importVendorBills(String csvContent) {
+        List<VendorBillCsvParser.VendorBillRow> rows = VendorBillCsvParser.parse(csvContent);
+        for (VendorBillCsvParser.VendorBillRow row : rows) {
+            BillingReconciliation reconciliation = findByVendorAndDate(row.vendorId(), row.billingDate());
+            if (reconciliation == null) {
+                reconciliation = new BillingReconciliation();
+                reconciliation.setCreatedAt(LocalDateTime.now());
+            }
+            reconciliation.setVendorId(row.vendorId());
+            reconciliation.setVendorName(row.vendorName());
+            reconciliation.setBillingDate(row.billingDate());
+            reconciliation.setVendorCount(row.vendorCount());
+            reconciliation.setVendorAmount(row.vendorAmount());
+            reconcileImportedRow(reconciliation);
+        }
+        return rows.size();
+    }
 
-        // 平台数据
-        Long platformCount = daily.getCallCount();
-        BigDecimal platformAmount = daily.getTotalCost();
+    private void reconcileImportedRow(BillingReconciliation reconciliation) {
+        Map<String, Object> platform = callRecordMapper.selectPlatformSummaryByVendorAndDate(
+                reconciliation.getVendorId(), reconciliation.getBillingDate());
 
-        // TODO: 实际应该调用厂商对账API获取vendorCount和vendorAmount
-        // 这里用模拟数据，实际需要对接厂商的账单接口
-        Long vendorCount = platformCount;  // 假设一致
-        BigDecimal vendorAmount = platformAmount;
+        Long platformCount = longValue(platform.get("platform_count"));
+        BigDecimal platformAmount = decimalValue(platform.get("platform_amount"));
+        Long vendorCount = Objects.requireNonNullElse(reconciliation.getVendorCount(), 0L);
+        BigDecimal vendorAmount = Objects.requireNonNullElse(reconciliation.getVendorAmount(), BigDecimal.ZERO);
 
-        // 计算差异
         Long diffCount = platformCount - vendorCount;
         BigDecimal diffAmount = platformAmount.subtract(vendorAmount);
 
-        // 计算差异率
-        BigDecimal diffRate = BigDecimal.ZERO;
-        if (platformCount > 0) {
-            diffRate = BigDecimal.valueOf(diffCount)
-                .divide(BigDecimal.valueOf(platformCount), 6, RoundingMode.HALF_UP);
-        }
+        String previousStatus = reconciliation.getStatus();
+        BigDecimal diffRate = VendorBillCsvParser.calculateDiffRate(
+                diffCount, platformCount, vendorCount, diffAmount, platformAmount, vendorAmount);
+        String status = VendorBillCsvParser.classifyStatus(diffRate);
 
-        // 判断状态
-        String status;
-        if (diffRate.abs().compareTo(DIFF_RATE_WARNING) <= 0) {
-            status = "matched";  // 差异≤1%，自动匹配
-        } else if (diffRate.abs().compareTo(DIFF_RATE_ERROR) <= 0) {
-            status = "diff_warning";  // 1%<差异≤5%，生成报告，人工确认
-        } else {
-            status = "diff_error";  // 差异>5%，触发告警
-            log.error("对账差异过大: vendorId={}, date={}, diffRate={}",
-                     vendorId, billingDate, diffRate);
-        }
-
-        // 保存对账记录
-        BillingReconciliation reconciliation = new BillingReconciliation();
-        reconciliation.setVendorId(vendorId);
-        reconciliation.setVendorName("vendor_" + vendorId);
-        reconciliation.setBillingDate(billingDate);
         reconciliation.setPlatformCount(platformCount);
         reconciliation.setPlatformAmount(platformAmount);
         reconciliation.setVendorCount(vendorCount);
@@ -105,9 +97,20 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
         reconciliation.setDiffAmount(diffAmount);
         reconciliation.setDiffRate(diffRate);
         reconciliation.setStatus(status);
-        reconciliation.setCreatedAt(LocalDateTime.now());
+        reconciliation.setReconciledAt(LocalDateTime.now());
+        if (reconciliation.getCreatedAt() == null) {
+            reconciliation.setCreatedAt(LocalDateTime.now());
+        }
 
-        save(reconciliation);
+        if (reconciliation.getId() == null) {
+            save(reconciliation);
+        } else {
+            updateById(reconciliation);
+        }
+
+        if (shouldPublishDiffAlert(previousStatus, status)) {
+            publishDiffAlert(reconciliation);
+        }
     }
 
     @Override
@@ -182,5 +185,54 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
         stats.put("matchRate", total > 0 ? (double) matched / total : 0);
 
         return stats;
+    }
+
+    private BillingReconciliation findByVendorAndDate(Long vendorId, LocalDate billingDate) {
+        return getOne(new LambdaQueryWrapper<BillingReconciliation>()
+                .eq(BillingReconciliation::getVendorId, vendorId)
+                .eq(BillingReconciliation::getBillingDate, billingDate)
+                .last("LIMIT 1"));
+    }
+
+    private Long longValue(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return value == null ? 0L : Long.parseLong(value.toString());
+    }
+
+    private BigDecimal decimalValue(Object value) {
+        if (value instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (value instanceof Number number) {
+            return BigDecimal.valueOf(number.doubleValue());
+        }
+        return value == null ? BigDecimal.ZERO : new BigDecimal(value.toString());
+    }
+
+    private boolean shouldPublishDiffAlert(String previousStatus, String status) {
+        return !"matched".equals(status) && !status.equals(previousStatus);
+    }
+
+    private void publishDiffAlert(BillingReconciliation reconciliation) {
+        if (governanceFeignClient == null) {
+            log.warn("GovernanceFeignClient不可用，跳过对账差异告警: reconciliationId={}", reconciliation.getId());
+            return;
+        }
+        try {
+            AlertRecordCreateDTO dto = new AlertRecordCreateDTO();
+            dto.setAlertType("billing_reconciliation");
+            dto.setAlertTitle("计费对账差异");
+            dto.setLevel("diff_error".equals(reconciliation.getStatus()) ? "error" : "warning");
+            dto.setAlertMessage("厂商 " + reconciliation.getVendorName()
+                    + " 在 " + reconciliation.getBillingDate()
+                    + " 存在对账差异，差异率 " + reconciliation.getDiffRate());
+            dto.setTriggeredValue(reconciliation.getDiffRate());
+            dto.setStatus("pending");
+            governanceFeignClient.createAlertRecord(dto);
+        } catch (Exception ex) {
+            log.warn("发送对账差异告警失败: reconciliationId={}", reconciliation.getId(), ex);
+        }
     }
 }

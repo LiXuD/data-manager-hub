@@ -18,8 +18,8 @@
     <el-card class="search-card">
       <div class="search-bar">
         <div class="search-inputs">
-          <el-input v-model="searchForm.typeName" placeholder="搜索类型名称" clearable class="search-input" @keyup.enter="handleSearch" />
-          <el-select v-model="searchForm.category" placeholder="分类" clearable class="search-select">
+          <el-input v-model="searchForm.dataTypeName" placeholder="搜索类型名称" clearable class="search-input" @keyup.enter="handleSearch" />
+          <el-select v-model="searchForm.dataCategory" placeholder="分类" clearable class="search-select">
             <el-option v-for="item in categoryOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
           <el-select v-model="searchForm.status" placeholder="状态" clearable class="search-select">
@@ -38,15 +38,15 @@
     <el-card class="table-card">
       <el-table :data="tableData" v-loading="loading" stripe>
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="typeCode" label="类型编码" width="180">
+        <el-table-column prop="dataTypeCode" label="类型编码" width="180">
           <template #default="{ row }">
-            <span class="code-tag">{{ row.typeCode }}</span>
+            <span class="code-tag">{{ row.dataTypeCode }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="typeName" label="类型名称" min-width="150" />
-        <el-table-column prop="category" label="分类" width="120">
+        <el-table-column prop="dataTypeName" label="类型名称" min-width="150" />
+        <el-table-column prop="dataCategory" label="分类" width="120">
           <template #default="{ row }">
-            <el-tag :type="getCategoryTag(row.category)" size="small">{{ categoryMap[row.category] || row.category }}</el-tag>
+            <el-tag :type="getCategoryTag(row.dataCategory)" size="small">{{ categoryMap[row.dataCategory] || row.dataCategory }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
@@ -84,13 +84,13 @@
     <el-dialog v-model="dialogVisible" :title="form.id ? '编辑数据类型' : '新增数据类型'" width="500px" class="form-dialog">
       <el-form :model="form" label-width="100px">
         <el-form-item label="类型编码" required>
-          <el-input v-model="form.typeCode" placeholder="如: BUSINESS_INFO" />
+          <el-input v-model="form.dataTypeCode" placeholder="如: BUSINESS_INFO" />
         </el-form-item>
         <el-form-item label="类型名称" required>
-          <el-input v-model="form.typeName" placeholder="请输入类型名称" />
+          <el-input v-model="form.dataTypeName" placeholder="请输入类型名称" />
         </el-form-item>
         <el-form-item label="分类" required>
-          <el-select v-model="form.category" style="width: 100%">
+          <el-select v-model="form.dataCategory" style="width: 100%">
             <el-option v-for="item in categoryOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
@@ -106,7 +106,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -115,17 +115,25 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { request } from '@/utils/request'
+import {
+  getDataTypeList,
+  createDataType,
+  updateDataType,
+  deleteDataType,
+  updateDataTypeStatus
+} from '@/api/datatype'
+import { COMMON_STATUS } from '@/constants'
 
-interface DataType { id: number; typeCode: string; typeName: string; category: string; description: string; status: string; createdAt: string }
+interface DataType { id: number; dataTypeCode: string; dataTypeName: string; dataCategory: string; description: string; status: string; createdAt: string }
 
 const loading = ref(false)
+const submitting = ref(false)
 const tableData = ref<DataType[]>([])
 const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
-const searchForm = reactive({ typeName: '', category: '', status: '' })
+const searchForm = reactive({ dataTypeName: '', dataCategory: '', status: '' })
 const dialogVisible = ref(false)
-const form = reactive({ id: null as number | null, typeCode: '', typeName: '', category: '', description: '', status: 'active' })
+const form = reactive({ id: null as number | null, dataTypeCode: '', dataTypeName: '', dataCategory: '', description: '', status: COMMON_STATUS.ACTIVE })
 
 const categoryOptions = [
   { label: '工商信息', value: 'business' },
@@ -141,39 +149,73 @@ const getCategoryTag = (category: string): 'primary' | 'success' | 'warning' | '
   return map[category] || 'info'
 }
 
-interface DataTypeListResponse {
-  data?: { records?: DataType[]; total?: number } | DataType[]
-  total?: number
-}
-
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<DataTypeListResponse>('/api/v1/data-type/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
+    const res = await getDataTypeList({ page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm })
     const data = res.data
     if (data && 'records' in data && Array.isArray(data.records)) {
       tableData.value = data.records
       total.value = data.total || 0
     } else if (Array.isArray(data)) {
       tableData.value = data
-      total.value = res.total || 0
+      total.value = data.length || 0
     }
   } catch {
-    tableData.value = [
-      { id: 1, typeCode: 'BUSINESS_INFO', typeName: '工商信息', category: 'business', description: '企业工商信息查询', status: 'active', createdAt: '2026-01-01 10:00:00' },
-      { id: 2, typeCode: 'CREDIT_QUERY', typeName: '企业征信', category: 'financial', description: '企业征信报告查询', status: 'active', createdAt: '2026-01-02 10:00:00' }
-    ]
-    total.value = 2
+    tableData.value = []
+    total.value = 0
   } finally { loading.value = false }
 }
 
 const handleSearch = () => { pagination.currentPage = 1; fetchList() }
-const handleReset = () => { searchForm.typeName = ''; searchForm.category = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
-const handleAdd = () => { Object.assign(form, { id: null, typeCode: '', typeName: '', category: '', description: '', status: 'active' }); dialogVisible.value = true }
+const handleReset = () => { searchForm.dataTypeName = ''; searchForm.dataCategory = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
+const handleAdd = () => { Object.assign(form, { id: null, dataTypeCode: '', dataTypeName: '', dataCategory: '', description: '', status: 'active' }); dialogVisible.value = true }
 const handleEdit = (row: DataType) => { Object.assign(form, { ...row }); dialogVisible.value = true }
-const handleDelete = async (row: DataType) => { await ElMessageBox.confirm(`确定要删除数据类型"${row.typeName}"吗？`, '提示', { type: 'warning' }); ElMessage.success('删除成功'); fetchList() }
-const handleSubmit = async () => { if (!form.typeCode || !form.typeName) { ElMessage.warning('请填写类型编码和类型名称'); return } ElMessage.success('保存成功'); dialogVisible.value = false; fetchList() }
-const handleStatusChange = (row: DataType) => { ElMessage.success(row.status === 'active' ? '已启用' : '已禁用') }
+
+const handleDelete = async (row: DataType) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除数据类型"${row.dataTypeName}"吗？`, '提示', { type: 'warning' })
+    await deleteDataType(row.id)
+    ElMessage.success('删除成功')
+    fetchList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+const handleSubmit = async () => {
+  if (!form.dataTypeCode || !form.dataTypeName) {
+    ElMessage.warning('请填写类型编码和类型名称')
+    return
+  }
+  submitting.value = true
+  try {
+    if (form.id) {
+      await updateDataType(form.id, { ...form, id: undefined })
+    } else {
+      await createDataType({ ...form, id: undefined })
+    }
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    fetchList()
+  } catch (error) {
+    ElMessage.error('保存失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const handleStatusChange = async (row: DataType) => {
+  try {
+    await updateDataTypeStatus(row.id, row.status)
+    ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
+  } catch (error) {
+    row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
+    ElMessage.error('状态更新失败')
+  }
+}
 
 onMounted(() => { fetchList() })
 </script>

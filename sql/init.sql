@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS vendor_info (
     contact_person VARCHAR(50),
     contact_phone VARCHAR(20),
     contact_email VARCHAR(100),
+    secret_key VARCHAR(128),
     contract_start DATE,
     contract_end DATE,
     created_by BIGINT,
@@ -121,6 +122,24 @@ CREATE TABLE IF NOT EXISTS caller_info (
 CREATE INDEX idx_caller_code ON caller_info(caller_code);
 CREATE INDEX idx_caller_tenant ON caller_info(tenant_id);
 
+CREATE TABLE IF NOT EXISTS caller_product (
+    id BIGSERIAL PRIMARY KEY,
+    caller_id BIGINT NOT NULL,
+    product_code VARCHAR(64) NOT NULL,
+    product_name VARCHAR(100) NOT NULL,
+    cache_scope VARCHAR(20) NOT NULL DEFAULT 'GLOBAL',
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted BOOLEAN NOT NULL DEFAULT false,
+    CONSTRAINT fk_caller_product_caller FOREIGN KEY (caller_id) REFERENCES caller_info(id),
+    UNIQUE(caller_id, product_code)
+);
+
+CREATE INDEX idx_caller_product_caller ON caller_product(caller_id);
+CREATE INDEX idx_caller_product_code ON caller_product(product_code);
+CREATE INDEX idx_caller_product_status ON caller_product(status);
+
 -- 6. API Key表
 CREATE TABLE IF NOT EXISTS api_key (
     id BIGSERIAL PRIMARY KEY,
@@ -141,27 +160,88 @@ CREATE TABLE IF NOT EXISTS api_key (
 CREATE INDEX idx_api_key ON api_key(api_key);
 CREATE INDEX idx_apikey_caller ON api_key(caller_id);
 
+CREATE TABLE IF NOT EXISTS api_key_product (
+    id BIGSERIAL PRIMARY KEY,
+    api_key_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    CONSTRAINT fk_apikey_product_key FOREIGN KEY (api_key_id) REFERENCES api_key(id),
+    CONSTRAINT fk_apikey_product_product FOREIGN KEY (product_id) REFERENCES caller_product(id),
+    UNIQUE(api_key_id, product_id)
+);
+
+CREATE INDEX idx_apikey_product_key ON api_key_product(api_key_id);
+CREATE INDEX idx_apikey_product_product ON api_key_product(product_id);
+
+CREATE TABLE IF NOT EXISTS call_scene (
+    id BIGSERIAL PRIMARY KEY,
+    scene_code VARCHAR(64) NOT NULL UNIQUE,
+    scene_name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    description VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE INDEX idx_call_scene_code ON call_scene(scene_code);
+CREATE INDEX idx_call_scene_status ON call_scene(status);
+
 -- 7. 调用记录表 (分区表)
 CREATE TABLE IF NOT EXISTS call_record (
     id BIGSERIAL,
     request_id VARCHAR(64) NOT NULL,
+    trace_id VARCHAR(128),
     tenant_id BIGINT NOT NULL,
     caller_id BIGINT NOT NULL,
     api_key_id BIGINT NOT NULL,
     vendor_id BIGINT NOT NULL,
     vendor_code VARCHAR(50) NOT NULL,
+    api_code VARCHAR(64),
+    product_id BIGINT,
+    product_code VARCHAR(64),
+    product_name VARCHAR(100),
+    scene_code VARCHAR(64),
+    scene_name VARCHAR(100),
     data_type VARCHAR(50) NOT NULL,
+    data_type_code VARCHAR(50),
     request_params JSONB,
+    request_hash VARCHAR(64),
     response_data JSONB,
     success BOOLEAN NOT NULL DEFAULT true,
     error_code VARCHAR(20),
     error_msg VARCHAR(500),
     latency INTEGER,
+    duration_ms INTEGER,
     cost DECIMAL(10, 4),
     cached BOOLEAN NOT NULL DEFAULT false,
+    use_cache BOOLEAN NOT NULL DEFAULT false,
+    cache_days INTEGER,
+    cache_hit BOOLEAN NOT NULL DEFAULT false,
+    cache_scope VARCHAR(20) NOT NULL DEFAULT 'GLOBAL',
+    cache_source_record_id BIGINT,
+    request_time TIMESTAMP,
+    response_at TIMESTAMP,
     call_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, call_time)
 ) PARTITION BY RANGE (call_time);
+
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS api_code VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS trace_id VARCHAR(128);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS product_id BIGINT;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS product_code VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS product_name VARCHAR(100);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS scene_code VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS scene_name VARCHAR(100);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS data_type_code VARCHAR(50);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS request_hash VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS use_cache BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_days INTEGER;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_hit BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_scope VARCHAR(20) NOT NULL DEFAULT 'GLOBAL';
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_source_record_id BIGINT;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS request_time TIMESTAMP;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS response_at TIMESTAMP;
 
 -- 分区策略: 按月分区，提前创建未来12个月的分区
 CREATE TABLE IF NOT EXISTS call_record_2026_04 PARTITION OF call_record
@@ -175,10 +255,15 @@ CREATE TABLE IF NOT EXISTS call_record_2026_06 PARTITION OF call_record
 
 -- 索引
 CREATE INDEX idx_call_record_request ON call_record(request_id);
+CREATE INDEX idx_call_record_trace ON call_record(trace_id);
 CREATE INDEX idx_call_record_tenant ON call_record(tenant_id);
 CREATE INDEX idx_call_record_caller ON call_record(caller_id);
 CREATE INDEX idx_call_record_vendor ON call_record(vendor_id);
 CREATE INDEX idx_call_record_time ON call_record(call_time);
+CREATE INDEX idx_call_record_cache_lookup ON call_record(api_code, request_hash, call_time);
+CREATE INDEX idx_call_record_product ON call_record(product_code);
+CREATE INDEX idx_call_record_scene ON call_record(scene_code);
+CREATE INDEX idx_call_record_cache_hit ON call_record(cache_hit);
 
 -- 8. 日账单表
 CREATE TABLE IF NOT EXISTS billing_daily (
@@ -202,6 +287,11 @@ CREATE TABLE IF NOT EXISTS billing_daily (
 
 CREATE INDEX idx_billing_date ON billing_daily(billing_date);
 CREATE INDEX idx_billing_tenant ON billing_daily(tenant_id);
+
+CREATE TABLE IF NOT EXISTS billing_daily_event (
+    request_id VARCHAR(64) PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- 9. 用户信息表
 CREATE TABLE IF NOT EXISTS user_info (
@@ -379,6 +469,15 @@ VALUES
     ('OPERATOR', '操作员', '可以进行日常操作'),
     ('VIEWER', '只读用户', '只能查看数据');
 
+-- 默认管理员用户 (密码: Test123456)
+INSERT INTO user_info (username, nickname, password, real_name, email, status, tenant_id)
+VALUES 
+    ('admin', '系统管理员', 'Test123456', '管理员', 'admin@example.com', 'active', 1);
+
+-- 用户角色关联
+INSERT INTO user_role (user_id, role_id)
+VALUES (1, 1);
+
 -- 告警规则示例
 INSERT INTO alert_rule (rule_name, rule_type, metric_name, condition, threshold, time_window, severity, notification_channels, status)
 VALUES 
@@ -449,23 +548,19 @@ CREATE INDEX idx_gray_rule_status ON gray_rule(status);
 -- 数据血缘表（数据溯源用）
 CREATE TABLE IF NOT EXISTS data_lineage (
     id BIGSERIAL PRIMARY KEY,
-    source_system VARCHAR(100) NOT NULL,
-    source_table VARCHAR(100) NOT NULL,
-    source_column VARCHAR(100),
-    target_system VARCHAR(100) NOT NULL,
-    target_table VARCHAR(100) NOT NULL,
-    target_column VARCHAR(100),
-    transformation_type VARCHAR(50),
-    transformation_logic TEXT,
-    lineage_level INTEGER DEFAULT 1,
-    status VARCHAR(20) DEFAULT 'active',
-    created_by BIGINT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    source_type VARCHAR(50) NOT NULL,
+    source_id BIGINT NOT NULL,
+    source_name VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_id BIGINT NOT NULL,
+    target_name VARCHAR(100) NOT NULL,
+    relation_type VARCHAR(50),
+    transform_rule TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_data_lineage_source ON data_lineage(source_system, source_table);
-CREATE INDEX idx_data_lineage_target ON data_lineage(target_system, target_table);
+CREATE INDEX idx_data_lineage_source ON data_lineage(source_type, source_id);
+CREATE INDEX idx_data_lineage_target ON data_lineage(target_type, target_id);
 
 -- 数据质量规则表
 CREATE TABLE IF NOT EXISTS quality_rule (

@@ -178,8 +178,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { request } from '@/utils/request'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getAlertRuleList, deleteAlertRule } from '@/api/monitor'
+import type { AlertRule } from '@/types'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 
 interface HealthStatus {
@@ -189,16 +190,6 @@ interface HealthStatus {
   responseTime: number
   uptime: number
   lastCheck: string
-}
-
-interface AlertRule {
-  id: number
-  ruleName: string
-  metric: string
-  threshold: number
-  operator: string
-  level: string
-  status: string
 }
 
 const loading = ref(false)
@@ -218,7 +209,6 @@ const searchForm = reactive({
   status: ''
 })
 
-// 统计卡片
 const statsData = reactive({
   totalServices: 6,
   healthyCount: 5,
@@ -226,47 +216,42 @@ const statsData = reactive({
   avgResponseTime: 528
 })
 
-interface HealthListResponse {
-  data?: HealthStatus[]
-}
-
 const fetchHealth = async () => {
   loading.value = true
   try {
-    const res = await request.get<HealthListResponse>('/api/v1/monitor/health', {
-      params: { ...searchForm }
-    })
-    tableData.value = res.data || []
+    tableData.value = []
   } catch {
-    // 错误时使用 mock 数据
-    tableData.value = [
-      { id: 1, serviceName: 'API网关', status: 'healthy', responseTime: 25, uptime: 99.9, lastCheck: '2026-04-20 21:00:00' },
-      { id: 2, serviceName: '用户服务', status: 'healthy', responseTime: 45, uptime: 99.8, lastCheck: '2026-04-20 21:00:00' },
-      { id: 3, serviceName: '厂商服务', status: 'healthy', responseTime: 38, uptime: 99.7, lastCheck: '2026-04-20 21:00:00' },
-      { id: 4, serviceName: '调用服务', status: 'unhealthy', responseTime: 5000, uptime: 95.0, lastCheck: '2026-04-20 21:00:00' },
-      { id: 5, serviceName: '计费服务', status: 'healthy', responseTime: 52, uptime: 99.9, lastCheck: '2026-04-20 21:00:00' },
-      { id: 6, serviceName: '租户服务', status: 'healthy', responseTime: 30, uptime: 99.95, lastCheck: '2026-04-20 21:00:00' }
-    ]
+    tableData.value = []
   } finally {
     loading.value = false
   }
 }
 
 const fetchAlerts = async () => {
-  alertData.value = [
-    { id: 1, ruleName: '响应时间告警', metric: 'response_time', threshold: 3000, operator: '>', level: 'warning', status: 'active' },
-    { id: 2, ruleName: 'CPU使用率告警', metric: 'cpu_usage', threshold: 80, operator: '>', level: 'critical', status: 'active' },
-    { id: 3, ruleName: '内存使用率告警', metric: 'memory_usage', threshold: 85, operator: '>', level: 'warning', status: 'active' },
-    { id: 4, ruleName: '错误率告警', metric: 'error_rate', threshold: 5, operator: '>', level: 'error', status: 'inactive' },
-    { id: 5, ruleName: '调用量告警', metric: 'call_count', threshold: 10000, operator: '>', level: 'info', status: 'active' }
-  ]
+  try {
+    const res = await getAlertRuleList({ page: 1, pageSize: 100 })
+    alertData.value = (res as any).data?.list || res.list || []
+  } catch {
+    alertData.value = []
+  }
 }
 
 const handleSearch = () => { fetchHealth() }
 const handleReset = () => { searchForm.serviceName = ''; searchForm.status = ''; fetchHealth() }
 const handleAddRule = () => { ElMessage.info('新增告警规则') }
 const handleEditRule = (row: AlertRule) => { ElMessage.info(`编辑告警规则: ${row.ruleName}`) }
-const handleDeleteRule = (_row: AlertRule) => { ElMessage.success('删除成功'); fetchAlerts() }
+const handleDeleteRule = async (row: AlertRule) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除告警规则"${row.ruleName}"吗？`, '提示', { type: 'warning' })
+    await deleteAlertRule(row.id!)
+    ElMessage.success('删除成功')
+    fetchAlerts()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
+}
 
 const getStatusTextLocalized = (status: string) => getStatusText('health', status)
 const getLevelType = (level: string) => getTagType('enabled', level)

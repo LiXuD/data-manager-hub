@@ -390,4 +390,66 @@ public class CallerApiTest extends BaseTest {
         response.then()
             .statusCode(anyOf(is(404), is(400)));
     }
+
+    // ==================== API Key接口授权测试 ====================
+
+    /**
+     * 测试获取API Key授权接口列表 - 正常场景
+     */
+    @Test
+    @Order(22)
+    public void testGetApiKeyInterfaces_Success() {
+        Response response = getAuthRequest()
+            .when()
+            .get("/caller/api-key/1/interfaces");
+
+        if (response.getStatusCode() == 200) {
+            verifySuccess(response);
+        }
+    }
+
+    /**
+     * 测试获取API Key授权接口列表 - 不存在的API Key
+     */
+    @Test
+    @Order(23)
+    public void testGetApiKeyInterfaces_NotFound() {
+        Response response = getAuthRequest()
+            .when()
+            .get("/caller/api-key/999999999/interfaces");
+
+        response.then()
+            .statusCode(anyOf(is(404), is(400)));
+    }
+
+    /**
+     * 测试分配API Key接口权限 - 正常场景
+     */
+    @Test
+    @Order(24)
+    public void testAssignApiKeyInterfaces_Success() {
+        Response response = getAuthRequest()
+            .body(Map.of("interfaceIds", new Integer[]{1}))
+            .when()
+            .post("/caller/api-key/1/interfaces");
+
+        if (response.getStatusCode() == 200) {
+            verifySuccess(response);
+        }
+    }
+
+    /**
+     * 测试分配API Key接口权限 - 不存在的API Key
+     */
+    @Test
+    @Order(25)
+    public void testAssignApiKeyInterfaces_NotFound() {
+        Response response = getAuthRequest()
+            .body(Map.of("interfaceIds", new Integer[]{1}))
+            .when()
+            .post("/caller/api-key/999999999/interfaces");
+
+        response.then()
+            .statusCode(anyOf(is(404), is(400)));
+    }
 }

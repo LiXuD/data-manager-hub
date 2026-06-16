@@ -1,0 +1,18 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/data-platform/*.log
+    fields:
+      service: data-platform
+    fields_under_root: true
+    multiline.pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+    multiline.negate: true
+    multiline.match: after
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "data-platform-logs-%{+yyyy.MM.dd}"
+
+setup.template.name: "data-platform"
+setup.template.pattern: "data-platform-*"

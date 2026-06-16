@@ -143,6 +143,24 @@ CREATE INDEX IF NOT EXISTS idx_caller_code ON caller_info(caller_code);
 CREATE INDEX IF NOT EXISTS idx_caller_tenant ON caller_info(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_caller_status ON caller_info(status);
 
+CREATE TABLE IF NOT EXISTS caller_product (
+    id BIGSERIAL PRIMARY KEY,
+    caller_id BIGINT NOT NULL,
+    product_code VARCHAR(64) NOT NULL,
+    product_name VARCHAR(100) NOT NULL,
+    cache_scope VARCHAR(20) NOT NULL DEFAULT 'GLOBAL',
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted BOOLEAN NOT NULL DEFAULT false,
+    CONSTRAINT fk_caller_product_caller FOREIGN KEY (caller_id) REFERENCES caller_info(id),
+    UNIQUE(caller_id, product_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_caller_product_caller ON caller_product(caller_id);
+CREATE INDEX IF NOT EXISTS idx_caller_product_code ON caller_product(product_code);
+CREATE INDEX IF NOT EXISTS idx_caller_product_status ON caller_product(status);
+
 -- 6. API Key 表
 CREATE TABLE IF NOT EXISTS api_key (
     id BIGSERIAL PRIMARY KEY,
@@ -163,29 +181,104 @@ CREATE INDEX IF NOT EXISTS idx_apikey_value ON api_key(key_value);
 CREATE INDEX IF NOT EXISTS idx_apikey_caller ON api_key(caller_id);
 CREATE INDEX IF NOT EXISTS idx_apikey_status ON api_key(status);
 
+CREATE TABLE IF NOT EXISTS api_key_product (
+    id BIGSERIAL PRIMARY KEY,
+    api_key_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    CONSTRAINT fk_apikey_product_key FOREIGN KEY (api_key_id) REFERENCES api_key(id),
+    CONSTRAINT fk_apikey_product_product FOREIGN KEY (product_id) REFERENCES caller_product(id),
+    UNIQUE(api_key_id, product_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_apikey_product_key ON api_key_product(api_key_id);
+CREATE INDEX IF NOT EXISTS idx_apikey_product_product ON api_key_product(product_id);
+
+CREATE TABLE IF NOT EXISTS call_scene (
+    id BIGSERIAL PRIMARY KEY,
+    scene_code VARCHAR(64) NOT NULL UNIQUE,
+    scene_name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    description VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE INDEX IF NOT EXISTS idx_call_scene_code ON call_scene(scene_code);
+CREATE INDEX IF NOT EXISTS idx_call_scene_status ON call_scene(status);
+
 -- 7. 调用记录表 (按月分区)
 CREATE TABLE IF NOT EXISTS call_record (
     id BIGSERIAL,
+    tenant_id BIGINT NOT NULL,
     caller_id BIGINT NOT NULL,
+    api_key_id BIGINT NOT NULL,
     vendor_id BIGINT NOT NULL,
-    data_type_id BIGINT NOT NULL,
+    vendor_code VARCHAR(50) NOT NULL,
     request_id VARCHAR(64) NOT NULL,
-    request_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    response_time TIMESTAMP,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    request_data JSONB,
+    trace_id VARCHAR(128),
+    api_code VARCHAR(64),
+    product_id BIGINT,
+    product_code VARCHAR(64),
+    product_name VARCHAR(100),
+    scene_code VARCHAR(64),
+    scene_name VARCHAR(100),
+    data_type VARCHAR(50) NOT NULL,
+    data_type_code VARCHAR(50),
+    request_params JSONB,
+    request_hash VARCHAR(64),
     response_data JSONB,
-    error_message VARCHAR(1000),
-    response_code VARCHAR(50),
-    response_message VARCHAR(500),
-    amount DECIMAL(10, 4) DEFAULT 0,
+    success BOOLEAN NOT NULL DEFAULT true,
+    error_code VARCHAR(20),
+    error_msg VARCHAR(500),
+    latency INTEGER,
+    duration_ms INTEGER,
     cost DECIMAL(10, 4) DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    cached BOOLEAN NOT NULL DEFAULT false,
+    use_cache BOOLEAN NOT NULL DEFAULT false,
+    cache_days INTEGER,
+    cache_hit BOOLEAN NOT NULL DEFAULT false,
+    cache_scope VARCHAR(20) NOT NULL DEFAULT 'GLOBAL',
+    cache_source_record_id BIGINT,
+    request_time TIMESTAMP,
+    response_at TIMESTAMP,
+    call_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id, call_time),
+    CONSTRAINT fk_record_tenant FOREIGN KEY (tenant_id) REFERENCES tenant_info(id),
     CONSTRAINT fk_record_caller FOREIGN KEY (caller_id) REFERENCES caller_info(id),
-    CONSTRAINT fk_record_vendor FOREIGN KEY (vendor_id) REFERENCES vendor_info(id),
-    CONSTRAINT fk_record_datatype FOREIGN KEY (data_type_id) REFERENCES data_type(id)
-) PARTITION BY RANGE (request_time);
+    CONSTRAINT fk_record_vendor FOREIGN KEY (vendor_id) REFERENCES vendor_info(id)
+) PARTITION BY RANGE (call_time);
+
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS api_code VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS trace_id VARCHAR(128);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS tenant_id BIGINT;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS api_key_id BIGINT;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS vendor_code VARCHAR(50);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS product_id BIGINT;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS product_code VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS product_name VARCHAR(100);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS scene_code VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS scene_name VARCHAR(100);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS data_type VARCHAR(50);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS data_type_code VARCHAR(50);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS success BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS error_code VARCHAR(20);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS error_msg VARCHAR(500);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS latency INTEGER;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cached BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS response_at TIMESTAMP;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS request_params JSONB;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS request_hash VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS use_cache BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_days INTEGER;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_hit BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_scope VARCHAR(20) NOT NULL DEFAULT 'GLOBAL';
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_source_record_id BIGINT;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS request_time TIMESTAMP;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS call_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- 创建分区函数
 CREATE OR REPLACE FUNCTION create_monthly_partition(partition_date DATE)
@@ -211,30 +304,43 @@ SELECT create_monthly_partition(CURRENT_DATE::DATE);
 SELECT create_monthly_partition((CURRENT_DATE + INTERVAL '1 month')::DATE);
 
 CREATE INDEX IF NOT EXISTS idx_call_record_caller ON call_record(caller_id);
+CREATE INDEX IF NOT EXISTS idx_call_record_trace ON call_record(trace_id);
 CREATE INDEX IF NOT EXISTS idx_call_record_vendor ON call_record(vendor_id);
-CREATE INDEX IF NOT EXISTS idx_call_record_request_time ON call_record(request_time);
-CREATE INDEX IF NOT EXISTS idx_call_record_status ON call_record(status);
+CREATE INDEX IF NOT EXISTS idx_call_record_time ON call_record(call_time);
+CREATE INDEX IF NOT EXISTS idx_call_record_success ON call_record(success);
+CREATE INDEX IF NOT EXISTS idx_call_record_cache_lookup ON call_record(api_code, request_hash, call_time);
+CREATE INDEX IF NOT EXISTS idx_call_record_product ON call_record(product_code);
+CREATE INDEX IF NOT EXISTS idx_call_record_scene ON call_record(scene_code);
+CREATE INDEX IF NOT EXISTS idx_call_record_cache_hit ON call_record(cache_hit);
 
 -- 8. 日账单表
 CREATE TABLE IF NOT EXISTS billing_daily (
     id BIGSERIAL PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
     caller_id BIGINT NOT NULL,
+    vendor_id BIGINT,
+    data_type VARCHAR(50) NOT NULL,
+    call_count BIGINT NOT NULL DEFAULT 0,
+    success_count BIGINT NOT NULL DEFAULT 0,
+    fail_count BIGINT NOT NULL DEFAULT 0,
+    total_cost DECIMAL(12, 4) NOT NULL DEFAULT 0,
+    avg_latency INTEGER,
     billing_date DATE NOT NULL,
-    total_calls BIGINT DEFAULT 0,
-    successful_calls BIGINT DEFAULT 0,
-    failed_calls BIGINT DEFAULT 0,
-    total_amount DECIMAL(12, 4) DEFAULT 0,
-    total_cost DECIMAL(12, 4) DEFAULT 0,
-    profit DECIMAL(12, 4) DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_by BIGINT,
+    CONSTRAINT fk_billing_tenant FOREIGN KEY (tenant_id) REFERENCES tenant_info(id),
     CONSTRAINT fk_billing_caller FOREIGN KEY (caller_id) REFERENCES caller_info(id),
-    UNIQUE(caller_id, billing_date)
+    UNIQUE(tenant_id, caller_id, vendor_id, data_type, billing_date)
 );
 
 CREATE INDEX IF NOT EXISTS idx_billing_daily_caller ON billing_daily(caller_id);
 CREATE INDEX IF NOT EXISTS idx_billing_daily_date ON billing_daily(billing_date);
+CREATE INDEX IF NOT EXISTS idx_billing_daily_tenant ON billing_daily(tenant_id);
+
+CREATE TABLE IF NOT EXISTS billing_daily_event (
+    request_id VARCHAR(64) PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- 9. 用户表
 CREATE TABLE IF NOT EXISTS user_info (
@@ -351,7 +457,24 @@ CREATE TABLE IF NOT EXISTS circuit_breaker (
 CREATE INDEX IF NOT EXISTS idx_circuit_vendor ON circuit_breaker(vendor_id);
 CREATE INDEX IF NOT EXISTS idx_circuit_state ON circuit_breaker(state);
 
--- 15. 操作日志表
+-- 15. 数据血缘表
+CREATE TABLE IF NOT EXISTS data_lineage (
+    id BIGSERIAL PRIMARY KEY,
+    source_type VARCHAR(50) NOT NULL,
+    source_id BIGINT NOT NULL,
+    source_name VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_id BIGINT NOT NULL,
+    target_name VARCHAR(100) NOT NULL,
+    relation_type VARCHAR(50),
+    transform_rule TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_data_lineage_source ON data_lineage(source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_data_lineage_target ON data_lineage(target_type, target_id);
+
+-- 16. 操作日志表
 CREATE TABLE IF NOT EXISTS operation_log (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT,

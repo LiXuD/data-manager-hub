@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { login } from '@/api/auth'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -23,23 +24,32 @@ const rules: FormRules = {
 const handleLogin = async () => {
   if (!loginFormRef.value) return
 
-  await loginFormRef.value.validate((valid) => {
+  await loginFormRef.value.validate(async (valid) => {
     if (valid) {
       loading.value = true
-
-      setTimeout(() => {
-        const mockToken = 'mock-token-' + Date.now()
-        userStore.login(mockToken, {
-          id: '1',
+      try {
+        const res = await login({
           username: loginForm.value.username,
-          nickname: loginForm.value.username,
-          roles: ['admin']
+          password: loginForm.value.password
+        })
+
+        const data = res.data
+        userStore.login(data.token, {
+          id: String(data.userId),
+          username: data.username,
+          nickname: data.username,
+          roles: data.roles || [],
+          tenantId: data.tenantId,
+          permissions: data.permissions || []
         })
 
         ElMessage.success('登录成功')
-        loading.value = false
         router.push('/dashboard')
-      }, 800)
+      } catch (error) {
+        console.error('登录失败:', error)
+      } finally {
+        loading.value = false
+      }
     }
   })
 }
@@ -94,6 +104,7 @@ const handleLogin = async () => {
               v-model="loginForm.username"
               placeholder="请输入用户名"
               size="large"
+              autocomplete="username"
             />
           </div>
         </el-form-item>
@@ -110,6 +121,7 @@ const handleLogin = async () => {
               placeholder="请输入密码"
               size="large"
               show-password
+              autocomplete="current-password"
               @keyup.enter="handleLogin"
             />
           </div>
@@ -131,7 +143,7 @@ const handleLogin = async () => {
             @click="handleLogin"
           >
             <span v-if="!loading">立即登录</span>
-            <span v-else>登录中...</span>
+            <span v-else>登录中…</span>
           </el-button>
         </el-form-item>
       </el-form>
@@ -480,6 +492,26 @@ const handleLogin = async () => {
 
   .login-header h1 {
     font-size: 22px;
+  }
+}
+
+/* 减少动画支持 */
+@media (prefers-reduced-motion: reduce) {
+  .bg-glow-1,
+  .bg-glow-2 {
+    animation: none;
+  }
+
+  .particle {
+    animation: none;
+  }
+
+  .login-box {
+    animation: none;
+  }
+
+  .logo-icon {
+    animation: none;
   }
 }
 </style>

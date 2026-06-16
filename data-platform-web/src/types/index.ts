@@ -18,6 +18,7 @@ export interface AlertRule {
   threshold?: number
   condition?: string
   level?: string
+  operator?: string
 }
 
 // 告警记录
@@ -183,6 +184,17 @@ export interface DataQueryRequest {
   params: Record<string, any>
 }
 
+export interface OpenApiQueryRequest {
+  requestId?: string
+  apiCode: string
+  apiVersion?: string
+  productCode: string
+  sceneCode: string
+  useCache?: boolean
+  cacheDays?: number
+  params: Record<string, any>
+}
+
 // 数据查询响应
 export interface DataQueryResponse {
   success: boolean
@@ -191,9 +203,19 @@ export interface DataQueryResponse {
   errorMsg?: string
   latency?: number
   cached?: boolean
+  requestId?: string
+  platformRequestId?: string
+  apiCode?: string
+  productCode?: string
+  sceneCode?: string
+  cacheSourceRecordId?: number
+  requestTime?: string
+  responseTime?: string
+  durationMs?: number
+  cost?: number
 }
 
-// 调用记录相关类型
+// 调用记录相关类型 (与后端 CallRecord 实体对齐)
 export interface CallRecord {
   id: number
   requestId: string
@@ -202,16 +224,35 @@ export interface CallRecord {
   apiKeyId?: number
   vendorId: number
   vendorCode: string
+  apiCode?: string
+  productId?: number
+  productCode?: string
+  productName?: string
+  sceneCode?: string
+  sceneName?: string
   dataType: string
+  dataTypeCode?: string
   requestParams: string
   responseData: string
   success: boolean
   errorCode?: string
   errorMsg?: string
   latency: number
+  durationMs?: number
+  responseTime?: number
   cost: number
   cached?: boolean
+  useCache?: boolean
+  cacheDays?: number
+  cacheHit?: boolean
+  cacheScope?: string
+  cacheSourceRecordId?: number
+  requestTime?: string
+  responseAt?: string
   callTime: string
+  result?: string
+  createdAt?: string
+  deleted?: boolean
 }
 
 // 分页响应
@@ -253,14 +294,6 @@ export interface AlertRecordQueryParams {
   level?: string
 }
 
-// 分页响应
-export interface PageResult<T> {
-  list: T[]
-  total: number
-  page: number
-  pageSize: number
-}
-
 // 列表响应 (简化版分页)
 export interface ListResponse<T> {
   data: T[]
@@ -269,16 +302,17 @@ export interface ListResponse<T> {
   pageSize?: number
 }
 
-// 数据类型
+// 数据类型 - 字段名与后端 DataType 实体对齐
 export interface DataType {
   id: number
-  typeCode: string
-  typeName: string
-  description: string
-  vendorId: number
-  vendorName: string
-  schema?: string
+  dataTypeCode: string    // 后端: dataTypeCode
+  dataTypeName: string    // 后端: dataTypeName
+  dataCategory?: string   // 后端: dataCategory
+  description?: string
+  pricingModel?: string
+  unitPrice?: number
   status: string
+  createdBy?: number
   createdAt: string
   updatedAt: string
 }
@@ -387,6 +421,222 @@ export interface QualityScore {
   failCount: number
   issueSummary?: string
   checkedAt: string
+}
+
+// ===================== 接口配置相关类型 =====================
+
+// HTTP 方法类型
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
+
+// 认证类型
+export type AuthType = 'NONE' | 'BASIC' | 'BEARER' | 'API_KEY'
+
+// 签名类型
+export type SignType = 'NONE' | 'HMAC_SHA256' | 'MD5'
+
+// Content-Type 类型
+export type ContentType = 'application/json' | 'application/x-www-form-urlencoded' | 'text/plain' | 'raw'
+
+// API 配置
+export interface ApiConfig {
+  url: string
+  method: HttpMethod
+  timeout: number
+  retryCount: number
+}
+
+// 请求头配置项
+export interface HeaderConfigItem {
+  key: string
+  value: string
+  enabled: boolean
+  description?: string
+}
+
+// 请求头配置（键值对形式）
+export type HeaderConfig = Record<string, string>
+
+// 请求参数映射项
+export interface RequestMappingItem {
+  targetField: string
+  sourceVar: string
+  defaultValue?: string
+  required?: boolean
+  transformType?: 'none' | 'uppercase' | 'lowercase' | 'trim'
+}
+
+// 响应参数映射项
+export interface ResponseMappingItem {
+  targetField: string
+  sourcePath: string
+  sourceType?: 'field' | 'jsonPath'
+  defaultValue?: any
+  transformType?: 'none' | 'toString' | 'toNumber'
+}
+
+// 签名配置
+export interface SignConfig {
+  type: SignType
+  secretKey?: string
+  signFields?: string[]
+}
+
+// 认证配置
+export interface AuthConfig {
+  type: AuthType
+  // Basic Auth
+  username?: string
+  password?: string
+  // Bearer Token
+  token?: string
+  // API Key
+  apiKeyName?: string
+  apiKeyValue?: string
+  apiKeyLocation?: 'header' | 'query'
+}
+
+// 降级配置
+export interface FallbackConfig {
+  enabled: boolean
+  fallbackVendorId?: number
+  fallbackVendorCode?: string
+}
+
+// 熔断配置
+export interface CircuitBreakerConfig {
+  threshold: number      // 熔断阈值（连续失败次数）
+  timeout: number        // 熔断时间（秒）
+}
+
+// 厂商接口配置 - 关联厂商、数据类型和接口
+export interface VendorInterfaceConfig {
+  id: number
+  vendorId: number
+  vendorName?: string
+  dataTypeId: number
+  dataTypeName?: string
+  dataTypeCode?: string
+  interfaceId: number
+  interfaceName?: string
+  apiUrl: string
+  method: HttpMethod
+  timeout: number
+  retryCount: number
+  circuitThreshold: number
+  circuitTimeout: number
+  signType?: string
+  encryptType?: string
+  headerConfig?: string
+  requestTemplate?: string
+  responseMapping?: string
+  fallbackVendorId?: number
+  fallbackVendorName?: string
+  // 扩展字段
+  authType?: AuthType
+  authConfig?: string
+  status: 'active' | 'inactive'
+  createdAt: string
+  updatedAt: string
+}
+
+// ===================== API 专用 DTO 类型 =====================
+
+// 调用方 (API DTO)
+export interface CallerDTO {
+  id?: number
+  callerCode: string
+  callerName: string
+  tenantId?: number
+  callerType?: string
+  description?: string
+  contactPerson?: string
+  contactPhone?: string
+  status?: 'active' | 'inactive'
+  createdAt?: string
+  updatedAt?: string
+}
+
+// API Key (API DTO)
+export interface ApiKeyDTO {
+  id?: number
+  callerId: number
+  apiKey: string
+  apiSecret?: string
+  rateLimit?: number
+  quotaLimit?: number
+  quotaUsed?: number
+  status?: 'active' | 'inactive' | 'expired'
+  expireTime?: string
+  createdAt?: string
+}
+
+export interface CallerProductDTO {
+  id?: number
+  callerId?: number
+  productCode: string
+  productName: string
+  cacheScope?: 'GLOBAL' | 'CALLER'
+  status?: 'active' | 'inactive'
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface CallSceneDTO {
+  id?: number
+  sceneCode: string
+  sceneName: string
+  status?: 'active' | 'inactive'
+  description?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+// 用户 (API DTO)
+export interface UserDTO {
+  id: number
+  username: string
+  realName?: string
+  phone?: string
+  email?: string
+  tenantId?: number
+  tenantName?: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+// 计费规则 (API DTO)
+export interface BillingRuleDTO {
+  id: number
+  vendorId: number
+  vendorName: string
+  dataTypeId: number
+  dataTypeName: string
+  pricePerCall: number
+  minPrice: number
+  maxPrice: number
+  discountThreshold: number
+  discountRate: number
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+// 计费记录 (API DTO)
+export interface BillingRecordDTO {
+  id: number
+  tenantId: number
+  tenantName: string
+  callerId: number
+  callerName: string
+  vendorId: number
+  vendorName: string
+  dataType: string
+  callCount: number
+  unitPrice: number
+  totalAmount: number
+  billingDate: string
+  status: string
 }
 
 // 字段加密

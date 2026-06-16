@@ -26,16 +26,16 @@
             v-for="vendor in vendorOptions"
             :key="vendor.id"
             :label="vendor.vendorName"
-            :value="Number(vendor.id)"
+            :value="vendor.id"
           />
         </el-select>
       </el-form-item>
       <el-form-item label="数据类型" prop="dataTypeId">
-        <el-select v-model="form.dataTypeId" placeholder="请选择数据类型" style="width: 100%">
+        <el-select v-model="form.dataTypeId" placeholder="请选择数据类型" clearable style="width: 100%">
           <el-option
             v-for="dt in datatypeOptions"
             :key="dt.id"
-            :label="dt.typeName"
+            :label="dt.dataTypeName"
             :value="dt.id"
           />
         </el-select>
@@ -64,14 +64,14 @@
 import { ref, watch } from 'vue'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { createInterface, updateInterface } from '@/api/interface'
-import type { ApiInterface, Vendor } from '@/types'
+import type { ApiInterface, Vendor, DataType } from '@/types'
 
 interface Props {
   modelValue: boolean
   formData?: ApiInterface | null
   mode: 'add' | 'edit'
   vendorOptions: Vendor[]
-  datatypeOptions: { id: number; typeName: string }[]
+  datatypeOptions: DataType[]
 }
 
 const props = defineProps<Props>()
@@ -86,8 +86,8 @@ const form = ref<{
   interfaceCode: string
   interfaceName: string
   path: string
-  vendorId?: number
-  dataTypeId: number | undefined
+  vendorId?: number | string
+  dataTypeId?: number | string
   sort: number
   description: string
   status: InterfaceStatus
@@ -109,14 +109,22 @@ const rules: FormRules = {
   dataTypeId: [{ required: true, message: '请选择数据类型', trigger: 'change' }]
 }
 
+// 确保id类型一致的辅助函数
+const normalizeId = (id: any): number | string | undefined => {
+  if (id == null) return undefined
+  const num = Number(id)
+  return !isNaN(num) ? num : id
+}
+
 watch(() => props.formData, (val) => {
+  
   if (val) {
     form.value = {
       interfaceCode: val.interfaceCode || '',
       interfaceName: val.interfaceName || '',
       path: val.path || '',
-      vendorId: val.vendorId,
-      dataTypeId: val.dataTypeId,
+      vendorId: normalizeId(val.vendorId),
+      dataTypeId: normalizeId(val.dataTypeId),
       sort: val.sort ?? 0,
       description: val.description || '',
       status: val.status || 'active'
@@ -145,11 +153,18 @@ const handleSubmit = async () => {
 
   loading.value = true
   try {
+    // 提交时确保id是number类型
+    const submitData: Partial<ApiInterface> = {
+      ...form.value,
+      vendorId: form.value.vendorId != null ? Number(form.value.vendorId) : undefined,
+      dataTypeId: form.value.dataTypeId != null ? Number(form.value.dataTypeId) : undefined
+    }
+    
     if (props.mode === 'add') {
-      await createInterface(form.value)
+      await createInterface(submitData)
       ElMessage.success('新增成功')
     } else {
-      await updateInterface(props.formData!.id, form.value)
+      await updateInterface(props.formData!.id, submitData)
       ElMessage.success('更新成功')
     }
     emit('success')

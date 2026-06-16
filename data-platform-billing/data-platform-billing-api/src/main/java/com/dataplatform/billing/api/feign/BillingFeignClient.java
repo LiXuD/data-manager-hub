@@ -1,13 +1,15 @@
 package com.dataplatform.billing.api.feign;
 
 import com.dataplatform.api.Result;
+import com.dataplatform.billing.api.dto.BillingCalculateReqDTO;
+import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
 import com.dataplatform.billing.api.dto.BillingDailyDTO;
 import com.dataplatform.billing.api.dto.BillingRuleDTO;
 import com.dataplatform.billing.api.dto.TenantBudgetDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 
-@FeignClient(name = "data-platform-billing-service", path = "/billing")
+@FeignClient(name = "data-platform-billing", contextId = "billingFeignClient", path = "/billing")
 public interface BillingFeignClient {
 
     @GetMapping("/daily/{id}")
@@ -26,4 +28,7 @@ public interface BillingFeignClient {
 
     @PutMapping("/budget/{tenantId}")
     Result<Void> updateTenantBudget(@PathVariable("tenantId") Long tenantId, @RequestBody TenantBudgetDTO dto);
+
+    @PostMapping("/calculate")
+    Result<BillingCalculateRespDTO> calculateCost(@RequestBody BillingCalculateReqDTO dto);
 }

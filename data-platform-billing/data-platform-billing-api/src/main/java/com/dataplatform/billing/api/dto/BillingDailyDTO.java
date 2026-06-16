@@ -1,11 +1,9 @@
 package com.dataplatform.billing.api.dto;
 
-import lombok.Data;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-@Data
 public class BillingDailyDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -20,4 +18,27 @@ public class BillingDailyDTO implements Serializable {
     private BigDecimal totalCost;
     private BigDecimal totalRevenue;
     private String status;
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+    public Long getCallerId() { return callerId; }
+    public void setCallerId(Long callerId) { this.callerId = callerId; }
+    public Long getVendorId() { return vendorId; }
+    public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
+    public LocalDate getBillingDate() { return billingDate; }
+    public void setBillingDate(LocalDate billingDate) { this.billingDate = billingDate; }
+    public Integer getTotalCalls() { return totalCalls; }
+    public void setTotalCalls(Integer totalCalls) { this.totalCalls = totalCalls; }
+    public Integer getSuccessCalls() { return successCalls; }
+    public void setSuccessCalls(Integer successCalls) { this.successCalls = successCalls; }
+    public Integer getFailedCalls() { return failedCalls; }
+    public void setFailedCalls(Integer failedCalls) { this.failedCalls = failedCalls; }
+    public BigDecimal getTotalCost() { return totalCost; }
+    public void setTotalCost(BigDecimal totalCost) { this.totalCost = totalCost; }
+    public BigDecimal getTotalRevenue() { return totalRevenue; }
+    public void setTotalRevenue(BigDecimal totalRevenue) { this.totalRevenue = totalRevenue; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 }

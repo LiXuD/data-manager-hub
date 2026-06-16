@@ -1,452 +1,346 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-04-29
-**状态**: MVP 已完成, 契约分离架构重构已完成 ✅
+**最后更新**: 2026-06-16
+**状态**: V2.0 全部完成（SkyWalking 桥接、SDK 多语言生成、灰度厂商路由），已合入 dev
 
 ---
 
-## 🏗️ 契约分离架构重构进度
+## 🏗️ 五域收敛架构 (2026-05-16 最终版)
 
-### ✅ Task 1: 创建 data-platform-api 公共契约模块 (完成)
+### 架构概览
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 创建 data-platform-api/pom.xml | ✅ 完成 | 2026-04-28 |
-| 创建 Result.java 统一返回结果类 | ✅ 完成 | 2026-04-28 |
-| 创建 PageResult.java 分页结果类 | ✅ 完成 | 2026-04-28 |
-| 创建 BusinessException.java 业务异常类 | ✅ 完成 | 2026-04-28 |
-| 创建 ErrorCode.java 错误码枚举 | ✅ 完成 | 2026-04-28 |
-| 更新父 pom.xml 添加模块聚合 | ✅ 完成 | 2026-04-28 |
-| 编译验证 | ✅ 通过 | 2026-04-28 |
+```
+                          ┌──────────────┐
+                          │   前端 (Vue3) │ :3000
+                          └──────┬───────┘
+                                 │
+                          ┌──────▼───────┐
+                          │   Gateway    │ :8888
+                          └──────┬───────┘
+                                 │
+        ┌─────────────────────────┼─────────────────────────┐
+        │                         │                         │
+   ┌────▼──────────┐  ┌──────────▼──────────┐  ┌──────────▼──────────┐
+   │   Masterdata   │  │       Access        │  │       Billing       │
+   │    (8081)      │  │       (8082)        │  │       (8084)        │
+   ├───────────────┤  ├────────────────────┤  ├────────────────────┤
+   │ 厂商管理       │  │ 调用方管理          │  │ 计费规则            │
+   │ 数据类型       │  │ API Key            │  │ 日账单              │
+   │ 接口管理       │  │ 调用记录           │  │ 预算告警            │
+   │ 灰度规则       │  │ 数据查询代理       │  │ 对账                │
+   └────────────────┘  └────────────────────┘  └────────────────────┘
+        │                         │                         │
+   ┌────▼──────────┐  ┌──────────▼──────────┐  ┌──────────▼──────────┐
+   │   Identity     │  │      Governance     │  │                      │
+   │    (8086)      │  │       (8085)        │  │                      │
+   ├───────────────┤  ├────────────────────┤  │                      │
+   │ 用户管理        │  │ 监控告警            │  │                      │
+   │ 角色权限        │  │ 操作日志           │  │                      │
+   │ 租户管理        │  │ 数据质量           │  │                      │
+   │ 数据加密        │  │ 数据血缘           │  │                      │
+   └────────────────┘  └────────────────────┘  └──────────────────────┘
+```
 
-**提交记录**: `c205b2c refactor: 创建 data-platform-api 公共契约模块`
+### 域职责划分
 
-### ✅ Task 2: 重构 data-platform-common 公共模块 (完成)
+| 域 | 模块 | 端口 | 职责 |
+|----|------|------|------|
+| **masterdata** | `data-platform-masterdata-api/service` | 8081 | 厂商管理、数据类型、接口定义、厂商配置、灰度规则 |
+| **access** | `data-platform-access-api/service` | 8082 | 调用方管理、API Key、数据调用、调用记录 |
+| **billing** | `data-platform-billing-api/service` | 8084 | 计费规则、账单、结算/对账、预算告警 |
+| **identity** | `data-platform-identity-api/service` | 8086 | 租户管理、用户管理、角色权限、数据加密/脱敏 |
+| **governance** | `data-platform-governance-api/service` | 8085 | 监控告警、操作日志、数据质量、数据血缘 |
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 修改 common pom.xml 依赖管理 | ✅ 完成 | 2026-04-28 |
-| 更新 common 依赖 data-platform-api | ✅ 完成 | 2026-04-28 |
-| 编译验证 | ✅ 通过 | 2026-04-28 |
+### 模块结构
 
-**提交记录**: `d6bc3e5 refactor: 重构 data-platform-common 依赖管理`
+```
+data-platform-masterdata/           # 厂商/数据类型/接口/灰度
+├── data-platform-masterdata-api/    # Feign接口、DTO/VO
+└── data-platform-masterdata-service/ # Controller/Service/Mapper
+    └── src/main/java/com/dataplatform/masterdata/
+        ├── MasterdataApplication.java
+        ├── controller/             # 控制器
+        │   ├── vendor/             # 厂商相关
+        │   ├── interface_/         # 接口相关
+        │   └── graylog/            # 灰度相关
+        ├── service/               # 业务服务
+        ├── mapper/                # 数据访问
+        └── entity/                 # 实体类
 
-### ✅ Task 3: 重构 data-platform-vendor 为 api + service 双模块 (完成)
+data-platform-access/               # 调用方/调用
+├── data-platform-access-api/
+└── data-platform-access-service/
+    └── src/main/java/com/dataplatform/access/
+        ├── AccessApplication.java
+        ├── caller/                # 调用方/API Key
+        └── call/                   # 调用记录/数据查询
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 修改 vendor 父 pom 为聚合模块 | ✅ 完成 | 2026-04-28 |
-| 创建 vendor-api 契约层模块 | ✅ 完成 | 2026-04-28 |
-| 创建 DTO 类 (VendorInfoDTO, VendorConfigDTO 等) | ✅ 完成 | 2026-04-28 |
-| 创建 Feign 客户端接口 | ✅ 完成 | 2026-04-28 |
-| 完善 vendor-service 业务层模块 | ✅ 完成 | 2026-04-28 |
-| 编译验证 | ✅ 通过 | 2026-04-28 |
+data-platform-billing/              # 计费
+├── data-platform-billing-api/
+└── data-platform-billing-service/
 
-**提交记录**: `5fb0a04 refactor: 重构 data-platform-vendor 为 api + service 双模块`
+data-platform-identity/             # 身份/租户/安全
+├── data-platform-identity-api/
+└── data-platform-identity-service/
+    └── src/main/java/com/dataplatform/identity/
+        ├── IdentityApplication.java
+        ├── iam/                   # 用户/角色/权限
+        ├── tenant/                 # 租户/脱敏规则
+        └── security/              # 数据加密
 
-### ✅ Task 4: 批量重构其他业务服务模块 (完成)
+data-platform-governance/            # 治理
+├── data-platform-governance-api/
+│   └── src/main/java/com/dataplatform/governance/
+│       ├── api/                   # Feign接口
+│       └── log/api/               # 日志远程服务
+└── data-platform-governance-service/
+    └── src/main/java/com/dataplatform/governance/
+        ├── GovernanceApplication.java
+        ├── log/                    # 操作日志
+        ├── monitor/               # 监控告警
+        ├── quality/                # 数据质量
+        └── trace/                 # 数据血缘
+```
 
-| 模块 | 状态 | 完成日期 |
-|------|------|----------|
-| data-platform-call | ✅ 完成 | 2026-04-28 |
-| data-platform-caller | ✅ 完成 | 2026-04-28 |
-| data-platform-user | ✅ 完成 | 2026-04-28 |
-| data-platform-tenant | ✅ 完成 | 2026-04-28 |
-| data-platform-role | ✅ 完成 | 2026-04-28 |
-| data-platform-datatype | ✅ 完成 | 2026-04-28 |
-| data-platform-interface | ✅ 完成 | 2026-04-28 |
-| data-platform-log | ✅ 完成 | 2026-04-28 |
-| data-platform-monitor | ✅ 完成 | 2026-04-28 |
-| data-platform-quality | ✅ 完成 | 2026-04-28 |
-| data-platform-trace | ✅ 完成 | 2026-04-28 |
-| data-platform-graylog | ✅ 完成 | 2026-04-28 |
-| data-platform-test | ✅ 完成 | 2026-04-28 |
-| data-platform-config | ✅ 完成 | 2026-04-28 |
+### 公共模块
 
-**提交记录**: `ccf50d2 refactor: 批量重构业务模块为 api + service 双模块结构`
+| 模块 | 职责 |
+|------|------|
+| `data-platform-common-contract` | API契约 (Result, PageResult, ErrorCode, 枚举) |
+| `data-platform-common-web` | Web层 (拦截器、日志AOP、工具类) |
+| `data-platform-common-persistence` | 持久层 (Entity基类、MyBatis-Plus配置) |
+| `data-platform-common-runtime` | 运行时 (适配器、认证、计费、熔断、映射) |
 
-### ✅ Task 5: 修复 data-platform-interface 依赖问题 (完成)
+### 公共模块详解
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 移除冗余的数据库和中间件依赖 | ✅ 完成 | 2026-04-28 |
-| 只保留 API 契约相关依赖 | ✅ 完成 | 2026-04-28 |
+#### data-platform-common-contract
 
-### ✅ Task 6: 清理和验证无循环依赖 (完成)
+**路径**: `data-platform-common-contract/src/main/java/com/dataplatform/`
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 检查循环依赖 | ✅ 无循环依赖 | 2026-04-28 |
-| 全量编译测试 | ✅ BUILD SUCCESS | 2026-04-28 |
-| 更新待办文档 | ✅ 完成 | 2026-04-28 |
+| 路径 | 类名 | 说明 |
+|------|------|------|
+| `api/` | `Result<T>` | 统一返回结果 |
+| `api/` | `PageResult<T>` | 分页结果 |
+| `api/exception/` | `BusinessException` | 业务异常 |
+| `api/exception/` | `ErrorCode` | 错误码枚举 |
+| `common/enums/` | 各种枚举类 | 状态枚举 |
 
-### ✅ Task 7: 修复重构残留src目录问题 (完成)
+#### data-platform-common-runtime
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 清理父模块残留src目录 (14个模块, 156个文件) | ✅ 完成 | 2026-04-29 |
-| 将代码迁移到service子模块 | ✅ 完成 | 2026-04-29 |
-| 将共享entity移动到api模块 | ✅ 完成 | 2026-04-29 |
-| 添加缺失的Redis和MyBatis-Plus依赖 | ✅ 完成 | 2026-04-29 |
-| 修复service模块间依赖关系 | ✅ 完成 | 2026-04-29 |
-| 全量编译测试 | ✅ BUILD SUCCESS | 2026-04-29 |
+**路径**: `data-platform-common-runtime/src/main/java/com/dataplatform/common/`
 
-**提交记录**: `e5802d9 fix: 修复契约分离架构重构残留问题`
+| 路径 | 类名 | 说明 |
+|------|------|------|
+| `adapter/` | `VendorAdapter` | 厂商适配器接口 |
+| `adapter/` | `AbstractVendorAdapter` | 适配器抽象基类 |
+| `adapter/` | `HttpVendorAdapter` | HTTP厂商适配器 |
+| `adapter/` | `VendorAdapterFactory` | 适配器工厂 |
+| `auth/` | `AuthHandler` | 认证处理器接口 |
+| `auth/` | `NoneAuthHandler` | 无认证 |
+| `auth/` | `BasicAuthHandler` | Basic认证 |
+| `auth/` | `BearerAuthHandler` | Bearer Token认证 |
+| `auth/` | `ApiKeyAuthHandler` | API Key认证 |
+| `auth/` | `AuthHandlerFactory` | 认证处理器工厂 |
+| `billing/` | `BillingCalculator` | 计费计算器接口 |
+| `billing/` | `StandardBillingCalculator` | 标准计费 |
+| `billing/` | `TieredBillingCalculator` | 阶梯计费 |
+| `billing/` | `DynamicBillingCalculator` | 动态计费 |
+| `circuitbreaker/` | `CircuitBreakerManager` | 熔断器管理 |
+| `mapping/` | `RequestMappingProcessor` | 请求映射处理 |
+| `mapping/` | `ResponseMappingProcessor` | 响应映射处理 |
+| `security/` | `SignatureBuilder` | 签名构建器 |
+| `util/` | `DataMaskingUtil` | 数据脱敏工具 |
+| `util/` | `VariableSubstitutionUtil` | 变量替换工具 |
+
+#### data-platform-common-web
+
+**路径**: `data-platform-common-web/src/main/java/com/dataplatform/common/`
+
+| 路径 | 类名 | 说明 |
+|------|------|------|
+| `interceptor/` | `AuthInterceptor` | 认证拦截器 |
+| `log/` | `OperationLog` | 操作日志注解 |
+| `log/` | `OperationLogAspect` | 操作日志切面 |
+| `util/` | `IpUtil` | IP地址工具 |
+| `util/` | `UserContext` | 用户上下文工具 |
+
+#### data-platform-common-persistence
+
+**路径**: `data-platform-common-persistence/src/main/java/com/dataplatform/common/`
+
+| 路径 | 类名 | 说明 |
+|------|------|------|
+| `config/` | `MybatisPlusConfig` | MyBatis-Plus配置 |
+| `entity/` | `CallRecord` | 调用记录基类 |
+| `entity/` | `DataType` | 数据类型基类 |
+| `entity/` | `BillingRuleDO` | 计费规则基类 |
+| `entity/` | `VendorConfigDO` | 厂商配置基类 |
+| `handler/` | `CodeEnumTypeHandler` | 枚举类型处理器 |
+| `handler/` | `JsonbTypeHandler` | JSONB类型处理器 |
 
 ---
 
-## 重构成果总结
+## 🔄 架构演进历史
 
-### 最终项目结构
-```
-data-platform (父聚合模块)
-├── data-platform-api (公共契约模块)
-├── data-platform-common (公共工具模块)
-├── data-platform-gateway
-├── data-platform-security
-├── data-platform-sdk
-├── data-platform-vendor/
-│   ├── data-platform-vendor-api/ (契约层)
-│   └── data-platform-vendor-service/ (业务层)
-├── ... (其他 14 个模块同结构)
-```
+### 2026-05-16 五域收敛
+
+**变更**: 从 13 个独立小服务合并为 5 个业务域
+
+| 原模块 | 合并到 | 域 |
+|--------|--------|---|
+| data-platform-vendor | masterdata | masterdata |
+| data-platform-interface | masterdata | masterdata |
+| data-platform-graylog | masterdata | masterdata |
+| data-platform-caller | access | access |
+| data-platform-call | access | access |
+| data-platform-billing | billing | billing |
+| data-platform-tenant | identity | identity |
+| data-platform-iam | identity | identity |
+| data-platform-security | identity | identity |
+| data-platform-monitor | governance | governance |
+| data-platform-log | governance | governance |
+| data-platform-quality | governance | governance |
+| data-platform-trace | governance | governance |
+
+**提交记录**: 五域收敛基线合入 dev
+
+---
+
+## 📊 服务端口总览
+
+| 域 | 服务名 | 端口 | 说明 |
+|----|--------|------|------|
+| - | data-platform-gateway | 8888 | API网关 |
+| masterdata | data-platform-masterdata | 8081 | 厂商/接口/灰度 |
+| access | data-platform-access | 8082 | 调用方/调用 |
+| billing | data-platform-billing | 8084 | 计费 |
+| identity | data-platform-identity | 8086 | 身份/租户 |
+| governance | data-platform-governance | 8085 | 监控/日志/质量 |
+| - | data-platform-sdk | 8087 | SDK生成 |
+| - | data-platform-web | 3000 | 前端 |
+
+---
+
+## 🔧 依赖关系
+
+### 服务间调用 (Feign)
+
+| 调用方 | 被调用方 | 接口 | 说明 |
+|--------|----------|------|------|
+| access | masterdata | `MasterdataFeignClient` | 获取厂商配置、接口定义 |
+| access | identity | `IdentityFeignClient` | 验证API Key |
+| billing | access | `CallContractController` | 获取调用记录 |
+| governance | - | `GovernanceFeignClient` | 数据质量/血缘 |
 
 ### 依赖规则
-- **service → api → data-platform-api**
-- 禁止反向依赖
+
+- **service → api → common-contract**
 - 禁止循环依赖
-
-### Git 提交记录
-- `c205b2c` refactor: 创建 data-platform-api 公共契约模块
-- `9a9f34c` refactor: 重构 data-platform-common，优化依赖管理
-- `5fb0a04` refactor: 重构 data-platform-vendor 为 api + service 双模块
-- `d2dd145` refactor: 重构 data-platform-billing
-- `ccf50d2` refactor: 批量重构业务模块为 api + service 双模块结构
-- `ae3749c` fix: 修复测试模块依赖问题
-- `e5802d9` fix: 修复契约分离架构重构残留问题
+- 域间调用只能通过 `api` 模块的 Feign 契约
 
 ---
 
-## 📊 MVP 完成状态
+## 🏗️ 五域收敛后续推进任务 (2026-05-16 规划)
 
-### ✅ Sprint 1: 基础架构修复 (完成)
+> 来源: `docs/2026-05-16-five-domain-next-phase-plan.md`
+> 执行顺序按阶段 A→F，同一阶段内任务可并行。
+> **更新**: 2026-05-17 所有阶段任务已完成。
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 模块依赖修复 | ✅ 完成 | 2026-04-26 |
-| 数据库字段添加 | ✅ 完成 | 2026-04-26 |
-| 统一实体类到common模块 | ✅ 完成 | 2026-04-26 |
-| 修复VendorConfig实体映射 | ✅ 完成 | 2026-04-26 |
+### 阶段 A: 基线守护与协作规则
 
-### ✅ Sprint 2: 厂商适配器核心 (完成)
+- [x] **架构扫描测试** — `arch-scan.sh`，5 项检查（跨域依赖、api 重型依赖、全包扫描、跨域 import、旧模块残留）✅
+- [x] **合并前检查清单** — 已写入 README.md「合并前检查」章节 ✅
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 创建VendorAdapter接口 | ✅ 完成 | 2026-04-26 |
-| 创建AbstractVendorAdapter基类 | ✅ 完成 | 2026-04-26 |
-| 实现HttpVendorAdapter | ✅ 完成 | 2026-04-26 |
-| 实现VendorAdapterFactory | ✅ 完成 | 2026-04-26 |
-| 创建VendorAdapterConfig | ✅ 完成 | 2026-04-26 |
-| 参数映射转换器 | ✅ 完成 | 2026-04-26 |
-| 签名认证实现 (HMAC-SHA256/MD5) | ✅ 完成 | 2026-04-26 |
+### 阶段 B: 启动烟雾测试
 
-### ✅ Sprint 3: 动态计费实现 (完成)
+- [x] **五域服务启动验证** — 6/6 端口监听正常，服务响应正常，无 Bean/Mapper 冲突 ✅
+- [x] **Gateway 路由映射梳理** — 12 条路由全部可达，发现 1 处 data-type/datatype 路径不匹配 ✅
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 创建BillingCalculator接口 | ✅ 完成 | 2026-04-26 |
-| 实现StandardBillingCalculator | ✅ 完成 | 2026-04-26 |
-| 实现TieredBillingCalculator | ✅ 完成 | 2026-04-26 |
-| 实现DynamicBillingCalculator | ✅ 完成 | 2026-04-26 |
-| 完善BillingRuleService | ✅ 完成 | 2026-04-26 |
-| 集成计费到DataQueryService | ✅ 完成 | 2026-04-26 |
+### 阶段 B+: Gateway 熔断补充
 
-### ✅ Sprint 4: 稳定性增强 (完成)
+- [x] **CircuitBreakerFilter** — `filter/CircuitBreakerFilter.java`，4 个测试通过 ✅
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 添加Resilience4j依赖 | ✅ 完成 | 2026-04-26 |
-| 创建CircuitBreakerManager | ✅ 完成 | 2026-04-26 |
-| 集成熔断到VendorProxyService | ✅ 完成 | 2026-04-26 |
-| 配置重试策略 | ✅ 完成 | 2026-04-26 |
-| 多厂商自动路由 | ✅ 完成 | 2026-04-26 |
+### 阶段 C: 业务链路回归
 
-### ✅ Sprint 5: 接口管理完善 (完成)
+- [x] **P1 核心链路测试** — `smoke-test-api.sh`，覆盖主数据/访问/计费三条核心链路 ✅
+- [x] **P2 链路测试** — `smoke-test-api.sh` 补充身份租户、治理告警/日志/质量/血缘观测 ✅
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 创建api_interface表 | ✅ 完成 | 2026-04-26 |
-| 完善ApiInterface实体 | ✅ 完成 | 2026-04-26 |
-| 完善ApiInterfaceService | ✅ 完成 | 2026-04-26 |
-| 修改VendorConfig支持interfaceId | ✅ 完成 | 2026-04-26 |
-| Schema管理API | ✅ 完成 | 2026-04-26 |
-| 调用统计API | ✅ 完成 | 2026-04-26 |
+### 阶段 D: 前端接口归并
 
-### ✅ Sprint 6: 测试与优化 (完成)
+- [x] **前端 API 类型整理** — 发现 8 处重复类型、CallRecord 字段冲突、多数 API 函数未类型化 ✅
 
-| 任务 | 状态 | 完成日期 |
-|------|------|----------|
-| 集成测试用例编写 | ✅ 完成 | 2026-04-26 |
-| 性能测试与优化 | ✅ 完成 | 2026-04-26 |
-| API文档更新 | ✅ 完成 | 2026-04-26 |
-| 部署文档更新 | ✅ 完成 | 2026-04-26 |
-| 代码质量问题修复 | ✅ 完成 | 2026-04-26 |
-| MVP验收 | ✅ 完成 | 2026-04-26 |
+### 阶段 E: 文档清理
+
+- [x] **DEPLOYMENT.md 更新** — 去掉 sdk 服务行，补充发布顺序 ✅
+- [x] **CODE_WIKI.md 重写** — 架构图去掉 sdk、sdk 标注为 Jar、端口表去掉 sdk ✅
+
+### 阶段 F: 部署路径
+
+- [x] **docker-compose 更新** — 添加五域服务说明注释 ✅
 
 ---
 
-## 一、已完成功能 ✅
+## 📋 待完成功能 (P1)
 
-### 1.1 厂商适配器实现 ✅
+### 1. Gateway 增强
 
-**文件位置**: `data-platform-common/src/main/java/com/dataplatform/common/adapter/`
+- [x] 限流过滤器 (RateLimitFilter) — `filter/RateLimitFilter.java` ✅
+- [x] 认证过滤器增强 (AuthFilter) — `filter/AuthFilter.java` ✅
+- [x] 请求日志过滤器 (RequestLogFilter) — `filter/RequestLogFilter.java` ✅
+- [x] 链路追踪过滤器 (TraceIdFilter) — `filter/TraceIdFilter.java` ✅（额外实现）
+- [x] 熔断过滤器 (CircuitBreakerFilter) — `filter/CircuitBreakerFilter.java` ✅
+- [x] 外部系统统一入口增强 — 产品/场景归因、API Key 产品授权、历史缓存命中、多维统计；提交前补齐 fresh DB DDL、场景字典网关路由、维度分组统计 ✅
 
-- [x] `VendorAdapter.java` - 适配器接口
-- [x] `AbstractVendorAdapter.java` - 抽象基类（含字段映射）
-- [x] `HttpVendorAdapter.java` - HTTP适配器实现
-- [x] `VendorAdapterFactory.java` - 工厂类
-- [x] `VendorAdapterConfig.java` - 配置类
+### 2. 自动对账完善
 
-### 1.2 签名认证实现 ✅
+- [x] 厂商账单获取 (CSV 文件导入) — `/billing/reconciliation/import` ✅
+- [x] 差异比对逻辑 — `/billing/reconciliation/run|list|diffs`，按平台调用记录与厂商账单的调用量/金额双维度比对 ✅
+- [x] 差异告警通知 — `diff_warning/diff_error` 通过 governance-api 写入告警记录；系统规则补齐必填阈值并避免重复状态告警 ✅
 
-**文件位置**: `data-platform-common/src/main/java/com/dataplatform/common/security/SignatureBuilder.java`
+### 3. 前端完善
 
-- [x] HMAC-SHA256 签名算法
-- [x] MD5 签名算法
-- [x] 签名类型配置支持
-- [x] 参数排序和拼接
+- [x] 三级联动: 厂商 → 数据类型 → 接口 — 后端 `/interface/options` + 前端 data-test/interface 筛选联动 ✅
+- [x] 统一调用入口前端补齐 — 调用方产品配置、API Key 产品授权、场景字典、OpenAPI 查询测试、调用记录产品/场景/缓存筛选 ✅
 
-### 1.3 动态计费实现 ✅
+### 4. 五域收敛后修复 (2026-05-17)
 
-**文件位置**: `data-platform-common/src/main/java/com/dataplatform/common/billing/`
-
-- [x] `BillingCalculator.java` - 计费接口
-- [x] `StandardBillingCalculator.java` - 标准计费
-- [x] `TieredBillingCalculator.java` - 阶梯计费
-- [x] `DynamicBillingCalculator.java` - 动态计费(SLA补偿)
-- [x] `BillingCalculatorFactory.java` - 工厂类
-
-### 1.4 熔断和重试机制 ✅
-
-**文件位置**: `data-platform-common/src/main/java/com/dataplatform/common/circuitbreaker/CircuitBreakerManager.java`
-
-- [x] 失败率50%触发熔断
-- [x] 熔断30秒后进入半开状态
-- [x] 半开状态允许5次调用
-- [x] 最多重试3次，间隔500ms
-
-### 1.5 多厂商自动路由 ✅
-
-**文件位置**: `data-platform-call/src/main/java/com/dataplatform/call/service/VendorProxyService.java`
-
-- [x] 主厂商异常自动切换备用厂商
-- [x] 循环调用检测
-- [x] 熔断时自动切换
-
-### 1.6 接口管理功能 ✅
-
-**文件位置**: `data-platform-interface/`
-
-- [x] `api_interface` 表创建
-- [x] `ApiInterface` 实体
-- [x] `ApiInterfaceService` 服务
-- [x] `ApiInterfaceController` 控制器
-- [x] Schema 管理 API
-- [x] 调用统计 API
-
-### 1.7 Redis 缓存优化 ✅
-
-- [x] `VendorInfo` 缓存
-- [x] `ApiInterface` 缓存
-- [x] `BillingRule` 缓存
-- [x] `SecretKey` 缓存
-
-### 1.8 测试覆盖 ✅
-
-**文件位置**: `data-platform-test/src/test/java/com/dataplatform/test/`
-
-| 测试类 | 测试数 | 状态 |
-|--------|--------|------|
-| SignatureBuilderTest | 12 | ✅ 通过 |
-| BillingCalculatorTest | 22 | ✅ 通过 |
-| CircuitBreakerManagerTest | 16 | ✅ 通过 |
-| HttpVendorAdapterTest | 13 | ✅ 通过 |
-| InterfaceApiTest | 17 | ✅ 编译通过 |
+- [x] Gateway 路由 `/api/v1/data-type/**` 移除 — 与 Controller `/datatype` 不匹配，删除死路由 ✅
+- [x] Gateway actuator/health 放行 — `sa-token.check-exclude-paths` 添加 `/actuator/**`、`/health/**` ✅
+- [x] 前端 CallRecord 类型统一 — 三处定义合并为 `types/index.ts` 单一来源 ✅
+- [x] 前端 API 函数泛型补充 — 14 个 API 文件添加类型参数 (call/quality/graylog/billing/config/datatype/log/permission/role/security/trace/user/caller/vendor-config) ✅
 
 ---
 
-## 二、待完成功能 (P1 - 后续版本)
+## 📋 后续迭代 (P2)
 
-### 2.1 Gateway增强
-
-**优先级**: P1
-
-待完成任务:
-
-- [ ] 添加 `RateLimitFilter` 限流过滤器
-- [ ] 添加 `AuthFilter` 认证过滤器增强
-- [ ] 添加 `CircuitBreakerFilter` 熔断过滤器
-- [ ] 添加 `RequestLogFilter` 请求日志过滤器
-- [ ] 实现请求ID传递 (用于链路追踪)
-
-**验收标准**:
-- 网关层统一限流 (按API Key)
-- 请求日志完整记录
+- [x] 配置热更新 (Nacos) — Gateway `CircuitBreakerFilter`、`RateLimitFilter` 与 masterdata 厂商配置缓存 TTL 接入 `@RefreshScope`/配置项热更新样例 ✅
+- [x] Kafka 异步化 — OpenAPI 调用记录写入 Kafka `call-record`，access 消费端落库，billing 消费端按 `request_id` 幂等聚合 `billing_daily`，持久化失败交由 Kafka 重试 ✅
+- [x] Prometheus 指标暴露 — Gateway 与五域服务统一暴露 `/actuator/prometheus` ✅
 
 ---
 
-### 2.2 自动对账完善
+## 📋 V2.0 规划
 
-**优先级**: P1
-
-待完成任务:
-
-- [ ] 实现厂商账单获取 (API或文件)
-- [ ] 完善差异比对逻辑
-- [ ] 差异告警通知
-
-**验收标准**:
-- 自动生成日对账记录
-- 超阈值自动告警
-
----
-
-### 2.3 前端完善
-
-**优先级**: P1
-
-待完成任务:
-
-- [ ] 完善接口管理页面 (`/interface`)
-- [ ] 完善数据查询测试页面 (`/data-test`)
-- [ ] 实现三级联动: 厂商 → 数据类型 → 接口
+- [x] 数据溯源 (SkyWalking) ✅
+  - 第一阶段: governance trace 血缘实体/DDL/API 对齐，JSON body 写入与上下游查询；OpenAPI 调用记录已保存 `X-Trace-Id`
+  - 第二阶段: SkyWalking OAP+UI docker-compose 编排、Java Agent 下载/启动脚本、Feign 拦截器 `TraceFeignRequestInterceptor` 跨域传播 `X-Trace-Id`、`TraceIdMdcFilter` 写入 SLF4J MDC、6 服务日志 pattern 注入 `%X{traceId}`
+  - 第三阶段 (2026-05-27): `TraceContextBridge` 桥接工具类（反射检测 SkyWalking 可用性，零硬依赖），`TraceIdMdcFilter` 注入 SkyWalking 原生 trace ID 到 MDC，`verify-trace.sh` 验证脚本，`apm-toolkit-trace:9.4.0` provided 依赖，`.gitignore` 排除 agent 目录
+- [x] SDK 多语言生成 ✅
+  - Freemarker 模板引擎驱动，支持 Java/Python/Go 三语言
+  - `ApiSpec` 模型 + `ApiSpec.fromDefaults()` 硬编码 14 个端点
+  - `SDKCli` 纯 Java CLI 入口（`--lang`、`--base-url`、`--output`）
+  - 6 个 Freemarker 模板：client + model 各 3 语言
+  - 向后兼容旧 `generateJavaSDK(baseUrl)` API
+  - 13 个单元测试通过
+- [x] 灰度发布增强 ✅
+  - `GrayVendorResolver` 核心组件：内置 30s TTL 缓存、条件评估（random/header/caller/ip）、权重随机选择
+  - `GraylogService.getActiveRule()` 增强：加入 startTime/endTime 时间窗口校验
+  - `OpenApiQueryController.resolveApiRoute()` 接入灰度路由：2+ 个 active 配置时按规则选择厂商
+  - 静默降级：Feign 异常时回落稳定厂商，无用户感知
+  - 14 个单元测试覆盖全场景
 
 ---
 
-## 三、待完成功能 (P2 - 后续迭代)
-
-### 3.1 配置热更新
-
-- [ ] 启用 Nacos 配置中心
-- [ ] 实现配置监听机制
-- [ ] 核心配置使用 `@RefreshScope`
-- [ ] 实现配置版本管理
-
-### 3.2 Kafka异步化
-
-- [ ] 启用 Kafka 消息队列
-- [ ] 调用记录改为异步写入
-- [ ] 实现消费者批量入库
-
-### 3.3 监控指标完善
-
-- [ ] 各服务暴露 Prometheus metrics 端点
-- [ ] 添加自定义业务指标
-- [ ] 配置 Grafana 仪表盘
-
-### 3.4 代码质量持续改进
-
-- [ ] 统一使用 @Autowired 注入 ObjectMapper
-- [ ] 提取通用缓存工具类
-- [ ] 添加更多集成测试
-
----
-
-## 四、高级功能 (P3 - V2.0)
-
-### 4.1 数据溯源
-
-- [ ] 统一 traceId 生成规则
-- [ ] 各服务传递 traceId
-- [ ] 接入 SkyWalking 可视化
-- [ ] 记录详细调用上下文
-
-### 4.2 数据质量监控
-
-- [ ] 创建 `data_quality_rule` 表
-- [ ] 创建 `data_quality_record` 表
-- [ ] 实现完整性检测
-- [ ] 实现准确性检测
-- [ ] 实现质量评分逻辑
-
-### 4.3 字段级加密
-
-- [ ] 实现 AES-256-GCM 加密
-- [ ] 密钥管理
-- [ ] 敏感字段自动加解密
-
-### 4.4 SDK生成
-
-- [ ] Java SDK 生成
-- [ ] Python SDK 生成
-- [ ] Go SDK 生成
-
-### 4.5 灰度发布增强
-
-- [ ] 支持按百分比分流
-- [ ] 支持按用户特征分流
-- [ ] 自动回滚机制
-
----
-
-## 五、交付文档
-
-| 文档 | 路径 | 状态 |
-|------|------|------|
-| README | `README-complete.md` | ✅ 已更新 |
-| API文档 | `docs/API.md` | ✅ 已创建 |
-| 部署文档 | `docs/DEPLOYMENT.md` | ✅ 已创建 |
-| 性能报告 | `docs/PERFORMANCE.md` | ✅ 已创建 |
-| 验收报告 | `docs/MVP_ACCEPTANCE.md` | ✅ 已创建 |
-
----
-
-## 六、测试结果
-
-### 单元测试
-
-```
-Tests run: 63, Failures: 0, Errors: 0, Skipped: 0
-BUILD SUCCESS
-```
-
-### 编译状态
-
-```
-mvn compile -DskipTests
-BUILD SUCCESS
-```
-
----
-
-## 七、版本规划
-
-### V1.0 (当前 - MVP) ✅
-
-- [x] 厂商适配器核心功能
-- [x] 签名认证
-- [x] 动态计费
-- [x] 熔断重试
-- [x] 多厂商路由
-- [x] 接口管理
-- [x] 基础测试覆盖
-
-### V1.1 (计划)
-
-- [ ] Gateway增强
-- [ ] 自动对账完善
-- [ ] 前端页面完善
-
-### V2.0 (计划)
-
-- [ ] 数据溯源
-- [ ] 数据质量监控
-- [ ] 字段级加密
-- [ ] SDK生成
-
----
-
-**文档维护**: 按版本更新
-**最后更新**: 2026-04-26
-**当前版本**: V1.0 MVP
+**文档维护**: 按架构变更更新
+**最后更新**: 2026-05-27

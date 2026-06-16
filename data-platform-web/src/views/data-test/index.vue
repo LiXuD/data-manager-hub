@@ -18,6 +18,16 @@
 
       <!-- 三级联动选择器 -->
       <div class="selector-row">
+        <div class="selector-item wide">
+          <label class="selector-label">API Key</label>
+          <el-input
+            v-model="apiKey"
+            placeholder="请输入外部调用 API Key"
+            show-password
+            class="selector-input"
+          />
+        </div>
+
         <div class="selector-item">
           <label class="selector-label">厂商</label>
           <el-select
@@ -49,7 +59,7 @@
             <el-option
               v-for="dt in filteredDataTypeList"
               :key="dt.id"
-              :label="dt.typeName"
+              :label="dt.dataTypeName"
               :value="dt.id"
             />
           </el-select>
@@ -72,6 +82,79 @@
               :value="intf.id"
             />
           </el-select>
+        </div>
+      </div>
+
+      <div class="selector-row">
+        <div class="selector-item">
+          <label class="selector-label">调用方</label>
+          <el-select
+            v-model="selectedCallerId"
+            placeholder="用于加载产品"
+            clearable
+            filterable
+            class="selector-input"
+            @change="handleCallerChange"
+          >
+            <el-option
+              v-for="caller in callerList"
+              :key="caller.id"
+              :label="caller.callerName"
+              :value="caller.id"
+            />
+          </el-select>
+        </div>
+
+        <div class="selector-item">
+          <label class="selector-label">产品</label>
+          <el-select
+            v-model="productCode"
+            placeholder="请选择或输入产品编码"
+            clearable
+            filterable
+            allow-create
+            class="selector-input"
+          >
+            <el-option
+              v-for="product in productList"
+              :key="product.id || product.productCode"
+              :label="`${product.productName} (${product.productCode})`"
+              :value="product.productCode"
+            />
+          </el-select>
+        </div>
+
+        <div class="selector-item">
+          <label class="selector-label">场景</label>
+          <el-select
+            v-model="sceneCode"
+            placeholder="请选择调用场景"
+            clearable
+            filterable
+            class="selector-input"
+          >
+            <el-option
+              v-for="scene in sceneList"
+              :key="scene.id || scene.sceneCode"
+              :label="`${scene.sceneName} (${scene.sceneCode})`"
+              :value="scene.sceneCode"
+            />
+          </el-select>
+        </div>
+
+        <div class="selector-item cache-item">
+          <label class="selector-label">历史缓存</label>
+          <div class="cache-controls">
+            <el-switch v-model="useCache" />
+            <el-input-number
+              v-model="cacheDays"
+              :min="1"
+              :max="30"
+              :disabled="!useCache"
+              controls-position="right"
+              class="cache-days"
+            />
+          </div>
         </div>
       </div>
 
@@ -129,6 +212,12 @@
           </svg>
           <span>查询成功</span>
         </div>
+        <div class="result-summary">
+          <span>请求ID: {{ result?.platformRequestId || result?.requestId || '-' }}</span>
+          <span>产品: {{ result?.productCode || productCode || '-' }}</span>
+          <span>场景: {{ result?.sceneCode || sceneCode || '-' }}</span>
+          <span>费用: ¥{{ (result?.cost || 0).toFixed(2) }}</span>
+        </div>
         <div class="json-viewer">
           <pre>{{ formattedResultData }}</pre>
         </div>
@@ -158,19 +247,33 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getVendorList } from '@/api/vendor'
 import { getDataTypeList } from '@/api/datatype'
-import { getInterfacesByDataType } from '@/api/interface'
-import { executeQuery } from '@/api/data-query'
-import type { Vendor, DataType, ApiInterface, DataQueryResponse } from '@/types'
+import { getInterfaceOptions } from '@/api/interface'
+import { executeOpenApiQuery } from '@/api/data-query'
+import { getCallerList, getCallerProducts } from '@/api/caller'
+import { getCallSceneList } from '@/api/call-scene'
+import type { Vendor, DataType, ApiInterface, DataQueryResponse, CallerDTO, CallerProductDTO, CallSceneDTO } from '@/types'
+
+type CallerOption = CallerDTO & { id: number }
 
 // 选择器数据
 const vendorList = ref<Vendor[]>([])
 const dataTypeList = ref<DataType[]>([])
 const interfaceList = ref<ApiInterface[]>([])
+const vendorInterfaceOptions = ref<ApiInterface[]>([])
+const callerList = ref<CallerOption[]>([])
+const productList = ref<CallerProductDTO[]>([])
+const sceneList = ref<CallSceneDTO[]>([])
 
 // 选中值
 const selectedVendorId = ref<number | null>(null)
 const selectedDataTypeId = ref<number | null>(null)
 const selectedInterfaceId = ref<number | null>(null)
+const selectedCallerId = ref<number | null>(null)
+const apiKey = ref('')
+const productCode = ref('')
+const sceneCode = ref('')
+const useCache = ref(false)
+const cacheDays = ref(3)
 
 // 请求参数
 const requestParams = ref('{\n  \n}')
@@ -180,15 +283,18 @@ const jsonError = ref('')
 const loading = ref(false)
 const result = ref<DataQueryResponse | null>(null)
 
-// 计算属性: 根据选中的厂商过滤数据类型
+// 计算属性: 根据厂商可用接口反推数据类型
 const filteredDataTypeList = computed(() => {
-  if (!selectedVendorId.value) return []
-  return dataTypeList.value.filter(dt => dt.vendorId === selectedVendorId.value)
+  if (!selectedVendorId.value) {
+    return []
+  }
+  const dataTypeIds = new Set(vendorInterfaceOptions.value.map(item => item.dataTypeId))
+  return dataTypeList.value.filter(item => item.id && dataTypeIds.has(item.id))
 })
 
 // 是否可以执行查询
 const canExecute = computed(() => {
-  return selectedVendorId.value && selectedDataTypeId.value
+  return Boolean(apiKey.value.trim() && selectedInterfaceId.value && productCode.value.trim() && sceneCode.value)
 })
 
 // 是否有结果
@@ -236,12 +342,39 @@ const loadDataTypes = async () => {
   }
 }
 
+const loadCallers = async () => {
+  try {
+    const res = await getCallerList({ page: 1, pageSize: 1000, status: 'active' })
+    callerList.value = (res.data || []).filter((caller): caller is CallerOption => caller.id !== undefined)
+  } catch (error) {
+    console.error('加载调用方列表失败:', error)
+  }
+}
+
+const loadScenes = async () => {
+  try {
+    const res = await getCallSceneList()
+    sceneList.value = (res.data || []).filter(scene => scene.status === 'active')
+  } catch (error) {
+    console.error('加载场景列表失败:', error)
+  }
+}
+
 // 厂商变更处理
-const handleVendorChange = () => {
+const handleVendorChange = async () => {
   selectedDataTypeId.value = null
   selectedInterfaceId.value = null
   interfaceList.value = []
+  vendorInterfaceOptions.value = []
   result.value = null
+
+  if (!selectedVendorId.value) return
+  try {
+    const res = await getInterfaceOptions({ vendorId: selectedVendorId.value, status: 'active' })
+    vendorInterfaceOptions.value = res.data || []
+  } catch (error) {
+    console.error('加载厂商接口选项失败:', error)
+  }
 }
 
 // 数据类型变更处理
@@ -251,8 +384,12 @@ const handleDataTypeChange = async () => {
 
   if (selectedDataTypeId.value) {
     try {
-      const res = await getInterfacesByDataType(selectedDataTypeId.value)
-      interfaceList.value = res || []
+      const res = await getInterfaceOptions({
+        vendorId: selectedVendorId.value || undefined,
+        dataTypeId: selectedDataTypeId.value,
+        status: 'active'
+      })
+      interfaceList.value = res.data || []
     } catch (error) {
       console.error('加载接口列表失败:', error)
       interfaceList.value = []
@@ -265,6 +402,19 @@ const handleDataTypeChange = async () => {
 // 接口变更处理
 const handleInterfaceChange = () => {
   result.value = null
+}
+
+const handleCallerChange = async () => {
+  productCode.value = ''
+  productList.value = []
+  result.value = null
+  if (!selectedCallerId.value) return
+  try {
+    const res = await getCallerProducts(selectedCallerId.value)
+    productList.value = (res.data || []).filter(product => product.status === 'active')
+  } catch (error) {
+    console.error('加载产品列表失败:', error)
+  }
 }
 
 // 格式化JSON
@@ -291,12 +441,15 @@ const handleExecute = async () => {
   }
 
   // 获取选中的对象
-  const vendor = vendorList.value.find(v => v.id === selectedVendorId.value)
   const dataType = dataTypeList.value.find(dt => dt.id === selectedDataTypeId.value)
   const intf = interfaceList.value.find(i => i.id === selectedInterfaceId.value)
 
-  if (!vendor || !dataType) {
-    ElMessage.warning('请选择厂商和数据类型')
+  if (!dataType || !intf) {
+    ElMessage.warning('请选择数据类型和接口')
+    return
+  }
+  if (!apiKey.value.trim() || !productCode.value.trim() || !sceneCode.value) {
+    ElMessage.warning('请填写 API Key、产品和场景')
     return
   }
 
@@ -304,10 +457,13 @@ const handleExecute = async () => {
   result.value = null
 
   try {
-    const res = await executeQuery({
-      vendorCode: vendor.vendorCode,
-      dataTypeCode: dataType.typeCode,
-      interfaceCode: intf?.interfaceCode,
+    const res = await executeOpenApiQuery(apiKey.value.trim(), {
+      requestId: `web-${Date.now()}`,
+      apiCode: intf.interfaceCode,
+      productCode: productCode.value.trim(),
+      sceneCode: sceneCode.value,
+      useCache: useCache.value,
+      cacheDays: useCache.value ? cacheDays.value : undefined,
       params
     })
     result.value = res
@@ -335,15 +491,25 @@ const handleClear = () => {
   selectedVendorId.value = null
   selectedDataTypeId.value = null
   selectedInterfaceId.value = null
+  selectedCallerId.value = null
+  apiKey.value = ''
+  productCode.value = ''
+  sceneCode.value = ''
+  useCache.value = false
+  cacheDays.value = 3
   requestParams.value = '{\n  \n}'
   jsonError.value = ''
   result.value = null
   interfaceList.value = []
+  vendorInterfaceOptions.value = []
+  productList.value = []
 }
 
 onMounted(() => {
   loadVendors()
   loadDataTypes()
+  loadCallers()
+  loadScenes()
 })
 </script>
 
@@ -397,6 +563,11 @@ onMounted(() => {
   min-width: 200px;
 }
 
+.selector-item.wide {
+  flex: 2;
+  min-width: 320px;
+}
+
 .selector-label {
   display: block;
   font-size: 13px;
@@ -407,6 +578,17 @@ onMounted(() => {
 
 .selector-input {
   width: 100%;
+}
+
+.cache-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.cache-days {
+  width: 112px;
 }
 
 /* JSON编辑器 */
@@ -501,6 +683,21 @@ onMounted(() => {
 .result-status.error {
   background: var(--el-color-danger-light-9);
   color: var(--el-color-danger);
+}
+
+.result-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.result-summary span {
+  background: var(--color-bg-light);
+  border-radius: 6px;
+  padding: 6px 10px;
 }
 
 /* JSON查看器 */

@@ -1,9 +1,12 @@
 # =====================================================
 # 数据管理平台 - Docker Compose 配置
 #
-# 使用说明:
-# - 数据库: 使用本地PostgreSQL (localhost:5432)
-# - 其他中间件: 使用Docker启动
+# 本文件仅启动中间件 (Redis/Kafka/Nacos 等)。
+# 五域 Java 服务通过 ./start-services.sh 以 mvn spring-boot:run 启动。
+#
+# 五域服务:
+#   masterdata (8081), access (8082), billing (8084),
+#   governance (8085), identity (8086), gateway (8888)
 #
 # 启动命令: docker-compose up -d
 # 停止命令: docker-compose down
@@ -52,17 +55,11 @@ services:
   # Nacos 服务注册与配置中心
   nacos:
     image: nacos/nacos-server:v2.3.2
+    platform: linux/amd64
     container_name: data-platform-nacos
     environment:
       MODE: standalone
       PREFER_HOST_MODE: hostname
-      SPRING_DATASOURCE_PLATFORM: mysql
-      MYSQL_SERVICE_HOST: host.docker.internal
-      MYSQL_SERVICE_PORT: 5432
-      MYSQL_SERVICE_DB_NAME: nacos_config
-      MYSQL_SERVICE_USER: postgres
-      MYSQL_SERVICE_PASSWORD: 123456
-      MYSQL_SERVICE_DB_PARAM: characterEncoding=utf8&connectTimeout=10000&socketTimeout=30000&autoReconnect=true&useSSL=false
       JVM_XMS: 512m
       JVM_XMX: 512m
       JVM_XMN: 256m
@@ -100,7 +97,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin123
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
-      - "3000:3000"
+      - "3100:3100"
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:
@@ -140,6 +137,35 @@ services:
       - /var/log/data-platform:/var/log/data-platform
     depends_on:
       - elasticsearch
+
+  # SkyWalking OAP 链路追踪服务端
+  skywalking-oap:
+    image: apache/skywalking-oap-server:9.4.0
+    container_name: data-platform-skywalking-oap
+    environment:
+      SW_STORAGE: h2
+      SW_STORAGE_H2_URL: "jdbc:h2:mem:skywalking-oap-db"
+      SW_CORE_REST_PORT: 12800
+      SW_CORE_GRPC_PORT: 11800
+    ports:
+      - "11800:11800"
+      - "12800:12800"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:12800/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # SkyWalking UI 链路追踪可视化
+  skywalking-ui:
+    image: apache/skywalking-ui:9.4.0
+    container_name: data-platform-skywalking-ui
+    environment:
+      SW_OAP_ADDRESS: http://skywalking-oap:12800
+    ports:
+      - "8088:8080"
+    depends_on:
+      - skywalking-oap
 
 volumes:
   redis_data:

@@ -16,8 +16,8 @@
     <SearchBar @search="handleSearch" @reset="handleReset">
       <el-input v-model="searchForm.roleName" placeholder="搜索角色名称" clearable class="search-input" @keyup.enter="handleSearch" />
       <el-select v-model="searchForm.status" placeholder="状态" clearable class="search-select">
-        <el-option :label="STATUS_LABELS[USER_STATUS.ACTIVE]" :value="USER_STATUS.ACTIVE" />
-        <el-option :label="STATUS_LABELS[USER_STATUS.INACTIVE]" :value="USER_STATUS.INACTIVE" />
+        <el-option :label="STATUS_LABELS[COMMON_STATUS.ACTIVE]" :value="COMMON_STATUS.ACTIVE" />
+        <el-option :label="STATUS_LABELS[COMMON_STATUS.INACTIVE]" :value="COMMON_STATUS.INACTIVE" />
       </el-select>
     </SearchBar>
 
@@ -34,7 +34,7 @@
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-switch v-model="row.status" :active-value="USER_STATUS.ACTIVE" :inactive-value="USER_STATUS.INACTIVE" @change="handleStatusChange(row)" />
+            <el-switch v-model="row.status" :active-value="COMMON_STATUS.ACTIVE" :inactive-value="COMMON_STATUS.INACTIVE" @change="handleStatusChange(row)" />
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170">
@@ -84,7 +84,26 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 权限配置弹窗 -->
+    <el-dialog v-model="permissionVisible" title="配置权限" width="800px" class="permission-dialog">
+      <div class="permission-config-container">
+        <el-transfer
+          v-model="selectedPermissions"
+          :data="permissionList"
+          :titles="['可选权限', '已授权限']"
+          :props="{ key: 'id', label: 'permissionName' }"
+          class="custom-transfer"
+        />
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="permissionVisible = false" size="large">取消</el-button>
+          <el-button type="primary" :loading="submitting" @click="handleSavePermissions" size="large">确定</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -93,30 +112,33 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { request } from '@/utils/request'
+import { getRoleList, createRole, updateRole, deleteRole, updateRoleStatus, assignPermissions, getRolePermissionIds } from '@/api/role'
+import { getAllPermissions } from '@/api/permission'
 import PageHeader from '@/components/PageHeader.vue'
 import SearchBar from '@/components/SearchBar.vue'
-import { USER_STATUS, STATUS_LABELS } from '@/constants'
+import { COMMON_STATUS, STATUS_LABELS } from '@/constants'
 
 interface Role { id: number; roleCode: string; roleName: string; description: string; status: string; createdAt: string }
+interface Permission { id: number; permissionCode: string; permissionName: string }
 
 const loading = ref(false)
+const submitting = ref(false)
 const tableData = ref<Role[]>([])
 const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 const searchForm = reactive({ roleName: '', status: '' })
 const dialogVisible = ref(false)
-const form = reactive({ id: null as number | null, roleCode: '', roleName: '', description: '', status: 'active' })
+const form = reactive({ id: null as number | null, roleCode: '', roleName: '', description: '', status: COMMON_STATUS.ACTIVE })
 
-interface RoleListResponse {
-  data?: { records?: Role[]; total?: number } | Role[]
-  total?: number
-}
+const permissionVisible = ref(false)
+const permissionList = ref<Permission[]>([])
+const selectedPermissions = ref<number[]>([])
+const currentRoleId = ref<number | null>(null)
 
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<RoleListResponse>('/api/v1/role/list', { params: { page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm } })
+    const res = await getRoleList({ page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm })
     const data = res.data
     if (data && 'records' in data && Array.isArray(data.records)) {
       tableData.value = data.records
@@ -126,24 +148,90 @@ const fetchList = async () => {
       total.value = res.total || 0
     }
   } catch {
-    tableData.value = [
-      { id: 1, roleCode: 'ADMIN', roleName: '系统管理员', description: '拥有所有权限', status: 'active', createdAt: '2026-01-01 10:00:00' },
-      { id: 2, roleCode: 'TENANT_ADMIN', roleName: '租户管理员', description: '租户管理权限', status: 'active', createdAt: '2026-01-02 10:00:00' },
-      { id: 3, roleCode: 'OPERATOR', roleName: '运营人员', description: '日常运营操作', status: 'active', createdAt: '2026-01-03 10:00:00' },
-      { id: 4, roleCode: 'VIEWER', roleName: '只读用户', description: '查看数据权限', status: 'active', createdAt: '2026-01-04 10:00:00' }
-    ]
-    total.value = 4
+    tableData.value = []
+    total.value = 0
   } finally { loading.value = false }
 }
 
 const handleSearch = () => { pagination.currentPage = 1; fetchList() }
 const handleReset = () => { searchForm.roleName = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
-const handleAdd = () => { Object.assign(form, { id: null, roleCode: '', roleName: '', description: '', status: 'active' }); dialogVisible.value = true }
+const handleAdd = () => { Object.assign(form, { id: null, roleCode: '', roleName: '', description: '', status: COMMON_STATUS.ACTIVE }); dialogVisible.value = true }
 const handleEdit = (row: Role) => { Object.assign(form, { ...row }); dialogVisible.value = true }
-const handleDelete = async (row: Role) => { await ElMessageBox.confirm(`确定要删除角色"${row.roleName}"吗？`, '提示', { type: 'warning' }); ElMessage.success('删除成功'); fetchList() }
-const handleSubmit = async () => { if (!form.roleCode || !form.roleName) { ElMessage.warning('请填写角色编码和角色名称'); return } ElMessage.success('保存成功'); dialogVisible.value = false; fetchList() }
-const handlePermission = (row: Role) => { ElMessage.info(`配置角色"${row.roleName}"的权限`) }
-const handleStatusChange = (row: Role) => { ElMessage.success(row.status === 'active' ? '已启用' : '已禁用') }
+
+const handleDelete = async (row: Role) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除角色"${row.roleName}"吗？`, '提示', { type: 'warning' })
+    await deleteRole(row.id)
+    ElMessage.success('删除成功')
+    fetchList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+const handleSubmit = async () => {
+  if (!form.roleCode || !form.roleName) {
+    ElMessage.warning('请填写角色编码和角色名称')
+    return
+  }
+  submitting.value = true
+  try {
+    const payload = { ...form, id: form.id ?? undefined }
+    if (form.id) {
+      await updateRole(form.id, payload)
+    } else {
+      await createRole(payload)
+    }
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    fetchList()
+  } catch (error) {
+    ElMessage.error('保存失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const handleStatusChange = async (row: Role) => {
+  try {
+    await updateRoleStatus(row.id, row.status)
+    ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
+  } catch (error) {
+    row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
+    ElMessage.error('状态更新失败')
+  }
+}
+
+const handlePermission = async (row: Role) => {
+  currentRoleId.value = row.id
+  try {
+    const [permsRes, rolePermsRes] = await Promise.all([
+      getAllPermissions(),
+      getRolePermissionIds(row.id)
+    ])
+    permissionList.value = permsRes.data || []
+    selectedPermissions.value = rolePermsRes.data || []
+    permissionVisible.value = true
+  } catch (error) {
+    ElMessage.error('加载权限数据失败')
+  }
+}
+
+const handleSavePermissions = async () => {
+  if (!currentRoleId.value) return
+  submitting.value = true
+  try {
+    await assignPermissions(currentRoleId.value, selectedPermissions.value)
+    ElMessage.success('权限配置成功')
+    permissionVisible.value = false
+  } catch (error) {
+    ElMessage.error('权限配置失败')
+  } finally {
+    submitting.value = false
+  }
+}
 
 onMounted(() => { fetchList() })
 </script>
@@ -157,4 +245,70 @@ onMounted(() => { fetchList() })
 .code-tag { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); background: var(--color-bg-light); padding: 4px 10px; border-radius: 6px; }
 .time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
 .pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }
+
+.permission-dialog :deep(.el-dialog__header) {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.permission-dialog :deep(.el-dialog__title) {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.permission-config-container {
+  padding: 8px 0;
+}
+
+.custom-transfer {
+  --el-transfer-panel-width: 300px;
+}
+
+.custom-transfer :deep(.el-transfer-panel) {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.custom-transfer :deep(.el-transfer-panel__header) {
+  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+  padding: 16px 20px;
+}
+
+.custom-transfer :deep(.el-transfer-panel__header .el-checkbox__label) {
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.custom-transfer :deep(.el-transfer-panel__header .el-checkbox__inner) {
+  border-color: white;
+}
+
+.custom-transfer :deep(.el-transfer-panel__body) {
+  height: 400px;
+}
+
+
+
+.custom-transfer :deep(.el-transfer-panel__item) {
+  border-radius: 8px;
+}
+
+.custom-transfer :deep(.el-transfer__buttons) {
+  padding: 0 24px;
+}
+
+.custom-transfer :deep(.el-transfer__button) {
+  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+}
+
+.dialog-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
 </style>

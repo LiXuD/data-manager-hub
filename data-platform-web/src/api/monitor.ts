@@ -1,8 +1,8 @@
-import request from "@/utils/request"
-import type { AlertRule, AlertRecord, AlertRuleQueryParams, AlertRecordQueryParams, PageResult } from '@/types'
+import { request } from "@/utils/request"
+import type { AlertRule, AlertRecord, AlertRuleQueryParams, AlertRecordQueryParams, PageResponse } from '@/types'
 
 export const getAlertRuleList = (params: AlertRuleQueryParams) => {
-  return request.get<PageResult<AlertRule>>("/alert/rule/list", { params })
+  return request.get<PageResponse<AlertRule>>("/alert/rule/list", { params })
 }
 
 export const getAlertRule = (id: number) => {
@@ -26,7 +26,7 @@ export const updateAlertRuleStatus = (id: number, status: string) => {
 }
 
 export const getAlertRecordList = (params: AlertRecordQueryParams) => {
-  return request.get<PageResult<AlertRecord>>("/alert/record/list", { params })
+  return request.get<PageResponse<AlertRecord>>("/alert/record/list", { params })
 }
 
 export const getAlertRecord = (id: number) => {

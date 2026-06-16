@@ -16,6 +16,8 @@ public interface ReconciliationService {
      */
     void reconcile(Long vendorId, LocalDate billingDate);
 
+    int importVendorBills(String csvContent);
+
     /**
      * 自动对账 (T+1执行昨日对账)
      */

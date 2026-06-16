@@ -15,10 +15,10 @@
     <description>API网关服务</description>
 
     <dependencies>
-        <!-- Common -->
+        <!-- Common contract -->
         <dependency>
             <groupId>com.dataplatform</groupId>
-            <artifactId>data-platform-common</artifactId>
+            <artifactId>data-platform-common-contract</artifactId>
         </dependency>
 
         <!-- Spring Cloud Gateway -->
@@ -33,6 +33,12 @@
             <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
 
+        <!-- Nacos Discovery -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+
         <!-- Sa-Token -->
         <dependency>
             <groupId>cn.dev33</groupId>
@@ -43,6 +49,12 @@
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- Redis Reactive (for Gateway non-blocking Redis ops) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
         </dependency>
 
         <!-- Exclude auto-configurations that require database -->
@@ -61,12 +73,30 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
 
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
+        </dependency>
+
+        <!-- Reactor Test (for Gateway filter unit tests) -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring Boot Test (JUnit 5 + Spring Mock for reactive) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

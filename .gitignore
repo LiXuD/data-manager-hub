@@ -30,7 +30,6 @@ dist/
 dist-ssr/
 *.local
 .DS_Store
-*.local
 
 # NPM
 npm-debug.log*
@@ -56,18 +55,12 @@ pnpm-debug.log*
 *.sublime-*
 
 # -------- OS --------
-.DS_Store
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 
 # -------- Logs --------
 logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
 # -------- Test --------
 coverage/
@@ -79,6 +72,9 @@ junit/
 # -------- Docker --------
 .docker/
 docker-compose.override.yml
+
+# SkyWalking agent (downloaded by setup-agent.sh)
+skywalking/agent/
 
 # -------- Maven Release --------
 pom.xml.releaseBackup
@@ -105,3 +101,7 @@ CLAUDE.md
 /.claude/settings.json
 /start-dev.sh
 /开发计划-未完成功能.md
+.gitnexus
+/.trae/
+/.claude/
+/.superpowers/

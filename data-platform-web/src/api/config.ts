@@ -1,39 +1,24 @@
-import request from '@/utils/request'
-import type { PageParams } from '@/types'
-
-export interface Config {
-  id: number
-  vendorId: number
-  vendorName: string
-  configKey: string
-  configValue: string
-  configType: string
-  description?: string
-  isEncrypted: boolean
-  isActive: boolean
-  status?: string
-  createdAt: string
-  updatedAt: string
-}
+import { request } from '@/utils/request'
+import type { PageParams, Config } from '@/types'
 
 export const getConfigList = (params: PageParams & { vendorId?: number; keyword?: string }) => {
   return request.get('/config/list', { params })
 }
 
 export const getConfigById = (id: number) => {
-  return request.get(`/config/${id}`)
+  return request.get<{ data: Config }>(`/config/${id}`)
 }
 
 export const createConfig = (data: Partial<Config>) => {
-  return request.post('/config', data)
+  return request.post<{ data: Config }>('/config', data)
 }
 
 export const updateConfig = (id: number, data: Partial<Config>) => {
-  return request.put(`/config/${id}`, data)
+  return request.put<{ data: Config }>(`/config/${id}`, data)
 }
 
 export const deleteConfig = (id: number) => {
-  return request.delete(`/config/${id}`)
+  return request.delete<void>(`/config/${id}`)
 }
 
 export const getConfigByVendor = (vendorId: number) => {
@@ -41,5 +26,5 @@ export const getConfigByVendor = (vendorId: number) => {
 }
 
 export const updateConfigStatus = (id: number, status: string) => {
-  return request.patch(`/config/${id}/status`, { status })
+  return request.patch<void>(`/config/${id}/status`, { status })
 }

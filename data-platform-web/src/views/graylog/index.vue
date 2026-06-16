@@ -14,62 +14,18 @@
       </el-button>
     </div>
 
-    <!-- 统计卡片 -->
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <div class="stat-label">灰度规则总数</div>
-            <div class="stat-value">12</div>
-          </div>
-        </div>
+        <StatCard label="灰度规则总数" :value="statsData.totalCount" />
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon success">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-              <polyline points="22 4 12 14.01 9 11.01"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <div class="stat-label">启用中</div>
-            <div class="stat-value success">4</div>
-          </div>
-        </div>
+        <StatCard label="启用中" :value="statsData.activeCount" variant="success" />
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon warning">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <polyline points="12 6 12 12 16 14"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <div class="stat-label">即将过期</div>
-            <div class="stat-value warning">2</div>
-          </div>
-        </div>
+        <StatCard label="即将过期" :value="statsData.expiringCount" variant="warning" />
       </el-col>
       <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon info">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-            </svg>
-          </div>
-          <div class="stat-info">
-            <div class="stat-label">已过期</div>
-            <div class="stat-value">6</div>
-          </div>
-        </div>
+        <StatCard label="已过期" :value="statsData.expiredCount" variant="info" />
       </el-col>
     </el-row>
 
@@ -217,25 +173,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { request } from '@/utils/request'
+import { getGrayRuleList, createGrayRule, updateGrayRule, deleteGrayRule } from '@/api/graylog'
+import type { GrayRule } from '@/api/graylog'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
-
-interface GrayRule {
-  id: number
-  ruleName: string
-  serviceName: string
-  version: string
-  weight: number
-  conditionType: string
-  conditionValue: string
-  description: string
-  status: string
-  startTime: string
-  endTime: string
-  createdAt: string
-}
+// StatCard is globally registered by unplugin-vue-components
+import { GRAY_RULE_STATUS } from '@/constants'
 
 const loading = ref(false)
 const tableData = ref<GrayRule[]>([])
@@ -251,7 +195,7 @@ const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const formData = reactive<GrayRule>({
   id: 0, ruleName: '', serviceName: '', version: '', weight: 10,
-  conditionType: 'random', conditionValue: '', description: '', status: 'active',
+  conditionType: 'random', conditionValue: '', description: '', status: GRAY_RULE_STATUS.ACTIVE,
   startTime: '', endTime: '', createdAt: ''
 })
 
@@ -269,35 +213,13 @@ const conditionTypeOptions = [
   { label: 'Cookie', value: 'cookie' }
 ]
 
-interface GraylogConfig {
-  id: number
-  ruleName: string
-  serviceName: string
-  version: string
-  weight: number
-  conditionType: string
-  conditionValue: string
-  description: string
-  status: string
-  startTime: string
-  endTime: string
-  createdAt: string
-}
-
-interface GraylogListResponse {
-  data?: { records?: GraylogConfig[]; total?: number } | GraylogConfig[]
-  total?: number
-}
-
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await request.get<GraylogListResponse>('/api/v1/graylog/list', {
-      params: {
-        page: pagination.currentPage,
-        pageSize: pagination.pageSize,
-        ...searchForm
-      }
+    const res = await getGrayRuleList({
+      page: pagination.currentPage,
+      pageSize: pagination.pageSize,
+      ...searchForm
     })
     const data = res.data
     if (data && 'records' in data && Array.isArray(data.records)) {
@@ -308,13 +230,8 @@ const fetchList = async () => {
       total.value = res.total || 0
     }
   } catch {
-    tableData.value = [
-      { id: 1, ruleName: '用户服务V2灰度', serviceName: 'user-service', version: '2.0.0', weight: 20, conditionType: 'random', conditionValue: '', description: '新版本用户服务灰度发布', status: 'active', startTime: '2026-04-15 00:00:00', endTime: '2026-04-30 23:59:59', createdAt: '2026-04-14 10:00:00' },
-      { id: 2, ruleName: '计费服务V1.5', serviceName: 'billing-service', version: '1.5.0', weight: 50, conditionType: 'userId', conditionValue: '1000-5000', description: '特定用户ID范围灰度', status: 'active', startTime: '2026-04-10 00:00:00', endTime: '2026-04-25 23:59:59', createdAt: '2026-04-09 14:00:00' },
-      { id: 3, ruleName: 'API网关V3灰度', serviceName: 'gateway', version: '3.0.0', weight: 10, conditionType: 'ip', conditionValue: '192.168.1.0/24', description: '内网IP灰度', status: 'inactive', startTime: '2026-04-01 00:00:00', endTime: '2026-04-15 23:59:59', createdAt: '2026-03-31 16:00:00' },
-      { id: 4, ruleName: '监控服务升级', serviceName: 'monitor-service', version: '2.1.0', weight: 30, conditionType: 'cookie', conditionValue: 'gray=true', description: 'Cookie标记用户灰度', status: 'expired', startTime: '2026-03-01 00:00:00', endTime: '2026-03-31 23:59:59', createdAt: '2026-02-28 11:00:00' }
-    ]
-    total.value = 12
+    tableData.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
@@ -325,7 +242,7 @@ const handleReset = () => { searchForm.serviceName = ''; searchForm.status = '';
 
 const handleAdd = () => {
   dialogTitle.value = '新增灰度规则'
-  Object.assign(formData, { id: 0, ruleName: '', serviceName: '', version: '', weight: 10, conditionType: 'random', conditionValue: '', description: '', status: 'active', startTime: '', endTime: '', createdAt: '' })
+  Object.assign(formData, { id: 0, ruleName: '', serviceName: '', version: '', weight: 10, conditionType: 'random', conditionValue: '', description: '', status: GRAY_RULE_STATUS.ACTIVE, startTime: '', endTime: '', createdAt: '' })
   dialogVisible.value = true
 }
 
@@ -338,9 +255,14 @@ const handleEdit = (row: GrayRule) => {
 const handleDelete = async (row: GrayRule) => {
   try {
     await ElMessageBox.confirm(`确定要删除规则"${row.ruleName}"吗？`, '提示', { type: 'warning' })
+    await deleteGrayRule(row.id)
     ElMessage.success('删除成功')
     fetchList()
-  } catch (e) {}
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+    }
+  }
 }
 
 const handleSubmit = async () => {
@@ -348,13 +270,53 @@ const handleSubmit = async () => {
     ElMessage.warning('请填写完整信息')
     return
   }
-  ElMessage.success('保存成功')
-  dialogVisible.value = false
-  fetchList()
+  try {
+    if (formData.id) {
+      await updateGrayRule(formData.id, formData)
+    } else {
+      await createGrayRule(formData)
+    }
+    ElMessage.success('保存成功')
+    dialogVisible.value = false
+    fetchList()
+  } catch (error) {
+    ElMessage.error('保存失败')
+  }
 }
 
 const getStatusType = (status: string) => getTagType('active', status)
 const getStatusTextLocalized = (status: string) => getStatusText('active', status)
+
+type RuleCategory = 'active' | 'expiring' | 'expired'
+
+const getRuleCategory = (rule: GrayRule, today: string, now: Date): RuleCategory => {
+  if (rule.status === GRAY_RULE_STATUS.EXPIRED) return 'expired'
+  if (rule.status !== GRAY_RULE_STATUS.ACTIVE) return 'expired'
+
+  const endDate = rule.endTime?.slice(0, 10)
+  if (!endDate) return 'active'
+  if (endDate < today) return 'expired'
+
+  const daysUntilExpiry = Math.ceil((new Date(endDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  return daysUntilExpiry <= 7 ? 'expiring' : 'active'
+}
+
+const statsData = computed(() => {
+  const now = new Date()
+  const today = now.toISOString().slice(0, 10)
+
+  const counts = { active: 0, expiring: 0, expired: 0 }
+  tableData.value.forEach(rule => {
+    counts[getRuleCategory(rule, today, now)]++
+  })
+
+  return {
+    totalCount: tableData.value.length,
+    activeCount: counts.active,
+    expiringCount: counts.expiring,
+    expiredCount: counts.expired
+  }
+})
 
 onMounted(() => { fetchList() })
 </script>
@@ -369,38 +331,6 @@ onMounted(() => { fetchList() })
 .page-header .el-button svg { width: 18px; height: 18px; }
 
 .stats-row { margin-bottom: 20px; }
-.stat-card {
-  background: var(--color-bg-lighter);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  transition: all 0.3s ease;
-}
-.stat-card:hover { border-color: var(--color-primary); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 212, 170, 0.1); }
-
-.stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--color-primary), #00A080);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.stat-icon svg { width: 24px; height: 24px; color: #0A1628; }
-.stat-icon.success { background: linear-gradient(135deg, #67C23A, #5Daf34); }
-.stat-icon.warning { background: linear-gradient(135deg, #E6A23C, #d48806); }
-.stat-icon.info { background: linear-gradient(135deg, #909399, #6c6c6c); }
-
-.stat-info { flex: 1; min-width: 0; }
-.stat-label { font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 6px; }
-.stat-value { font-size: 24px; font-weight: 700; color: var(--color-text-primary); font-family: var(--font-mono); }
-.stat-value.success { color: #67C23A; }
-.stat-value.warning { color: #E6A23C; }
 
 .search-card { margin-bottom: 20px; }
 .search-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
