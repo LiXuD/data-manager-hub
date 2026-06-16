@@ -73,7 +73,7 @@ data-platform/
 
 ---
 
-## 🗄️ 数据库表 (21张)
+## 🗄️ 数据库表 (22张)
 
 | 序号 | 表名 | 说明 |
 |------|------|------|
@@ -82,22 +82,23 @@ data-platform/
 | 3 | data_type | 数据类型 |
 | 4 | vendor_config | 厂商配置 |
 | 5 | vendor_config_extended | 厂商扩展配置 |
-| 6 | config_version | 配置版本历史 |
-| 7 | caller_info | 调用方信息 |
+| 6 | caller_info | 调用方信息 |
+| 7 | caller_product | 调用方产品配置 |
 | 8 | api_key | API Key |
-| 9 | api_interface | 接口定义 |
-| 10 | interface_param | 接口参数定义 |
+| 9 | api_key_product | API Key 产品授权 |
+| 10 | call_scene | 调用场景字典 |
 | 11 | call_record | 调用记录 (按月分区) |
 | 12 | billing_daily | 日账单 |
-| 13 | billing_rule | 计费规则 |
-| 14 | user_info | 用户 |
-| 15 | role_info | 角色 |
-| 16 | user_role | 用户角色关联 |
-| 17 | alert_rule | 告警规则 |
-| 18 | alert_record | 告警记录 |
-| 19 | circuit_breaker | 熔断记录 |
-| 20 | operation_log | 操作日志 |
-| 21 | gray_rule | 灰度规则 |
+| 13 | billing_daily_event | 计费事件 (Kafka 异步) |
+| 14 | billing_rule | 计费规则 |
+| 15 | user_info | 用户 |
+| 16 | role_info | 角色 |
+| 17 | user_role | 用户角色关联 |
+| 18 | alert_rule | 告警规则 |
+| 19 | alert_record | 告警记录 |
+| 20 | circuit_breaker | 熔断记录 |
+| 21 | operation_log | 操作日志 |
+| 22 | gray_rule | 灰度规则 |
 
 ---
 

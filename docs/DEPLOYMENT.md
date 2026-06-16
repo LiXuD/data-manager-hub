@@ -1,6 +1,6 @@
 # 数据管理平台部署文档
 
-**版本**: 2026-05-21
+**版本**: 2026-06-16
 
 ---
 
@@ -122,6 +122,40 @@ SW_AGENT_ENABLED=true ./start-services.sh
 - **Feign 调用**: `TraceFeignRequestInterceptor` 自动传播 `X-Trace-Id` 到下游服务
 - **日志关联**: `TraceIdMdcFilter` 将 `X-Trace-Id` 写入 SLF4J MDC，日志 pattern 中通过 `%X{traceId}` 引用
 - **业务关联**: `call_record.trace_id` 列存储请求级 Trace ID，可与 SkyWalking trace 关联
+
+### 验证链路
+
+```bash
+# 启动服务并验证 trace 传播
+./skywalking/verify-trace.sh
+```
+
+---
+
+## SDK 代码生成
+
+`data-platform-sdk` 是普通 Jar 依赖，不独立部署。使用 Freemarker 模板引擎生成多语言 SDK 客户端代码。
+
+### 生成命令
+
+```bash
+# Java SDK
+java -cp data-platform-sdk.jar com.dataplatform.sdk.SDKCli --lang java --base-url http://localhost:8888 --output ./sdk-java
+
+# Python SDK
+java -cp data-platform-sdk.jar com.dataplatform.sdk.SDKCli --lang python --base-url http://localhost:8888 --output ./sdk-python
+
+# Go SDK
+java -cp data-platform-sdk.jar com.dataplatform.sdk.SDKCli --lang go --base-url http://localhost:8888 --output ./sdk-go
+```
+
+### 支持语言
+
+| 语言 | 模板 | 说明 |
+|------|------|------|
+| Java | `client-java.ftl` + `model-java.ftl` | Maven 项目结构 |
+| Python | `client-python.ftl` + `model-python.ftl` | pip 可安装 |
+| Go | `client-go.ftl` + `model-go.ftl` | go module |
 
 ---
 
@@ -375,5 +409,5 @@ psql -h localhost -U postgres dataplatform < backup_20260516.sql
 
 ---
 
-**文档版本**: 2026-05-21
-**最后更新**: SkyWalking 链路追踪集成
+**文档版本**: 2026-06-16
+**最后更新**: V2.0 全部功能完成（SkyWalking 桥接、SDK 多语言生成、灰度厂商路由）

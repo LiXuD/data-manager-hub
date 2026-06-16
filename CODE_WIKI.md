@@ -2,7 +2,7 @@
 
 > **项目名称**: 数据管理平台 (Data Management Platform)
 > **仓库地址**: https://github.com/LiXuD/data-manager-hub.git
-> **文档版本**: 2026-05-16
+> **文档版本**: 2026-06-16
 > **技术栈**: Java 21 + Spring Boot 3.4 + Spring Cloud 2024.0.0 + MyBatis-Plus 3.5.7 + Vue3 + TypeScript
 
 ---
@@ -665,11 +665,24 @@ com.dataplatform.governance/
 
 > **路径**: `data-platform-sdk/`
 > **类型**: 普通 Jar 依赖，不作为 Spring Boot 服务独立部署
-> **职责**: SDK 客户端与代码生成工具，供其他模块以 Maven 依赖方式引用。
+> **职责**: SDK 客户端与代码生成工具，支持 Java/Python/Go 三语言，Freemarker 模板引擎驱动。
 
 | 类名 | 说明 |
 |------|------|
-| `SDKGeneratorService` | SDK代码生成服务 |
+| `SDKGeneratorService` | SDK代码生成服务（向后兼容旧 API） |
+| `ApiSpec` | API 端点模型，`fromDefaults()` 硬编码 14 个端点 |
+| `SDKCli` | 纯 Java CLI 入口（`--lang`、`--base-url`、`--output`） |
+
+#### Freemarker 模板
+
+| 模板 | 语言 | 说明 |
+|------|------|------|
+| `client-java.ftl` | Java | HTTP 客户端 |
+| `model-java.ftl` | Java | 数据模型 |
+| `client-python.ftl` | Python | HTTP 客户端 |
+| `model-python.ftl` | Python | 数据模型 |
+| `client-go.ftl` | Go | HTTP 客户端 |
+| `model-go.ftl` | Go | 数据模型 |
 
 ---
 
@@ -706,6 +719,8 @@ com.dataplatform.governance/
 | `HttpVendorAdapterTest` | HTTP厂商适配器测试 |
 | `RequestMappingProcessorTest` | 请求映射处理测试 |
 | `ResponseMappingProcessorTest` | 响应映射处理测试 |
+| `GrayVendorResolverTest` | 灰度厂商路由测试 (14 用例) |
+| `CircuitBreakerFilterTest` | Gateway 熔断器测试 |
 
 ---
 
@@ -860,23 +875,27 @@ data-platform-web/src/
 | 1 | vendor_info | 厂商信息 | masterdata |
 | 2 | data_type | 数据类型 | masterdata |
 | 3 | vendor_config | 厂商API配置 | masterdata |
-| 4 | api_interface | 接口定义 | masterdata |
-| 5 | interface_param | 接口参数 | masterdata |
-| 6 | gray_rule | 灰度规则 | masterdata |
-| 7 | caller_info | 调用方信息 | access |
-| 8 | api_key | API Key | access |
-| 9 | call_record | 调用记录 | access |
-| 10 | billing_rule | 计费规则 | billing |
-| 11 | billing_daily | 日账单 | billing |
-| 12 | user_info | 用户 | identity |
-| 13 | role_info | 角色 | identity |
-| 14 | user_role | 用户角色关联 | identity |
-| 15 | tenant_info | 租户 | identity |
-| 16 | alert_rule | 告警规则 | governance |
-| 17 | alert_record | 告警记录 | governance |
-| 18 | operation_log | 操作日志 | governance |
-| 19 | quality_rule | 质量规则 | governance |
-| 20 | data_lineage | 数据血缘 | governance |
+| 4 | vendor_config_extended | 厂商扩展配置 | masterdata |
+| 5 | api_interface | 接口定义 | masterdata (migration) |
+| 6 | interface_param | 接口参数 | masterdata (migration) |
+| 7 | gray_rule | 灰度规则 | masterdata |
+| 8 | caller_info | 调用方信息 | access |
+| 9 | caller_product | 调用方产品配置 | access |
+| 10 | api_key | API Key | access |
+| 11 | api_key_product | API Key 产品授权 | access |
+| 12 | call_scene | 调用场景字典 | access |
+| 13 | call_record | 调用记录 (按月分区) | access |
+| 14 | billing_rule | 计费规则 | billing |
+| 15 | billing_daily | 日账单 | billing |
+| 16 | billing_daily_event | 计费事件 (Kafka) | billing |
+| 17 | user_info | 用户 | identity |
+| 18 | role_info | 角色 | identity |
+| 19 | user_role | 用户角色关联 | identity |
+| 20 | tenant_info | 租户 | identity |
+| 21 | alert_rule | 告警规则 | governance |
+| 22 | alert_record | 告警记录 | governance |
+| 23 | circuit_breaker | 熔断记录 | governance |
+| 24 | operation_log | 操作日志 | governance |
 
 ---
 
