@@ -10,6 +10,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.UUID;
 
 public class TraceIdMdcFilter extends OncePerRequestFilter {
 
@@ -18,10 +19,11 @@ public class TraceIdMdcFilter extends OncePerRequestFilter {
                                      HttpServletResponse response,
                                      FilterChain filterChain) throws ServletException, IOException {
         String traceId = request.getHeader(TraceConstants.TRACE_ID_HEADER);
-        if (traceId != null && !traceId.isBlank()) {
-            MDC.put(TraceConstants.TRACE_ID_MDC_KEY, traceId);
-            response.setHeader(TraceConstants.TRACE_ID_HEADER, traceId);
+        if (traceId == null || traceId.isBlank()) {
+            traceId = UUID.randomUUID().toString().replace("-", "");
         }
+        MDC.put(TraceConstants.TRACE_ID_MDC_KEY, traceId);
+        response.setHeader(TraceConstants.TRACE_ID_HEADER, traceId);
         // Enrich MDC with SkyWalking trace ID if agent is active (no-op otherwise)
         TraceContextBridge.enrichMdcWithSkyWalkingTraceId();
         try {

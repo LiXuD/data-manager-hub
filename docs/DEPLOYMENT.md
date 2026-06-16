@@ -36,11 +36,13 @@ git clone https://github.com/LiXuD/data-manager-hub.git
 cd data-manager-hub
 ```
 
-### 2. 启动基础设施
+### 2. 启动本地基础设施
 
 ```bash
 docker-compose up -d
 ```
+
+> `docker-compose.yml` 仅用于本地开发/测试，包含 PostgreSQL、Redis、Kafka、Nacos、Prometheus、Grafana、Elasticsearch、Kibana 和 SkyWalking。生产环境应使用独立的高可用基础设施，并通过环境变量或密钥系统提供连接信息和密码。
 
 ### 3. 初始化数据库
 
@@ -104,7 +106,7 @@ npm run dev
 
 ### 启动 SkyWalking
 
-`docker-compose up -d` 已包含 SkyWalking OAP 和 UI 容器。UI 访问地址: `http://localhost:8088`。
+本地 `docker-compose up -d` 已包含 SkyWalking OAP 和 UI 容器。UI 访问地址: `http://localhost:8088`。生产环境不要使用 compose 中的 H2 存储，应配置 Elasticsearch 等持久化存储。
 
 ### 启用 Agent
 
@@ -140,13 +142,13 @@ SW_AGENT_ENABLED=true ./start-services.sh
 
 ```bash
 # Java SDK
-java -cp data-platform-sdk.jar com.dataplatform.sdk.SDKCli --lang java --base-url http://localhost:8888 --output ./sdk-java
+java -cp data-platform-sdk.jar com.dataplatform.sdk.generator.SDKCli --lang java --base-url http://localhost:8888 --output ./sdk-java
 
 # Python SDK
-java -cp data-platform-sdk.jar com.dataplatform.sdk.SDKCli --lang python --base-url http://localhost:8888 --output ./sdk-python
+java -cp data-platform-sdk.jar com.dataplatform.sdk.generator.SDKCli --lang python --base-url http://localhost:8888 --output ./sdk-python
 
 # Go SDK
-java -cp data-platform-sdk.jar com.dataplatform.sdk.SDKCli --lang go --base-url http://localhost:8888 --output ./sdk-go
+java -cp data-platform-sdk.jar com.dataplatform.sdk.generator.SDKCli --lang go --base-url http://localhost:8888 --output ./sdk-go
 ```
 
 ### 支持语言
@@ -166,9 +168,9 @@ java -cp data-platform-sdk.jar com.dataplatform.sdk.SDKCli --lang go --base-url 
 ```yaml
 spring:
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:dataplatform}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 ```
 
 ### Redis 配置
@@ -177,9 +179,9 @@ spring:
 spring:
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:redis_password}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
 ```
 
 ### Nacos 配置
@@ -189,8 +191,8 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
-        namespace: dev
+        server-addr: ${NACOS_SERVER_ADDR}
+        namespace: ${NACOS_NAMESPACE:prod}
 ```
 
 ### Sa-Token 认证配置
@@ -309,7 +311,7 @@ mvn clean install -U -DskipTests
 export DB_HOST=postgres-server
 export DB_PORT=5432
 export DB_NAME=dataplatform
-export DB_USER=postgres
+export DB_USERNAME=dataplatform_app
 export DB_PASSWORD=your_password
 
 # Redis

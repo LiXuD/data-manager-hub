@@ -97,7 +97,6 @@ CLAUDE.md
 .worktrees/
 /docs/superpowers/plans/2026-04-22-api-automation-test.md
 /docs/superpowers/specs/2026-04-22-api-automation-test-design.md
-/prometheus/prometheus.yml
 /.claude/settings.json
 /start-dev.sh
 /开发计划-未完成功能.md

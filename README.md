@@ -193,15 +193,17 @@ data-platform/
 - Maven 3.9+
 - Docker (用于基础设施)
 
-### 1. 启动基础设施
+### 1. 启动本地基础设施
 
 ```bash
 cd data-platform
 docker-compose up -d
 ```
 
+> `docker-compose.yml` 仅用于本地开发/测试，不作为生产部署模板。
+
 服务端口：
-- PostgreSQL: 5432 (本地安装)
+- PostgreSQL: 5432
 - Redis: 6379
 - Nacos: 8848
 
@@ -257,7 +259,7 @@ npm run dev
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=dataplatform
-DB_USER=postgres
+DB_USERNAME=postgres
 DB_PASSWORD=postgres
 
 # Redis 配置

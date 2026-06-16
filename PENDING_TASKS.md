@@ -342,5 +342,30 @@ data-platform-governance/            # 治理
 
 ---
 
+## 📋 上线前审查与修复 (2026-06-16)
+
+- [x] 生产 profile 安全化 — 五域服务与 Gateway 的 `application-prod.yml` 去除 `localhost`、默认数据库密码、默认 Redis 密码等生产默认值；新增 masterdata 生产配置 ✅
+- [x] Trace 传播修复 — `TraceIdMdcFilter` 在请求缺失 `X-Trace-Id` 时生成 traceId；`TraceFeignRequestInterceptor` 支持从 MDC/SkyWalking 桥接上下文兜底传播 ✅
+- [x] 默认测试门禁修复 — 外部 API 集成测试默认跳过，需设置 `-Dintegration.tests=true` 或 `INTEGRATION_TESTS=true` 才执行，避免未启动服务时 `mvn test` 假失败 ✅
+- [x] 厂商适配器回归修复 — `AbstractVendorAdapter.transformRequest` 恢复兼容旧 JSON 字段映射格式，同时保留 `requestMapping` 结构化格式 ✅
+- [x] 本地基础设施闭环 — `docker-compose.yml` 补齐 PostgreSQL，修复 Grafana 端口映射，补交 `prometheus/prometheus.yml`，并标注 compose 仅用于本地/测试 ✅
+- [x] SkyWalking Agent 安装修复 — `setup-agent.sh` 改为从临时目录定位真实 `skywalking-agent.jar` 后复制到 `skywalking/agent` ✅
+- [x] 部署文档更新 — 统一 `DB_USERNAME` 变量、修正 SDK CLI 主类、区分本地 compose 与生产高可用基础设施 ✅
+
+验证结果:
+- [x] `bash arch-scan.sh` 通过
+- [x] `mvn -q validate` 通过
+- [x] `mvn -q -DskipTests compile` 通过
+- [x] `mvn -q -DskipTests test-compile` 通过
+- [x] `mvn -q test` 通过
+- [x] `npm run build` 通过（仅 Vite chunk size warning）
+- [x] `docker compose config` 通过
+
+注意事项:
+- `docker-compose.yml` 仍保留本地/测试默认密码，不作为生产模板；生产环境必须使用外部密钥或环境变量覆盖。
+- `mvn test` 默认跳过真实外部 API 集成测试；上线前真实环境验收需显式开启 `-Dintegration.tests=true` 或 `INTEGRATION_TESTS=true`。
+
+---
+
 **文档维护**: 按架构变更更新
-**最后更新**: 2026-05-27
+**最后更新**: 2026-06-16

@@ -1,7 +1,9 @@
 # =====================================================
 # 数据管理平台 - Docker Compose 配置
 #
-# 本文件仅启动中间件 (Redis/Kafka/Nacos 等)。
+# 本文件仅用于本地开发/测试启动中间件 (PostgreSQL/Redis/Kafka/Nacos 等)，
+# 不作为生产部署模板。生产环境必须使用独立的高可用中间件，
+# 并通过环境变量或密钥系统提供密码。
 # 五域 Java 服务通过 ./start-services.sh 以 mvn spring-boot:run 启动。
 #
 # 五域服务:
@@ -14,17 +16,37 @@
 # =====================================================
 
 services:
+  # PostgreSQL 主数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: data-platform-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dataplatform}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER:-postgres}\" -d \"$${POSTGRES_DB:-dataplatform}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Redis 缓存
   redis:
     image: redis:7-alpine
     container_name: data-platform-redis
-    command: redis-server --requirepass redis_password --appendonly yes
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password}
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_password} --appendonly yes
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redis_password", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD:-redis_password}\" ping"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -94,10 +116,10 @@ services:
     container_name: data-platform-grafana
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
-      - "3100:3100"
+      - "3100:3000"
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:
@@ -109,6 +131,7 @@ services:
     container_name: data-platform-elasticsearch
     environment:
       - discovery.type=single-node
+      # Local/test only. Use authenticated TLS-enabled Elasticsearch in production.
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
@@ -144,6 +167,7 @@ services:
     container_name: data-platform-skywalking-oap
     environment:
       SW_STORAGE: h2
+      # Local/test only. Configure persistent storage such as Elasticsearch in production.
       SW_STORAGE_H2_URL: "jdbc:h2:mem:skywalking-oap-db"
       SW_CORE_REST_PORT: 12800
       SW_CORE_GRPC_PORT: 11800
@@ -168,6 +192,7 @@ services:
       - skywalking-oap
 
 volumes:
+  postgres_data:
   redis_data:
   kafka_data:
   nacos_logs:

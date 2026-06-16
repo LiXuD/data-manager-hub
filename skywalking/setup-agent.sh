@@ -16,6 +16,7 @@ echo "下载 SkyWalking Java Agent v${SW_VERSION}..."
 mkdir -p "$AGENT_DIR"
 
 TMP_FILE=$(mktemp)
+TMP_DIR=$(mktemp -d)
 curl -L -o "$TMP_FILE" "$DOWNLOAD_URL" 2>/dev/null
 
 if [ $? -ne 0 ] || [ ! -s "$TMP_FILE" ]; then
@@ -23,11 +24,20 @@ if [ $? -ne 0 ] || [ ! -s "$TMP_FILE" ]; then
     echo "  URL: $DOWNLOAD_URL"
     echo "  解压到: $AGENT_DIR/"
     rm -f "$TMP_FILE"
+    rm -rf "$TMP_DIR"
     exit 1
 fi
 
-tar -xzf "$TMP_FILE" -C "$SCRIPT_DIR"
+tar -xzf "$TMP_FILE" -C "$TMP_DIR"
 rm -f "$TMP_FILE"
+
+EXTRACTED_AGENT_DIR=$(find "$TMP_DIR" -type f -name skywalking-agent.jar -exec dirname {} \; | head -1)
+if [ -n "$EXTRACTED_AGENT_DIR" ]; then
+    rm -rf "$AGENT_DIR"
+    mkdir -p "$AGENT_DIR"
+    cp -R "$EXTRACTED_AGENT_DIR"/. "$AGENT_DIR"/
+fi
+rm -rf "$TMP_DIR"
 
 if [ -f "$AGENT_DIR/skywalking-agent.jar" ]; then
     echo "SkyWalking Agent 安装成功: $AGENT_DIR/skywalking-agent.jar"
