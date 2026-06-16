@@ -22,7 +22,8 @@ export const statusTypeMap = {
     inactive: 'info',
     enabled: 'success',
     disabled: 'danger',
-    expired: 'warning'
+    expired: 'warning',
+    pending: 'warning'
   } as Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'>,
 
   // Health status (monitor)
@@ -61,10 +62,11 @@ export const statusTypeMap = {
 export const statusLabels = {
   billing: { pending: '待结算', settled: '已结算', overdue: '逾期' },
   call: { success: '成功', failed: '失败', timeout: '超时', rate_limited: '限流' },
-  active: { active: '启用中', inactive: '已禁用', expired: '已过期' },
+  active: { active: '启用中', inactive: '已禁用', expired: '已过期', pending: '待生效' },
   health: { healthy: '正常', unhealthy: '异常', unknown: '未知' },
   enabled: { success: '成功', failed: '失败', enabled: '启用', disabled: '禁用' },
-  level: { info: '信息', warning: '警告', error: '错误', critical: '严重' }
+  level: { info: '信息', warning: '警告', error: '错误', critical: '严重' },
+  conditionType: { random: '随机流量', header: '请求头', caller: '调用方', ip: 'IP段' }
 } as const
 
 export type StatusDomain = keyof typeof statusTypeMap

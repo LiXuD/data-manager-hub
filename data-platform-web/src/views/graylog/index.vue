@@ -33,9 +33,9 @@
     <el-card class="search-card">
       <div class="search-bar">
         <div class="search-inputs">
-          <el-input v-model="searchForm.serviceName" placeholder="搜索服务名称" clearable class="search-input" @keyup.enter="handleSearch" />
+          <el-input v-model="searchForm.keyword" placeholder="搜索规则名称/服务名称" clearable class="search-input" @keyup.enter="handleSearch" />
           <el-select v-model="searchForm.status" placeholder="状态" clearable class="search-select">
-            <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <el-option v-for="item in GRAY_RULE_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </div>
         <div class="search-btn-group">
@@ -70,17 +70,22 @@
         </el-table-column>
         <el-table-column prop="conditionType" label="匹配条件" width="120">
           <template #default="{ row }">
-            <el-tag size="small">{{ row.conditionType }}</el-tag>
+            <el-tag size="small">{{ getStatusText('conditionType', row.conditionType) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusTextLocalized(row.status) }}</el-tag>
+            <el-switch
+              :model-value="row.status === 'active'"
+              active-text="启用"
+              inactive-text="禁用"
+              @change="(val: string | number | boolean) => handleStatusChange(row, val === true)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="有效期" width="160">
           <template #default="{ row }">
-            <span class="time-cell">{{ row.startTime?.slice(0, 10) }} ~ {{ row.endTime?.slice(0, 10) }}</span>
+            <span class="time-cell">{{ row.startTime?.slice(0, 10) || '-' }} ~ {{ row.endTime?.slice(0, 10) || '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
@@ -104,82 +109,24 @@
       </div>
     </el-card>
 
-    <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="700px" class="form-dialog">
-      <el-form :model="formData" label-width="100px">
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="规则名称" required>
-              <el-input v-model="formData.ruleName" placeholder="如: 用户服务V2灰度" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="服务名称" required>
-              <el-input v-model="formData.serviceName" placeholder="如: user-service" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="目标版本" required>
-              <el-input v-model="formData.version" placeholder="如: v2.0.0" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="流量权重">
-              <el-slider v-model="formData.weight" :min="0" :max="100" show-input />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="匹配条件">
-              <el-select v-model="formData.conditionType" style="width: 100%">
-                <el-option v-for="item in conditionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="条件值">
-              <el-input v-model="formData.conditionValue" placeholder="根据条件类型填写" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="开始时间">
-              <el-date-picker v-model="formData.startTime" type="datetime" placeholder="选择开始时间" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="结束时间">
-              <el-date-picker v-model="formData.endTime" type="datetime" placeholder="选择结束时间" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="描述">
-          <el-input v-model="formData.description" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-switch v-model="formData.status" active-value="active" inactive-value="inactive" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
-      </template>
-    </el-dialog>
+    <!-- 表单弹窗 -->
+    <GrayRuleForm
+      v-model="formVisible"
+      :form-data="currentRow"
+      :mode="formMode"
+      @success="fetchList"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getGrayRuleList, createGrayRule, updateGrayRule, deleteGrayRule } from '@/api/graylog'
+import { getGrayRuleList, deleteGrayRule, updateGrayRuleStatus } from '@/api/graylog'
 import type { GrayRule } from '@/api/graylog'
-import { getStatusType as getTagType, getStatusText } from '@/utils/status'
-// StatCard is globally registered by unplugin-vue-components
-import { GRAY_RULE_STATUS } from '@/constants'
+import { GRAY_RULE_STATUS_OPTIONS, GRAY_RULE_STATUS } from '@/constants'
+import { getStatusText } from '@/utils/status'
+import GrayRuleForm from './components/GrayRuleForm.vue'
 
 const loading = ref(false)
 const tableData = ref<GrayRule[]>([])
@@ -187,31 +134,14 @@ const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 
 const searchForm = reactive({
-  serviceName: '',
+  keyword: '',
   status: ''
 })
 
-const dialogVisible = ref(false)
-const dialogTitle = ref('')
-const formData = reactive<GrayRule>({
-  id: 0, ruleName: '', serviceName: '', version: '', weight: 10,
-  conditionType: 'random', conditionValue: '', description: '', status: GRAY_RULE_STATUS.ACTIVE,
-  startTime: '', endTime: '', createdAt: ''
-})
+const formVisible = ref(false)
+const formMode = ref<'add' | 'edit'>('add')
+const currentRow = ref<GrayRule | null>(null)
 
-const statusOptions = [
-  { label: '全部', value: '' },
-  { label: '启用', value: 'active' },
-  { label: '禁用', value: 'inactive' },
-  { label: '已过期', value: 'expired' }
-]
-
-const conditionTypeOptions = [
-  { label: '随机流量', value: 'random' },
-  { label: '用户ID', value: 'userId' },
-  { label: 'IP段', value: 'ip' },
-  { label: 'Cookie', value: 'cookie' }
-]
 
 const fetchList = async () => {
   loading.value = true
@@ -238,18 +168,18 @@ const fetchList = async () => {
 }
 
 const handleSearch = () => { pagination.currentPage = 1; fetchList() }
-const handleReset = () => { searchForm.serviceName = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
+const handleReset = () => { searchForm.keyword = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
 
 const handleAdd = () => {
-  dialogTitle.value = '新增灰度规则'
-  Object.assign(formData, { id: 0, ruleName: '', serviceName: '', version: '', weight: 10, conditionType: 'random', conditionValue: '', description: '', status: GRAY_RULE_STATUS.ACTIVE, startTime: '', endTime: '', createdAt: '' })
-  dialogVisible.value = true
+  formMode.value = 'add'
+  currentRow.value = null
+  formVisible.value = true
 }
 
 const handleEdit = (row: GrayRule) => {
-  dialogTitle.value = '编辑灰度规则'
-  Object.assign(formData, { ...row })
-  dialogVisible.value = true
+  formMode.value = 'edit'
+  currentRow.value = { ...row }
+  formVisible.value = true
 }
 
 const handleDelete = async (row: GrayRule) => {
@@ -265,27 +195,18 @@ const handleDelete = async (row: GrayRule) => {
   }
 }
 
-const handleSubmit = async () => {
-  if (!formData.ruleName || !formData.serviceName) {
-    ElMessage.warning('请填写完整信息')
-    return
-  }
+const handleStatusChange = async (row: GrayRule, enabled: boolean) => {
+  const newStatus = enabled ? GRAY_RULE_STATUS.ACTIVE : GRAY_RULE_STATUS.INACTIVE
+  const oldStatus = row.status
+  row.status = newStatus
   try {
-    if (formData.id) {
-      await updateGrayRule(formData.id, formData)
-    } else {
-      await createGrayRule(formData)
-    }
-    ElMessage.success('保存成功')
-    dialogVisible.value = false
-    fetchList()
-  } catch (error) {
-    ElMessage.error('保存失败')
+    await updateGrayRuleStatus(row.id, newStatus)
+    ElMessage.success(enabled ? '已启用' : '已禁用')
+  } catch {
+    row.status = oldStatus
+    ElMessage.error('状态更新失败')
   }
 }
-
-const getStatusType = (status: string) => getTagType('active', status)
-const getStatusTextLocalized = (status: string) => getStatusText('active', status)
 
 type RuleCategory = 'active' | 'expiring' | 'expired'
 

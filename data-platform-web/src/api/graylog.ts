@@ -95,3 +95,7 @@ export const updateGrayRule = (id: number, data: Partial<GrayRule>) => {
 export const deleteGrayRule = (id: number) => {
   return request.delete<void>(`/graylog/${id}`)
 }
+
+export const updateGrayRuleStatus = (id: number, status: string) => {
+  return request.patch<void>(`/graylog/${id}/status`, { status })
+}
