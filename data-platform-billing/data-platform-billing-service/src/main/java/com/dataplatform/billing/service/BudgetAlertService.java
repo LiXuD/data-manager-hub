@@ -18,6 +18,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 计费域计费计算的 Budget Alert Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class BudgetAlertService extends ServiceImpl<TenantBudgetMapper, TenantBudget> {
 

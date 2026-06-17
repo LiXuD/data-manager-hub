@@ -6,6 +6,10 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.GrayRuleStatus;
 import java.time.LocalDateTime;
 
+/**
+ * 主数据域灰度规则的 Gray Rule。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("gray_rule")
 public class GrayRule {
     @TableId(type = IdType.AUTO)

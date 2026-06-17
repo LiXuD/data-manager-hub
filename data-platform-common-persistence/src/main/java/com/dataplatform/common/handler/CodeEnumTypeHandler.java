@@ -11,6 +11,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+/**
+ * 公共持久化层处理器的 Code Enum Type Handler。
+ * <p>组件，封装 Code Enum Type Handler 相关职责。</p>
+ */
 @MappedTypes(CodeEnum.class)
 @MappedJdbcTypes(JdbcType.VARCHAR)
 public class CodeEnumTypeHandler<E extends Enum<E> & CodeEnum> extends BaseTypeHandler<E> {

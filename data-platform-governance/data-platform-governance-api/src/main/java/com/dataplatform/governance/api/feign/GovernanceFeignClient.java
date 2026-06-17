@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
+/**
+ * 观测治理域远程调用的 Governance Feign Client。
+ * <p>OpenFeign 远程调用契约，供其他服务依赖 api 模块完成跨域调用。</p>
+ */
 @FeignClient(name = "data-platform-governance", contextId = "governanceFeignClient", path = "/governance")
 public interface GovernanceFeignClient {
 

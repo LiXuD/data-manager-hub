@@ -2,6 +2,10 @@ package com.dataplatform.masterdata.interface_.api.dto;
 
 import java.io.Serializable;
 
+/**
+ * 主数据域接口定义的 Api Interface Update Req DTO。
+ * <p>跨服务契约数据对象，用于 api 模块暴露远程接口时传递稳定字段。</p>
+ */
 public class ApiInterfaceUpdateReqDTO implements Serializable {
 
     private String interfaceName;

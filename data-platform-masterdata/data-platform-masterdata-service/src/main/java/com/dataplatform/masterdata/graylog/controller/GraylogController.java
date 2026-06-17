@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+/**
+ * 主数据域灰度规则的 Graylog Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/graylog")
 public class GraylogController implements GraylogFeignClient {

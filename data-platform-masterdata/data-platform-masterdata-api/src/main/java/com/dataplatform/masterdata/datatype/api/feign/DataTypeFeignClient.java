@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 主数据域数据类型的 Data Type Feign Client。
+ * <p>OpenFeign 远程调用契约，供其他服务依赖 api 模块完成跨域调用。</p>
+ */
 @FeignClient(name = "data-platform-masterdata", contextId = "masterdataDataTypeFeignClient")
 public interface DataTypeFeignClient {
 

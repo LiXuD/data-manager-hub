@@ -4,6 +4,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+/**
+ * 公共运行时层的 Data Masking Util。
+ * <p>工具类，提供无状态的通用辅助能力。</p>
+ */
 public class DataMaskingUtil {
 
     private static final Pattern PHONE_PATTERN = Pattern.compile("1[3-9]\\d{9}");

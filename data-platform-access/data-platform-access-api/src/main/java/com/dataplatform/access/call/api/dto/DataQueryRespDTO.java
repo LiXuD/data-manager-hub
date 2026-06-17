@@ -2,6 +2,10 @@ package com.dataplatform.access.call.api.dto;
 
 import java.io.Serializable;
 
+/**
+ * 访问域数据调用的 Data Query Resp DTO。
+ * <p>跨服务契约数据对象，用于 api 模块暴露远程接口时传递稳定字段。</p>
+ */
 public class DataQueryRespDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 

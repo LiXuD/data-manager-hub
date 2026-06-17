@@ -10,6 +10,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 访问域数据调用的 Call Record Event Consumer。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class CallRecordEventConsumer {
 

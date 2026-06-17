@@ -12,6 +12,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 计费域计费计算的 Billing Daily Event Consumer。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class BillingDailyEventConsumer {
 

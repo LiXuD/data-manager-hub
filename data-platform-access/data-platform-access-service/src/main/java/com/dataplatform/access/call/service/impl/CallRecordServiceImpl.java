@@ -18,6 +18,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 访问域数据调用的 Call Record Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRecord>
     implements CallRecordService {

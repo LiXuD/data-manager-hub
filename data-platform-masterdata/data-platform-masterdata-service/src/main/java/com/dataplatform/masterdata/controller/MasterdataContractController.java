@@ -14,6 +14,10 @@ import com.dataplatform.masterdata.vendor.service.VendorService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 主数据域的 Masterdata Contract Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 public class MasterdataContractController implements MasterdataFeignClient {
 

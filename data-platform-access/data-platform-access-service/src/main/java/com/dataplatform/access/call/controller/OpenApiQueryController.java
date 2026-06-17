@@ -40,6 +40,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 访问域数据调用的 Open Api Query Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/openapi/v1")
 public class OpenApiQueryController {

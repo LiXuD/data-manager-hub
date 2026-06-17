@@ -5,6 +5,10 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 
+/**
+ * 观测治理域数据质量的 Quality Rule。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("quality_rule")
 public class QualityRule {
 

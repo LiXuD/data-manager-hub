@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 主数据域接口定义的 Api Interface Internal Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/interface/internal")
 public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {

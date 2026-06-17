@@ -4,6 +4,10 @@ import jakarta.validation.constraints.NotBlank;
 
 import java.io.Serializable;
 
+/**
+ * 主数据域接口定义的 Api Interface Create Req DTO。
+ * <p>跨服务契约数据对象，用于 api 模块暴露远程接口时传递稳定字段。</p>
+ */
 public class ApiInterfaceCreateReqDTO implements Serializable {
 
     @NotBlank(message = "接口编码不能为空")

@@ -3,6 +3,10 @@ package com.dataplatform.identity.api.dto;
 import java.io.Serializable;
 import java.util.List;
 
+/**
+ * 身份租户域的 Login Resp DTO。
+ * <p>跨服务契约数据对象，用于 api 模块暴露远程接口时传递稳定字段。</p>
+ */
 public class LoginRespDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 

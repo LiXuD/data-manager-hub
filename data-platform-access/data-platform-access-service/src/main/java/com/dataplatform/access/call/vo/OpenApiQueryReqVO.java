@@ -2,6 +2,10 @@ package com.dataplatform.access.call.vo;
 
 import java.util.Map;
 
+/**
+ * 访问域数据调用的 Open Api Query Req VO。
+ * <p>Web 层请求或响应视图对象，用于隔离页面接口与数据库实体。</p>
+ */
 public class OpenApiQueryReqVO {
 
     private String requestId;

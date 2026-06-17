@@ -11,6 +11,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 观测治理域数据血缘的 Data Lineage Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/trace/lineage")
 public class DataLineageController {

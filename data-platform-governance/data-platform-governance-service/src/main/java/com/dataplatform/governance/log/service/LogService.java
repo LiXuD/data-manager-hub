@@ -14,6 +14,10 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
+/**
+ * 观测治理域操作日志的 Log Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 @Primary
 public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> implements OperationLogService {

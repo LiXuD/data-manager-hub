@@ -22,6 +22,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 主数据域接口定义的 Api Interface Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/interface")
 public class ApiInterfaceController implements ApiInterfaceManageFeignClient {

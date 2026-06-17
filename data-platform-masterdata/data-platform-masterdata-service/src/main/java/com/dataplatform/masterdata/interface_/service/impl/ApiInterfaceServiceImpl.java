@@ -23,6 +23,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 主数据域接口定义的 Api Interface Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, ApiInterface> implements ApiInterfaceService {
 

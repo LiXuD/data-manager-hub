@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 
+/**
+ * 计费域计费计算的 Billing Contract Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/billing")
 public class BillingContractController implements BillingFeignClient {

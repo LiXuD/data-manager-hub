@@ -12,6 +12,10 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 
+/**
+ * 主数据域厂商的 Vendor Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class VendorServiceImpl extends ServiceImpl<VendorMapper, VendorInfo> implements VendorService {
     

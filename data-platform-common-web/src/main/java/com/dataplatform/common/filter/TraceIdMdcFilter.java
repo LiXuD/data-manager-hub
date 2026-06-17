@@ -12,6 +12,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * 公共 Web 层过滤器的 Trace Id Mdc Filter。
+ * <p>请求过滤器，处理网关或 Web 链路中的横切逻辑。</p>
+ */
 public class TraceIdMdcFilter extends OncePerRequestFilter {
 
     @Override

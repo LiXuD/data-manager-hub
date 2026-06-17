@@ -6,6 +6,10 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+/**
+ * 身份租户域配置的 Web Mvc Config。
+ * <p>配置组件，集中声明本模块运行所需的 Spring Bean 或框架参数。</p>
+ */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 

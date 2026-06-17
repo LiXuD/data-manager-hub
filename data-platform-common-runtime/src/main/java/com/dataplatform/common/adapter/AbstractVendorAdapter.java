@@ -13,6 +13,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 公共运行时层厂商适配的 Abstract Vendor Adapter。
+ * <p>厂商适配组件，封装外部数据源调用、认证和结果转换逻辑。</p>
+ */
 public abstract class AbstractVendorAdapter implements VendorAdapter {
 
     protected final Logger log = LoggerFactory.getLogger(getClass());

@@ -8,6 +8,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 主数据域接口定义的 Interface Stats Mapper。
+ * <p>MyBatis-Plus 数据访问接口，封装对应表的持久化操作。</p>
+ */
 @Mapper
 public interface InterfaceStatsMapper {
 

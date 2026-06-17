@@ -22,6 +22,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * 计费域计费计算的 Reconciliation Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliationMapper, BillingReconciliation>
     implements ReconciliationService {

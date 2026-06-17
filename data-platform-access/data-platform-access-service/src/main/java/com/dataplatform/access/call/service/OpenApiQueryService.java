@@ -18,6 +18,10 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
+/**
+ * 访问域数据调用的 Open Api Query Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class OpenApiQueryService {
 

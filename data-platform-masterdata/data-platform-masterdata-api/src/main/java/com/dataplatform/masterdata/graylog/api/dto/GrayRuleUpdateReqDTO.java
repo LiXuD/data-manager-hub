@@ -3,6 +3,10 @@ package com.dataplatform.masterdata.graylog.api.dto;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
+/**
+ * 主数据域灰度规则的 Gray Rule Update Req DTO。
+ * <p>跨服务契约数据对象，用于 api 模块暴露远程接口时传递稳定字段。</p>
+ */
 public class GrayRuleUpdateReqDTO implements Serializable {
 
     private String ruleName;

@@ -16,6 +16,10 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 观测治理域监控告警的 Alert Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
     implements AlertService {

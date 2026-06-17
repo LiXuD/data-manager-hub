@@ -8,6 +8,10 @@ import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 
+/**
+ * 访问域调用方的 Caller Product。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("caller_product")
 public class CallerProduct {
 

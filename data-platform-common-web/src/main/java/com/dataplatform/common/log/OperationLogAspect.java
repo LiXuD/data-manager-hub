@@ -17,6 +17,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 
+/**
+ * 公共 Web 层操作日志的 Operation Log Aspect。
+ * <p>日志治理组件，负责记录、转发或查询操作日志。</p>
+ */
 @Aspect
 @Component
 public class OperationLogAspect {

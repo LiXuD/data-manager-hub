@@ -2,6 +2,10 @@ package com.dataplatform.api;
 
 import java.io.Serializable;
 
+/**
+ * 公共契约层的 Result。
+ * <p>组件，封装 Result 相关职责。</p>
+ */
 public class Result<T> implements Serializable {
     private static final long serialVersionUID = 1L;
 

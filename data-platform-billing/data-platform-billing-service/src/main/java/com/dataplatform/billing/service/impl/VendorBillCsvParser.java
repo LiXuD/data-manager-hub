@@ -9,6 +9,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * 计费域计费计算的 Vendor Bill Csv Parser。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 final class VendorBillCsvParser {
 
     private static final BigDecimal DIFF_RATE_WARNING = new BigDecimal("0.01");

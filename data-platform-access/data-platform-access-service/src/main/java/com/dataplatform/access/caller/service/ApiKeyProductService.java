@@ -9,6 +9,10 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 访问域调用方的 Api Key Product Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class ApiKeyProductService extends ServiceImpl<ApiKeyProductMapper, ApiKeyProduct> {
 

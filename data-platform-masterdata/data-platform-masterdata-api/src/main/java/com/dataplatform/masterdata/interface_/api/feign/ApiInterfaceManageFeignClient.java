@@ -14,6 +14,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 主数据域接口定义的 Api Interface Manage Feign Client。
+ * <p>OpenFeign 远程调用契约，供其他服务依赖 api 模块完成跨域调用。</p>
+ */
 @FeignClient(name = "data-platform-masterdata", contextId = "masterdataApiInterfaceManageClient")
 public interface ApiInterfaceManageFeignClient {
 

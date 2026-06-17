@@ -8,6 +8,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 访问域数据调用的 Rate Limit Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class RateLimitService {
 

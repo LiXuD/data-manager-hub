@@ -4,6 +4,10 @@ import com.baomidou.mybatisplus.annotation.*;
 
 import java.time.LocalDateTime;
 
+/**
+ * 身份租户域用户权限的 Permission。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("permission")
 public class Permission {
 

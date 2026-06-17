@@ -7,6 +7,10 @@ import com.dataplatform.common.result.PageResult;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+/**
+ * 访问域数据调用的 Call Record Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 public interface CallRecordService extends IService<CallRecord> {
 
     PageResult<CallRecord> list(Long callerId, Long vendorId, String dataType, Boolean success,

@@ -8,6 +8,10 @@ import com.dataplatform.common.enums.AlertStatus;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 观测治理域监控告警的 Alert Rule。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("alert_rule")
 public class AlertRule {
     @TableId(type = IdType.AUTO)

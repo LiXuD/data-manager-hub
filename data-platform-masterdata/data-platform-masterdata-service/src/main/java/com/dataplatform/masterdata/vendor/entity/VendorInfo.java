@@ -7,6 +7,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 
+/**
+ * 主数据域厂商的 Vendor Info。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("vendor_info")
 public class VendorInfo {
 

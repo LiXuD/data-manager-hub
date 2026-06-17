@@ -3,6 +3,10 @@ package com.dataplatform.access.call.service;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 访问域数据调用的 Data Query Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 public interface DataQueryService {
 
     /**

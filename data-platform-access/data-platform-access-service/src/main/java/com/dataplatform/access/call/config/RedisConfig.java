@@ -7,6 +7,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+/**
+ * 访问域数据调用的 Redis Config。
+ * <p>配置组件，集中声明本模块运行所需的 Spring Bean 或框架参数。</p>
+ */
 @Configuration
 public class RedisConfig {
     

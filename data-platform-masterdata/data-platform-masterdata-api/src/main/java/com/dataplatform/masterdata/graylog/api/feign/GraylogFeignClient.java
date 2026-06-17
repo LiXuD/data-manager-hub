@@ -10,6 +10,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+/**
+ * 主数据域灰度规则的 Graylog Feign Client。
+ * <p>OpenFeign 远程调用契约，供其他服务依赖 api 模块完成跨域调用。</p>
+ */
 @FeignClient(name = "data-platform-masterdata", contextId = "masterdataGraylogFeignClient")
 public interface GraylogFeignClient {
 

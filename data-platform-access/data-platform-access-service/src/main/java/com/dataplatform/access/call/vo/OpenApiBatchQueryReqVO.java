@@ -3,6 +3,10 @@ package com.dataplatform.access.call.vo;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 访问域数据调用的 Open Api Batch Query Req VO。
+ * <p>Web 层请求或响应视图对象，用于隔离页面接口与数据库实体。</p>
+ */
 public class OpenApiBatchQueryReqVO {
 
     private String requestId;

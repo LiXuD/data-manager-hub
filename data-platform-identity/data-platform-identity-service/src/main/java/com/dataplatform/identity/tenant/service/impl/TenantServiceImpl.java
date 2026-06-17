@@ -12,6 +12,10 @@ import org.springframework.util.StringUtils;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 身份租户域租户的 Tenant Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class TenantServiceImpl extends ServiceImpl<TenantMapper, TenantInfo> implements TenantService {
 

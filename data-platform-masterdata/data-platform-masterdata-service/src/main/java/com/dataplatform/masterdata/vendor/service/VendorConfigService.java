@@ -5,6 +5,10 @@ import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 
 import java.util.List;
 
+/**
+ * 主数据域厂商的 Vendor Config Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 public interface VendorConfigService extends IService<VendorConfig> {
 
     List<VendorConfig> listByVendor(Long vendorId);

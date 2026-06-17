@@ -3,6 +3,10 @@ package com.dataplatform.identity.tenant.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import java.time.LocalDateTime;
 
+/**
+ * 身份租户域租户的 Tenant Info。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("tenant_info")
 public class TenantInfo {
 

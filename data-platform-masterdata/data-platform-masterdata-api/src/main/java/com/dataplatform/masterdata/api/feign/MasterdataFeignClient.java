@@ -9,6 +9,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
+/**
+ * 主数据域远程调用的 Masterdata Feign Client。
+ * <p>OpenFeign 远程调用契约，供其他服务依赖 api 模块完成跨域调用。</p>
+ */
 @FeignClient(name = "data-platform-masterdata", contextId = "masterdataFeignClient")
 public interface MasterdataFeignClient {
 

@@ -8,6 +8,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * 计费域计费计算的 Billing Reconciliation。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("billing_reconciliation")
 public class BillingReconciliation {
 

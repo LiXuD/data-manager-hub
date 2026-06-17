@@ -9,6 +9,10 @@ import org.apache.ibatis.annotations.Select;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 计费域计费计算的 Data Type Mapper。
+ * <p>MyBatis-Plus 数据访问接口，封装对应表的持久化操作。</p>
+ */
 @Mapper
 public interface DataTypeMapper extends BaseMapper<DataType> {
     

@@ -7,6 +7,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
+/**
+ * 公共 Web 层配置的 Trace Web Auto Configuration。
+ * <p>配置组件，集中声明本模块运行所需的 Spring Bean 或框架参数。</p>
+ */
 @Configuration
 @ConditionalOnWebApplication
 public class TraceWebAutoConfiguration {

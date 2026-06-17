@@ -10,6 +10,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 计费域计费计算的 Billing Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 public interface BillingService extends IService<BillingDaily> {
 
     /**

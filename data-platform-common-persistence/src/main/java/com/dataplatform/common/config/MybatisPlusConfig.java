@@ -18,6 +18,10 @@ import org.springframework.context.annotation.Configuration;
 import javax.sql.DataSource;
 import java.time.LocalDateTime;
 
+/**
+ * 公共持久化层配置的 Mybatis Plus Config。
+ * <p>配置组件，集中声明本模块运行所需的 Spring Bean 或框架参数。</p>
+ */
 @Configuration
 @ConditionalOnClass(name = {"com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor", "javax.sql.DataSource"})
 @ConditionalOnBean(DataSource.class)

@@ -5,6 +5,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+/**
+ * 观测治理域配置的 Web Mvc Config。
+ * <p>配置组件，集中声明本模块运行所需的 Spring Bean 或框架参数。</p>
+ */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 

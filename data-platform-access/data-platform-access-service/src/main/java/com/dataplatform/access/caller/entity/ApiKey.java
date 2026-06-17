@@ -5,6 +5,10 @@ import com.dataplatform.common.enums.ApiKeyStatus;
 import java.time.LocalDateTime;
 
 
+/**
+ * 访问域调用方的 Api Key。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("api_key")
 public class ApiKey {
 

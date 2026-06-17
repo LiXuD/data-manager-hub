@@ -12,6 +12,10 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 观测治理域数据质量的 Quality Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class QualityService extends ServiceImpl<QualityRuleMapper, QualityRule> {
 

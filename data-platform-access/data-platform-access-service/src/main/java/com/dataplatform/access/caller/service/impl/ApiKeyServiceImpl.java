@@ -13,6 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 访问域调用方的 Api Key Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> 
     implements ApiKeyService {

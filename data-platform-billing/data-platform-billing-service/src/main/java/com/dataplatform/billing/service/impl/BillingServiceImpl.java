@@ -24,6 +24,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 计费域计费计算的 Billing Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingDaily>
     implements BillingService {

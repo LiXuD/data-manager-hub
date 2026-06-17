@@ -3,6 +3,10 @@ package com.dataplatform.api;
 import java.io.Serializable;
 import java.util.List;
 
+/**
+ * 公共契约层的 Page Result。
+ * <p>组件，封装 Page Result 相关职责。</p>
+ */
 public class PageResult<T> implements Serializable {
     private static final long serialVersionUID = 1L;
 

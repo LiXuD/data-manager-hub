@@ -20,6 +20,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 主数据域厂商的 Vendor Extended Config Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedConfigMapper, VendorExtendedConfig> implements VendorExtendedConfigService {
 

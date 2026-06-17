@@ -1,5 +1,9 @@
 package com.dataplatform.api.exception;
 
+/**
+ * 公共契约层的 Business Exception。
+ * <p>业务异常类型，用于表达可预期的领域错误。</p>
+ */
 public class BusinessException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 

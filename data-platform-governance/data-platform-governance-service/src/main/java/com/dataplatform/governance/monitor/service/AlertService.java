@@ -8,6 +8,10 @@ import com.dataplatform.governance.monitor.entity.AlertRecord;
 
 import java.util.List;
 
+/**
+ * 观测治理域监控告警的 Alert Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 public interface AlertService extends IService<AlertRule> {
 
     // 告警规则

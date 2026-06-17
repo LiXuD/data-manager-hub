@@ -354,11 +354,13 @@ data-platform-governance/            # 治理
 - [x] 运行态启动阻断修复 — 删除 masterdata/access 域内重复 `WebMvcConfig`，补齐 common-runtime 熔断自动配置，dev profile 改为环境变量占位并对齐 compose ✅
 - [x] 可执行 Jar 打包修复 — 五域 service 与 Gateway 统一输出 Spring Boot 可执行主 Jar，避免部署产物缺少 `BOOT-INF` ✅
 - [x] 前端资源体积优化 — 去除 Element Plus 整包入口注册，Dashboard 改用 ECharts 按需模块，拆分 Vue/axios 公共 chunk，消除 Vite 大 chunk 警告 ✅
+- [x] 后端注释覆盖 — 324 个后端顶层 Java 类型补齐类级 Javadoc；关键 Feign 契约补充方法级说明，提升五域边界和跨服务调用可读性 ✅
 
 验证结果:
 - [x] `bash arch-scan.sh` 通过
 - [x] `mvn -q validate` 通过
 - [x] `mvn -q -DskipTests compile` 通过
+- [x] 后端 Java 顶层类型 Javadoc 覆盖扫描通过，缺失数 0/324
 - [x] `mvn -q -DskipTests test-compile` 通过
 - [x] `mvn -q test` 通过
 - [x] `npm run build` 通过，无 Vite 大 chunk 警告；最大 chunk 480.75 KiB

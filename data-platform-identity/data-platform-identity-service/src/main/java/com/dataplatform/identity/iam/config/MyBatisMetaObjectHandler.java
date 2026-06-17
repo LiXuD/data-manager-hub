@@ -6,6 +6,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
+/**
+ * 身份租户域配置的 My Batis Meta Object Handler。
+ * <p>配置组件，集中声明本模块运行所需的 Spring Bean 或框架参数。</p>
+ */
 @Component
 public class MyBatisMetaObjectHandler implements MetaObjectHandler {
     @Override
