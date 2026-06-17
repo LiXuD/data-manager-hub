@@ -44,6 +44,13 @@ docker-compose up -d
 
 > `docker-compose.yml` 仅用于本地开发/测试，包含 PostgreSQL、Redis、Kafka、Nacos、Prometheus、Grafana、Elasticsearch、Kibana 和 SkyWalking。生产环境应使用独立的高可用基础设施，并通过环境变量或密钥系统提供连接信息和密码。
 
+如本机 5432 已被占用，可改用备用宿主端口：
+
+```bash
+POSTGRES_PORT=15432 docker-compose up -d postgres
+export DB_PORT=15432
+```
+
 ### 3. 初始化数据库
 
 ```bash

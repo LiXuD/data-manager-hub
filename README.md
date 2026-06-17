@@ -207,6 +207,8 @@ docker-compose up -d
 - Redis: 6379
 - Nacos: 8848
 
+如果本机已安装 PostgreSQL 并占用 5432，可使用 `POSTGRES_PORT=15432 docker-compose up -d postgres` 为 compose 内数据库改用备用宿主端口；启动 Java 服务前同时设置 `DB_PORT=15432`。
+
 ### 2. 初始化数据库
 
 ```bash

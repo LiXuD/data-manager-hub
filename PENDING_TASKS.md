@@ -1,7 +1,7 @@
 # 数据管理平台 - 待完成功能与问题清单
 
 **创建日期**: 2026-04-26
-**最后更新**: 2026-06-16
+**最后更新**: 2026-06-17
 **状态**: V2.0 全部完成（SkyWalking 桥接、SDK 多语言生成、灰度厂商路由），已合入 dev
 
 ---
@@ -351,6 +351,8 @@ data-platform-governance/            # 治理
 - [x] 本地基础设施闭环 — `docker-compose.yml` 补齐 PostgreSQL，修复 Grafana 端口映射，补交 `prometheus/prometheus.yml`，并标注 compose 仅用于本地/测试 ✅
 - [x] SkyWalking Agent 安装修复 — `setup-agent.sh` 改为从临时目录定位真实 `skywalking-agent.jar` 后复制到 `skywalking/agent` ✅
 - [x] 部署文档更新 — 统一 `DB_USERNAME` 变量、修正 SDK CLI 主类、区分本地 compose 与生产高可用基础设施 ✅
+- [x] 运行态启动阻断修复 — 删除 masterdata/access 域内重复 `WebMvcConfig`，补齐 common-runtime 熔断自动配置，dev profile 改为环境变量占位并对齐 compose ✅
+- [x] 可执行 Jar 打包修复 — 五域 service 与 Gateway 统一输出 Spring Boot 可执行主 Jar，避免部署产物缺少 `BOOT-INF` ✅
 
 验证结果:
 - [x] `bash arch-scan.sh` 通过
@@ -359,7 +361,10 @@ data-platform-governance/            # 治理
 - [x] `mvn -q -DskipTests test-compile` 通过
 - [x] `mvn -q test` 通过
 - [x] `npm run build` 通过（仅 Vite chunk size warning）
+- [x] `mvn -q -DskipTests clean package` 通过，五域 service 与 Gateway 主 Jar 均包含 `BOOT-INF`
 - [x] `docker compose config` 通过
+- [x] compose PostgreSQL 备用端口启动与 `sql/init.sql` 初始化通过
+- [x] masterdata/access/billing/identity/governance/gateway 六服务本地启动健康检查全部 `UP`
 
 注意事项:
 - `docker-compose.yml` 仍保留本地/测试默认密码，不作为生产模板；生产环境必须使用外部密钥或环境变量覆盖。
@@ -368,4 +373,4 @@ data-platform-governance/            # 治理
 ---
 
 **文档维护**: 按架构变更更新
-**最后更新**: 2026-06-16
+**最后更新**: 2026-06-17
