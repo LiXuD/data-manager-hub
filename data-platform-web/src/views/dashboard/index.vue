@@ -1,6 +1,20 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import * as echarts from 'echarts'
+import { LineChart, PieChart } from 'echarts/charts'
+import {
+  GridComponent,
+  TooltipComponent
+} from 'echarts/components'
+import { graphic, init, use, type ECharts } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+
+use([
+  LineChart,
+  PieChart,
+  GridComponent,
+  TooltipComponent,
+  CanvasRenderer
+])
 
 // 统计数据
 const statsData = ref([
@@ -30,14 +44,14 @@ const recentCalls = ref([
 // 图表引用
 const trendChartRef = ref<HTMLDivElement>()
 const vendorChartRef = ref<HTMLDivElement>()
-let trendChart: echarts.ECharts | null = null
-let vendorChart: echarts.ECharts | null = null
+let trendChart: ECharts | null = null
+let vendorChart: ECharts | null = null
 
 // 初始化趋势图表
 const initTrendChart = () => {
   if (!trendChartRef.value) return
 
-  trendChart = echarts.init(trendChartRef.value)
+  trendChart = init(trendChartRef.value)
 
   const xAxisData = Array.from({ length: 24 }, (_, i) => `${i}:00`)
 
@@ -80,7 +94,7 @@ const initTrendChart = () => {
       symbol: 'none',
       lineStyle: { color: '#00D4AA', width: 2 },
       areaStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+        color: new graphic.LinearGradient(0, 0, 0, 1, [
           { offset: 0, color: 'rgba(0, 212, 170, 0.25)' },
           { offset: 1, color: 'rgba(0, 212, 170, 0)' }
         ])
@@ -94,7 +108,7 @@ const initTrendChart = () => {
 const initVendorChart = () => {
   if (!vendorChartRef.value) return
 
-  vendorChart = echarts.init(vendorChartRef.value)
+  vendorChart = init(vendorChartRef.value)
 
   vendorChart.setOption({
     backgroundColor: 'transparent',

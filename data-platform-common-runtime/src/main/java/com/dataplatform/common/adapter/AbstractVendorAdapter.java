@@ -39,7 +39,17 @@ public abstract class AbstractVendorAdapter implements VendorAdapter {
                     new TypeReference<List<RequestMappingItem>>() {});
                 return requestMappingProcessor.mapRequest(params, items);
             }
-            // 没有 requestMapping 字段则使用原始参数
+            if (wrapper.values().stream().allMatch(String.class::isInstance)) {
+                Map<String, String> fieldMapping = objectMapper.convertValue(wrapper,
+                    new TypeReference<Map<String, String>>() {});
+                Map<String, Object> transformed = new HashMap<>();
+                for (Map.Entry<String, Object> entry : params.entrySet()) {
+                    String targetField = fieldMapping.getOrDefault(entry.getKey(), entry.getKey());
+                    transformed.put(targetField, entry.getValue());
+                }
+                return transformed;
+            }
+            // 对只有 body/contentType 等模板元数据、没有 requestMapping 的配置，保持原始参数
             return new HashMap<>(params);
         } catch (Exception e1) {
             try {

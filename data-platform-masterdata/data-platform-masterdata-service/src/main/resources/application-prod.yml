@@ -26,11 +26,19 @@ spring.data.redis:
   password: ${REDIS_PASSWORD}
   database: 0
 
+sa-token:
+  token-name: Authorization
+  timeout: 7200
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+  token-prefix: Bearer
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-  mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.dataplatform.governance.monitor.entity,com.dataplatform.governance.log.entity,com.dataplatform.governance.quality.entity,com.dataplatform.governance.trace.entity
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.dataplatform.masterdata.vendor.entity,com.dataplatform.masterdata.interface_.entity,com.dataplatform.masterdata.graylog.entity
   global-config:
     db-config:
       logic-delete-field: deleted

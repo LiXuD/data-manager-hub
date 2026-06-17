@@ -116,15 +116,15 @@ export const ALERT_STATUS_OPTIONS = [
 /** 灰度规则条件类型 */
 export const CONDITION_TYPE = {
   RANDOM: 'random',
-  USER_ID: 'userId',
-  IP: 'ip',
-  COOKIE: 'cookie'
+  HEADER: 'header',
+  CALLER: 'caller',
+  IP: 'ip'
 } as const
 export type ConditionType = typeof CONDITION_TYPE[keyof typeof CONDITION_TYPE]
 
 export const CONDITION_TYPE_OPTIONS = [
   { label: '随机流量', value: CONDITION_TYPE.RANDOM },
-  { label: '用户ID', value: CONDITION_TYPE.USER_ID },
-  { label: 'IP段', value: CONDITION_TYPE.IP },
-  { label: 'Cookie', value: CONDITION_TYPE.COOKIE }
+  { label: '请求头', value: CONDITION_TYPE.HEADER },
+  { label: '调用方', value: CONDITION_TYPE.CALLER },
+  { label: 'IP段', value: CONDITION_TYPE.IP }
 ] as const

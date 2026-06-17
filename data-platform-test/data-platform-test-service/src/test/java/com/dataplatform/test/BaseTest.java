@@ -89,6 +89,12 @@ public class BaseTest {
 
     @BeforeEach
     public void setUp() {
+        Assumptions.assumeTrue(
+            Boolean.parseBoolean(System.getProperty(
+                "integration.tests",
+                System.getenv().getOrDefault("INTEGRATION_TESTS", "false"))),
+            "External API integration tests are disabled by default. Set -Dintegration.tests=true or INTEGRATION_TESTS=true to run them."
+        );
         login();
     }
 

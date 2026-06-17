@@ -14,7 +14,7 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        server-addr: ${NACOS_SERVER_ADDR}
         namespace: ${NACOS_NAMESPACE:prod}
         group: DEFAULT_GROUP
         enabled: true
@@ -141,9 +141,9 @@ sa-token:
     - /health/**
 
 spring.data.redis:
-  host: ${REDIS_HOST:localhost}
-  port: ${REDIS_PORT:6379}
-  password: ${REDIS_PASSWORD:redis_password}
+  host: ${REDIS_HOST}
+  port: ${REDIS_PORT}
+  password: ${REDIS_PASSWORD}
   database: 0
 
 gateway:
