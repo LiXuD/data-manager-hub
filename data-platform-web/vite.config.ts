@@ -31,5 +31,24 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return
+          }
+
+          if (id.includes('/node_modules/@vue/') || id.includes('/node_modules/vue') || id.includes('/node_modules/vue-router') || id.includes('/node_modules/pinia')) {
+            return 'vue-core'
+          }
+
+          if (id.includes('/node_modules/axios/')) {
+            return 'axios'
+          }
+        }
+      }
+    }
   }
 })
