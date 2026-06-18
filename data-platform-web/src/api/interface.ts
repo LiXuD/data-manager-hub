@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import type { ApiInterface, ListResponse } from '@/types'
+import type { ApiInterface, InterfaceParam, ListResponse } from '@/types'
 
 export const getInterfaceList = (params: {
   page: number
@@ -25,6 +25,10 @@ export const getInterfaceOptions = (params: {
   status?: string
 }) => {
   return request.get<{ data: ApiInterface[] }>('/interface/options', { params })
+}
+
+export const getInterfaceParams = (interfaceId: number) => {
+  return request.get<{ data: InterfaceParam[] }>(`/interface/${interfaceId}/params`)
 }
 
 export const createInterface = (data: Partial<ApiInterface>) => {

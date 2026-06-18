@@ -176,6 +176,20 @@ export interface ApiInterface {
   updatedAt: string
 }
 
+export interface InterfaceParam {
+  id?: number
+  interfaceId?: number
+  paramName: string
+  description?: string
+  paramType?: 'string' | 'number' | 'boolean' | 'object' | 'array' | string
+  required?: boolean
+  defaultValue?: string
+  validationRule?: string
+  sort?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
 // 数据查询请求
 export interface DataQueryRequest {
   vendorCode: string
