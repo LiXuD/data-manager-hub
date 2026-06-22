@@ -58,25 +58,39 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         }
 
         long startTime = System.currentTimeMillis();
+        String url = config.getApiUrl();
+        String method = config.getMethod() != null ? config.getMethod().toUpperCase() : "POST";
+
+        Map<String, Object> vendorParams = transformRequest(params, config.getRequestTemplate());
+        log.info("[VENDOR-REQ] {} {} | vendor={} | params={}", method, url, vendorCode, truncateJson(vendorParams));
 
         try {
-            Map<String, Object> vendorParams = transformRequest(params, config.getRequestTemplate());
             Request request = buildRequest(config, vendorParams);
 
             try (Response response = httpClient.newCall(request).execute()) {
                 long latency = System.currentTimeMillis() - startTime;
-                return handleResponse(response, config, latency);
+                Map<String, Object> result = handleResponse(response, config, latency);
+
+                boolean success = Boolean.TRUE.equals(result.get("success"));
+                String rawResponse = result.containsKey("rawResponse")
+                    ? truncateJson(result.get("rawResponse")) : "[no body]";
+
+                log.info("[VENDOR-RES] {} {} | vendor={} | status={} | success={} | {}ms | response={}",
+                        method, url, vendorCode, response.code(), success, latency, rawResponse);
+
+                return result;
             }
 
         } catch (IOException e) {
-            log.error("厂商API调用失败: vendor={}, url={}, error={}",
-                vendorCode, config.getApiUrl(), e.getMessage());
+            long latency = System.currentTimeMillis() - startTime;
+            log.error("[VENDOR-ERR] {} {} | vendor={} | {}ms | error={}",
+                    method, url, vendorCode, latency, e.getMessage());
 
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("success", false);
             errorResult.put("errorCode", "VENDOR_ERROR");
             errorResult.put("errorMsg", e.getMessage());
-            errorResult.put("latency", System.currentTimeMillis() - startTime);
+            errorResult.put("latency", latency);
             return errorResult;
         }
     }
@@ -200,5 +214,17 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         result.put("rawResponse", vendorResponse);
 
         return result;
+    }
+
+    private String truncateJson(Object obj) {
+        if (obj == null) {
+            return "null";
+        }
+        try {
+            String json = objectMapper.writeValueAsString(obj);
+            return json.length() <= 2048 ? json : json.substring(0, 2048) + "...[truncated]";
+        } catch (Exception e) {
+            return obj.toString();
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.dataplatform.common.config;
 
+import com.dataplatform.common.filter.HttpLoggingFilter;
 import com.dataplatform.common.filter.TraceIdMdcFilter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -21,6 +22,15 @@ public class TraceWebAutoConfiguration {
         registration.setFilter(new TraceIdMdcFilter());
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<HttpLoggingFilter> httpLoggingFilter() {
+        FilterRegistrationBean<HttpLoggingFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new HttpLoggingFilter());
+        registration.addUrlPatterns("/*");
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 20);
         return registration;
     }
 }
