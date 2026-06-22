@@ -1,6 +1,7 @@
 package com.dataplatform.access.call.controller;
 
 import com.dataplatform.access.call.service.CallRecordService;
+import com.dataplatform.access.call.vo.InterfaceQualityVO;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -95,6 +97,17 @@ public class CallRecordController {
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
         return Result.success(callRecordService.getDimensionStats(callerId, productCode, sceneCode, apiCode,
                 vendorCode, dataType, cacheHit, startTime, endTime));
+    }
+
+    @GetMapping("/quality-report")
+    public Result<List<InterfaceQualityVO>> getInterfaceQualityReport(
+            @RequestParam(required = false) String vendorCode,
+            @RequestParam(required = false) String dataType,
+            @RequestParam(required = false) String apiCode,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
+        return Result.success(callRecordService.getInterfaceQualityReport(vendorCode, dataType, apiCode,
+                startTime, endTime));
     }
 
     @GetMapping("/export")

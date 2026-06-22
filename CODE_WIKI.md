@@ -175,6 +175,12 @@ data-manager-hub/
 | `CodeEnum` | 编码枚举基接口 |
 | `EnumUtils` | 枚举工具类 |
 
+**工具类** (`common/util/`):
+
+| 类名 | 说明 |
+|------|------|
+| `LogTruncationUtil` | 日志截断工具，SHORT=2048 / MEDIUM=4096 / FULL=8192 |
+
 #### 3.1.2 data-platform-common-runtime (运行时)
 
 > **路径**: `data-platform-common-runtime/src/main/java/com/dataplatform/common/`
@@ -277,6 +283,9 @@ VendorAdapterFactory (工厂类)
 | `OperationLogAspect` | AOP切面，拦截 `@OperationLog` 注解方法 |
 | `IpUtil` | IP地址提取，支持 X-Forwarded-For 代理场景 |
 | `UserContext` | Sa-Token 用户上下文 |
+| `TraceIdMdcFilter` | 读取 X-Trace-Id header → 写入 MDC → 回写 response header |
+| `HttpLoggingFilter` | HTTP 请求/响应报文日志，记录每一笔 API 调用的原始报文 |
+| `TraceWebAutoConfiguration` | FilterRegistrationBean 自动注册（TraceIdMdcFilter + HttpLoggingFilter） |
 
 #### 3.1.4 data-platform-common-persistence (持久层)
 
@@ -339,7 +348,8 @@ VendorAdapterFactory (工厂类)
 | API Key 产品授权 | `api_key_product`，一把 Key 可绑定多个调用方产品 |
 | 公共场景 | `call_scene`，调用时必须传启用的 `sceneCode` |
 | 历史缓存 | `useCache=true` 时按 `apiCode + requestHash` 查询 call_record，命中不调用厂商且费用为 0 |
-| 多维统计 | `/call-record/dimension-stats` 支持 caller/product/scene/api/vendor/dataType/cacheHit 过滤 |
+| 多维统计 | `/call-record/dimension-stats` 支持 caller/product/scene/api/vendor/dataType/cacheHit 过滤，分组含 byCaller/byVendor/byDataType 等 |
+| 接口质量报表 | `/call-record/quality-report` 按 vendor+dataType+apiCode 分组，含成功率/P50/P95/P99 延迟，默认最近 90 天 |
 
 ---
 

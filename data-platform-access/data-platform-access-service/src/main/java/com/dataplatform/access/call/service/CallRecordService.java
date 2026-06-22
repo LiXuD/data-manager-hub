@@ -1,10 +1,12 @@
 package com.dataplatform.access.call.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.dataplatform.access.call.vo.InterfaceQualityVO;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.common.result.PageResult;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,6 +33,10 @@ public interface CallRecordService extends IService<CallRecord> {
                                           String apiCode, String vendorCode, String dataType,
                                           Boolean cacheHit, LocalDateTime startTime,
                                           LocalDateTime endTime);
+
+    List<InterfaceQualityVO> getInterfaceQualityReport(String vendorCode, String dataType,
+                                                        String apiCode, LocalDateTime startTime,
+                                                        LocalDateTime endTime);
 
     String export(Long callerId, LocalDateTime startTime, LocalDateTime endTime);
 

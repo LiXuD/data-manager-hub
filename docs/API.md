@@ -817,6 +817,24 @@ GET /call-record/stats?days=7
 Authorization: Bearer {token}
 ```
 
+### 多维统计
+
+```http
+GET /call-record/dimension-stats?vendorCode=tianyancha&dataType=company_info&startTime=2026-06-01&endTime=2026-06-22
+Authorization: Bearer {token}
+```
+
+返回按 caller、product、scene、vendor、dataType 等维度分组的调用统计（总数、成功/失败数、费用、延迟）。
+
+### 接口质量报表
+
+```http
+GET /call-record/quality-report?startTime=2026-06-01&endTime=2026-06-22
+Authorization: Bearer {token}
+```
+
+按 vendor + dataType + apiCode 分组返回接口质量指标：成功率、失败率、平均/P50/P95/P99 延迟、总费用。默认查询最近 90 天。
+
 ---
 
 ## 计费管理 (/billing)
