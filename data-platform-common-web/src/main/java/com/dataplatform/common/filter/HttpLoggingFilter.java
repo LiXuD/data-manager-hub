@@ -7,14 +7,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.Set;
 
 /**
  * HTTP 请求/响应报文日志记录过滤器。
@@ -25,6 +25,7 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(HttpLoggingFilter.class);
     private static final int MAX_BODY_LENGTH = 4096;
     private static final String[] SKIP_PATTERNS = {"/actuator/", "/health/", "/favicon.ico"};
+    private static final Set<String> NO_BODY_METHODS = Set.of("GET", "HEAD", "OPTIONS");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -37,31 +38,37 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
             return;
         }
 
-        ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request);
+        boolean hasBody = !NO_BODY_METHODS.contains(request.getMethod());
+        ContentCachingRequestWrapper requestWrapper = hasBody ? new ContentCachingRequestWrapper(request) : null;
         ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
 
         long startTime = System.currentTimeMillis();
-        String traceId = request.getHeader(TraceConstants.TRACE_ID_HEADER);
         String method = request.getMethod();
         String queryString = request.getQueryString();
 
         try {
-            filterChain.doFilter(requestWrapper, responseWrapper);
+            if (requestWrapper != null) {
+                filterChain.doFilter(requestWrapper, responseWrapper);
+            } else {
+                filterChain.doFilter(request, responseWrapper);
+            }
         } finally {
-            long duration = System.currentTimeMillis() - startTime;
-            int statusCode = responseWrapper.getStatus();
+            if (log.isInfoEnabled()) {
+                long duration = System.currentTimeMillis() - startTime;
+                int statusCode = responseWrapper.getStatus();
+                String traceId = MDC.get(TraceConstants.TRACE_ID_MDC_KEY);
+                String requestBody = requestWrapper != null ? readBody(requestWrapper.getContentAsByteArray()) : "[no-body]";
+                String responseBody = readBody(responseWrapper.getContentAsByteArray());
 
-            String requestBody = getRequestBody(requestWrapper);
-            String responseBody = getResponseBody(responseWrapper);
-
-            log.info("[HTTP] {} {} | traceId={} | status={} | {}ms\n  Request: {}\n  Response: {}",
-                    method,
-                    uri + (queryString != null ? "?" + queryString : ""),
-                    traceId != null ? traceId : "-",
-                    statusCode,
-                    duration,
-                    requestBody,
-                    responseBody);
+                log.info("[HTTP] {} {} | traceId={} | status={} | {}ms | req={} | res={}",
+                        method,
+                        uri + (queryString != null ? "?" + queryString : ""),
+                        traceId != null ? traceId : "-",
+                        statusCode,
+                        duration,
+                        requestBody,
+                        responseBody);
+            }
 
             responseWrapper.copyBodyToResponse();
         }
@@ -79,25 +86,11 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
         return false;
     }
 
-    private String getRequestBody(ContentCachingRequestWrapper request) {
-        byte[] body = request.getContentAsByteArray();
+    private String readBody(byte[] body) {
         if (body.length == 0) {
             return "[empty]";
         }
-        String bodyStr = new String(body, StandardCharsets.UTF_8);
-        return truncate(bodyStr);
-    }
-
-    private String getResponseBody(ContentCachingResponseWrapper response) {
-        byte[] body = response.getContentAsByteArray();
-        if (body.length == 0) {
-            return "[empty]";
-        }
-        String bodyStr = new String(body, StandardCharsets.UTF_8);
-        return truncate(bodyStr);
-    }
-
-    private String truncate(String str) {
+        String str = new String(body, StandardCharsets.UTF_8);
         if (str.length() <= MAX_BODY_LENGTH) {
             return str;
         }

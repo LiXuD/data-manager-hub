@@ -4,7 +4,6 @@ import com.dataplatform.common.auth.AuthHandler;
 import com.dataplatform.common.auth.AuthHandlerFactory;
 import com.dataplatform.common.security.SignatureBuilder;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.*;
 import org.springframework.util.StringUtils;
 
@@ -21,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 public class HttpVendorAdapter extends AbstractVendorAdapter {
 
     private static final MediaType JSON_MEDIA_TYPE = MediaType.parse("application/json; charset=utf-8");
+    private static final int MAX_LOG_LENGTH = 2048;
 
     private final String vendorCode;
     private final OkHttpClient httpClient;
@@ -62,23 +62,20 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         String method = config.getMethod() != null ? config.getMethod().toUpperCase() : "POST";
 
         Map<String, Object> vendorParams = transformRequest(params, config.getRequestTemplate());
-        log.info("[VENDOR-REQ] {} {} | vendor={} | params={}", method, url, vendorCode, truncateJson(vendorParams));
+        log.info("[VENDOR-REQ] {} {} | vendor={} | params={}", method, url, vendorCode, truncate(vendorParams));
 
         try {
-            Request request = buildRequest(config, vendorParams);
+            Request request = buildRequest(config, vendorParams, method);
 
             try (Response response = httpClient.newCall(request).execute()) {
                 long latency = System.currentTimeMillis() - startTime;
-                Map<String, Object> result = handleResponse(response, config, latency);
-
-                boolean success = Boolean.TRUE.equals(result.get("success"));
-                String rawResponse = result.containsKey("rawResponse")
-                    ? truncateJson(result.get("rawResponse")) : "[no body]";
+                VendorCallResult callResult = handleResponse(response, config, latency);
 
                 log.info("[VENDOR-RES] {} {} | vendor={} | status={} | success={} | {}ms | response={}",
-                        method, url, vendorCode, response.code(), success, latency, rawResponse);
+                        method, url, vendorCode, response.code(), callResult.success, latency,
+                        truncate(callResult.rawResponse));
 
-                return result;
+                return callResult.toMap();
             }
 
         } catch (IOException e) {
@@ -95,28 +92,18 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         }
     }
 
-    /**
-     * 构建 HTTP 请求
-     */
-    private Request buildRequest(VendorAdapterConfig config, Map<String, Object> params) throws IOException {
+    private Request buildRequest(VendorAdapterConfig config, Map<String, Object> params, String method) throws IOException {
         String url = config.getApiUrl();
-        String method = config.getMethod() != null ? config.getMethod().toUpperCase() : "POST";
 
-        // 添加签名
         Map<String, Object> signedParams = addSignature(config, params);
-
-        // 构建请求体
         String jsonBody = objectMapper.writeValueAsString(signedParams);
         RequestBody body = RequestBody.create(jsonBody, JSON_MEDIA_TYPE);
 
-        // 构建请求构建器
         Request.Builder builder = new Request.Builder().url(url);
 
-        // 添加请求头
         if (config.getHeaders() != null) {
             for (Map.Entry<String, String> header : config.getHeaders().entrySet()) {
                 String value = header.getValue();
-                // 支持变量替换: {secretKey} -> 实际密钥
                 if (value.contains("{secretKey}") && config.getSecretKey() != null) {
                     value = value.replace("{secretKey}", config.getSecretKey());
                 }
@@ -124,10 +111,8 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
             }
         }
 
-        // 应用认证配置
         applyAuth(builder, config);
 
-        // 设置请求方法
         if ("GET".equals(method)) {
             HttpUrl httpUrl = HttpUrl.parse(url);
             if (httpUrl == null) {
@@ -145,9 +130,6 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         return builder.build();
     }
 
-    /**
-     * 应用认证配置
-     */
     private void applyAuth(Request.Builder builder, VendorAdapterConfig config) {
         String authType = config.getAuthType();
         Map<String, Object> authConfig = config.getAuthConfig();
@@ -160,12 +142,11 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         if (handler != null) {
             handler.applyAuth(builder, authConfig, Collections.singletonMap("vendorCode", vendorCode));
             log.debug("应用认证: type={}", authType);
+        } else {
+            log.warn("未知的认证类型: vendor={}, authType={}", vendorCode, authType);
         }
     }
 
-    /**
-     * 添加签名
-     */
     private Map<String, Object> addSignature(VendorAdapterConfig config, Map<String, Object> params) {
         if (StringUtils.hasText(config.getSignType()) && StringUtils.hasText(config.getSecretKey())) {
             Map<String, Object> signedParams = new HashMap<>(params);
@@ -177,54 +158,54 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         return params;
     }
 
-    /**
-     * 处理 HTTP 响应
-     */
-    private Map<String, Object> handleResponse(Response response, VendorAdapterConfig config, long latency)
+    private VendorCallResult handleResponse(Response response, VendorAdapterConfig config, long latency)
             throws IOException {
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("latency", latency);
-
         if (!response.isSuccessful()) {
-            result.put("success", false);
-            result.put("errorCode", "HTTP_" + response.code());
-            result.put("errorMsg", "HTTP请求失败: " + response.code());
-            return result;
+            return new VendorCallResult(false, null, null,
+                    "HTTP_" + response.code(), "HTTP请求失败: " + response.code(), latency);
         }
 
-        // 解析响应体
         ResponseBody responseBody = response.body();
         if (responseBody == null) {
-            result.put("success", false);
-            result.put("errorCode", "EMPTY_RESPONSE");
-            result.put("errorMsg", "响应体为空");
-            return result;
+            return new VendorCallResult(false, null, null,
+                    "EMPTY_RESPONSE", "响应体为空", latency);
         }
 
         String responseStr = responseBody.string();
         Map<String, Object> vendorResponse = objectMapper.readValue(responseStr,
             new TypeReference<Map<String, Object>>() {});
 
-        // 转换响应字段
         Map<String, Object> transformedResponse = transformResponse(vendorResponse, config.getResponseMapping());
 
-        result.put("success", true);
-        result.put("data", transformedResponse);
-        result.put("rawResponse", vendorResponse);
-
-        return result;
+        return new VendorCallResult(true, transformedResponse, responseStr, null, null, latency);
     }
 
-    private String truncateJson(Object obj) {
+    private String truncate(Object obj) {
         if (obj == null) {
             return "null";
         }
-        try {
-            String json = objectMapper.writeValueAsString(obj);
-            return json.length() <= 2048 ? json : json.substring(0, 2048) + "...[truncated]";
-        } catch (Exception e) {
-            return obj.toString();
+        String str = obj instanceof String ? (String) obj : obj.toString();
+        if (str.length() <= MAX_LOG_LENGTH) {
+            return str;
+        }
+        return str.substring(0, MAX_LOG_LENGTH) + "...[truncated " + str.length() + " chars]";
+    }
+
+    private record VendorCallResult(boolean success, Map<String, Object> data, String rawResponse,
+                                     String errorCode, String errorMsg, long latency) {
+        Map<String, Object> toMap() {
+            Map<String, Object> map = new HashMap<>();
+            map.put("success", success);
+            map.put("latency", latency);
+            if (success) {
+                map.put("data", data);
+                map.put("rawResponse", rawResponse);
+            } else {
+                map.put("errorCode", errorCode);
+                map.put("errorMsg", errorMsg);
+            }
+            return map;
         }
     }
 }

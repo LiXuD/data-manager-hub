@@ -202,7 +202,7 @@
               @change="syncAdvancedJsonFromValues"
             />
             <el-input
-              v-else-if="getParamInputType(param) === 'object' || getParamInputType(param) === 'array'"
+              v-else-if="['object', 'array'].includes(getParamInputType(param))"
               v-model="paramValues[param.paramName]"
               type="textarea"
               :rows="4"
@@ -529,15 +529,15 @@ const loadInterfaceParams = async (interfaceId: number) => {
   }
 }
 
-const buildParamsFromForm = () => {
+const buildParamsFromForm = (source?: Record<string, any>) => {
   const params: Record<string, any> = {}
 
   for (const param of interfaceParams.value) {
     const type = getParamInputType(param)
-    const value = paramValues.value[param.paramName]
+    const rawValue = source ? source[param.paramName] : paramValues.value[param.paramName]
     const label = getParamLabel(param)
 
-    if (isEmptyValue(value, type)) {
+    if (isEmptyValue(rawValue, type)) {
       if (param.required) {
         return { error: `请填写必填参数：${label}` }
       }
@@ -545,56 +545,34 @@ const buildParamsFromForm = () => {
     }
 
     if (type === 'object' || type === 'array') {
-      try {
-        const parsed = JSON.parse(String(value))
-        if (type === 'object' && (Array.isArray(parsed) || parsed === null || typeof parsed !== 'object')) {
-          return { error: `${label} 必须是 JSON 对象` }
-        }
-        if (type === 'array' && !Array.isArray(parsed)) {
-          return { error: `${label} 必须是 JSON 数组` }
-        }
-        params[param.paramName] = parsed
-      } catch {
+      const parsed = source ? rawValue : (() => { try { return JSON.parse(String(rawValue)) } catch { return null } })()
+      if (parsed === null && !source) {
         return { error: `${label} JSON 格式错误` }
       }
+      if (type === 'object' && (Array.isArray(parsed) || parsed === null || typeof parsed !== 'object')) {
+        return { error: `${label} 必须是 JSON 对象` }
+      }
+      if (type === 'array' && !Array.isArray(parsed)) {
+        return { error: `${label} 必须是 JSON 数组` }
+      }
+      params[param.paramName] = parsed
     } else if (type === 'number') {
-      const num = Number(value)
-      if (Number.isNaN(num)) {
+      const num = source ? rawValue : Number(rawValue)
+      if (typeof num !== 'number' || Number.isNaN(num)) {
         return { error: `${label} 必须是数字` }
       }
       params[param.paramName] = num
+    } else if (type === 'boolean' && source) {
+      if (typeof rawValue !== 'boolean') {
+        return { error: `${label} 必须是布尔值` }
+      }
+      params[param.paramName] = rawValue
     } else {
-      params[param.paramName] = value
+      params[param.paramName] = rawValue
     }
   }
 
   return { params }
-}
-
-const validateParamsPayload = (params: Record<string, any>) => {
-  for (const param of interfaceParams.value) {
-    const type = getParamInputType(param)
-    const value = params[param.paramName]
-    const label = getParamLabel(param)
-
-    if (param.required && isEmptyValue(value, type)) {
-      return `请填写必填参数：${label}`
-    }
-    if (isEmptyValue(value, type)) continue
-    if (type === 'object' && (Array.isArray(value) || value === null || typeof value !== 'object')) {
-      return `${label} 必须是 JSON 对象`
-    }
-    if (type === 'array' && !Array.isArray(value)) {
-      return `${label} 必须是 JSON 数组`
-    }
-    if (type === 'number' && (typeof value !== 'number' || Number.isNaN(value))) {
-      return `${label} 必须是数字`
-    }
-    if (type === 'boolean' && typeof value !== 'boolean') {
-      return `${label} 必须是布尔值`
-    }
-  }
-  return ''
 }
 
 // 加载厂商列表
@@ -721,9 +699,9 @@ const handleExecute = async () => {
       jsonError.value = 'JSON格式错误，请检查输入'
       return
     }
-    const validationError = validateParamsPayload(params)
-    if (validationError) {
-      ElMessage.warning(validationError)
+    const built = buildParamsFromForm(params)
+    if (built.error) {
+      ElMessage.warning(built.error)
       return
     }
   } else {
