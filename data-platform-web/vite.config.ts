@@ -40,7 +40,7 @@ export default defineConfig({
             return
           }
 
-          if (id.includes('/node_modules/@vue/') || id.includes('/node_modules/vue') || id.includes('/node_modules/vue-router') || id.includes('/node_modules/pinia')) {
+          if (id.includes('/node_modules/@vue/') || id.includes('/node_modules/vue/') || id.includes('/node_modules/vue-router/') || id.includes('/node_modules/pinia/')) {
             return 'vue-core'
           }
 
