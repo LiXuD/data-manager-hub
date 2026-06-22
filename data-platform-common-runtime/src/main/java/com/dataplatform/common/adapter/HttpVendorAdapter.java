@@ -3,6 +3,7 @@ package com.dataplatform.common.adapter;
 import com.dataplatform.common.auth.AuthHandler;
 import com.dataplatform.common.auth.AuthHandlerFactory;
 import com.dataplatform.common.security.SignatureBuilder;
+import com.dataplatform.common.util.LogTruncationUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import okhttp3.*;
 import org.springframework.util.StringUtils;
@@ -20,7 +21,6 @@ import java.util.concurrent.TimeUnit;
 public class HttpVendorAdapter extends AbstractVendorAdapter {
 
     private static final MediaType JSON_MEDIA_TYPE = MediaType.parse("application/json; charset=utf-8");
-    private static final int MAX_LOG_LENGTH = 2048;
 
     private final String vendorCode;
     private final OkHttpClient httpClient;
@@ -62,7 +62,10 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         String method = config.getMethod() != null ? config.getMethod().toUpperCase() : "POST";
 
         Map<String, Object> vendorParams = transformRequest(params, config.getRequestTemplate());
-        log.info("[VENDOR-REQ] {} {} | vendor={} | params={}", method, url, vendorCode, truncate(vendorParams));
+        if (log.isInfoEnabled()) {
+            log.info("[VENDOR-REQ] {} {} | vendor={} | params={}", method, url, vendorCode,
+                    LogTruncationUtil.truncate(vendorParams, LogTruncationUtil.SHORT));
+        }
 
         try {
             Request request = buildRequest(config, vendorParams, method);
@@ -71,9 +74,11 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
                 long latency = System.currentTimeMillis() - startTime;
                 VendorCallResult callResult = handleResponse(response, config, latency);
 
-                log.info("[VENDOR-RES] {} {} | vendor={} | status={} | success={} | {}ms | response={}",
-                        method, url, vendorCode, response.code(), callResult.success, latency,
-                        truncate(callResult.rawResponse));
+                if (log.isInfoEnabled()) {
+                    log.info("[VENDOR-RES] {} {} | vendor={} | status={} | success={} | {}ms | response={}",
+                            method, url, vendorCode, response.code(), callResult.success, latency,
+                            LogTruncationUtil.truncate(callResult.rawResponse, LogTruncationUtil.SHORT));
+                }
 
                 return callResult.toMap();
             }
@@ -161,35 +166,29 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
     private VendorCallResult handleResponse(Response response, VendorAdapterConfig config, long latency)
             throws IOException {
 
+        ResponseBody responseBody = response.body();
+        String rawBody = (responseBody != null) ? responseBody.string() : "";
+
         if (!response.isSuccessful()) {
-            return new VendorCallResult(false, null, null,
-                    "HTTP_" + response.code(), "HTTP请求失败: " + response.code(), latency);
+            String errorDetail = rawBody.isEmpty()
+                ? "HTTP请求失败: " + response.code()
+                : "HTTP请求失败: " + response.code() + " | " + LogTruncationUtil.truncate(rawBody, LogTruncationUtil.SHORT);
+            return new VendorCallResult(false, null, rawBody,
+                    "HTTP_" + response.code(), errorDetail, latency);
         }
 
-        ResponseBody responseBody = response.body();
-        if (responseBody == null) {
+        if (rawBody.isEmpty()) {
             return new VendorCallResult(false, null, null,
                     "EMPTY_RESPONSE", "响应体为空", latency);
         }
 
-        String responseStr = responseBody.string();
-        Map<String, Object> vendorResponse = objectMapper.readValue(responseStr,
+        String logResponse = LogTruncationUtil.truncate(rawBody, LogTruncationUtil.SHORT);
+        Map<String, Object> vendorResponse = objectMapper.readValue(rawBody,
             new TypeReference<Map<String, Object>>() {});
 
         Map<String, Object> transformedResponse = transformResponse(vendorResponse, config.getResponseMapping());
 
-        return new VendorCallResult(true, transformedResponse, responseStr, null, null, latency);
-    }
-
-    private String truncate(Object obj) {
-        if (obj == null) {
-            return "null";
-        }
-        String str = obj instanceof String ? (String) obj : obj.toString();
-        if (str.length() <= MAX_LOG_LENGTH) {
-            return str;
-        }
-        return str.substring(0, MAX_LOG_LENGTH) + "...[truncated " + str.length() + " chars]";
+        return new VendorCallResult(true, transformedResponse, logResponse, null, null, latency);
     }
 
     private record VendorCallResult(boolean success, Map<String, Object> data, String rawResponse,

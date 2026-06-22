@@ -1,6 +1,7 @@
 package com.dataplatform.common.filter;
 
 import com.dataplatform.common.constant.TraceConstants;
+import com.dataplatform.common.util.LogTruncationUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,7 +24,6 @@ import java.util.Set;
 public class HttpLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(HttpLoggingFilter.class);
-    private static final int MAX_BODY_LENGTH = 4096;
     private static final String[] SKIP_PATTERNS = {"/actuator/", "/health/", "/favicon.ico"};
     private static final Set<String> NO_BODY_METHODS = Set.of("GET", "HEAD", "OPTIONS");
 
@@ -38,26 +38,35 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
             return;
         }
 
+        boolean loggingEnabled = log.isInfoEnabled();
         boolean hasBody = !NO_BODY_METHODS.contains(request.getMethod());
-        ContentCachingRequestWrapper requestWrapper = hasBody ? new ContentCachingRequestWrapper(request) : null;
-        ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
+
+        ContentCachingRequestWrapper requestWrapper = (loggingEnabled && hasBody)
+            ? new ContentCachingRequestWrapper(request) : null;
+        ContentCachingResponseWrapper responseWrapper = loggingEnabled
+            ? new ContentCachingResponseWrapper(response) : null;
 
         long startTime = System.currentTimeMillis();
         String method = request.getMethod();
         String queryString = request.getQueryString();
 
         try {
-            if (requestWrapper != null) {
+            if (requestWrapper != null && responseWrapper != null) {
                 filterChain.doFilter(requestWrapper, responseWrapper);
-            } else {
+            } else if (requestWrapper != null) {
+                filterChain.doFilter(requestWrapper, response);
+            } else if (responseWrapper != null) {
                 filterChain.doFilter(request, responseWrapper);
+            } else {
+                filterChain.doFilter(request, response);
             }
         } finally {
-            if (log.isInfoEnabled()) {
+            if (loggingEnabled && responseWrapper != null) {
                 long duration = System.currentTimeMillis() - startTime;
                 int statusCode = responseWrapper.getStatus();
                 String traceId = MDC.get(TraceConstants.TRACE_ID_MDC_KEY);
-                String requestBody = requestWrapper != null ? readBody(requestWrapper.getContentAsByteArray()) : "[no-body]";
+                String requestBody = requestWrapper != null
+                    ? readBody(requestWrapper.getContentAsByteArray()) : "[no-body]";
                 String responseBody = readBody(responseWrapper.getContentAsByteArray());
 
                 log.info("[HTTP] {} {} | traceId={} | status={} | {}ms | req={} | res={}",
@@ -68,9 +77,9 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
                         duration,
                         requestBody,
                         responseBody);
-            }
 
-            responseWrapper.copyBodyToResponse();
+                responseWrapper.copyBodyToResponse();
+            }
         }
     }
 
@@ -90,10 +99,6 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
         if (body.length == 0) {
             return "[empty]";
         }
-        String str = new String(body, StandardCharsets.UTF_8);
-        if (str.length() <= MAX_BODY_LENGTH) {
-            return str;
-        }
-        return str.substring(0, MAX_BODY_LENGTH) + "...[truncated " + str.length() + " chars]";
+        return LogTruncationUtil.truncate(new String(body, StandardCharsets.UTF_8), LogTruncationUtil.MEDIUM);
     }
 }

@@ -2,6 +2,7 @@ package com.dataplatform.common.log;
 
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.util.IpUtil;
+import com.dataplatform.common.util.LogTruncationUtil;
 import com.dataplatform.common.util.UserContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,7 +27,6 @@ import java.time.LocalDateTime;
 public class OperationLogAspect {
 
     private static final Logger log = LoggerFactory.getLogger(OperationLogAspect.class);
-    private static final int MAX_LOG_LENGTH = 8192;
 
     @Autowired(required = false)
     private OperationLogService operationLogService;
@@ -63,7 +63,7 @@ public class OperationLogAspect {
                 try {
                     Object[] args = point.getArgs();
                     if (args != null && args.length > 0) {
-                        record.setParams(truncateJson(objectMapper.writeValueAsString(args)));
+                        record.setParams(LogTruncationUtil.truncate(objectMapper.writeValueAsString(args), LogTruncationUtil.FULL));
                     }
                 } catch (Exception ignored) {
                 }
@@ -74,7 +74,7 @@ public class OperationLogAspect {
             record.setStatus(StatusConstants.SUCCESS);
             if (operationLog.saveResult() && objectMapper != null && result != null) {
                 try {
-                    record.setResult(truncateJson(objectMapper.writeValueAsString(result)));
+                    record.setResult(LogTruncationUtil.truncate(objectMapper.writeValueAsString(result), LogTruncationUtil.FULL));
                 } catch (Exception ignored) {
                 }
             }
@@ -96,10 +96,4 @@ public class OperationLogAspect {
         }
     }
 
-    private String truncateJson(String json) {
-        if (json != null && json.length() > MAX_LOG_LENGTH) {
-            return json.substring(0, MAX_LOG_LENGTH) + "...[truncated]";
-        }
-        return json;
-    }
 }
