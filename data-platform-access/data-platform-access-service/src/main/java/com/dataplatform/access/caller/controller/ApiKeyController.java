@@ -35,8 +35,8 @@ public class ApiKeyController {
     private CallerProductService callerProductService;
 
     @GetMapping("/list")
-    public Result<List<ApiKey>> list() {
-        return Result.success(apiKeyService.list());
+    public Result<List<ApiKey>> list(@RequestParam(value = "callerId", required = false) Long callerId) {
+        return Result.success(callerId != null ? apiKeyService.listByCaller(callerId) : apiKeyService.list());
     }
 
     @GetMapping("/{id}")
@@ -53,12 +53,8 @@ public class ApiKeyController {
                     .body(Result.error(400, "name不能为空"));
         }
 
-        ApiKey apiKey = new ApiKey();
-        apiKey.setCallerId(callerId);
-        apiKey.setKeyName(name);
-        apiKey.setStatus(ApiKeyStatus.ACTIVE);
-        apiKeyService.save(apiKey);
-        return ResponseEntity.ok(Result.success(apiKeyService.getById(apiKey.getId())));
+        ApiKey apiKey = apiKeyService.createApiKey(callerId, name);
+        return ResponseEntity.ok(Result.success(apiKey));
     }
 
     @OperationLog(module = "API Key管理", operation = "新增API Key")
@@ -70,12 +66,8 @@ public class ApiKeyController {
                     .body(Result.error(400, "name不能为空"));
         }
 
-        ApiKey apiKey = new ApiKey();
-        apiKey.setCallerId(callerId);
-        apiKey.setKeyName(name);
-        apiKey.setStatus(ApiKeyStatus.ACTIVE);
-        apiKeyService.save(apiKey);
-        return ResponseEntity.ok(Result.success(apiKeyService.getById(apiKey.getId())));
+        ApiKey apiKey = apiKeyService.createApiKey(callerId, name);
+        return ResponseEntity.ok(Result.success(apiKey));
     }
 
     @OperationLog(module = "API Key管理", operation = "更新API Key状态")
@@ -145,6 +137,18 @@ public class ApiKeyController {
             }
         }
         apiKeyProductService.assignProducts(id, productIds);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    @OperationLog(module = "API Key管理", operation = "删除API Key")
+    @DeleteMapping("/api-key/{id}")
+    public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
+        ApiKey apiKey = apiKeyService.getById(id);
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "API Key不存在"));
+        }
+        apiKeyService.removeById(id);
         return ResponseEntity.ok(Result.success(null));
     }
 }

@@ -109,33 +109,15 @@ public class AuditBusinessFlowTest extends BaseTest {
 
     @Test
     @Order(6)
-    @DisplayName("链路3-1: 内部接口写入日志 → 验证成功")
-    void testInternalLogSave() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("userId", 1L);
-        data.put("username", "test_user");
-        data.put("module", "测试模块");
-        data.put("operation", "测试操作");
-        data.put("method", "POST");
-        data.put("params", "{}");
-        data.put("result", "success");
-        data.put("ip", "127.0.0.1");
-        data.put("duration", 100);
-        data.put("status", "success");
-
-        // 内部接口不需要认证（/log/internal/** 在 auth 排除路径中）
-        Response response = given()
+    @DisplayName("链路3-1: 经网关访问内部接口 → 验证拒绝")
+    void testInternalLogBlockedByGateway() {
+        given()
             .contentType("application/json")
-            .body(data)
+            .body(Map.of("module", "测试模块"))
             .when()
-            .post(GATEWAY_URL + "/api/v1/log/internal/save");
-
-        // 内部接口可能返回 200 或 401（取决于网关配置）
-        if (response.getStatusCode() == 200) {
-            log.info("内部日志写入成功");
-        } else {
-            log.info("内部日志写入返回 {}, 可能需要认证", response.getStatusCode());
-        }
+            .post(GATEWAY_URL + "/internal/v1/governance/logs")
+            .then()
+            .statusCode(404);
     }
 
     // ==================== 链路4：联动验证 ====================

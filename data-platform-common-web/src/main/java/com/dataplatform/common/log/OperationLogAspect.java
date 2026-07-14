@@ -11,8 +11,7 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -23,16 +22,18 @@ import java.time.LocalDateTime;
  * <p>日志治理组件，负责记录、转发或查询操作日志。</p>
  */
 @Aspect
-@Component
 public class OperationLogAspect {
 
     private static final Logger log = LoggerFactory.getLogger(OperationLogAspect.class);
 
-    @Autowired(required = false)
-    private OperationLogService operationLogService;
+    private final ObjectProvider<OperationLogService> operationLogServices;
+    private final ObjectMapper objectMapper;
 
-    @Autowired(required = false)
-    private ObjectMapper objectMapper;
+    public OperationLogAspect(ObjectProvider<OperationLogService> operationLogServices,
+                              ObjectMapper objectMapper) {
+        this.operationLogServices = operationLogServices;
+        this.objectMapper = objectMapper;
+    }
 
     @Around("@annotation(operationLog)")
     public Object around(ProceedingJoinPoint point, OperationLog operationLog) throws Throwable {
@@ -47,17 +48,12 @@ public class OperationLogAspect {
             record.setDescription(operationLog.description());
             record.setMethod(signature.getDeclaringTypeName() + "." + signature.getName());
 
-            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attributes != null) {
+            if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
                 HttpServletRequest request = attributes.getRequest();
                 record.setIp(IpUtil.getClientIp(request));
             }
 
-            Long userId = UserContext.getCurrentUserId();
-            if (userId != null) {
-                record.setUserId(userId);
-                record.setUsername(UserContext.getCurrentUsername());
-            }
+            populateUser(record);
 
             if (operationLog.saveParams() && objectMapper != null) {
                 try {
@@ -86,6 +82,7 @@ public class OperationLogAspect {
             throw e;
         } finally {
             record.setDuration(System.currentTimeMillis() - startTime);
+            OperationLogService operationLogService = operationLogServices.getIfAvailable();
             if (operationLogService != null) {
                 try {
                     operationLogService.save(record);
@@ -96,4 +93,15 @@ public class OperationLogAspect {
         }
     }
 
+    private void populateUser(OperationLogRecord record) {
+        try {
+            Long userId = UserContext.getCurrentUserId();
+            if (userId != null) {
+                record.setUserId(userId);
+                record.setUsername(UserContext.getCurrentUsername());
+            }
+        } catch (RuntimeException exception) {
+            log.debug("User context is unavailable while recording operation log", exception);
+        }
+    }
 }

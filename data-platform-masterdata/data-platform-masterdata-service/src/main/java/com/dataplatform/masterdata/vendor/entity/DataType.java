@@ -2,6 +2,7 @@ package com.dataplatform.masterdata.vendor.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.common.handler.CommonStatusTypeHandler;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -10,7 +11,7 @@ import java.time.LocalDateTime;
  * 主数据域厂商的 Data Type。
  * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
  */
-@TableName("data_type")
+@TableName(value = "data_type", autoResultMap = true)
 public class DataType {
     
     @TableId(type = IdType.AUTO)
@@ -22,6 +23,7 @@ public class DataType {
     private String description;
     private String pricingModel;
     private BigDecimal unitPrice;
+    @TableField(typeHandler = CommonStatusTypeHandler.class)
     private CommonStatus status;
     
     @TableField(fill = FieldFill.INSERT)

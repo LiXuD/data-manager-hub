@@ -3,6 +3,7 @@ package com.dataplatform.masterdata.vendor.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import com.dataplatform.common.handler.JsonbTypeHandler;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.common.handler.CommonStatusTypeHandler;
 import java.time.LocalDateTime;
 
 /**
@@ -41,6 +42,7 @@ public class VendorConfig {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String paramMapping;
 
+    @TableField(typeHandler = CommonStatusTypeHandler.class)
     private CommonStatus status;
 
     @TableField(fill = FieldFill.INSERT)

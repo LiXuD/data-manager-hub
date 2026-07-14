@@ -5,7 +5,7 @@ import com.dataplatform.api.Result;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
 import com.dataplatform.billing.api.dto.BillingCalculateReqDTO;
 import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
-import com.dataplatform.billing.api.feign.BillingFeignClient;
+import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.access.call.service.VendorProxyService;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
@@ -26,17 +27,18 @@ import org.springframework.stereotype.Service;
 public class OpenApiQueryService {
 
     private static final String DEFAULT_API_VERSION = "v1";
+    private static final String MASKED_VALUE = "***MASKED***";
 
     private final CallRecordService callRecordService;
     private final CallRecordEventPublisher callRecordEventPublisher;
     private final VendorProxyService vendorProxyService;
-    private final BillingFeignClient billingFeignClient;
+    private final BillingInternalFeignClient billingFeignClient;
     private final ObjectMapper objectMapper;
 
     public OpenApiQueryService(CallRecordService callRecordService,
                                CallRecordEventPublisher callRecordEventPublisher,
                                VendorProxyService vendorProxyService,
-                               BillingFeignClient billingFeignClient) {
+                               BillingInternalFeignClient billingFeignClient) {
         this.callRecordService = callRecordService;
         this.callRecordEventPublisher = callRecordEventPublisher;
         this.vendorProxyService = vendorProxyService;
@@ -63,11 +65,12 @@ public class OpenApiQueryService {
                 LocalDateTime responseTime = LocalDateTime.now();
                 long duration = System.currentTimeMillis() - startTime;
                 Map<String, Object> cachedResult = readResponseData(cachedRecord.getResponseData());
+                BigDecimal cost = calculateCost(context, platformRequestId, duration, requestTime, true, false);
                 CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
-                        true, duration, BigDecimal.ZERO, true, cachedRecord.getId(), requestTime, responseTime);
+                        true, duration, cost, true, cachedRecord.getId(), requestTime, responseTime);
                 callRecordEventPublisher.publish(record);
                 return buildResponse(context, platformRequestId, cachedResult, true,
-                        cachedRecord.getId(), requestTime, responseTime, duration, BigDecimal.ZERO);
+                        cachedRecord.getId(), requestTime, responseTime, duration, cost);
             }
         }
 
@@ -80,7 +83,7 @@ public class OpenApiQueryService {
         LocalDateTime responseTime = LocalDateTime.now();
         long duration = System.currentTimeMillis() - startTime;
         boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
-        BigDecimal cost = success ? calculateCost(context.getVendorCode(), context.getDataTypeCode(), duration) : BigDecimal.ZERO;
+        BigDecimal cost = calculateCost(context, platformRequestId, duration, requestTime, success, success);
         vendorResult.put("requestId", platformRequestId);
         vendorResult.put("cached", false);
         vendorResult.put("latency", duration);
@@ -92,22 +95,26 @@ public class OpenApiQueryService {
                 null, requestTime, responseTime, duration, cost);
     }
 
-    private BigDecimal calculateCost(String vendorCode, String dataType, long latencyMs) {
-        try {
-            BillingCalculateReqDTO req = new BillingCalculateReqDTO();
-            req.setVendorCode(vendorCode);
-            req.setDataType(dataType);
-            req.setCallCount(1);
-            req.setLatency(latencyMs);
-            Result<BillingCalculateRespDTO> costResult = billingFeignClient.calculateCost(req);
-            BillingCalculateRespDTO resp = costResult != null ? costResult.getData() : null;
-            if (resp != null && resp.getCost() != null) {
-                return resp.getCost();
-            }
-        } catch (Exception ignored) {
-            // Keep OpenAPI calls available when billing is temporarily unavailable.
+    private BigDecimal calculateCost(OpenApiCallContext context, String requestId, long latencyMs,
+                                     LocalDateTime callTime, boolean success, boolean billable) {
+        BillingCalculateReqDTO req = new BillingCalculateReqDTO();
+        req.setVendorCode(context.getVendorCode());
+        req.setDataType(context.getDataTypeCode());
+        req.setCallCount(1);
+        req.setLatency(latencyMs);
+        req.setRequestId(requestId);
+        req.setTenantId(context.getTenantId());
+        req.setCallerId(context.getCallerId());
+        req.setVendorId(context.getVendorId());
+        req.setSuccess(success);
+        req.setBillable(billable);
+        req.setCallTime(callTime);
+        Result<BillingCalculateRespDTO> costResult = billingFeignClient.calculateCost(req);
+        BillingCalculateRespDTO resp = costResult != null ? costResult.getData() : null;
+        if (resp == null || resp.getCost() == null) {
+            throw new IllegalStateException("Billing service returned an empty cost");
         }
-        return new BigDecimal("0.10");
+        return resp.getCost();
     }
 
     @SuppressWarnings("unchecked")
@@ -187,8 +194,10 @@ public class OpenApiQueryService {
         record.setResponseAt(responseTime);
         record.setCallTime(requestTime);
         try {
-            record.setRequestParams(objectMapper.writeValueAsString(context.getParams()));
-            record.setResponseData(objectMapper.writeValueAsString(result));
+            record.setRequestParams(objectMapper.writeValueAsString(sanitizeForRecord(context.getParams())));
+            Map<String, Object> responseForRecord = Boolean.TRUE.equals(context.getUseCache())
+                    ? result : sanitizeForRecord(result);
+            record.setResponseData(objectMapper.writeValueAsString(responseForRecord));
         } catch (Exception e) {
             record.setRequestParams("{}");
             record.setResponseData("{}");
@@ -203,6 +212,36 @@ public class OpenApiQueryService {
         } catch (Exception e) {
             return DigestUtil.sha256Hex(String.valueOf(params));
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> sanitizeForRecord(Map<String, Object> source) {
+        if (source == null || source.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, Object> sanitized = new LinkedHashMap<>();
+        source.forEach((key, value) -> {
+            if (isSensitiveKey(key)) {
+                sanitized.put(key, MASKED_VALUE);
+            } else if (value instanceof Map<?, ?> nested) {
+                sanitized.put(key, sanitizeForRecord((Map<String, Object>) nested));
+            } else {
+                sanitized.put(key, value);
+            }
+        });
+        return sanitized;
+    }
+
+    private boolean isSensitiveKey(String key) {
+        String lower = key != null ? key.toLowerCase() : "";
+        return lower.contains("name")
+                || lower.contains("phone")
+                || lower.contains("mobile")
+                || lower.contains("idcard")
+                || lower.contains("id_card")
+                || lower.contains("cert")
+                || lower.contains("secret")
+                || lower.contains("token");
     }
 
     private String generateRequestId() {

@@ -52,3 +52,36 @@ logging:
     com.dataplatform.identity: DEBUG
     com.dataplatform.identity.iam: DEBUG
     com.baomidou.mybatisplus: DEBUG
+
+platform:
+  security:
+    internal:
+      enabled: ${INTERNAL_AUTH_ENABLED:true}
+      issuer: data-platform-identity
+      service-name: data-platform-identity
+      token-uri: ${INTERNAL_AUTH_TOKEN_URI:http://localhost:8086/internal-auth/v1/token}
+      client-secret: ${INTERNAL_AUTH_IDENTITY_SECRET:dev-identity-internal-secret}
+      public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH:}
+      private-key-location: file:${INTERNAL_AUTH_PRIVATE_KEY_PATH:}
+      token-ttl: 5m
+      clients:
+        data-platform-access:
+          secret: ${INTERNAL_AUTH_ACCESS_SECRET:dev-access-internal-secret}
+          grants:
+            data-platform-masterdata: [masterdata:read, masterdata:vendor-secret:read]
+            data-platform-billing: [billing:calculate]
+            data-platform-governance: [governance:log]
+        data-platform-billing:
+          secret: ${INTERNAL_AUTH_BILLING_SECRET:dev-billing-internal-secret}
+          grants:
+            data-platform-access: [access:stats:read]
+            data-platform-governance: [governance:alert, governance:log]
+        data-platform-masterdata:
+          secret: ${INTERNAL_AUTH_MASTERDATA_SECRET:dev-masterdata-internal-secret}
+          grants:
+            data-platform-access: [access:stats:read]
+            data-platform-governance: [governance:log]
+        data-platform-identity:
+          secret: ${INTERNAL_AUTH_IDENTITY_SECRET:dev-identity-internal-secret}
+          grants:
+            data-platform-governance: [governance:log]

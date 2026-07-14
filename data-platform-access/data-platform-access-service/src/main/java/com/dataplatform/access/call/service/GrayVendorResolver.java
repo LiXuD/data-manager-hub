@@ -3,7 +3,7 @@ package com.dataplatform.access.call.service;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.util.IpUtil;
 import com.dataplatform.masterdata.graylog.api.dto.GrayRuleDTO;
-import com.dataplatform.masterdata.graylog.api.feign.GraylogFeignClient;
+import com.dataplatform.masterdata.graylog.api.feign.GraylogInternalFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -27,10 +27,10 @@ public class GrayVendorResolver {
     private static final Logger log = LoggerFactory.getLogger(GrayVendorResolver.class);
     private static final long CACHE_TTL_MS = 30_000;
 
-    private final GraylogFeignClient graylogFeignClient;
+    private final GraylogInternalFeignClient graylogFeignClient;
     private final ConcurrentHashMap<String, CachedRule> cache = new ConcurrentHashMap<>();
 
-    public GrayVendorResolver(GraylogFeignClient graylogFeignClient) {
+    public GrayVendorResolver(GraylogInternalFeignClient graylogFeignClient) {
         this.graylogFeignClient = graylogFeignClient;
     }
 

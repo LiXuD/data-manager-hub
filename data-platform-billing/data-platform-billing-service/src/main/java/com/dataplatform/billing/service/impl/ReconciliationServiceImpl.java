@@ -3,12 +3,14 @@ package com.dataplatform.billing.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.dataplatform.access.call.api.dto.VendorCallSummaryDTO;
+import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
+import com.dataplatform.api.Result;
 import com.dataplatform.billing.entity.BillingReconciliation;
 import com.dataplatform.billing.mapper.BillingReconciliationMapper;
-import com.dataplatform.billing.mapper.CallRecordMapper;
 import com.dataplatform.billing.service.ReconciliationService;
 import com.dataplatform.governance.api.dto.AlertRecordCreateDTO;
-import com.dataplatform.governance.api.feign.GovernanceFeignClient;
+import com.dataplatform.governance.api.feign.GovernanceInternalFeignClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,10 +35,10 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     private static final Logger log = LoggerFactory.getLogger(ReconciliationServiceImpl.class);
 
     @Autowired
-    private CallRecordMapper callRecordMapper;
+    private CallStatsInternalFeignClient callStatsClient;
 
     @Autowired(required = false)
-    private GovernanceFeignClient governanceFeignClient;
+    private GovernanceInternalFeignClient governanceFeignClient;
 
     @Override
     public void reconcile(Long vendorId, LocalDate billingDate) {
@@ -77,11 +79,13 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     }
 
     private void reconcileImportedRow(BillingReconciliation reconciliation) {
-        Map<String, Object> platform = callRecordMapper.selectPlatformSummaryByVendorAndDate(
-                reconciliation.getVendorId(), reconciliation.getBillingDate());
-
-        Long platformCount = longValue(platform.get("platform_count"));
-        BigDecimal platformAmount = decimalValue(platform.get("platform_amount"));
+        Result<VendorCallSummaryDTO> response = callStatsClient.getVendorDailySummary(
+                reconciliation.getVendorId(), reconciliation.getBillingDate().toString());
+        if (response == null || !Integer.valueOf(200).equals(response.getCode()) || response.getData() == null) {
+            throw new IllegalStateException("Access 调用汇总查询失败");
+        }
+        Long platformCount = Objects.requireNonNullElse(response.getData().getCallCount(), 0L);
+        BigDecimal platformAmount = Objects.requireNonNullElse(response.getData().getTotalAmount(), BigDecimal.ZERO);
         Long vendorCount = Objects.requireNonNullElse(reconciliation.getVendorCount(), 0L);
         BigDecimal vendorAmount = Objects.requireNonNullElse(reconciliation.getVendorAmount(), BigDecimal.ZERO);
 
@@ -196,23 +200,6 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
                 .eq(BillingReconciliation::getVendorId, vendorId)
                 .eq(BillingReconciliation::getBillingDate, billingDate)
                 .last("LIMIT 1"));
-    }
-
-    private Long longValue(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        return value == null ? 0L : Long.parseLong(value.toString());
-    }
-
-    private BigDecimal decimalValue(Object value) {
-        if (value instanceof BigDecimal decimal) {
-            return decimal;
-        }
-        if (value instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue());
-        }
-        return value == null ? BigDecimal.ZERO : new BigDecimal(value.toString());
     }
 
     private boolean shouldPublishDiffAlert(String previousStatus, String status) {

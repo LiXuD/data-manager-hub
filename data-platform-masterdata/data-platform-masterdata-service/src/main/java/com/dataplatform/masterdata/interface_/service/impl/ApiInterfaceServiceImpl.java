@@ -4,12 +4,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.dataplatform.access.call.api.dto.CallStatsDTO;
+import com.dataplatform.access.call.api.dto.DailyCallStatsDTO;
+import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
+import com.dataplatform.api.Result;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
 import com.dataplatform.masterdata.interface_.mapper.ApiInterfaceMapper;
-import com.dataplatform.masterdata.interface_.mapper.InterfaceStatsMapper;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,7 +42,7 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
-    private InterfaceStatsMapper interfaceStatsMapper;
+    private CallStatsInternalFeignClient callStatsClient;
 
     @Autowired
     private StringRedisTemplate redisTemplate;
@@ -173,19 +176,18 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
             endTime = LocalDateTime.now();
         }
 
-        Map<String, Object> stats = interfaceStatsMapper.getStatsByInterfaceId(
-            id, startTime, endTime, DEFAULT_SLA_THRESHOLD);
+        Result<CallStatsDTO> response = callStatsClient.getInterfaceStats(
+                apiInterface.getInterfaceCode(), startTime.toString(), endTime.toString(), DEFAULT_SLA_THRESHOLD);
+        CallStatsDTO stats = requireData(response, "接口调用统计");
 
         Map<String, Object> result = new HashMap<>();
         result.put("interfaceId", id);
         result.put("interfaceCode", apiInterface.getInterfaceCode());
         result.put("interfaceName", apiInterface.getInterfaceName());
-        result.put("totalCalls", stats.get("total_calls"));
-        result.put("successCalls", stats.get("success_calls"));
-        result.put("avgLatency", stats.get("avg_latency") != null
-            ? ((Number) stats.get("avg_latency")).doubleValue()
-            : 0);
-        result.put("slowCalls", stats.get("slow_calls"));
+        result.put("totalCalls", stats.getTotalCalls());
+        result.put("successCalls", stats.getSuccessCalls());
+        result.put("avgLatency", stats.getAvgLatency());
+        result.put("slowCalls", stats.getSlowCalls());
         result.put("startTime", startTime);
         result.put("endTime", endTime);
         return result;
@@ -193,7 +195,8 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
 
     @Override
     public List<Map<String, Object>> getDailyCallStats(Long id, LocalDateTime startTime, LocalDateTime endTime) {
-        if (this.getById(id) == null) {
+        ApiInterface apiInterface = this.getById(id);
+        if (apiInterface == null) {
             return List.of();
         }
 
@@ -204,6 +207,26 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
             endTime = LocalDateTime.now();
         }
 
-        return interfaceStatsMapper.getDailyStatsByInterfaceId(id, startTime, endTime);
+        Result<List<DailyCallStatsDTO>> response = callStatsClient.getDailyInterfaceStats(
+                apiInterface.getInterfaceCode(), startTime.toString(), endTime.toString());
+        return requireData(response, "接口每日调用统计").stream()
+                .map(this::toDailyStatsMap)
+                .toList();
+    }
+
+    private Map<String, Object> toDailyStatsMap(DailyCallStatsDTO stats) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("date", stats.getDate());
+        result.put("total_calls", stats.getTotalCalls());
+        result.put("success_calls", stats.getSuccessCalls());
+        result.put("avg_latency", stats.getAvgLatency());
+        return result;
+    }
+
+    private <T> T requireData(Result<T> response, String operation) {
+        if (response == null || !Integer.valueOf(200).equals(response.getCode()) || response.getData() == null) {
+            throw new IllegalStateException(operation + "服务调用失败");
+        }
+        return response.getData();
     }
 }

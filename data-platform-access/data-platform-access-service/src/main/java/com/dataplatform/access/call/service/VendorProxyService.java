@@ -8,8 +8,8 @@ import com.dataplatform.common.circuitbreaker.CircuitBreakerManager;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
-import com.dataplatform.masterdata.vendor.api.feign.VendorConfigFeignClient;
-import com.dataplatform.masterdata.vendor.api.feign.VendorFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -33,10 +33,10 @@ public class VendorProxyService {
     private static final Logger log = LoggerFactory.getLogger(VendorProxyService.class);
 
     @Autowired
-    private VendorConfigFeignClient vendorConfigFeignClient;
+    private VendorConfigInternalFeignClient vendorConfigFeignClient;
 
     @Autowired
-    private VendorFeignClient vendorFeignClient;
+    private VendorInternalFeignClient vendorFeignClient;
 
     @Autowired
     private CircuitBreakerManager circuitBreakerManager;

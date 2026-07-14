@@ -44,3 +44,11 @@ mybatis-plus:
       logic-delete-field: deleted
       logic-delete-value: true
       logic-not-delete-value: false
+
+platform.security.internal:
+  enabled: true
+  issuer: data-platform-identity
+  service-name: data-platform-masterdata
+  token-uri: ${INTERNAL_AUTH_TOKEN_URI}
+  client-secret: ${INTERNAL_AUTH_MASTERDATA_SECRET}
+  public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH}

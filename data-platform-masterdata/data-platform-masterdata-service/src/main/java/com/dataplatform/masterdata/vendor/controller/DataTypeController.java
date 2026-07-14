@@ -9,7 +9,6 @@ import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.masterdata.datatype.api.dto.DataTypeCreateReqDTO;
 import com.dataplatform.masterdata.datatype.api.dto.DataTypeDTO;
 import com.dataplatform.masterdata.datatype.api.dto.DataTypeUpdateReqDTO;
-import com.dataplatform.masterdata.datatype.api.feign.DataTypeFeignClient;
 import com.dataplatform.masterdata.vendor.entity.DataType;
 import com.dataplatform.masterdata.vendor.mapper.DataTypeMapper;
 import org.springframework.beans.BeanUtils;
@@ -26,7 +25,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/datatype")
-public class DataTypeController implements DataTypeFeignClient {
+public class DataTypeController {
 
     private final DataTypeMapper dataTypeMapper;
 
@@ -34,7 +33,6 @@ public class DataTypeController implements DataTypeFeignClient {
         this.dataTypeMapper = dataTypeMapper;
     }
 
-    @Override
     @GetMapping("/list")
     public PageResult<DataTypeDTO> list(
             @RequestParam(required = false) String keyword,
@@ -52,7 +50,6 @@ public class DataTypeController implements DataTypeFeignClient {
                 pageSize);
     }
 
-    @Override
     @GetMapping("/{id}")
     public Result<DataTypeDTO> get(@PathVariable("id") Long id) {
         DataType dataType = dataTypeMapper.selectById(id);
@@ -62,7 +59,6 @@ public class DataTypeController implements DataTypeFeignClient {
         return Result.success(toDTO(dataType));
     }
 
-    @Override
     @GetMapping("/code/{code}")
     public Result<DataTypeDTO> getByCode(@PathVariable("code") String code) {
         DataType dataType = getActiveByCode(code);
@@ -72,7 +68,6 @@ public class DataTypeController implements DataTypeFeignClient {
         return Result.success(toDTO(dataType));
     }
 
-    @Override
     @OperationLog(module = "数据类型管理", operation = "新增数据类型")
     @PostMapping
     public Result<DataTypeDTO> create(@RequestBody DataTypeCreateReqDTO dto) {
@@ -99,7 +94,6 @@ public class DataTypeController implements DataTypeFeignClient {
         return Result.success(toDTO(dataType));
     }
 
-    @Override
     @OperationLog(module = "数据类型管理", operation = "更新数据类型")
     @PutMapping("/{id}")
     public Result<DataTypeDTO> update(@PathVariable("id") Long id, @RequestBody DataTypeUpdateReqDTO dto) {
@@ -114,7 +108,6 @@ public class DataTypeController implements DataTypeFeignClient {
         return Result.success(toDTO(dataTypeMapper.selectById(id)));
     }
 
-    @Override
     @OperationLog(module = "数据类型管理", operation = "删除数据类型")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
@@ -129,7 +122,6 @@ public class DataTypeController implements DataTypeFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @OperationLog(module = "数据类型管理", operation = "更新数据类型状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
@@ -151,7 +143,6 @@ public class DataTypeController implements DataTypeFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @GetMapping("/all")
     public Result<List<DataTypeDTO>> listAll() {
         LambdaQueryWrapper<DataType> wrapper = new LambdaQueryWrapper<>();

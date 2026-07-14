@@ -2,7 +2,7 @@ package com.dataplatform.access.call.service;
 
 import com.dataplatform.api.Result;
 import com.dataplatform.masterdata.graylog.api.dto.GrayRuleDTO;
-import com.dataplatform.masterdata.graylog.api.feign.GraylogFeignClient;
+import com.dataplatform.masterdata.graylog.api.feign.GraylogInternalFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +18,7 @@ import static org.mockito.Mockito.*;
 
 class GrayVendorResolverTest {
 
-    private GraylogFeignClient graylogFeignClient;
+    private GraylogInternalFeignClient graylogFeignClient;
     private GrayVendorResolver resolver;
 
     private VendorConfigDTO stableConfig;
@@ -26,7 +26,7 @@ class GrayVendorResolverTest {
 
     @BeforeEach
     void setUp() {
-        graylogFeignClient = mock(GraylogFeignClient.class);
+        graylogFeignClient = mock(GraylogInternalFeignClient.class);
         resolver = new GrayVendorResolver(graylogFeignClient);
 
         stableConfig = new VendorConfigDTO();

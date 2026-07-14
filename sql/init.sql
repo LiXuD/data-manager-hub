@@ -144,6 +144,7 @@ CREATE INDEX idx_caller_product_status ON caller_product(status);
 CREATE TABLE IF NOT EXISTS api_key (
     id BIGSERIAL PRIMARY KEY,
     caller_id BIGINT NOT NULL,
+    key_name VARCHAR(100),
     api_key VARCHAR(64) NOT NULL UNIQUE,
     api_secret VARCHAR(128) NOT NULL,
     rate_limit INTEGER NOT NULL DEFAULT 100,
@@ -159,6 +160,7 @@ CREATE TABLE IF NOT EXISTS api_key (
 
 CREATE INDEX idx_api_key ON api_key(api_key);
 CREATE INDEX idx_apikey_caller ON api_key(caller_id);
+CREATE INDEX IF NOT EXISTS idx_apikey_key_name ON api_key(key_name);
 
 CREATE TABLE IF NOT EXISTS api_key_product (
     id BIGSERIAL PRIMARY KEY,
@@ -243,15 +245,27 @@ ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_source_record_id BIGINT;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS request_time TIMESTAMP;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS response_at TIMESTAMP;
 
--- 分区策略: 按月分区，提前创建未来12个月的分区
-CREATE TABLE IF NOT EXISTS call_record_2026_04 PARTITION OF call_record
-    FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
+-- 分区策略: 按月分区，初始化当前月和下月，避免时间推进后写入失败
+CREATE OR REPLACE FUNCTION create_monthly_partition(partition_date DATE)
+RETURNS VOID AS $$
+DECLARE
+    partition_name TEXT;
+    start_date DATE;
+    end_date DATE;
+BEGIN
+    start_date := DATE_TRUNC('month', partition_date);
+    end_date := start_date + INTERVAL '1 month';
+    partition_name := 'call_record_' || TO_CHAR(start_date, 'YYYY_MM');
 
-CREATE TABLE IF NOT EXISTS call_record_2026_05 PARTITION OF call_record
-    FOR VALUES FROM ('2026-05-01') TO ('2026-06-01');
+    EXECUTE format(
+        'CREATE TABLE IF NOT EXISTS %I PARTITION OF call_record FOR VALUES FROM (%L) TO (%L)',
+        partition_name, start_date, end_date
+    );
+END;
+$$ LANGUAGE plpgsql;
 
-CREATE TABLE IF NOT EXISTS call_record_2026_06 PARTITION OF call_record
-    FOR VALUES FROM ('2026-06-01') TO ('2026-07-01');
+SELECT create_monthly_partition(CURRENT_DATE::DATE);
+SELECT create_monthly_partition((CURRENT_DATE + INTERVAL '1 month')::DATE);
 
 -- 索引
 CREATE INDEX idx_call_record_request ON call_record(request_id);
@@ -492,6 +506,7 @@ COMMIT;
 -- 计费规则表
 CREATE TABLE IF NOT EXISTS billing_rule (
     id BIGSERIAL PRIMARY KEY,
+    rule_name VARCHAR(100) NOT NULL DEFAULT '默认计费规则',
     vendor_id BIGINT,
     vendor_name VARCHAR(100),
     data_type VARCHAR(50),

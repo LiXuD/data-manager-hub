@@ -7,7 +7,6 @@ import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.masterdata.vendor.api.dto.VendorCreateReqDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorUpdateReqDTO;
-import com.dataplatform.masterdata.vendor.api.feign.VendorFeignClient;
 import com.dataplatform.masterdata.vendor.entity.VendorInfo;
 import com.dataplatform.masterdata.vendor.service.VendorService;
 import org.springframework.beans.BeanUtils;
@@ -22,7 +21,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/vendor")
-public class VendorController implements VendorFeignClient {
+public class VendorController {
 
     private final VendorService vendorService;
 
@@ -30,7 +29,6 @@ public class VendorController implements VendorFeignClient {
         this.vendorService = vendorService;
     }
 
-    @Override
     @GetMapping("/list")
     public PageResult<VendorInfoDTO> list(
             @RequestParam(name = "page", defaultValue = "1") Integer page,
@@ -46,7 +44,6 @@ public class VendorController implements VendorFeignClient {
                 result.getPageSize());
     }
 
-    @Override
     @GetMapping("/{id}")
     public Result<VendorInfoDTO> getById(@PathVariable("id") Long id) {
         VendorInfo vendor = vendorService.getById(id);
@@ -56,7 +53,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(toDTO(vendor));
     }
 
-    @Override
     @GetMapping("/code/{vendorCode}")
     public Result<VendorInfoDTO> getByVendorCode(@PathVariable("vendorCode") String vendorCode) {
         VendorInfo vendor = vendorService.getByVendorCode(vendorCode);
@@ -66,7 +62,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(toDTO(vendor));
     }
 
-    @Override
     @OperationLog(module = "厂商管理", operation = "新增厂商")
     @PostMapping
     public Result<VendorInfoDTO> create(@RequestBody VendorCreateReqDTO dto) {
@@ -92,7 +87,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(toDTO(vendor));
     }
 
-    @Override
     @OperationLog(module = "厂商管理", operation = "更新厂商")
     @PutMapping("/{id}")
     public Result<VendorInfoDTO> update(@PathVariable("id") Long id, @RequestBody VendorUpdateReqDTO dto) {
@@ -106,7 +100,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(toDTO(vendorService.getById(id)));
     }
 
-    @Override
     @OperationLog(module = "厂商管理", operation = "删除厂商")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
@@ -118,7 +111,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @OperationLog(module = "厂商管理", operation = "更新厂商状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {

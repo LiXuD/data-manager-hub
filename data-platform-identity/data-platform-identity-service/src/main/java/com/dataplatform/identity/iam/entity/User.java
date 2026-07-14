@@ -6,13 +6,14 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.common.handler.CommonStatusTypeHandler;
 import java.time.LocalDateTime;
 
 /**
  * 身份租户域用户权限的 User。
  * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
  */
-@TableName("user_info")
+@TableName(value = "user_info", autoResultMap = true)
 public class User {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -21,6 +22,7 @@ public class User {
     private String password;
     private String email;
     private String phone;
+    @TableField(typeHandler = CommonStatusTypeHandler.class)
     private CommonStatus status;
     private Long tenantId;
     private Long createdBy;

@@ -175,7 +175,7 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
 
     @Override
     public void recordDailyBilling(LocalDate billingDate) {
-        // Daily aggregation is updated incrementally by BillingDailyEventConsumer.
+        // Daily aggregation is updated incrementally by BillingUsageRecorder.
     }
 
     @Override

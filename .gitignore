@@ -61,6 +61,7 @@ Desktop.ini
 
 # -------- Logs --------
 logs/
+.runtime/
 
 # -------- Test --------
 coverage/

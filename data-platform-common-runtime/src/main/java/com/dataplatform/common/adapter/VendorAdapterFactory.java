@@ -34,6 +34,9 @@ public class VendorAdapterFactory {
      * 创建适配器
      */
     private static VendorAdapter createAdapter(String vendorCode) {
+        if ("mock_vendor".equalsIgnoreCase(vendorCode)) {
+            return new MockVendorAdapter(vendorCode);
+        }
         // 默认使用 HTTP 适配器
         // 未来可根据厂商类型创建不同适配器 (如: WebService, FTP 等)
         return new HttpVendorAdapter(vendorCode);

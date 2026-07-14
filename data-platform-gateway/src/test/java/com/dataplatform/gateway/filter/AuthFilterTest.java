@@ -112,8 +112,8 @@ class AuthFilterTest {
 
         filter.filter(exchange, chain).block();
 
-        assertEquals(Integer.valueOf(1), exchange.getAttribute("callerId"));
-        assertEquals(Integer.valueOf(10), exchange.getAttribute("keyId"));
+        assertEquals(Long.valueOf(1), exchange.getAttribute("callerId"));
+        assertEquals(Long.valueOf(10), exchange.getAttribute("keyId"));
         assertEquals("test-caller", exchange.getAttribute("callerName"));
         verify(chain).filter(exchange);
     }
@@ -133,7 +133,31 @@ class AuthFilterTest {
 
         filter.filter(exchange, chain).block();
 
-        assertEquals(Integer.valueOf(2), exchange.getAttribute("callerId"));
+        assertEquals(Long.valueOf(2), exchange.getAttribute("callerId"));
+        verify(chain).filter(exchange);
+    }
+
+    @Test
+    void shouldPassWithTypedJacksonNumericValues() {
+        Map<String, Object> keyInfo = Map.of(
+                "callerId", java.util.List.of("java.lang.Long", 3),
+                "keyId", java.util.List.of("java.lang.Long", 30),
+                "callerName", "typed-caller",
+                "status", 1);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:key:typed-key")).thenReturn(Mono.just(keyInfo));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test")
+                .header("X-Api-Key", "typed-key")
+                .build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(chain.filter(exchange)).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(Long.valueOf(3), exchange.getAttribute("callerId"));
+        assertEquals(Long.valueOf(30), exchange.getAttribute("keyId"));
         verify(chain).filter(exchange);
     }
 }

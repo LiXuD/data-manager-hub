@@ -1,7 +1,11 @@
 package com.dataplatform.masterdata.vendor.config;
 
 import com.dataplatform.common.interceptor.AuthInterceptor;
+import com.dataplatform.common.security.InternalSecurityProperties;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -12,14 +16,25 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
+    private final InternalSecurityProperties internalSecurity;
+
+    public WebMvcConfig(InternalSecurityProperties internalSecurity) {
+        this.internalSecurity = internalSecurity;
+    }
+
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new AuthInterceptor())
-            .addPathPatterns("/**")
-            .excludePathPatterns(
+        List<String> excludes = new ArrayList<>(List.of(
                 "/auth/**",
                 "/actuator/**",
-                "/health/**"
-            );
+                "/health/**",
+                "/error"
+        ));
+        if (internalSecurity.isEnabled()) {
+            excludes.add("/internal/**");
+        }
+        InterceptorRegistration registration = registry.addInterceptor(new AuthInterceptor())
+                .addPathPatterns("/**");
+        registration.excludePathPatterns(excludes);
     }
 }

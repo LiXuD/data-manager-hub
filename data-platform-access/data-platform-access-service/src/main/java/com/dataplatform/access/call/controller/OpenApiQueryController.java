@@ -22,11 +22,12 @@ import com.dataplatform.api.Result;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
+import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
-import com.dataplatform.masterdata.vendor.api.feign.VendorConfigFeignClient;
-import com.dataplatform.masterdata.vendor.api.feign.VendorFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,8 +62,8 @@ public class OpenApiQueryController {
     private final CallerService callerService;
     private final CallSceneService callSceneService;
     private final ApiInterfaceFeignClient apiInterfaceFeignClient;
-    private final VendorConfigFeignClient vendorConfigFeignClient;
-    private final VendorFeignClient vendorFeignClient;
+    private final VendorConfigInternalFeignClient vendorConfigFeignClient;
+    private final VendorInternalFeignClient vendorFeignClient;
     private final GrayVendorResolver grayVendorResolver;
 
     public OpenApiQueryController(OpenApiQueryService openApiQueryService,
@@ -74,8 +75,8 @@ public class OpenApiQueryController {
                                   CallerService callerService,
                                   CallSceneService callSceneService,
                                   ApiInterfaceFeignClient apiInterfaceFeignClient,
-                                  VendorConfigFeignClient vendorConfigFeignClient,
-                                  VendorFeignClient vendorFeignClient,
+                                  VendorConfigInternalFeignClient vendorConfigFeignClient,
+                                  VendorInternalFeignClient vendorFeignClient,
                                   GrayVendorResolver grayVendorResolver) {
         this.openApiQueryService = openApiQueryService;
         this.rateLimitService = rateLimitService;
@@ -144,8 +145,16 @@ public class OpenApiQueryController {
         if (!validateInterfacePermission(apiKeyEntity.getId(), route.interfaceId())) {
             return Result.error(403, "API Key没有访问该接口的权限");
         }
+        String paramError = validateParams(route.interfaceId(),
+                request.getParams() != null ? request.getParams() : Collections.emptyMap());
+        if (paramError != null) {
+            return Result.error(400, paramError);
+        }
         if (!checkRateLimit(apiKeyEntity)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
+        }
+        if (!apiKeyService.validateAndConsumeQuota(apiKeyEntity.getApiKey(), 1)) {
+            return Result.error(429, "API Key配额不足");
         }
 
         OpenApiCallContext context = buildContext(request, apiKeyEntity, caller, product, scene, route,
@@ -210,8 +219,18 @@ public class OpenApiQueryController {
         if (!validateInterfacePermission(apiKeyEntity.getId(), route.interfaceId())) {
             return Result.error(403, "API Key没有访问该接口的权限");
         }
+        for (OpenApiBatchQueryReqVO.QueryItem item : request.getItems()) {
+            String paramError = validateParams(route.interfaceId(),
+                    item.getParams() != null ? item.getParams() : Collections.emptyMap());
+            if (paramError != null) {
+                return Result.error(400, paramError);
+            }
+        }
         if (!checkRateLimit(apiKeyEntity)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
+        }
+        if (!apiKeyService.validateAndConsumeQuota(apiKeyEntity.getApiKey(), request.getItems().size())) {
+            return Result.error(429, "API Key配额不足");
         }
 
         return Result.success(buildBatchResp(request, apiKeyEntity, caller, product, scene, route, traceId));
@@ -251,6 +270,52 @@ public class OpenApiQueryController {
             return false;
         }
         return apiKeyInterfaceService.hasInterfacePermission(apiKeyId, interfaceId);
+    }
+
+    private String validateParams(Long interfaceId, Map<String, Object> params) {
+        Result<List<InterfaceParamDTO>> paramResult = apiInterfaceFeignClient.listParams(interfaceId);
+        List<InterfaceParamDTO> definitions = paramResult != null ? paramResult.getData() : Collections.emptyList();
+        if (definitions == null || definitions.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> safeParams = params != null ? params : Collections.emptyMap();
+        for (InterfaceParamDTO definition : definitions) {
+            String name = normalize(definition.getParamName());
+            if (name == null) {
+                continue;
+            }
+            Object value = safeParams.get(name);
+            if (Boolean.TRUE.equals(definition.getRequired()) && isMissing(value)) {
+                return name + "不能为空";
+            }
+            if (!isMissing(value) && !matchesParamType(value, normalize(definition.getParamType()))) {
+                return name + "类型必须为" + definition.getParamType();
+            }
+        }
+        return null;
+    }
+
+    private boolean isMissing(Object value) {
+        return value == null || (value instanceof String text && text.trim().isEmpty());
+    }
+
+    private boolean matchesParamType(Object value, String type) {
+        if (type == null || "string".equalsIgnoreCase(type)) {
+            return value instanceof String;
+        }
+        if ("number".equalsIgnoreCase(type)) {
+            return value instanceof Number;
+        }
+        if ("boolean".equalsIgnoreCase(type)) {
+            return value instanceof Boolean;
+        }
+        if ("object".equalsIgnoreCase(type)) {
+            return value instanceof Map;
+        }
+        if ("array".equalsIgnoreCase(type)) {
+            return value instanceof List;
+        }
+        return true;
     }
 
     private boolean checkRateLimit(ApiKey apiKeyEntity) {

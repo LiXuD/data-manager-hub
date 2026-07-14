@@ -2,7 +2,7 @@
 
 > **项目名称**: 数据管理平台 (Data Management Platform)
 > **仓库地址**: https://github.com/LiXuD/data-manager-hub.git
-> **文档版本**: 2026-06-16
+> **文档版本**: 2026-07-14
 > **技术栈**: Java 21 + Spring Boot 3.4 + Spring Cloud 2024.0.0 + MyBatis-Plus 3.5.7 + Vue3 + TypeScript
 
 ---
@@ -278,9 +278,12 @@ VendorAdapterFactory (工厂类)
 
 | 类名 | 说明 |
 |------|------|
-| `AuthInterceptor` | 认证拦截器，验证 Bearer Token |
+| `AuthInterceptor` | 用户认证拦截器，通过共享 Redis 中的 Sa-Token 会话验证 Bearer Token |
+| `InternalAuthenticationInterceptor` | 服务认证拦截器，校验 Service JWT 的签名、issuer、audience、有效期和 scope |
+| `InternalAuthFeignInterceptor` | 仅为带 `@InternalFeignContract` 标记的 Feign 契约获取并注入短期 Service JWT，避免凭证泄漏到公共请求 |
+| `ServiceTokenProvider` | 按 audience 缓存 Service JWT，使用连接/读取超时和有限重试，4xx 不重试 |
 | `OperationLog` | 操作日志注解 |
-| `OperationLogAspect` | AOP切面，拦截 `@OperationLog` 注解方法 |
+| `OperationLogAspect` | 由自动配置注册，拦截 `@OperationLog` 并通过本地或远程实现写日志；日志上下文异常不影响业务 |
 | `IpUtil` | IP地址提取，支持 X-Forwarded-For 代理场景 |
 | `UserContext` | Sa-Token 用户上下文 |
 | `TraceIdMdcFilter` | 读取 X-Trace-Id header → 写入 MDC → 回写 response header |
@@ -374,17 +377,18 @@ com.dataplatform.masterdata/
 ├── controller/
 │   ├── vendor/                    # 厂商相关
 │   │   ├── VendorController.java   # /vendor
-│   │   ├── VendorInternalController.java  # /internal/vendor
+│   │   ├── VendorInternalController.java  # /internal/v1/masterdata/vendors
 │   │   ├── DataTypeController.java # /datatype
 │   │   ├── VendorConfigController.java    # /vendor-config
-│   │   ├── VendorConfigInternalController.java  # /internal/vendor-config
+│   │   ├── VendorConfigInternalController.java  # /internal/v1/masterdata/vendor-configs
 │   │   ├── ConfigController.java   # /config
 │   │   └── VendorExtendedConfigController.java
 │   ├── interface_/                 # 接口相关
 │   │   ├── ApiInterfaceController.java      # /interface
-│   │   └── ApiInterfaceInternalController.java  # /internal/interface
+│   │   └── ApiInterfaceInternalController.java  # /internal/v1/masterdata/interfaces
 │   └── graylog/                    # 灰度相关
-│       └── GraylogController.java  # /graylog
+│       ├── GraylogController.java  # /graylog
+│       └── GraylogInternalController.java  # /internal/v1/masterdata/gray-rules
 ├── service/
 │   ├── vendor/
 │   │   ├── VendorService.java
@@ -421,8 +425,7 @@ com.dataplatform.masterdata/
 | `/vendor-config` | 厂商API配置 |
 | `/interface` | 接口定义 CRUD |
 | `/graylog` | 灰度规则 CRUD |
-| `/internal/vendor-config` | 内部 API (Feign) |
-| `/internal/interface` | 内部 API (Feign) |
+| `/internal/v1/masterdata/**` | 受 Service JWT 和 `masterdata:read` 保护；厂商密钥另需 `masterdata:vendor-secret:read` |
 
 ---
 
@@ -447,7 +450,6 @@ com.dataplatform.access/
 ├── caller/                        # 调用方/API Key
 │   ├── CallerController.java      # /caller
 │   ├── ApiKeyController.java     # /api-key
-│   ├── CallerInternalController.java  # /internal/caller
 │   ├── CallerService.java
 │   ├── ApiKeyService.java
 │   └── entity/
@@ -456,6 +458,8 @@ com.dataplatform.access/
 ├── call/                          # 调用/数据查询
 │   ├── DataQueryController.java  # /data
 │   ├── CallRecordController.java # /call-record
+│   ├── CallStatsInternalController.java # /internal/v1/access/call-stats
+│   ├── CallStatsQueryService.java # Access 领域统计查询
 │   ├── DataQueryService.java     # 数据查询核心服务
 │   ├── CallRecordService.java
 │   ├── RateLimitService.java     # 限流 (基于Redis)
@@ -475,7 +479,7 @@ com.dataplatform.access/
 | `/api-key` | API Key 管理 |
 | `/data` | 数据查询 `/data/query` |
 | `/call-record` | 调用记录查询 |
-| `/internal/caller` | 内部 API (Feign - API Key验证) |
+| `/internal/v1/access/call-stats` | 向 Masterdata/Billing 提供只读统计，需 `access:stats:read` |
 
 ---
 
@@ -499,16 +503,15 @@ com.dataplatform.billing/
 ├── BillingApplication.java
 ├── controller/
 │   ├── BillingController.java     # /billing
-│   ├── BillingContractController.java  # 内部契约
-│   └── BillingInternalController.java  # 内部API
+│   └── BillingInternalController.java  # /internal/v1/billing
 ├── service/
 │   ├── BillingService.java        # 计费核心服务
+│   ├── BillingUsageRecorder.java  # 幂等更新日聚合
 │   ├── BudgetAlertService.java     # 预算告警
 │   └── ReconciliationService.java  # 对账服务
 ├── mapper/
 │   ├── BillingRuleMapper.java
-│   ├── BillingDailyMapper.java
-│   └── CallRecordMapper.java
+│   └── BillingDailyMapper.java
 ├── entity/
 │   ├── BillingRule.java
 │   ├── BillingDaily.java
@@ -526,7 +529,7 @@ com.dataplatform.billing/
 | `/billing/daily` | 日账单查询 |
 | `/billing/budget` | 预算管理 |
 | `/billing/summary` | 账单汇总 |
-| `/internal/billing` | 内部 API |
+| `/internal/v1/billing` | 受 Service JWT 和 `billing:calculate` scope 保护的内部 API |
 
 ---
 
@@ -549,7 +552,8 @@ com.dataplatform.billing/
 com.dataplatform.identity/
 ├── IdentityApplication.java
 ├── controller/
-│   ├── IdentityContractController.java  # 内部契约
+│   ├── IdentityContractController.java  # Identity 契约
+│   ├── InternalTokenController.java     # /internal-auth/v1/token
 │   ├── iam/                            # 用户权限
 │   │   ├── AuthController.java         # /auth
 │   │   ├── UserController.java         # /user
@@ -597,7 +601,7 @@ com.dataplatform.identity/
 | `/permission` | 权限管理 |
 | `/tenant` | 租户 CRUD |
 | `/security` | 数据加密/解密 |
-| `/internal/identity` | 内部 API (Feign) |
+| `/internal-auth/v1/token` | 使用服务客户端密钥换取短期 Service JWT，不经 Gateway 暴露 |
 
 ---
 
@@ -620,12 +624,13 @@ com.dataplatform.identity/
 com.dataplatform.governance/
 ├── GovernanceApplication.java
 ├── controller/
-│   ├── GovernanceContractController.java  # 内部契约
+│   ├── GovernanceContractController.java  # 管理契约
+│   ├── GovernanceInternalController.java  # /internal/v1/governance
 │   ├── monitor/                          # 监控告警
 │   │   └── AlertController.java          # /alert
 │   ├── log/                              # 操作日志
 │   │   ├── LogController.java            # /log
-│   │   └── InternalLogController.java    # /log/internal
+│   │   └── InternalLogController.java    # /internal/v1/governance/logs
 │   ├── quality/                          # 数据质量
 │   │   └── QualityController.java       # /quality
 │   └── trace/                            # 数据血缘
@@ -664,10 +669,10 @@ com.dataplatform.governance/
 |------|------|
 | `/alert` | 告警规则 CRUD、告警记录 |
 | `/log` | 操作日志查询 |
-| `/log/internal` | 内部 API (日志保存) |
+| `/internal/v1/governance/logs` | 受 `governance:log` scope 保护的日志写入 API |
 | `/quality` | 质量规则 CRUD、质量评分 |
 | `/trace` | 血缘关系查询与管理 |
-| `/internal/governance` | 内部 API (Feign) |
+| `/internal/v1/governance` | 受 Service JWT scope 保护的治理内部 API |
 
 ---
 
@@ -739,6 +744,8 @@ com.dataplatform.governance/
 > **路径**: `data-platform-web/`
 > **端口**: 3000
 > **职责**: 基于Vue3的SPA前端应用。
+
+数据测试页会依据所选接口的参数定义自动生成输入项，应用默认值并校验必填项及参数类型；参数定义由 masterdata 域的 `/interface/{id}/params` API 提供。
 
 #### 技术栈
 
@@ -857,16 +864,20 @@ data-platform-web/src/
 
 | 调用方 | 被调用方 | 接口 | 说明 |
 |--------|----------|------|------|
-| access | masterdata | `MasterdataFeignClient` | 获取厂商配置、接口定义 |
-| access | identity | `IdentityFeignClient` | 验证 API Key |
-| billing | access | `CallContractController` | 获取调用记录 |
-| governance | - | `GovernanceFeignClient` | 数据质量/血缘查询 |
+| access | masterdata | `ApiInterfaceFeignClient`、`Vendor*InternalFeignClient`、`GraylogInternalFeignClient` | 获取接口、厂商配置和灰度规则 |
+| access | billing | `BillingInternalFeignClient` | 计算费用并更新幂等日聚合 |
+| billing | access | `CallStatsInternalFeignClient` | 获取厂商日调用统计用于对账 |
+| masterdata | access | `CallStatsInternalFeignClient` | 获取接口汇总与每日统计 |
+| access / billing / masterdata / identity | governance | `LogClient` | 写入操作日志 |
+| billing | governance | `GovernanceInternalFeignClient` | 写入对账告警 |
 
 ### 4.3 依赖规则
 
 - **service → api → common-contract**
 - 禁止循环依赖
-- 域间调用只能通过 `*-api` 模块的 Feign 契约
+- 域间同步调用只能通过 `*-api` 模块中带 `@InternalFeignContract` 标记、路径为 `/internal/**` 的 Feign 契约
+- 每个内部控制器必须声明 `@InternalScope`，每个客户端按 audience 获取最小 scope
+- 领域表仅允许所属域直接访问；Kafka 不跨域传递需要认证和一致性语义的业务调用
 
 ---
 
@@ -875,8 +886,9 @@ data-platform-web/src/
 ### 5.1 数据库信息
 
 - **数据库**: PostgreSQL 16
-- **地址**: localhost:5432
-- **每个域独立数据库**，按域功能区分
+- **地址**: 由 `DB_HOST`、`DB_PORT` 和 `DB_NAME` 环境变量配置
+- **逻辑归属**: 表按业务域划分；当前本地部署使用同一个 PostgreSQL 数据库
+- **建库方式**: 先执行 `sql/init.sql`，再按顺序执行 `sql/migrations/` 下的迁移脚本
 
 ### 5.2 数据表总览
 
@@ -886,8 +898,8 @@ data-platform-web/src/
 | 2 | data_type | 数据类型 | masterdata |
 | 3 | vendor_config | 厂商API配置 | masterdata |
 | 4 | vendor_config_extended | 厂商扩展配置 | masterdata |
-| 5 | api_interface | 接口定义 | masterdata (migration) |
-| 6 | interface_param | 接口参数 | masterdata (migration) |
+| 5 | api_interface | 接口定义 | masterdata |
+| 6 | interface_param | 接口参数 | masterdata |
 | 7 | gray_rule | 灰度规则 | masterdata |
 | 8 | caller_info | 调用方信息 | access |
 | 9 | caller_product | 调用方产品配置 | access |
@@ -897,7 +909,7 @@ data-platform-web/src/
 | 13 | call_record | 调用记录 (按月分区) | access |
 | 14 | billing_rule | 计费规则 | billing |
 | 15 | billing_daily | 日账单 | billing |
-| 16 | billing_daily_event | 计费事件 (Kafka) | billing |
+| 16 | billing_daily_event | 计费聚合幂等请求账本 | billing |
 | 17 | user_info | 用户 | identity |
 | 18 | role_info | 角色 | identity |
 | 19 | user_role | 用户角色关联 | identity |
@@ -968,7 +980,7 @@ DataQueryService
     ▼
 VendorProxyService (获取厂商配置 + 接口定义)
     │
-    ├── MasterdataFeignClient → masterdata:8081
+    ├── Vendor*InternalFeignClient / ApiInterfaceFeignClient → masterdata:8081
     │
     ▼
 VendorAdapterFactory.getAdapter(vendorCode)
@@ -982,7 +994,9 @@ HttpVendorAdapter.execute(config, params)
     └── transformResponse() — 响应数据映射
     │
     ▼
-返回结果 + 异步写入调用记录 (Kafka) + 计费
+返回结果 + Access 域内 Kafka 异步写入调用记录
+    │
+    └── BillingInternalFeignClient → 费用计算与幂等日聚合
 ```
 
 ---

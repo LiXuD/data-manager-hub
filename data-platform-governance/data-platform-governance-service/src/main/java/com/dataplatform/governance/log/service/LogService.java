@@ -51,6 +51,8 @@ public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> im
     }
 
     public void saveLog(OperationLog log) {
+        log.setOperationModule(defaultValue(log.getOperationModule(), log.getModule(), "unknown"));
+        log.setOperationType(limit(defaultValue(log.getOperationType(), log.getOperation(), log.getMethod(), "UNKNOWN"), 20));
         log.setCreatedAt(LocalDateTime.now());
         save(log);
     }
@@ -70,6 +72,19 @@ public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> im
         log.setDuration(record.getDuration() != null ? record.getDuration().intValue() : null);
         log.setStatus(record.getStatus());
         log.setCreatedAt(record.getCreatedAt());
-        save(log);
+        saveLog(log);
+    }
+
+    private String defaultValue(String... values) {
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return "unknown";
+    }
+
+    private String limit(String value, int maxLength) {
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 }

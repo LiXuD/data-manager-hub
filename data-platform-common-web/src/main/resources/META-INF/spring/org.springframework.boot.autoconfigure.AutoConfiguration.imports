@@ -1,2 +1,4 @@
 com.dataplatform.common.config.TraceWebAutoConfiguration
 com.dataplatform.common.feign.TraceFeignConfig
+com.dataplatform.common.config.InternalSecurityAutoConfiguration
+com.dataplatform.common.config.OperationLogAutoConfiguration

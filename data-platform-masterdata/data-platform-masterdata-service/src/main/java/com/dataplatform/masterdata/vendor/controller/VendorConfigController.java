@@ -8,7 +8,6 @@ import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigCreateReqDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigUpdateReqDTO;
-import com.dataplatform.masterdata.vendor.api.feign.VendorConfigFeignClient;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import org.springframework.beans.BeanUtils;
@@ -24,7 +23,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/vendor/config")
-public class VendorConfigController implements VendorConfigFeignClient {
+public class VendorConfigController {
 
     private final VendorConfigService vendorConfigService;
 
@@ -32,7 +31,6 @@ public class VendorConfigController implements VendorConfigFeignClient {
         this.vendorConfigService = vendorConfigService;
     }
 
-    @Override
     @GetMapping("/list")
     public Result<List<VendorConfigDTO>> list(
             @RequestParam(required = false) Long vendorId,
@@ -50,7 +48,11 @@ public class VendorConfigController implements VendorConfigFeignClient {
             wrapper.eq(VendorConfig::getInterfaceId, interfaceId);
         }
         if (status != null && !status.isEmpty()) {
-            wrapper.eq(VendorConfig::getStatus, CommonStatus.fromCode(status));
+            CommonStatus parsedStatus = CommonStatus.fromCode(status);
+            if (parsedStatus == null) {
+                return Result.error(400, "无效的状态值");
+            }
+            wrapper.eq(VendorConfig::getStatus, parsedStatus.getCode());
         }
         wrapper.orderByDesc(VendorConfig::getCreatedAt);
         return Result.success(vendorConfigService.list(wrapper).stream()
@@ -58,13 +60,11 @@ public class VendorConfigController implements VendorConfigFeignClient {
                 .toList());
     }
 
-    @Override
     @GetMapping("/{id}")
     public Result<VendorConfigDTO> getById(@PathVariable("id") Long id) {
         return Result.success(toDTO(vendorConfigService.getById(id)));
     }
 
-    @Override
     @GetMapping("/vendor/{vendorId}")
     public Result<List<VendorConfigDTO>> listByVendorId(@PathVariable("vendorId") Long vendorId) {
         LambdaQueryWrapper<VendorConfig> wrapper = new LambdaQueryWrapper<>();
@@ -85,7 +85,6 @@ public class VendorConfigController implements VendorConfigFeignClient {
                 .toList());
     }
 
-    @Override
     @OperationLog(module = "厂商配置管理", operation = "新增厂商配置")
     @PostMapping
     public Result<VendorConfigDTO> create(@RequestBody VendorConfigCreateReqDTO dto) {
@@ -105,7 +104,6 @@ public class VendorConfigController implements VendorConfigFeignClient {
         return Result.success(toDTO(config));
     }
 
-    @Override
     @OperationLog(module = "厂商配置管理", operation = "更新厂商配置")
     @PutMapping("/{id}")
     public Result<VendorConfigDTO> update(@PathVariable("id") Long id,
@@ -119,7 +117,6 @@ public class VendorConfigController implements VendorConfigFeignClient {
         return Result.success(toDTO(vendorConfigService.getById(id)));
     }
 
-    @Override
     @OperationLog(module = "厂商配置管理", operation = "删除厂商配置")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
@@ -196,7 +193,6 @@ public class VendorConfigController implements VendorConfigFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @GetMapping("/byCode")
     public Result<VendorConfigDTO> getByVendorCodeAndDataTypeCode(
             @RequestParam("vendorCode") String vendorCode,
@@ -204,13 +200,11 @@ public class VendorConfigController implements VendorConfigFeignClient {
         return Result.success(toDTO(vendorConfigService.getByVendorCodeAndDataTypeCode(vendorCode, dataTypeCode)));
     }
 
-    @Override
     @GetMapping("/secretKey")
     public Result<String> getSecretKey(@RequestParam("vendorCode") String vendorCode) {
         return Result.success(vendorConfigService.getSecretKey(vendorCode));
     }
 
-    @Override
     @GetMapping("/byVendorIdAndDataTypeCode")
     public Result<VendorConfigDTO> getByVendorIdAndDataTypeCode(
             @RequestParam("vendorId") Long vendorId,
@@ -218,7 +212,6 @@ public class VendorConfigController implements VendorConfigFeignClient {
         return Result.success(toDTO(vendorConfigService.getByVendorIdAndDataTypeCode(vendorId, dataTypeCode)));
     }
 
-    @Override
     @GetMapping("/byInterfaceCode")
     public Result<VendorConfigDTO> getByVendorCodeAndInterfaceCode(
             @RequestParam("vendorCode") String vendorCode,

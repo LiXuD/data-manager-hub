@@ -1,6 +1,7 @@
 package com.dataplatform.common.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.handler.JsonbTypeHandler;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -8,7 +9,7 @@ import java.time.LocalDateTime;
  * 公共持久化层的 Call Record。
  * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
  */
-@TableName("call_record")
+@TableName(value = "call_record", autoResultMap = true)
 public class CallRecord {
 
     @TableId(type = IdType.AUTO)
@@ -29,15 +30,16 @@ public class CallRecord {
     private String sceneName;
     private String dataType;
     private String dataTypeCode;
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String requestParams;
     private String requestHash;
+    @TableField(typeHandler = JsonbTypeHandler.class)
     private String responseData;
     private Boolean success;
     private String errorCode;
     private String errorMsg;
     private Integer latency;
     private Integer durationMs;
-    private Integer responseTime;
     private BigDecimal cost;
     private Boolean cached;
     private Boolean useCache;
@@ -48,13 +50,6 @@ public class CallRecord {
     private LocalDateTime requestTime;
     private LocalDateTime responseAt;
     private LocalDateTime callTime;
-    private String result;
-
-    @TableField(fill = FieldFill.INSERT)
-    private LocalDateTime createdAt;
-
-    @TableLogic
-    private Boolean deleted;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -104,8 +99,6 @@ public class CallRecord {
     public void setLatency(Integer latency) { this.latency = latency; }
     public Integer getDurationMs() { return durationMs; }
     public void setDurationMs(Integer durationMs) { this.durationMs = durationMs; }
-    public Integer getResponseTime() { return responseTime; }
-    public void setResponseTime(Integer responseTime) { this.responseTime = responseTime; }
     public BigDecimal getCost() { return cost; }
     public void setCost(BigDecimal cost) { this.cost = cost; }
     public Boolean getCached() { return cached; }
@@ -126,10 +119,4 @@ public class CallRecord {
     public void setResponseAt(LocalDateTime responseAt) { this.responseAt = responseAt; }
     public LocalDateTime getCallTime() { return callTime; }
     public void setCallTime(LocalDateTime callTime) { this.callTime = callTime; }
-    public String getResult() { return result; }
-    public void setResult(String result) { this.result = result; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    public Boolean getDeleted() { return deleted; }
-    public void setDeleted(Boolean deleted) { this.deleted = deleted; }
 }

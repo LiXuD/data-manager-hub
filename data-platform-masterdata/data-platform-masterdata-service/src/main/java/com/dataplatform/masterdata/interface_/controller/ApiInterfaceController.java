@@ -8,7 +8,6 @@ import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceCreateReqDTO;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceUpdateReqDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
-import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceManageFeignClient;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
 import com.dataplatform.masterdata.interface_.entity.InterfaceParam;
@@ -28,7 +27,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/interface")
-public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
+public class ApiInterfaceController {
 
     private final ApiInterfaceService apiInterfaceService;
     private final InterfaceParamService interfaceParamService;
@@ -39,7 +38,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         this.interfaceParamService = interfaceParamService;
     }
 
-    @Override
     @GetMapping("/list")
     public PageResult<ApiInterfaceDTO> list(
             @RequestParam(name = "vendorId", required = false) Long vendorId,
@@ -56,7 +54,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
                 result.getPageSize());
     }
 
-    @Override
     @GetMapping("/{id}")
     public Result<ApiInterfaceDTO> getById(@PathVariable("id") Long id) {
         ApiInterface apiInterface = apiInterfaceService.getById(id);
@@ -66,7 +63,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(toDTO(apiInterface));
     }
 
-    @Override
     @GetMapping("/by-data-type/{dataTypeId}")
     public Result<List<ApiInterfaceDTO>> listByDataType(@PathVariable("dataTypeId") Long dataTypeId) {
         return Result.success(apiInterfaceService.listByDataTypeId(dataTypeId).stream()
@@ -74,7 +70,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
                 .toList());
     }
 
-    @Override
     @GetMapping("/options")
     public Result<List<ApiInterfaceDTO>> listOptions(
             @RequestParam(name = "vendorId", required = false) Long vendorId,
@@ -85,7 +80,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
                 .toList());
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "新增接口")
     @PostMapping
     public Result<ApiInterfaceDTO> create(@RequestBody ApiInterfaceCreateReqDTO dto) {
@@ -113,7 +107,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(toDTO(apiInterface));
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "更新接口")
     @PutMapping("/{id}")
     public Result<ApiInterfaceDTO> update(@PathVariable("id") Long id, @RequestBody ApiInterfaceUpdateReqDTO dto) {
@@ -127,7 +120,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(toDTO(apiInterfaceService.getById(id)));
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "删除接口")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
@@ -139,7 +131,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "更新接口状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
@@ -160,7 +151,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @GetMapping("/{id}/schema")
     public Result<Map<String, Object>> getSchema(@PathVariable("id") Long id) {
         Map<String, Object> schema = apiInterfaceService.getInterfaceSchema(id);
@@ -170,7 +160,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(schema);
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "更新接口Schema")
     @PutMapping("/{id}/schema")
     public Result<Void> updateSchema(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
@@ -191,7 +180,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "验证Schema")
     @PostMapping("/schema/validate")
     public Result<Map<String, Object>> validateSchema(@RequestBody Map<String, String> body) {
@@ -199,7 +187,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(Map.of("valid", valid));
     }
 
-    @Override
     @GetMapping("/{id}/stats")
     public Result<Map<String, Object>> getCallStats(
             @PathVariable("id") Long id,
@@ -212,7 +199,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(stats);
     }
 
-    @Override
     @GetMapping("/{id}/stats/daily")
     public Result<List<Map<String, Object>>> getDailyCallStats(
             @PathVariable("id") Long id,
@@ -221,7 +207,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(apiInterfaceService.getDailyCallStats(id, startTime, endTime));
     }
 
-    @Override
     @GetMapping("/{id}/params")
     public Result<List<InterfaceParamDTO>> listParams(@PathVariable("id") Long id) {
         ApiInterface apiInterface = apiInterfaceService.getById(id);
@@ -233,7 +218,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
                 .toList());
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "新增接口参数")
     @PostMapping("/{id}/params")
     public Result<InterfaceParamDTO> addParam(@PathVariable("id") Long id, @RequestBody InterfaceParamDTO dto) {
@@ -256,7 +240,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(toDTO(param));
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "批量保存接口参数")
     @PutMapping("/{id}/params/batch")
     public Result<Void> batchSaveParams(@PathVariable("id") Long id, @RequestBody List<InterfaceParamDTO> params) {
@@ -277,7 +260,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "更新接口参数")
     @PutMapping("/params/{paramId}")
     public Result<InterfaceParamDTO> updateParam(@PathVariable("paramId") Long paramId,
@@ -292,7 +274,6 @@ public class ApiInterfaceController implements ApiInterfaceManageFeignClient {
         return Result.success(toDTO(interfaceParamService.getById(paramId)));
     }
 
-    @Override
     @OperationLog(module = "接口管理", operation = "删除接口参数")
     @DeleteMapping("/params/{paramId}")
     public Result<Void> deleteParam(@PathVariable("paramId") Long paramId) {

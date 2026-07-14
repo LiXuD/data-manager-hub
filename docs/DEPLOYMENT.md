@@ -1,6 +1,6 @@
 # 数据管理平台部署文档
 
-**版本**: 2026-06-16
+**版本**: 2026-07-14
 
 ---
 
@@ -15,6 +15,7 @@
 | Node.js | 18+ | 前端构建 |
 | Docker | 24+ | 容器化部署 |
 | Docker Compose | 2.x | 容器编排 |
+| OpenSSL | 3.x | 本地生成服务间认证 RSA 密钥 |
 
 ### 基础设施
 
@@ -39,7 +40,7 @@ cd data-manager-hub
 ### 2. 启动本地基础设施
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 > `docker-compose.yml` 仅用于本地开发/测试，包含 PostgreSQL、Redis、Kafka、Nacos、Prometheus、Grafana、Elasticsearch、Kibana 和 SkyWalking。生产环境应使用独立的高可用基础设施，并通过环境变量或密钥系统提供连接信息和密码。
@@ -47,7 +48,7 @@ docker-compose up -d
 如本机 5432 已被占用，可改用备用宿主端口：
 
 ```bash
-POSTGRES_PORT=15432 docker-compose up -d postgres
+POSTGRES_PORT=15432 docker compose up -d postgres
 export DB_PORT=15432
 ```
 
@@ -55,6 +56,9 @@ export DB_PORT=15432
 
 ```bash
 psql -h localhost -U postgres -d dataplatform -f sql/init.sql
+for migration in sql/migrations/*.sql; do
+  psql -h localhost -U postgres -d dataplatform -f "$migration"
+done
 ```
 
 ### 4. 构建项目
@@ -74,12 +78,12 @@ mvn clean install -DskipTests
 **使用 Maven 单独启动**:
 
 ```bash
-# 按顺序启动各服务
+# 按顺序启动各服务，Identity 必须先可用
+cd data-platform-identity/data-platform-identity-service && mvn spring-boot:run &
 cd data-platform-masterdata/data-platform-masterdata-service && mvn spring-boot:run &
 cd data-platform-access/data-platform-access-service && mvn spring-boot:run &
 cd data-platform-billing/data-platform-billing-service && mvn spring-boot:run &
 cd data-platform-governance/data-platform-governance-service && mvn spring-boot:run &
-cd data-platform-identity/data-platform-identity-service && mvn spring-boot:run &
 cd data-platform-gateway && mvn spring-boot:run &
 ```
 
@@ -212,6 +216,29 @@ sa-token:
   token-prefix: Bearer
 ```
 
+用户会话通过 `sa-token-redis-jackson` 存入共享 Redis。Identity 负责登录和签发用户 Token，其他业务域在本地读取同一会话并校验；生产环境必须保证五域服务使用相同 Redis 实例和 `Authorization` token-name。
+
+### 服务间认证配置
+
+跨域 Feign 调用使用 Identity 签发的短期 RSA JWT，内部端点统一为 `/internal/v1/**`。目标服务本地校验签名、issuer、audience、有效期和 scope；Identity 按 `clients.<service>.grants.<audience>` 只签发该目标允许的最小 scope。用户 Token 与 API Key 不作为服务身份传播。
+
+生产环境必须由密钥管理系统挂载 RSA 密钥，并为每个服务提供独立客户端密钥：
+
+```bash
+export INTERNAL_AUTH_ENABLED=true
+export INTERNAL_AUTH_TOKEN_URI=http://data-platform-identity:8086/internal-auth/v1/token
+export INTERNAL_AUTH_PRIVATE_KEY_PATH=/run/secrets/internal-auth-private.pem  # 仅 Identity
+export INTERNAL_AUTH_PUBLIC_KEY_PATH=/run/secrets/internal-auth-public.pem
+export INTERNAL_AUTH_ACCESS_SECRET=...
+export INTERNAL_AUTH_BILLING_SECRET=...
+export INTERNAL_AUTH_MASTERDATA_SECRET=...
+export INTERNAL_AUTH_IDENTITY_SECRET=...
+```
+
+五域 dev profile 默认开启内部认证。本地 `start-services.sh` 会在被 Git 忽略的 `.runtime/` 中生成临时 RSA 密钥，并等待 Identity 健康后再启动依赖服务。令牌客户端默认连接超时 2 秒、读取超时 5 秒、最多尝试 3 次；4xx 凭证错误不重试。Gateway 不路由 `/internal/**`，并清理外部请求中的 `X-Actor-*`、`X-Internal-*` 可信头。
+
+最小授权关系：Access 可读 Masterdata、读取厂商密钥、调用 Billing 和写 Governance 日志；Billing 可读 Access 统计并写 Governance 告警/日志；Masterdata 可读 Access 统计并写 Governance 日志；Identity 仅写 Governance 日志。
+
 ---
 
 ## 服务依赖关系
@@ -228,12 +255,27 @@ Gateway (8888)
 Access (8082)
     │
     ├─→ Masterdata (8081) - 获取厂商配置/接口定义 (Feign)
-    └─→ Identity (8086) - 验证 API Key (Feign)
+    ├─→ Billing (8084) - 计算调用费用 (Feign)
+    └─→ Governance (8085) - 写入操作日志 (Feign)
 
 Billing (8084)
     │
-    └─→ Access (8082) - 获取调用记录 (Feign)
+    ├─→ Access (8082) - 对账统计 (Feign)
+    └─→ Governance (8085) - 告警与操作日志 (Feign)
+
+Masterdata
+    │
+    ├─→ Access (8082) - 接口调用统计 (Feign)
+    └─→ Governance (8085) - 写入操作日志 (Feign)
+
+Identity
+    │
+    └─→ Governance (8085) - 写入操作日志 (Feign)
 ```
+
+`call-record` Kafka 仅在 Access 域内用于调用记录异步落库。Billing 不消费该主题，费用与日聚合通过认证 Feign 同步完成。
+
+Access 的生产 profile 默认使用 `SASL_SSL` 与 `SCRAM-SHA-512`。生产环境必须提供 `KAFKA_BOOTSTRAP_SERVERS`、`KAFKA_USERNAME`、`KAFKA_PASSWORD`、`KAFKA_SSL_TRUSTSTORE_LOCATION` 和 `KAFKA_SSL_TRUSTSTORE_PASSWORD`；如基础设施采用其他安全机制，应显式覆盖 `KAFKA_SECURITY_PROTOCOL` 与 `KAFKA_SASL_MECHANISM`，不得退回明文匿名连接。
 
 ---
 
@@ -254,17 +296,15 @@ Billing (8084)
 ### 启动顺序
 
 ```
-1. 基础设施 (PostgreSQL, Redis, Nacos)
-2. identity (8086) — 租户/用户是其他域的基础
-3. masterdata (8081)
-4. billing (8084)
-5. access (8082)
-6. governance (8085)
-7. gateway (8888)
-8. web (3000)
+1. 基础设施 (PostgreSQL, Redis, Kafka, Nacos)
+2. Identity（服务 Token 签发）
+3. Masterdata / Billing / Governance
+4. Access
+5. Gateway
+6. Web
 ```
 
-一键脚本简化为: `./start-services.sh`（已包含步骤 2-7）。
+一键脚本简化为: `./start-services.sh`（已包含步骤 2-5）。
 
 ---
 
@@ -418,5 +458,5 @@ psql -h localhost -U postgres dataplatform < backup_20260516.sql
 
 ---
 
-**文档版本**: 2026-06-16
-**最后更新**: V2.0 全部功能完成（SkyWalking 桥接、SDK 多语言生成、灰度厂商路由）
+**文档版本**: 2026-07-10
+**最后更新**: 补充全新数据库的迁移执行步骤，并与当前五域部署基线保持一致。

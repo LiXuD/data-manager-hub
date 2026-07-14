@@ -1,6 +1,7 @@
 package com.dataplatform.access.caller.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.access.caller.handler.ApiKeyStatusTypeHandler;
 import com.dataplatform.common.enums.ApiKeyStatus;
 import java.time.LocalDateTime;
 
@@ -9,7 +10,7 @@ import java.time.LocalDateTime;
  * 访问域调用方的 Api Key。
  * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
  */
-@TableName("api_key")
+@TableName(value = "api_key", autoResultMap = true)
 public class ApiKey {
 
     @TableId(type = IdType.AUTO)
@@ -22,6 +23,7 @@ public class ApiKey {
     private Integer rateLimit;
     private Long quotaLimit;
     private Long quotaUsed;
+    @TableField(typeHandler = ApiKeyStatusTypeHandler.class)
     private ApiKeyStatus status;
     private LocalDateTime expireTime;
     

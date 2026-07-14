@@ -60,7 +60,7 @@ class RequestLogFilterTest {
     }
 
     @Test
-    void shouldBeOrderedZero() {
-        assertEquals(0, filter.getOrder());
+    void shouldWrapOpenApiAuthFailures() {
+        assertEquals(-4, filter.getOrder());
     }
 }

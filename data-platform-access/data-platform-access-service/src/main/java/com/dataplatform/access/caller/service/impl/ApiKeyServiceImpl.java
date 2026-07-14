@@ -6,9 +6,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.access.caller.entity.ApiKey;
 import com.dataplatform.access.caller.mapper.ApiKeyMapper;
+import com.dataplatform.access.caller.service.ApiKeyCacheService;
 import com.dataplatform.access.caller.service.ApiKeyService;
+import java.io.Serializable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,6 +26,14 @@ import java.util.List;
 @Service
 public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey> 
     implements ApiKeyService {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiKeyServiceImpl.class);
+
+    private final ApiKeyCacheService apiKeyCacheService;
+
+    public ApiKeyServiceImpl(ApiKeyCacheService apiKeyCacheService) {
+        this.apiKeyCacheService = apiKeyCacheService;
+    }
 
     @Override
     @Transactional
@@ -41,7 +55,36 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         apiKey.setStatus(ApiKeyStatus.ACTIVE);
         apiKey.setExpireTime(LocalDateTime.now().plusYears(1));
         save(apiKey);
+        apiKeyCacheService.sync(apiKey);
         return apiKey;
+    }
+
+    @Override
+    public boolean updateById(ApiKey entity) {
+        boolean updated = super.updateById(entity);
+        if (updated && entity != null) {
+            ApiKey latest = entity.getId() != null ? getById(entity.getId()) : entity;
+            apiKeyCacheService.sync(latest != null ? latest : entity);
+        }
+        return updated;
+    }
+
+    @Override
+    public boolean removeById(Serializable id) {
+        ApiKey existing = id != null ? getById(id) : null;
+        boolean removed = super.removeById(id);
+        if (removed) {
+            apiKeyCacheService.evict(existing);
+        }
+        return removed;
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void syncActiveKeysOnStartup() {
+        List<ApiKey> activeKeys = list(new LambdaQueryWrapper<ApiKey>()
+                .eq(ApiKey::getStatus, ApiKeyStatus.ACTIVE.getCode()));
+        activeKeys.forEach(apiKeyCacheService::sync);
+        log.info("已同步可用 API Key 到网关缓存: count={}", activeKeys.size());
     }
 
     @Override
@@ -67,10 +110,12 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         if (key.getExpireTime() != null && key.getExpireTime().isBefore(LocalDateTime.now())) {
             return false;
         }
-        if (key.getQuotaUsed() + count > key.getQuotaLimit()) {
+        long used = key.getQuotaUsed() != null ? key.getQuotaUsed() : 0L;
+        long limit = key.getQuotaLimit() != null ? key.getQuotaLimit() : 0L;
+        if (count <= 0 || limit <= 0 || used + count > limit) {
             return false;
         }
-        key.setQuotaUsed(key.getQuotaUsed() + count);
+        key.setQuotaUsed(used + count);
         return updateById(key);
     }
 }

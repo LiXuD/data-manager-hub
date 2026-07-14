@@ -2,13 +2,14 @@ package com.dataplatform.masterdata.interface_.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.common.handler.CommonStatusTypeHandler;
 import java.time.LocalDateTime;
 
 /**
  * 主数据域接口定义的 Api Interface。
  * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
  */
-@TableName("api_interface")
+@TableName(value = "api_interface", autoResultMap = true)
 public class ApiInterface {
 
     @TableId(type = IdType.AUTO)
@@ -23,6 +24,7 @@ public class ApiInterface {
     private String requestSchema;
     private String responseSchema;
     private Integer sort;
+    @TableField(typeHandler = CommonStatusTypeHandler.class)
     private CommonStatus status;
 
     @TableField(fill = FieldFill.INSERT)

@@ -131,6 +131,9 @@ public class CallerController {
     @PatchMapping("/api-key/{id}/status")
     public ResponseEntity<Result<Void>> updateApiKeyStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
+        if ("inactive".equals(status)) {
+            status = ApiKeyStatus.REVOKED.getCode();
+        }
         ApiKeyStatus statusEnum = ApiKeyStatus.fromCode(status);
         if (statusEnum == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -144,6 +147,18 @@ public class CallerController {
         }
         apiKey.setStatus(statusEnum);
         apiKeyService.updateById(apiKey);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    @OperationLog(module = "API Key管理", operation = "删除API Key")
+    @DeleteMapping("/api-key/{id}")
+    public ResponseEntity<Result<Void>> deleteApiKey(@PathVariable Long id) {
+        ApiKey apiKey = apiKeyService.getById(id);
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "API Key不存在"));
+        }
+        apiKeyService.removeById(id);
         return ResponseEntity.ok(Result.success(null));
     }
 

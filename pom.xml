@@ -46,6 +46,7 @@
         <hutool.version>5.8.28</hutool.version>
         <lombok.version>1.18.36</lombok.version>
         <resilience4j.version>2.2.0</resilience4j.version>
+        <nimbus-jose-jwt.version>9.47</nimbus-jose-jwt.version>
         <byte-buddy.version>1.17.2</byte-buddy.version>
         <maven.enforcer.version>3.5.0</maven.enforcer.version>
         <profiles.active>dev</profiles.active>
@@ -125,6 +126,17 @@
                 <groupId>cn.dev33</groupId>
                 <artifactId>sa-token-spring-boot3-starter</artifactId>
                 <version>${sa-token.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.dev33</groupId>
+                <artifactId>sa-token-redis-jackson</artifactId>
+                <version>${sa-token.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${nimbus-jose-jwt.version}</version>
             </dependency>
 
             <!-- Redisson -->

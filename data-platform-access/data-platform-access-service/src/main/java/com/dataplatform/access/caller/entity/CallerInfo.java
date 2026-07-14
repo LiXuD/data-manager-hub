@@ -1,6 +1,7 @@
 package com.dataplatform.access.caller.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.handler.CommonStatusTypeHandler;
 import com.dataplatform.common.enums.CommonStatus;
 import java.time.LocalDateTime;
 
@@ -9,7 +10,7 @@ import java.time.LocalDateTime;
  * 访问域调用方的 Caller Info。
  * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
  */
-@TableName("caller_info")
+@TableName(value = "caller_info", autoResultMap = true)
 public class CallerInfo {
 
     @TableId(type = IdType.AUTO)
@@ -20,6 +21,7 @@ public class CallerInfo {
     private Long tenantId;
     private String callerType;
     private String description;
+    @TableField(typeHandler = CommonStatusTypeHandler.class)
     private CommonStatus status;
 
     @TableField(exist = false)

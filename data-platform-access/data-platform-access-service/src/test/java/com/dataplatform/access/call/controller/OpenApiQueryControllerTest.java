@@ -23,8 +23,8 @@ import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
-import com.dataplatform.masterdata.vendor.api.feign.VendorConfigFeignClient;
-import com.dataplatform.masterdata.vendor.api.feign.VendorFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,8 +49,8 @@ class OpenApiQueryControllerTest {
     private CallerService callerService;
     private CallSceneService callSceneService;
     private ApiInterfaceFeignClient apiInterfaceFeignClient;
-    private VendorConfigFeignClient vendorConfigFeignClient;
-    private VendorFeignClient vendorFeignClient;
+    private VendorConfigInternalFeignClient vendorConfigFeignClient;
+    private VendorInternalFeignClient vendorFeignClient;
     private GrayVendorResolver grayVendorResolver;
     private OpenApiQueryController controller;
 
@@ -65,8 +65,8 @@ class OpenApiQueryControllerTest {
         callerService = mock(CallerService.class);
         callSceneService = mock(CallSceneService.class);
         apiInterfaceFeignClient = mock(ApiInterfaceFeignClient.class);
-        vendorConfigFeignClient = mock(VendorConfigFeignClient.class);
-        vendorFeignClient = mock(VendorFeignClient.class);
+        vendorConfigFeignClient = mock(VendorConfigInternalFeignClient.class);
+        vendorFeignClient = mock(VendorInternalFeignClient.class);
         grayVendorResolver = mock(GrayVendorResolver.class);
         controller = new OpenApiQueryController(
                 openApiQueryService,
@@ -119,6 +119,8 @@ class OpenApiQueryControllerTest {
         apiInterface.setInterfaceCode("PERSONAL_QUERY");
         when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY")).thenReturn(Result.success(apiInterface));
         when(apiKeyInterfaceService.hasInterfacePermission(10L, 30L)).thenReturn(true);
+        when(apiInterfaceFeignClient.listParams(30L)).thenReturn(Result.success(List.of()));
+        when(apiKeyService.validateAndConsumeQuota("test-key", 1)).thenReturn(true);
 
         VendorConfigDTO config = new VendorConfigDTO();
         config.setVendorId(40L);

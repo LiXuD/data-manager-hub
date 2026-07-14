@@ -133,23 +133,21 @@ public class DataQueryController {
 
     private boolean validateInterfacePermission(Long apiKeyId, String interfaceCode) {
         if (interfaceCode == null || interfaceCode.trim().isEmpty()) {
-            return true; // 没有指定接口code，可能是旧版调用，暂时允许
+            return false;
         }
 
         try {
-            // 获取接口信息
             Result<ApiInterfaceDTO> interfaceResult = apiInterfaceFeignClient.getByInterfaceCode(interfaceCode);
             if (interfaceResult == null || interfaceResult.getData() == null) {
-                return true; // 接口不存在，暂时允许
+                return false;
             }
 
             Long interfaceId = interfaceResult.getData().getId();
 
-            // 检查该API Key是否有该接口权限
             return apiKeyInterfaceService.hasInterfacePermission(apiKeyId, interfaceId);
         } catch (Exception e) {
-            log.warn("检查接口权限失败，默认允许: {}", e.getMessage());
-            return true;
+            log.warn("检查接口权限失败，拒绝访问: {}", e.getMessage());
+            return false;
         }
     }
 

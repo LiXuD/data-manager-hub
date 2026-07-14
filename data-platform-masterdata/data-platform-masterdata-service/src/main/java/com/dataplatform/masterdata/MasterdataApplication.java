@@ -1,5 +1,7 @@
 package com.dataplatform.masterdata;
 
+import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
+import com.dataplatform.governance.log.api.LogClient;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -13,7 +15,7 @@ import org.springframework.context.annotation.ComponentScan;
  */
 @SpringBootApplication
 @EnableDiscoveryClient
-@EnableFeignClients(basePackages = "com.dataplatform.governance.log.api")
+@EnableFeignClients(clients = {CallStatsInternalFeignClient.class, LogClient.class})
 @MapperScan({
         "com.dataplatform.masterdata.vendor.mapper",
         "com.dataplatform.masterdata.interface_.mapper",

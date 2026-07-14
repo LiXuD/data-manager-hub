@@ -3,6 +3,7 @@ package com.dataplatform.gateway.filter;
 import com.dataplatform.common.result.Result;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,14 +70,18 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
         if (keyIdObj == null) {
             return chain.filter(exchange);
         }
-        Long keyId = ((Number) keyIdObj).longValue();
+        Long keyId = asLong(keyIdObj);
+        if (keyId == null) {
+            log.warn("Rate limit skipped because keyId is invalid: {}", keyIdObj);
+            return chain.filter(exchange);
+        }
 
         return loadRateLimitConfig(keyId)
                 .flatMap(config -> {
                     int windowSec = config.containsKey("windowSec")
-                            ? ((Number) config.get("windowSec")).intValue() : defaultWindowSec;
+                            ? asInt(config.get("windowSec"), defaultWindowSec) : defaultWindowSec;
                     int maxReqs = config.containsKey("maxReqs")
-                            ? ((Number) config.get("maxReqs")).intValue() : defaultMaxRequests;
+                            ? asInt(config.get("maxReqs"), defaultMaxRequests) : defaultMaxRequests;
 
                     long now = System.currentTimeMillis();
                     String windowKey = "openapi:window:" + keyId;
@@ -105,6 +110,28 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
         return redisTemplate.opsForValue().get(configKey)
                 .defaultIfEmpty(Map.of("windowSec", defaultWindowSec, "maxReqs", defaultMaxRequests))
                 .map(v -> (Map<String, Object>) v);
+    }
+
+    private int asInt(Object value, int defaultValue) {
+        Long parsed = asLong(value);
+        return parsed != null ? parsed.intValue() : defaultValue;
+    }
+
+    private Long asLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof List<?> list && list.size() >= 2) {
+            return asLong(list.get(1));
+        }
+        if (value instanceof String text) {
+            try {
+                return Long.parseLong(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private Mono<Void> writeRateLimitError(ServerWebExchange exchange, int windowSec) {
