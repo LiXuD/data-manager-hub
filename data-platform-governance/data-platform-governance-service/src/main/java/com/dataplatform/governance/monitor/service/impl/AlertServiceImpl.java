@@ -68,7 +68,7 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
         Page<AlertRule> result = this.page(new Page<>(page, pageSize), wrapper);
 
         PageResult<AlertRule> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());
@@ -106,7 +106,7 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
         Page<AlertRecord> result = alertRecordMapper.selectPage(new Page<>(page, pageSize), wrapper);
 
         PageResult<AlertRecord> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());

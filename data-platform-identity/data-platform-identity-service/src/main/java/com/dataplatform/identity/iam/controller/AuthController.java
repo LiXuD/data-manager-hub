@@ -14,6 +14,8 @@ import com.dataplatform.identity.iam.mapper.RoleMapper;
 import com.dataplatform.identity.iam.mapper.UserMapper;
 import com.dataplatform.identity.iam.mapper.UserRoleMapper;
 import com.dataplatform.identity.iam.service.RolePermissionService;
+import com.dataplatform.identity.tenant.entity.TenantInfo;
+import com.dataplatform.identity.tenant.mapper.TenantMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 /**
  * 身份租户域用户权限的 Auth Controller。
@@ -40,6 +43,8 @@ public class AuthController {
     private PermissionMapper permissionMapper;
     @Autowired
     private RoleMapper roleMapper;
+    @Autowired
+    private TenantMapper tenantMapper;
 
     @OperationLog(module = "认证管理", operation = "用户登录")
     @PostMapping("/login")
@@ -63,6 +68,11 @@ public class AuthController {
         List<String> roleCodes = getUserRoles(user.getId());
 
         UserContext.login(user.getId(), user.getUsername(), user.getTenantId(), permissionCodes);
+
+        User loginUpdate = new User();
+        loginUpdate.setId(user.getId());
+        loginUpdate.setLastLoginTime(LocalDateTime.now());
+        userMapper.updateById(loginUpdate);
 
         Map<String, Object> data = new HashMap<>();
         data.put("token", StpUtil.getTokenValue());
@@ -102,13 +112,63 @@ public class AuthController {
             return Result.error(401, "未登录");
         }
 
+        User user = userMapper.selectById(UserContext.getCurrentUserId());
+        if (user == null) {
+            return Result.error(404, "用户不存在");
+        }
+        TenantInfo tenant = user.getTenantId() == null ? null : tenantMapper.selectById(user.getTenantId());
+
         Map<String, Object> data = new HashMap<>();
-        data.put("userId", UserContext.getCurrentUserId());
-        data.put("username", UserContext.getCurrentUsername());
-        data.put("tenantId", UserContext.getCurrentTenantId());
-        data.put("permissions", UserContext.getCurrentPermissions());
+        data.put("userId", user.getId());
+        data.put("username", user.getUsername());
+        data.put("nickname", user.getNickname());
+        data.put("email", user.getEmail());
+        data.put("phone", user.getPhone());
+        data.put("tenantId", user.getTenantId());
+        data.put("tenantName", tenant == null ? null : tenant.getTenantName());
+        data.put("lastLoginTime", user.getLastLoginTime());
+        data.put("roles", getUserRoles(user.getId()));
+        data.put("permissions", getUserPermissions(user.getId()));
 
         return Result.success(data);
+    }
+
+    @OperationLog(module = "个人中心", operation = "更新个人信息")
+    @PutMapping("/profile")
+    public Result<Map<String, Object>> updateProfile(@RequestBody Map<String, String> body) {
+        if (!UserContext.isLoggedIn()) {
+            return Result.error(401, "未登录");
+        }
+        User update = new User();
+        update.setId(UserContext.getCurrentUserId());
+        update.setNickname(body.get("nickname"));
+        update.setEmail(body.get("email"));
+        update.setPhone(body.get("phone"));
+        userMapper.updateById(update);
+        return getUserInfo();
+    }
+
+    @OperationLog(module = "个人中心", operation = "修改密码")
+    @PutMapping("/password")
+    public Result<Void> changePassword(@RequestBody Map<String, String> body) {
+        if (!UserContext.isLoggedIn()) {
+            return Result.error(401, "未登录");
+        }
+        User user = userMapper.selectById(UserContext.getCurrentUserId());
+        String oldPassword = body.get("oldPassword");
+        String newPassword = body.get("newPassword");
+        if (user == null || oldPassword == null || !oldPassword.equals(user.getPassword())) {
+            return Result.error(400, "当前密码错误");
+        }
+        if (newPassword == null || newPassword.length() < 8
+                || !newPassword.matches(".*[A-Za-z].*") || !newPassword.matches(".*\\d.*")) {
+            return Result.error(400, "新密码至少8位，且包含数字和字母");
+        }
+        User update = new User();
+        update.setId(user.getId());
+        update.setPassword(newPassword);
+        userMapper.updateById(update);
+        return Result.success(null);
     }
 
     private List<String> getUserRoles(Long userId) {

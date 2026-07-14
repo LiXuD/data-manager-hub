@@ -30,8 +30,24 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
-    if (res.code === 200) {
+
+    if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
       return res
+    }
+
+    if (res && typeof res === 'object' && !('code' in res)) {
+      return res
+    }
+
+    if (res?.code === 200) {
+      return res
+    }
+
+    if (res?.code === 401 && localStorage.getItem('token')) {
+      useUserStore().logout()
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     }
 
     const msg = res.message || res.msg || '请求失败'

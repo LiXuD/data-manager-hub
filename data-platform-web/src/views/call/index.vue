@@ -54,7 +54,7 @@
         <div class="search-btn-group">
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
-          <el-button type="success" @click="handleExport">导出</el-button>
+          <el-button type="success" :loading="exporting" @click="handleExport">导出</el-button>
         </div>
       </div>
     </el-card>
@@ -118,14 +118,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getCallRecordList, getCallDimensionStats } from '@/api/call'
+import { exportCallRecords, getCallRecordList, getCallDimensionStats } from '@/api/call'
 import type { CallRecord } from '@/types'
 import { useCacheStore } from '@/stores/cache'
 import { extractPageData } from '@/utils/pagination'
 // StatCard is globally registered by unplugin-vue-components
 
 const loading = ref(false)
+const exporting = ref(false)
 const tableData = ref<CallRecord[]>([])
 const total = ref(0)
 const searchForm = reactive({
@@ -210,8 +210,22 @@ const handleReset = () => {
   fetchList()
 }
 
-const handleExport = () => {
-  ElMessage.info('导出功能开发中...')
+const handleExport = async () => {
+  exporting.value = true
+  try {
+    const blob = await exportCallRecords({
+      startTime: searchForm.dateRange[0],
+      endTime: searchForm.dateRange[1]
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `call-record-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  } finally {
+    exporting.value = false
+  }
 }
 
 const buildQueryParams = () => {

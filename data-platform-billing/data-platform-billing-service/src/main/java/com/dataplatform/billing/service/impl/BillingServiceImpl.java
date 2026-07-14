@@ -179,13 +179,16 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
     }
 
     @Override
-    public Page<BillingDaily> pageQuery(Long tenantId, LocalDate startDate, LocalDate endDate,
+    public Page<BillingDaily> pageQuery(Long tenantId, Long vendorId, LocalDate startDate, LocalDate endDate,
                                          Integer page, Integer pageSize) {
         Page<BillingDaily> pageParam = new Page<>(page, pageSize);
         LambdaQueryWrapper<BillingDaily> wrapper = new LambdaQueryWrapper<>();
 
         if (tenantId != null) {
             wrapper.eq(BillingDaily::getTenantId, tenantId);
+        }
+        if (vendorId != null) {
+            wrapper.eq(BillingDaily::getVendorId, vendorId);
         }
         if (startDate != null) {
             wrapper.ge(BillingDaily::getBillingDate, startDate);
@@ -263,8 +266,21 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
 
     @Override
     public byte[] export() {
-        // 简单实现：返回空的CSV
-        return "id,billing_date,call_count,total_cost\n".getBytes();
+        StringBuilder csv = new StringBuilder("id,tenant_id,caller_id,vendor_id,data_type,billing_date,call_count,success_count,fail_count,total_cost\n");
+        for (BillingDaily billing : list(new LambdaQueryWrapper<BillingDaily>().orderByDesc(BillingDaily::getBillingDate))) {
+            csv.append(billing.getId()).append(',')
+                    .append(billing.getTenantId()).append(',')
+                    .append(billing.getCallerId()).append(',')
+                    .append(billing.getVendorId()).append(',')
+                    .append(billing.getDataType() == null ? "" : billing.getDataType()).append(',')
+                    .append(billing.getBillingDate()).append(',')
+                    .append(billing.getCallCount()).append(',')
+                    .append(billing.getSuccessCount()).append(',')
+                    .append(billing.getFailCount()).append(',')
+                    .append(billing.getTotalCost())
+                    .append('\n');
+        }
+        return ("\uFEFF" + csv).getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     @Override

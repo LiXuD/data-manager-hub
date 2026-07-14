@@ -1,13 +1,12 @@
 package com.dataplatform.api;
 
-import java.io.Serializable;
 import java.util.List;
 
 /**
  * 公共契约层的 Page Result。
  * <p>组件，封装 Page Result 相关职责。</p>
  */
-public class PageResult<T> implements Serializable {
+public class PageResult<T> extends Result<List<T>> {
     private static final long serialVersionUID = 1L;
 
     private List<T> list;
@@ -18,6 +17,9 @@ public class PageResult<T> implements Serializable {
 
     public static <T> PageResult<T> of(List<T> list, Long total, Integer pageNum, Integer pageSize) {
         PageResult<T> result = new PageResult<>();
+        result.setCode(200);
+        result.setMsg("success");
+        result.setData(list);
         result.setList(list);
         result.setTotal(total);
         result.setPageNum(pageNum);

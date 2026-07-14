@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.handler.CommonStatusTypeHandler;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 
 /**
@@ -19,12 +20,14 @@ public class User {
     private Long id;
     private String username;
     private String nickname;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
     private String email;
     private String phone;
     @TableField(typeHandler = CommonStatusTypeHandler.class)
     private CommonStatus status;
     private Long tenantId;
+    private LocalDateTime lastLoginTime;
     private Long createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -51,6 +54,8 @@ public class User {
     public void setStatus(CommonStatus status) { this.status = status; }
     public Long getTenantId() { return tenantId; }
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+    public LocalDateTime getLastLoginTime() { return lastLoginTime; }
+    public void setLastLoginTime(LocalDateTime lastLoginTime) { this.lastLoginTime = lastLoginTime; }
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }

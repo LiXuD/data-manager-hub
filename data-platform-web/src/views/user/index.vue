@@ -84,6 +84,9 @@
         <el-form-item label="用户名" required>
           <el-input v-model="form.username" placeholder="请输入用户名" />
         </el-form-item>
+        <el-form-item v-if="!form.id" label="初始密码" required>
+          <el-input v-model="form.password" type="password" show-password placeholder="至少8位，且包含数字和字母" />
+        </el-form-item>
         <el-form-item label="昵称">
           <el-input v-model="form.realName" placeholder="请输入昵称" />
         </el-form-item>
@@ -152,6 +155,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUserList, createUser, updateUser, deleteUser, updateUserStatus, getUserRoles, assignUserRoles, getRoleList, getUserCallers, assignUserCallers, getCallerList } from '@/api/user'
 import type { UserDTO } from '@/types'
 import { COMMON_STATUS } from '@/constants/status'
+import { extractPageData } from '@/utils/pagination'
 
 interface Role { id: number; roleCode: string; roleName: string }
 interface Caller { id: number; callerCode: string; callerName: string }
@@ -163,7 +167,7 @@ const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 const searchForm = reactive({ username: '', status: '' })
 const dialogVisible = ref(false)
-const form = reactive({ id: null as number | null, username: '', realName: '', email: '', phone: '', status: COMMON_STATUS.ACTIVE })
+const form = reactive({ id: null as number | null, username: '', password: '', realName: '', email: '', phone: '', status: COMMON_STATUS.ACTIVE })
 
 const roleVisible = ref(false)
 const roleList = ref<Role[]>([])
@@ -178,8 +182,9 @@ const fetchList = async () => {
   loading.value = true
   try {
     const res = await getUserList({ page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm })
-    tableData.value = (res as any)?.data?.data?.records || (res as any)?.data?.data || (res as any)?.data || []
-    total.value = (res as any)?.data?.total || 0
+    const page = extractPageData<UserDTO>(res)
+    tableData.value = page.list
+    total.value = page.total
   } catch (e: unknown) {
     console.error('加载用户列表失败:', e)
     tableData.value = []
@@ -190,8 +195,8 @@ const fetchList = async () => {
 const handleSearch = () => { pagination.currentPage = 1; fetchList() }
 const handleReset = () => { searchForm.username = ''; searchForm.status = ''; pagination.currentPage = 1; fetchList() }
 
-const handleAdd = () => { Object.assign(form, { id: null, username: '', realName: '', email: '', phone: '', status: 'active' }); dialogVisible.value = true }
-const handleEdit = (row: UserDTO) => { Object.assign(form, { ...row }); dialogVisible.value = true }
+const handleAdd = () => { Object.assign(form, { id: null, username: '', password: '', realName: '', email: '', phone: '', status: 'active' }); dialogVisible.value = true }
+const handleEdit = (row: UserDTO) => { Object.assign(form, { ...row, password: '' }); dialogVisible.value = true }
 
 const handleDelete = async (row: UserDTO) => {
   try {
@@ -211,11 +216,16 @@ const handleSubmit = async () => {
     ElMessage.warning('请填写用户名')
     return
   }
+  if (!form.id && (form.password.length < 8 || !/[A-Za-z]/.test(form.password) || !/\d/.test(form.password))) {
+    ElMessage.warning('初始密码至少8位，且包含数字和字母')
+    return
+  }
   submitting.value = true
   try {
     const payload = { ...form, id: form.id ?? undefined }
     if (form.id) {
-      await updateUser(form.id, payload)
+      const { password: _password, ...updatePayload } = payload
+      await updateUser(form.id, updatePayload)
     } else {
       await createUser(payload)
     }
@@ -246,8 +256,8 @@ const handleRole = async (row: UserDTO) => {
       getRoleList({ page: 1, pageSize: 100 }),
       getUserRoles(row.id)
     ])
-    roleList.value = (rolesRes as any)?.data?.data?.records || (rolesRes as any)?.data?.data || []
-    selectedRoles.value = (userRolesRes as any)?.data?.data || []
+    roleList.value = extractPageData<Role>(rolesRes).list
+    selectedRoles.value = userRolesRes.data || []
     roleVisible.value = true
   } catch (error) {
     ElMessage.error('加载角色数据失败')
@@ -275,8 +285,8 @@ const handleCaller = async (row: UserDTO) => {
       getCallerList({ page: 1, pageSize: 100 }),
       getUserCallers(row.id)
     ])
-    callerList.value = (callersRes as any)?.data?.data?.records || (callersRes as any)?.data?.data || []
-    selectedCallers.value = (userCallersRes as any)?.data?.data || []
+    callerList.value = extractPageData<Caller>(callersRes).list
+    selectedCallers.value = userCallersRes.data || []
     callerVisible.value = true
   } catch (error) {
     ElMessage.error('加载调用方数据失败')

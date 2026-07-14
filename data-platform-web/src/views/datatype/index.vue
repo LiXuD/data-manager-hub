@@ -123,6 +123,7 @@ import {
   updateDataTypeStatus
 } from '@/api/datatype'
 import { COMMON_STATUS } from '@/constants'
+import { extractPageData } from '@/utils/pagination'
 
 interface DataType { id: number; dataTypeCode: string; dataTypeName: string; dataCategory: string; description: string; status: string; createdAt: string }
 
@@ -153,14 +154,9 @@ const fetchList = async () => {
   loading.value = true
   try {
     const res = await getDataTypeList({ page: pagination.currentPage, pageSize: pagination.pageSize, ...searchForm })
-    const data = res.data
-    if (data && 'records' in data && Array.isArray(data.records)) {
-      tableData.value = data.records
-      total.value = data.total || 0
-    } else if (Array.isArray(data)) {
-      tableData.value = data
-      total.value = data.length || 0
-    }
+    const page = extractPageData<DataType>(res)
+    tableData.value = page.list
+    total.value = page.total
   } catch {
     tableData.value = []
     total.value = 0

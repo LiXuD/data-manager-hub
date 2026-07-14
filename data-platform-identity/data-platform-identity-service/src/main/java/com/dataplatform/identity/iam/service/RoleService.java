@@ -32,7 +32,7 @@ public class RoleService extends ServiceImpl<RoleMapper, Role> {
         Page<Role> result = this.page(new Page<>(page, pageSize), wrapper);
 
         PageResult<Role> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());

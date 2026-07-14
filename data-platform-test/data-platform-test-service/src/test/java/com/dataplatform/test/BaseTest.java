@@ -140,7 +140,7 @@ public class BaseTest {
     protected void verifySuccess(Response response) {
         response.then()
             .statusCode(200)
-            .body("code", equalTo(0))
+            .body("code", equalTo(200))
             .body("message", notNullValue());
     }
 
@@ -150,7 +150,7 @@ public class BaseTest {
     protected void verifyError(Response response, int expectedStatus) {
         response.then()
             .statusCode(expectedStatus)
-            .body("code", not(equalTo(0)));
+            .body("code", not(equalTo(200)));
     }
 
     /** 验证响应为 404 或 400 (资源不存在或请求错误) */

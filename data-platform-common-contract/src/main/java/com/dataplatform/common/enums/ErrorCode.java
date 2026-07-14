@@ -4,7 +4,7 @@ package com.dataplatform.common.enums;
  */
 public enum ErrorCode {
     // 成功
-    SUCCESS(0, "成功"),
+    SUCCESS(200, "成功"),
     // 参数错误 1001-1999
     INVALID_PARAMETER(1001, "参数错误"),
     MISSING_PARAMETER(1002, "缺少必要参数"),

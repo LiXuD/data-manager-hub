@@ -70,6 +70,39 @@
       </div>
     </el-card>
 
+    <el-dialog v-model="callerDialogVisible" :title="callerForm.id ? '编辑调用方' : '新增调用方'" width="520px">
+      <el-form :model="callerForm" label-width="100px">
+        <el-form-item label="调用方编码" required>
+          <el-input v-model="callerForm.callerCode" :disabled="Boolean(callerForm.id)" />
+        </el-form-item>
+        <el-form-item label="调用方名称" required>
+          <el-input v-model="callerForm.callerName" />
+        </el-form-item>
+        <el-form-item label="调用方类型">
+          <el-input v-model="callerForm.callerType" />
+        </el-form-item>
+        <el-form-item label="联系人">
+          <el-input v-model="callerForm.contactPerson" />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="callerForm.contactPhone" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="callerForm.description" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="callerForm.status" style="width: 100%">
+            <el-option label="启用" value="active" />
+            <el-option label="禁用" value="inactive" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="callerDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveCaller">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 产品配置弹窗 -->
     <el-dialog v-model="productVisible" title="调用方产品配置" width="760px" class="form-dialog">
       <el-form :model="productForm" inline class="inline-form">
@@ -178,6 +211,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getCallerList,
+  createCaller,
   deleteCaller,
   getApiKeyList,
   createApiKey,
@@ -188,7 +222,8 @@ import {
   getCallerProducts,
   createCallerProduct,
   getApiKeyProducts,
-  assignApiKeyProducts
+  assignApiKeyProducts,
+  updateCaller
 } from '@/api/caller'
 import type { Caller, ApiKey, CallerProduct } from '@/api/caller'
 import { getInterfaceList } from '@/api/interface'
@@ -218,6 +253,16 @@ const selectedInterfaces = ref<number[]>([])
 const productAuthVisible = ref(false)
 const selectedProducts = ref<number[]>([])
 const currentApiKeyId = ref<number | null>(null)
+const callerDialogVisible = ref(false)
+const callerForm = reactive<Caller>({
+  callerCode: '',
+  callerName: '',
+  callerType: '',
+  description: '',
+  contactPerson: '',
+  contactPhone: '',
+  status: 'active'
+})
 
 const loadData = async () => {
   loading.value = true
@@ -236,8 +281,33 @@ const loadData = async () => {
 
 const handleSearch = () => { pagination.page = 1; loadData() }
 const handleReset = () => { searchForm.keyword = ''; searchForm.status = ''; loadData() }
-const handleAdd = () => { ElMessage.info('新增功能开发中') }
-const handleEdit = (_row: Caller) => { ElMessage.info('编辑功能开发中') }
+const handleAdd = () => {
+  Object.assign(callerForm, { id: undefined, callerCode: '', callerName: '', callerType: '', description: '', contactPerson: '', contactPhone: '', status: 'active' })
+  callerDialogVisible.value = true
+}
+const handleEdit = (row: Caller) => {
+  Object.assign(callerForm, { ...row })
+  callerDialogVisible.value = true
+}
+const handleSaveCaller = async () => {
+  if (!callerForm.callerCode.trim() || !callerForm.callerName.trim()) {
+    ElMessage.warning('请填写调用方编码和名称')
+    return
+  }
+  submitting.value = true
+  try {
+    if (callerForm.id) {
+      await updateCaller(callerForm.id, { ...callerForm })
+    } else {
+      await createCaller({ ...callerForm })
+    }
+    ElMessage.success('保存成功')
+    callerDialogVisible.value = false
+    loadData()
+  } finally {
+    submitting.value = false
+  }
+}
 const handleDelete = async (row: Caller) => { await ElMessageBox.confirm(`确认删除"${row.callerName}"?`, '提示', { type: 'warning' }); await deleteCaller(row.id!); ElMessage.success('删除成功'); loadData() }
 const resetProductForm = () => {
   productForm.productCode = ''

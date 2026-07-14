@@ -11,8 +11,9 @@ export const getInterfaceList = (params: {
   return request.get<ListResponse<ApiInterface>>('/interface/list', { params })
 }
 
-export const getInterfaceById = (id: number) => {
-  return request.get<ApiInterface>(`/interface/${id}`)
+export const getInterfaceById = async (id: number) => {
+  const response = await request.get<{ data: ApiInterface }>(`/interface/${id}`)
+  return response.data
 }
 
 export const getInterfacesByDataType = (dataTypeId: number) => {
@@ -48,13 +49,15 @@ export const updateInterfaceStatus = (id: number, status: 'active' | 'inactive')
 }
 
 // 获取接口调用统计
-export const getInterfaceStats = (id: number, params?: { startTime?: string; endTime?: string }) => {
-  return request.get<InterfaceStats>(`/interface/${id}/stats`, { params })
+export const getInterfaceStats = async (id: number, params?: { startTime?: string; endTime?: string }) => {
+  const response = await request.get<{ data: InterfaceStats }>(`/interface/${id}/stats`, { params })
+  return response.data
 }
 
 // 获取接口每日调用统计
-export const getInterfaceDailyStats = (id: number, params?: { startTime?: string; endTime?: string }) => {
-  return request.get<DailyStatItem[]>(`/interface/${id}/stats/daily`, { params })
+export const getInterfaceDailyStats = async (id: number, params?: { startTime?: string; endTime?: string }) => {
+  const response = await request.get<{ data: DailyStatItem[] }>(`/interface/${id}/stats/daily`, { params })
+  return response.data
 }
 
 // 接口统计信息

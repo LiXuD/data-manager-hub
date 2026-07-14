@@ -38,7 +38,7 @@ public interface BillingService extends IService<BillingDaily> {
     /**
      * 分页查询账单
      */
-    Page<BillingDaily> pageQuery(Long tenantId, LocalDate startDate, LocalDate endDate,
+    Page<BillingDaily> pageQuery(Long tenantId, Long vendorId, LocalDate startDate, LocalDate endDate,
                                   Integer page, Integer pageSize);
 
     /**

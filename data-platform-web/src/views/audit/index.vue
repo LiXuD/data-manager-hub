@@ -6,6 +6,7 @@
         <h2>操作日志</h2>
         <p class="header-desc">系统操作审计与日志查询</p>
       </div>
+      <el-button type="primary" :loading="exporting" @click="handleExport">导出日志</el-button>
     </div>
 
     <el-row :gutter="16" class="stats-row">
@@ -38,6 +39,7 @@
             range-separator="至"
             start-placeholder="开始时间"
             end-placeholder="结束时间"
+            value-format="YYYY-MM-DD HH:mm:ss"
             class="date-picker"
           />
         </div>
@@ -110,14 +112,30 @@
         />
       </div>
     </el-card>
+
+    <el-dialog v-model="detailVisible" title="操作日志详情" width="720px">
+      <el-descriptions v-if="detail" :column="2" border>
+        <el-descriptions-item label="操作人">{{ detail.username || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="状态">{{ getStatusTextLocalized(detail.status) }}</el-descriptions-item>
+        <el-descriptions-item label="模块">{{ detail.module || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="操作">{{ detail.operation || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="请求方法" :span="2">{{ detail.method || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="IP地址">{{ detail.ip || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="耗时">{{ detail.duration ?? 0 }}ms</el-descriptions-item>
+        <el-descriptions-item label="请求参数" :span="2"><pre>{{ detail.params || '-' }}</pre></el-descriptions-item>
+        <el-descriptions-item label="响应结果" :span="2"><pre>{{ detail.result || '-' }}</pre></el-descriptions-item>
+        <el-descriptions-item label="操作时间" :span="2">{{ detail.createdAt || '-' }}</el-descriptions-item>
+      </el-descriptions>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getLogList, getLogStats } from '@/api/log'
+import { useRoute } from 'vue-router'
+import { exportLogs, getLogById, getLogList, getLogStats } from '@/api/log'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
+import { extractPageData } from '@/utils/pagination'
 
 interface OperationLog {
   id: number
@@ -134,12 +152,16 @@ interface OperationLog {
 }
 
 const loading = ref(false)
+const route = useRoute()
+const exporting = ref(false)
 const tableData = ref<OperationLog[]>([])
+const detailVisible = ref(false)
+const detail = ref<OperationLog | null>(null)
 const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 
 const searchForm = reactive({
-  username: '',
+  username: typeof route.query.keyword === 'string' ? route.query.keyword : '',
   module: '',
   operation: '',
   dateRange: [] as string[]
@@ -165,7 +187,10 @@ const statsData = ref({
 
 const fetchStats = async () => {
   try {
-    const res = await getLogStats({})
+    const res = await getLogStats({
+      startTime: searchForm.dateRange[0],
+      endTime: searchForm.dateRange[1]
+    })
     if (res.data) {
       statsData.value = {
         totalCount: res.data.totalCount || 0,
@@ -185,16 +210,15 @@ const fetchList = async () => {
     const res = await getLogList({
       page: pagination.currentPage,
       pageSize: pagination.pageSize,
-      ...searchForm
+      keyword: searchForm.username || undefined,
+      module: searchForm.module || undefined,
+      operation: searchForm.operation || undefined,
+      startTime: searchForm.dateRange[0],
+      endTime: searchForm.dateRange[1]
     })
-    const data = res.data
-    if (data && 'records' in data && Array.isArray(data.records)) {
-      tableData.value = data.records
-      total.value = data.total || 0
-    } else if (Array.isArray(data)) {
-      tableData.value = data
-      total.value = res.total || 0
-    }
+    const page = extractPageData<OperationLog>(res)
+    tableData.value = page.list
+    total.value = page.total
   } catch {
     tableData.value = []
     total.value = 0
@@ -205,7 +229,7 @@ const fetchList = async () => {
 
 const handleSearch = () => {
   pagination.currentPage = 1
-  fetchList()
+  Promise.all([fetchStats(), fetchList()])
 }
 
 const handleReset = () => {
@@ -214,11 +238,33 @@ const handleReset = () => {
   searchForm.operation = ''
   searchForm.dateRange = []
   pagination.currentPage = 1
-  fetchList()
+  Promise.all([fetchStats(), fetchList()])
 }
 
-const handleViewDetail = (row: OperationLog) => {
-  ElMessage.info(`查看详情: ${row.operation}`)
+const handleViewDetail = async (row: OperationLog) => {
+  const response = await getLogById(row.id)
+  detail.value = response.data as OperationLog
+  detailVisible.value = true
+}
+
+const handleExport = async () => {
+  exporting.value = true
+  try {
+    const blob = await exportLogs({
+      module: searchForm.module || undefined,
+      operation: searchForm.operation || undefined,
+      startTime: searchForm.dateRange[0],
+      endTime: searchForm.dateRange[1]
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `operation-logs-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  } finally {
+    exporting.value = false
+  }
 }
 
 const getStatusType = (status: string) => getTagType('enabled', status)

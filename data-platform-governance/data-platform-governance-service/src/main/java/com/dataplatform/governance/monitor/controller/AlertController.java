@@ -100,6 +100,24 @@ public class AlertController {
         return ResponseEntity.ok(Result.success(alertService.getRuleById(id)));
     }
 
+    @OperationLog(module = "告警规则管理", operation = "更新告警规则状态")
+    @PatchMapping("/rule/{id}/status")
+    public ResponseEntity<Result<Void>> updateRuleStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        AlertRule rule = alertService.getRuleById(id);
+        if (rule == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "告警规则不存在"));
+        }
+        try {
+            rule.setStatus(AlertStatus.fromCode(body.get("status")));
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "无效的状态值"));
+        }
+        alertService.updateRule(rule);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
     @OperationLog(module = "告警规则管理", operation = "删除告警规则")
     @DeleteMapping("/rule/{id}")
     public ResponseEntity<Result<Void>> deleteRule(@PathVariable Long id) {
@@ -122,6 +140,16 @@ public class AlertController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
         return alertService.listRecords(status, level, page, pageSize);
+    }
+
+    @GetMapping("/record/{id}")
+    public ResponseEntity<Result<AlertRecord>> getRecordById(@PathVariable Long id) {
+        AlertRecord record = alertService.getRecordById(id);
+        if (record == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "告警记录不存在"));
+        }
+        return ResponseEntity.ok(Result.success(record));
     }
 
     @OperationLog(module = "告警记录管理", operation = "处理告警")

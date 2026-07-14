@@ -127,6 +127,7 @@ import type { GrayRule } from '@/api/graylog'
 import { GRAY_RULE_STATUS_OPTIONS, GRAY_RULE_STATUS } from '@/constants'
 import { getStatusText } from '@/utils/status'
 import GrayRuleForm from './components/GrayRuleForm.vue'
+import { extractPageData } from '@/utils/pagination'
 
 const loading = ref(false)
 const tableData = ref<GrayRule[]>([])
@@ -151,14 +152,9 @@ const fetchList = async () => {
       pageSize: pagination.pageSize,
       ...searchForm
     })
-    const data = res.data
-    if (data && 'records' in data && Array.isArray(data.records)) {
-      tableData.value = data.records
-      total.value = data.total || 0
-    } else if (Array.isArray(data)) {
-      tableData.value = data
-      total.value = res.total || 0
-    }
+    const page = extractPageData<GrayRule>(res)
+    tableData.value = page.list
+    total.value = page.total
   } catch {
     tableData.value = []
     total.value = 0

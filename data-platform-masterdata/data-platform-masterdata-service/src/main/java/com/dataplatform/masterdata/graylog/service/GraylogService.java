@@ -33,7 +33,7 @@ public class GraylogService extends ServiceImpl<GrayRuleMapper, GrayRule> {
         Page<GrayRule> result = this.page(new Page<>(page, pageSize), wrapper);
 
         PageResult<GrayRule> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());

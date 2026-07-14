@@ -30,11 +30,11 @@ export const resetPassword = (id: number, newPassword: string) => {
 }
 
 export const getUserRoles = (userId: number) => {
-  return request.get<{ data: Role[] }>(`/user/${userId}/roles`)
+  return request.get<{ code: number; msg: string; data: number[] }>(`/user/${userId}/roles`)
 }
 
 export const assignUserRoles = (userId: number, roleIds: number[]) => {
-  return request.post<void>(`/user/${userId}/roles`, { roleIds })
+  return request.post<void>(`/user/${userId}/roles`, roleIds)
 }
 
 export const getRoleList = (params: PageParams) => {
@@ -42,11 +42,11 @@ export const getRoleList = (params: PageParams) => {
 }
 
 export const getUserCallers = (userId: number) => {
-  return request.get<{ data: CallerDTO[] }>(`/user/${userId}/callers`)
+  return request.get<{ code: number; msg: string; data: number[] }>(`/user/${userId}/callers`)
 }
 
 export const assignUserCallers = (userId: number, callerIds: number[]) => {
-  return request.post<void>(`/user/${userId}/callers`, { callerIds })
+  return request.post<void>(`/user/${userId}/callers`, callerIds)
 }
 
 export const getCallerList = (params: PageParams) => {

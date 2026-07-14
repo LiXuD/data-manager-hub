@@ -43,7 +43,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper, VendorInfo> imp
         List<VendorInfo> records = result.getRecords();
         
         PageResult<VendorInfo> pageResult = new PageResult<>();
-        pageResult.setCode(0);
+        pageResult.setCode(200);
         pageResult.setMessage("success");
         pageResult.setData(records);
         pageResult.setTotal(Long.valueOf(result.getTotal()));

@@ -36,7 +36,7 @@ public class TenantController {
         Page<TenantInfo> pageResult = tenantService.listPage(page, pageSize, keyword, status);
 
         PageResult<TenantInfo> result = new PageResult<>();
-        result.setCode(0);
+        result.setCode(200);
         result.setMessage("success");
         result.setData(pageResult.getRecords());
         result.setTotal(pageResult.getTotal());

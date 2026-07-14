@@ -38,7 +38,7 @@ public class Result<T> implements Serializable {
 
     public static <T> Result<T> success(T data) {
         Result<T> result = new Result<>();
-        result.setCode(0);
+        result.setCode(200);
         result.setMessage("success");
         result.setData(data);
         return result;

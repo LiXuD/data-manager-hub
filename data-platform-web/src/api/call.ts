@@ -62,5 +62,5 @@ export const exportCallRecords = (params: {
   startTime?: string
   endTime?: string
 }) => {
-  return request.get<void>('/call-record/export', { params })
+  return request.get<Blob>('/call-record/export', { params, responseType: 'blob' })
 }

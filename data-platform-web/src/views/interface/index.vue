@@ -166,6 +166,7 @@ import InterfaceForm from './components/InterfaceForm.vue'
 import VendorInterfaceConfig from './components/VendorInterfaceConfig.vue'
 import InterfaceStats from './components/InterfaceStats.vue'
 import { COMMON_STATUS } from '@/constants'
+import { extractPageData } from '@/utils/pagination'
 
 const cacheStore = useCacheStore()
 
@@ -223,23 +224,9 @@ const loadData = async () => {
       status: searchForm.status as typeof COMMON_STATUS.ACTIVE | typeof COMMON_STATUS.INACTIVE | undefined
     }
     const res = await getInterfaceList(params)
-    // 处理不同格式的响应
-    let list: ApiInterface[] = []
-    if (res) {
-      const data = (res as any).data
-      const records = (res as any).records
-      if (Array.isArray(data)) {
-        list = data
-      } else if (data && Array.isArray(data.records)) {
-        list = data.records
-      } else if (Array.isArray(records)) {
-        list = records
-      } else if (Array.isArray(res)) {
-        list = res
-      }
-    }
-    tableData.value = list
-    pagination.total = res.total || 0
+    const page = extractPageData<ApiInterface>(res)
+    tableData.value = page.list
+    pagination.total = page.total
   } catch (error) {
     console.error('加载失败:', error)
     ElMessage.error('加载数据失败，请稍后重试')

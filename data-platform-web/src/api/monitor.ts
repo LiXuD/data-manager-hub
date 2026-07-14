@@ -33,6 +33,30 @@ export const getAlertRecord = (id: number) => {
   return request.get<AlertRecord>(`/alert/record/${id}`)
 }
 
-export const resolveAlertRecord = (id: number, resolution?: string) => {
-  return request.patch<void>(`/alert/record/${id}/resolve`, { resolution })
+export const resolveAlertRecord = (id: number, resolution: string) => {
+  return request.post<void>(`/alert/record/${id}/resolve`, { resolution })
+}
+
+export interface ServiceHealth {
+  serviceName: string
+  status: 'healthy' | 'unhealthy' | 'unknown'
+  responseTime: number
+  uptime: number
+  instanceCount: number
+  lastCheck: string
+}
+
+export interface HealthStats {
+  totalServices: number
+  healthyCount: number
+  unhealthyCount: number
+  avgResponseTime: number
+}
+
+export const getServiceHealth = (params?: { serviceName?: string; status?: string }) => {
+  return request.get<{ data: { list: ServiceHealth[]; stats: HealthStats } }>('/alert/health/list', { params })
+}
+
+export const checkServiceHealth = (serviceName: string) => {
+  return request.post<{ data: ServiceHealth }>(`/alert/health/${encodeURIComponent(serviceName)}/check`)
 }

@@ -17,12 +17,12 @@ export const getLogById = (id: number) => {
 }
 
 export const exportLogs = (params: {
-  startTime: string
-  endTime: string
+  startTime?: string
+  endTime?: string
   module?: string
   operation?: string
 }) => {
-  return request.get<void>('/log/export', { params })
+  return request.get<Blob>('/log/export', { params, responseType: 'blob' })
 }
 
 export const getLogStats = (params: { startTime?: string; endTime?: string }) => {

@@ -13,6 +13,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 观测治理域操作日志的 Log Service。
@@ -36,18 +40,53 @@ public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> im
         if (StringUtils.hasText(operation)) {
             wrapper.like(OperationLog::getOperation, operation);
         }
+        applyTimeRange(wrapper, startTime, endTime);
         wrapper.orderByDesc(OperationLog::getCreatedAt);
 
         Page<OperationLog> result = this.page(new Page<>(page, pageSize), wrapper);
 
         PageResult<OperationLog> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());
         response.setPage(page);
         response.setPageSize(pageSize);
         return response;
+    }
+
+    public Map<String, Object> stats(String startTime, String endTime) {
+        LambdaQueryWrapper<OperationLog> wrapper = new LambdaQueryWrapper<>();
+        applyTimeRange(wrapper, startTime, endTime);
+        List<OperationLog> logs = list(wrapper);
+
+        long successCount = logs.stream().filter(log -> "success".equalsIgnoreCase(log.getStatus())).count();
+        long failCount = logs.size() - successCount;
+        double avgDuration = logs.stream()
+                .filter(log -> log.getDuration() != null)
+                .mapToInt(OperationLog::getDuration)
+                .average()
+                .orElse(0D);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("totalCount", logs.size());
+        result.put("successCount", successCount);
+        result.put("failCount", failCount);
+        result.put("avgDuration", Math.round(avgDuration));
+        return result;
+    }
+
+    public List<OperationLog> export(String module, String operation, String startTime, String endTime) {
+        LambdaQueryWrapper<OperationLog> wrapper = new LambdaQueryWrapper<>();
+        if (StringUtils.hasText(module)) {
+            wrapper.eq(OperationLog::getModule, module);
+        }
+        if (StringUtils.hasText(operation)) {
+            wrapper.like(OperationLog::getOperation, operation);
+        }
+        applyTimeRange(wrapper, startTime, endTime);
+        wrapper.orderByDesc(OperationLog::getCreatedAt);
+        return list(wrapper);
     }
 
     public void saveLog(OperationLog log) {
@@ -86,5 +125,15 @@ public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> im
 
     private String limit(String value, int maxLength) {
         return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
+
+    private void applyTimeRange(LambdaQueryWrapper<OperationLog> wrapper, String startTime, String endTime) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        if (StringUtils.hasText(startTime)) {
+            wrapper.ge(OperationLog::getCreatedAt, LocalDateTime.parse(startTime, formatter));
+        }
+        if (StringUtils.hasText(endTime)) {
+            wrapper.le(OperationLog::getCreatedAt, LocalDateTime.parse(endTime, formatter));
+        }
     }
 }

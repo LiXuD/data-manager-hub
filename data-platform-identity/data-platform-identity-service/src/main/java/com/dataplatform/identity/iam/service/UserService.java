@@ -32,7 +32,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         Page<User> result = this.page(new Page<>(page, pageSize), wrapper);
 
         PageResult<User> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());
