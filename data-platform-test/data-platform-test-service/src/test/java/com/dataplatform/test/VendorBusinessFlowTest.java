@@ -83,7 +83,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(3)
     @DisplayName("链路1-3: 查询数据类型详情 → 验证创建数据一致")
     void testDataTypeDetail() {
-        Assumptions.assumeTrue(testDataTypeId != null, "需要测试数据类型ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testDataTypeId != null, "需要测试数据类型ID");
 
         Response response = getAuthRequest()
             .when()
@@ -101,7 +101,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(4)
     @DisplayName("链路1-4: 更新数据类型 → 验证修改生效")
     void testUpdateDataType() {
-        Assumptions.assumeTrue(testDataTypeId != null, "需要测试数据类型ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testDataTypeId != null, "需要测试数据类型ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("dataTypeName", "更新后的业务链路测试数据类型");
@@ -127,7 +127,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(5)
     @DisplayName("链路1-5: 数据类型状态切换 → active/inactive")
     void testDataTypeStatusToggle() {
-        Assumptions.assumeTrue(testDataTypeId != null, "需要测试数据类型ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testDataTypeId != null, "需要测试数据类型ID");
 
         // 切换为 inactive
         Response inactiveResponse = getAuthRequest()
@@ -194,7 +194,7 @@ public class VendorBusinessFlowTest extends BaseTest {
 
         String existingCode = listResponse.jsonPath().getString("data[0].vendorCode");
         if (existingCode == null) {
-            Assumptions.assumeTrue(false, "没有已有厂商数据，跳过重复代码测试");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "没有已有厂商数据，跳过重复代码测试");
             return;
         }
 
@@ -216,7 +216,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(12)
     @DisplayName("链路2-3: 查询厂商详情 → 验证创建数据一致")
     void testVendorDetail() {
-        Assumptions.assumeTrue(testVendorId != null, "需要测试厂商ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorId != null, "需要测试厂商ID");
 
         Response response = getAuthRequest()
             .when()
@@ -235,7 +235,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(13)
     @DisplayName("链路2-4: 更新厂商 → 验证修改生效")
     void testUpdateVendor() {
-        Assumptions.assumeTrue(testVendorId != null, "需要测试厂商ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorId != null, "需要测试厂商ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("vendorName", "更新后的业务链路测试厂商");
@@ -264,7 +264,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(14)
     @DisplayName("链路2-5: 厂商状态切换 → active/inactive/suspended")
     void testVendorStatusToggle() {
-        Assumptions.assumeTrue(testVendorId != null, "需要测试厂商ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorId != null, "需要测试厂商ID");
 
         // 切换为 inactive
         Response inactiveResp = getAuthRequest()
@@ -299,8 +299,8 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(20)
     @DisplayName("链路3-1: 创建厂商配置 → 提取ID（依赖厂商+数据类型）")
     void testCreateVendorConfig() {
-        Assumptions.assumeTrue(testVendorId != null, "需要测试厂商ID");
-        Assumptions.assumeTrue(testDataTypeId != null, "需要测试数据类型ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorId != null, "需要测试厂商ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testDataTypeId != null, "需要测试数据类型ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("vendorId", testVendorId);
@@ -319,16 +319,12 @@ public class VendorBusinessFlowTest extends BaseTest {
             .when()
             .post("/vendor/config");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             testVendorConfigId = extractId(response);
             Assertions.assertNotNull(testVendorConfigId, "厂商配置创建成功后应返回ID");
             registerDeleteById("/vendor/config/{id}", testVendorConfigId);
             log.info("厂商配置创建成功, ID: {}", testVendorConfigId);
-        } else {
-            // 记录错误信息，便于诊断
-            log.warn("厂商配置创建失败, status: {}, body: {}", response.getStatusCode(), response.getBody().asString());
-            // 不直接失败，可能需要额外的前置数据
-            Assumptions.assumeTrue(false, "厂商配置创建失败，跳过后续配置相关测试");
         }
     }
 
@@ -336,7 +332,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(21)
     @DisplayName("链路3-2: 查询厂商配置详情 → 验证创建数据一致")
     void testVendorConfigDetail() {
-        Assumptions.assumeTrue(testVendorConfigId != null, "需要测试厂商配置ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorConfigId != null, "需要测试厂商配置ID");
 
         Response response = getAuthRequest()
             .when()
@@ -354,7 +350,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(22)
     @DisplayName("链路3-3: 更新厂商配置 → 验证修改生效")
     void testUpdateVendorConfig() {
-        Assumptions.assumeTrue(testVendorConfigId != null, "需要测试厂商配置ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorConfigId != null, "需要测试厂商配置ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("apiUrl", "https://api.test.example.com/updated");
@@ -381,7 +377,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(23)
     @DisplayName("链路3-4: 厂商配置状态切换 → active/inactive")
     void testVendorConfigStatusToggle() {
-        Assumptions.assumeTrue(testVendorConfigId != null, "需要测试厂商配置ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorConfigId != null, "需要测试厂商配置ID");
 
         // 切换为 inactive
         Response inactiveResp = getAuthRequest()
@@ -408,7 +404,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(30)
     @DisplayName("链路4-1: 创建扩展配置 → 提取ID（依赖厂商）")
     void testCreateExtendedConfig() {
-        Assumptions.assumeTrue(testVendorId != null, "需要测试厂商ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorId != null, "需要测试厂商ID");
 
         String configKey = "ext_key_" + System.currentTimeMillis();
 
@@ -424,13 +420,12 @@ public class VendorBusinessFlowTest extends BaseTest {
             .when()
             .post("/vendor/extended-config");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             testExtendedConfigId = extractId(response);
             Assertions.assertNotNull(testExtendedConfigId, "扩展配置创建成功后应返回ID");
             registerDeleteById("/vendor/extended-config/{id}", testExtendedConfigId);
             log.info("扩展配置创建成功, ID: {}", testExtendedConfigId);
-        } else {
-            Assumptions.assumeTrue(false, "扩展配置创建失败，跳过后续扩展配置测试");
         }
     }
 
@@ -438,13 +433,14 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(31)
     @DisplayName("链路4-2: 查询扩展配置列表 → 按厂商过滤")
     void testExtendedConfigListByVendor() {
-        Assumptions.assumeTrue(testVendorId != null, "需要测试厂商ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorId != null, "需要测试厂商ID");
 
         Response response = getAuthRequest()
             .when()
             .get("/vendor/extended-config/vendor/" + testVendorId);
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
 
@@ -455,7 +451,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(32)
     @DisplayName("链路4-3: 更新扩展配置 → 验证修改生效")
     void testUpdateExtendedConfig() {
-        Assumptions.assumeTrue(testExtendedConfigId != null, "需要测试扩展配置ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testExtendedConfigId != null, "需要测试扩展配置ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("configValue", "updated_test_value");
@@ -466,7 +462,8 @@ public class VendorBusinessFlowTest extends BaseTest {
             .when()
             .put("/vendor/extended-config/" + testExtendedConfigId);
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
             log.info("扩展配置更新验证通过");
         }
@@ -508,13 +505,14 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(42)
     @DisplayName("链路5-3: 查询厂商配置列表 → 按厂商过滤")
     void testVerifyVendorConfigByVendor() {
-        Assumptions.assumeTrue(testVendorId != null, "需要测试厂商ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorId != null, "需要测试厂商ID");
 
         Response response = getAuthRequest()
             .when()
             .get("/vendor/config/vendor/" + testVendorId);
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
 
@@ -553,15 +551,14 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(50)
     @DisplayName("链路6-1: 删除扩展配置 → 验证已删除")
     void testDeleteExtendedConfig() {
-        Assumptions.assumeTrue(testExtendedConfigId != null, "没有需要删除的扩展配置");
+        org.junit.jupiter.api.Assertions.assertTrue(testExtendedConfigId != null, "没有需要删除的扩展配置");
 
         Response response = getAuthRequest()
             .when()
             .delete("/vendor/extended-config/" + testExtendedConfigId);
 
-        if (response.getStatusCode() == 200 || response.getStatusCode() == 204) {
-            log.info("扩展配置删除成功, ID: {}", testExtendedConfigId);
-        }
+        response.then().statusCode(anyOf(is(200), is(204)));
+        log.info("扩展配置删除成功, ID: {}", testExtendedConfigId);
 
         testExtendedConfigId = null; // 标记已删除，避免 cleanup 重复删除
     }
@@ -570,15 +567,14 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(51)
     @DisplayName("链路6-2: 删除厂商配置 → 验证已删除")
     void testDeleteVendorConfig() {
-        Assumptions.assumeTrue(testVendorConfigId != null, "没有需要删除的厂商配置");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorConfigId != null, "没有需要删除的厂商配置");
 
         Response response = getAuthRequest()
             .when()
             .delete("/vendor/config/" + testVendorConfigId);
 
-        if (response.getStatusCode() == 200 || response.getStatusCode() == 204) {
-            log.info("厂商配置删除成功, ID: {}", testVendorConfigId);
-        }
+        response.then().statusCode(anyOf(is(200), is(204)));
+        log.info("厂商配置删除成功, ID: {}", testVendorConfigId);
 
         testVendorConfigId = null;
     }
@@ -587,22 +583,19 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(52)
     @DisplayName("链路6-3: 删除厂商 → 验证已删除")
     void testDeleteVendor() {
-        Assumptions.assumeTrue(testVendorId != null, "没有需要删除的厂商");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorId != null, "没有需要删除的厂商");
 
         Response response = getAuthRequest()
             .when()
             .delete("/vendor/" + testVendorId);
 
-        if (response.getStatusCode() == 200 || response.getStatusCode() == 204) {
-            log.info("厂商删除成功, ID: {}", testVendorId);
+        response.then().statusCode(anyOf(is(200), is(204)));
+        log.info("厂商删除成功, ID: {}", testVendorId);
 
-            // 验证已删除
-            Response checkResponse = getAuthRequest()
-                .when()
-                .get("/vendor/" + testVendorId);
-
-            checkResponse.then().statusCode(anyOf(is(404), is(400)));
-        }
+        Response checkResponse = getAuthRequest()
+            .when()
+            .get("/vendor/" + testVendorId);
+        checkResponse.then().statusCode(anyOf(is(404), is(400)));
 
         testVendorId = null;
     }
@@ -611,27 +604,19 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(53)
     @DisplayName("链路6-4: 删除数据类型 → 验证已删除")
     void testDeleteDataType() {
-        Assumptions.assumeTrue(testDataTypeId != null, "没有需要删除的数据类型");
+        org.junit.jupiter.api.Assertions.assertTrue(testDataTypeId != null, "没有需要删除的数据类型");
 
         Response response = getAuthRequest()
             .when()
             .delete("/datatype/" + testDataTypeId);
 
-        if (response.getStatusCode() == 200 || response.getStatusCode() == 204) {
-            log.info("数据类型删除成功, ID: {}", testDataTypeId);
+        response.then().statusCode(anyOf(is(200), is(204)));
+        log.info("数据类型删除成功, ID: {}", testDataTypeId);
 
-            // 验证已删除（接受 404/400 或仍然 200 — MyBatis-Plus @TableLogic 行为差异）
-            Response checkResponse = getAuthRequest()
-                .when()
-                .get("/datatype/" + testDataTypeId);
-
-            int checkStatus = checkResponse.getStatusCode();
-            if (checkStatus == 404 || checkStatus == 400) {
-                log.info("数据类型已确认删除 ({}返回)", checkStatus);
-            } else {
-                log.warn("数据类型删除后仍可查询 (status={})，可能是 @TableLogic 缓存问题", checkStatus);
-            }
-        }
+        Response checkResponse = getAuthRequest()
+            .when()
+            .get("/datatype/" + testDataTypeId);
+        checkResponse.then().statusCode(anyOf(is(404), is(400)));
 
         testDataTypeId = null;
     }
@@ -720,7 +705,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @Order(66)
     @DisplayName("边界-7: 状态值无效 → 验证400")
     void testVendorStatusInvalid() {
-        Assumptions.assumeTrue(testVendorId != null, "需要测试厂商ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testVendorId != null, "需要测试厂商ID");
 
         Response response = getAuthRequest()
             .body(Map.of("status", "invalid_status"))

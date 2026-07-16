@@ -146,35 +146,27 @@ public class AuditBusinessFlowTest extends BaseTest {
             .when()
             .post("/vendor");
 
-        if (createResp.getStatusCode() == 200) {
-            Long vendorId = extractId(createResp);
-            if (vendorId != null) {
-                // 删除临时厂商
-                getAuthRequest()
-                    .when()
-                    .delete("/vendor/" + vendorId);
+        verifySuccess(createResp);
+        Long vendorId = extractId(createResp);
+        Assertions.assertNotNull(vendorId, "临时厂商创建后应返回ID");
+        getAuthRequest().when().delete("/vendor/" + vendorId).then().statusCode(200);
 
-                // 等待异步日志写入
-                try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
-
-                // 再查日志，总数应该增加了
-                Response afterResp = getAuthRequest()
-                    .queryParam("page", 1)
-                    .queryParam("pageSize", 1)
-                    .when()
-                    .get("/log/list");
-
-                verifySuccess(afterResp);
-                int afterTotal = afterResp.jsonPath().getInt("total");
-
-                // 用 assumeTrue 而非 assertTrue，异步日志可能延迟
-                Assumptions.assumeTrue(afterTotal > beforeTotal,
-                    "操作后日志总数应增加（异步日志可能延迟）: before=" + beforeTotal + ", after=" + afterTotal);
-                log.info("操作日志联动验证通过: before={}, after={}", beforeTotal, afterTotal);
-            }
-        } else {
-            log.info("厂商创建失败，跳过联动验证");
+        try { Thread.sleep(2000); } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            Assertions.fail("等待异步日志时被中断", exception);
         }
+
+        Response afterResp = getAuthRequest()
+            .queryParam("page", 1)
+            .queryParam("pageSize", 1)
+            .when()
+            .get("/log/list");
+
+        verifySuccess(afterResp);
+        int afterTotal = afterResp.jsonPath().getInt("total");
+        org.junit.jupiter.api.Assertions.assertTrue(afterTotal > beforeTotal,
+            "操作后日志总数应增加: before=" + beforeTotal + ", after=" + afterTotal);
+        log.info("操作日志联动验证通过: before={}, after={}", beforeTotal, afterTotal);
     }
 
     // ==================== 链路5：边界测试 ====================

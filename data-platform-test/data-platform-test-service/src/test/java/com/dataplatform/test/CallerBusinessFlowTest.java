@@ -72,7 +72,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     @Order(3)
     @DisplayName("链路1-3: 创建重复 callerCode → 验证409冲突")
     void testCreateCallerDuplicateCode() {
-        Assumptions.assumeTrue(testCallerId != null, "需要测试调用方ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testCallerId != null, "需要测试调用方ID");
 
         // 获取已有调用方的 code
         Response detail = getAuthRequest()
@@ -80,7 +80,7 @@ public class CallerBusinessFlowTest extends BaseTest {
             .get("/caller/" + testCallerId);
 
         String existingCode = detail.jsonPath().getString("data.callerCode");
-        Assumptions.assumeTrue(existingCode != null, "需要已有调用方代码");
+        org.junit.jupiter.api.Assertions.assertTrue(existingCode != null, "需要已有调用方代码");
 
         Map<String, Object> data = new HashMap<>();
         data.put("callerCode", existingCode);
@@ -101,7 +101,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     @Order(4)
     @DisplayName("链路2-1: 查询调用方详情 → 验证创建数据一致")
     void testCallerDetail() {
-        Assumptions.assumeTrue(testCallerId != null, "需要测试调用方ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testCallerId != null, "需要测试调用方ID");
 
         Response response = getAuthRequest()
             .when()
@@ -134,7 +134,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     @Order(6)
     @DisplayName("链路3-1: 更新调用方信息")
     void testUpdateCaller() {
-        Assumptions.assumeTrue(testCallerId != null, "需要测试调用方ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testCallerId != null, "需要测试调用方ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("callerName", "更新后的业务链路测试调用方");
@@ -165,7 +165,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     @Order(8)
     @DisplayName("链路4-1: 切换调用方状态 inactive → active")
     void testCallerStatusToggle() {
-        Assumptions.assumeTrue(testCallerId != null, "需要测试调用方ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testCallerId != null, "需要测试调用方ID");
 
         // 切换为 inactive
         Response inactiveResp = getAuthRequest()
@@ -192,7 +192,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     @Order(10)
     @DisplayName("链路5-1: 创建 API Key → 提取ID")
     void testCreateApiKey() {
-        Assumptions.assumeTrue(testCallerId != null, "需要测试调用方ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testCallerId != null, "需要测试调用方ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("name", uniqueId("测试API密钥"));
@@ -214,7 +214,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     @Order(11)
     @DisplayName("链路5-2: 创建 API Key 缺少 name → 验证400")
     void testCreateApiKeyMissingName() {
-        Assumptions.assumeTrue(testCallerId != null, "需要测试调用方ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testCallerId != null, "需要测试调用方ID");
 
         Map<String, Object> data = new HashMap<>();
 
@@ -233,7 +233,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     @Order(13)
     @DisplayName("链路6-1: 切换 API Key 状态 expired → active")
     void testApiKeyStatusToggle() {
-        Assumptions.assumeTrue(testApiKeyId != null, "需要测试API Key ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testApiKeyId != null, "需要测试API Key ID");
 
         // 切换为 expired
         Response expiredResp = getAuthRequest()
@@ -268,7 +268,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     @Order(17)
     @DisplayName("链路7-1: 删除调用方 → 验证已删除")
     void testDeleteCaller() {
-        Assumptions.assumeTrue(testCallerId != null, "需要测试调用方ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testCallerId != null, "需要测试调用方ID");
 
         Response response = getAuthRequest()
             .when()
@@ -281,12 +281,7 @@ public class CallerBusinessFlowTest extends BaseTest {
             .when()
             .get("/caller/" + testCallerId);
 
-        int status = check.getStatusCode();
-        if (status == 404 || status == 400) {
-            log.info("调用方已确认删除 ({}返回)", status);
-        } else {
-            log.warn("调用方删除后仍可查询 (status={})", status);
-        }
+        check.then().statusCode(anyOf(is(404), is(400)));
 
         testCallerId = null;
         testApiKeyId = null;
@@ -357,7 +352,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     @DisplayName("边界-5: 修改API Key状态为无效值 → 验证400")
     void testApiKeyStatusInvalid() {
         // 需要一个存在的 API Key 来测试
-        Assumptions.assumeTrue(testApiKeyId != null, "需要测试API Key ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testApiKeyId != null, "需要测试API Key ID");
 
         Response response = getAuthRequest()
             .body(Map.of("status", "invalid_status"))

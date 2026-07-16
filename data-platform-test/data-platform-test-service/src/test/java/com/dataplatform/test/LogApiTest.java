@@ -92,13 +92,11 @@ public class LogApiTest extends BaseTest {
             .when()
             .get("/log/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
             response.then()
                 .body("data", notNullValue());
-        } else {
-            response.then()
-                .statusCode(anyOf(is(404), is(400)));
         }
     }
 

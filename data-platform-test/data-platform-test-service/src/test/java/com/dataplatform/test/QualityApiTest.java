@@ -37,7 +37,8 @@ public class QualityApiTest extends BaseTest {
             .when()
             .post("/quality/rules");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
             Integer id = response.jsonPath().getInt("data.id");
             if (id != null) {
@@ -75,7 +76,8 @@ public class QualityApiTest extends BaseTest {
             .when()
             .get("/quality/rules");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -102,10 +104,12 @@ public class QualityApiTest extends BaseTest {
         Response response = getAuthRequest()
             .queryParam("dataType", "USER")
             .queryParam("dataId", 1)
+            .body(Map.of("id", 1))
             .when()
             .post("/quality/check");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -137,7 +141,8 @@ public class QualityApiTest extends BaseTest {
             .when()
             .get("/quality/history");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }

@@ -67,10 +67,9 @@ public class VendorApiTest extends BaseTest {
             .when()
             .get("/vendor/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then().statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -154,7 +153,7 @@ public class VendorApiTest extends BaseTest {
     @Order(8)
     public void testUpdateVendor_Success() {
         if (testVendorId == null) {
-            Assumptions.assumeTrue(false, "No test vendor to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test vendor to update");
             return;
         }
 
@@ -176,7 +175,7 @@ public class VendorApiTest extends BaseTest {
     @Order(9)
     public void testDeleteVendor_Success() {
         if (testVendorId == null) {
-            Assumptions.assumeTrue(false, "No test vendor to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test vendor to delete");
             return;
         }
 
@@ -198,7 +197,8 @@ public class VendorApiTest extends BaseTest {
             .when()
             .patch("/vendor/1/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -213,7 +213,8 @@ public class VendorApiTest extends BaseTest {
             .when()
             .post("/vendor/1/test");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -258,10 +259,9 @@ public class VendorApiTest extends BaseTest {
             .when()
             .get("/datatype/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then().statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -344,7 +344,7 @@ public class VendorApiTest extends BaseTest {
     @Order(27)
     public void testUpdateDataType_Success() {
         if (testDataTypeId == null) {
-            Assumptions.assumeTrue(false, "No test datatype to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test datatype to update");
             return;
         }
 
@@ -366,7 +366,7 @@ public class VendorApiTest extends BaseTest {
     @Order(28)
     public void testDeleteDataType_Success() {
         if (testDataTypeId == null) {
-            Assumptions.assumeTrue(false, "No test datatype to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test datatype to delete");
             return;
         }
 
@@ -388,7 +388,8 @@ public class VendorApiTest extends BaseTest {
             .when()
             .patch("/datatype/1/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -433,10 +434,9 @@ public class VendorApiTest extends BaseTest {
             .when()
             .get("/config/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then().statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -503,7 +503,7 @@ public class VendorApiTest extends BaseTest {
     @Order(46)
     public void testUpdateConfig_Success() {
         if (testConfigId == null) {
-            Assumptions.assumeTrue(false, "No test config to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test config to update");
             return;
         }
 
@@ -525,7 +525,7 @@ public class VendorApiTest extends BaseTest {
     @Order(47)
     public void testDeleteConfig_Success() {
         if (testConfigId == null) {
-            Assumptions.assumeTrue(false, "No test config to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test config to delete");
             return;
         }
 
@@ -560,7 +560,8 @@ public class VendorApiTest extends BaseTest {
             .when()
             .patch("/config/1/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }

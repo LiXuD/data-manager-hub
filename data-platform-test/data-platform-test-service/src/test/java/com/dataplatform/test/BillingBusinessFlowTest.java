@@ -102,7 +102,7 @@ public class BillingBusinessFlowTest extends BaseTest {
     @Order(5)
     @DisplayName("链路1-5: 更新计费规则 → 验证修改生效")
     void testUpdateBillingRule() {
-        Assumptions.assumeTrue(testBillingRuleId != null, "需要测试计费规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testBillingRuleId != null, "需要测试计费规则ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("ruleName", uniqueId("RULE_UPDATED"));
@@ -121,7 +121,7 @@ public class BillingBusinessFlowTest extends BaseTest {
     @Order(6)
     @DisplayName("链路1-6: 删除计费规则 → 验证已删除")
     void testDeleteBillingRule() {
-        Assumptions.assumeTrue(testBillingRuleId != null, "没有需要删除的计费规则");
+        org.junit.jupiter.api.Assertions.assertTrue(testBillingRuleId != null, "没有需要删除的计费规则");
 
         Response response = getAuthRequest()
             .when()

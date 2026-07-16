@@ -54,7 +54,8 @@ public class TenantApiTest extends BaseTest {
             .when()
             .get("/tenant/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -142,7 +143,7 @@ public class TenantApiTest extends BaseTest {
     @Order(8)
     public void testUpdateTenant_Success() {
         if (testTenantId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test tenant to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test tenant to update");
             return;
         }
 
@@ -182,7 +183,7 @@ public class TenantApiTest extends BaseTest {
     @Order(10)
     public void testDeleteTenant_Success() {
         if (testTenantId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test tenant to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test tenant to delete");
             return;
         }
 
@@ -219,7 +220,8 @@ public class TenantApiTest extends BaseTest {
             .when()
             .patch("/tenant/1/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }

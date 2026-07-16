@@ -77,13 +77,11 @@ public class MonitorApiTest extends BaseTest {
             .when()
             .get("/alert/rule/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
             response.then()
                 .body("data", notNullValue());
-        } else {
-            response.then()
-                .statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -113,6 +111,7 @@ public class MonitorApiTest extends BaseTest {
         data.put("threshold", 80);
         data.put("condition", "gt");
         data.put("level", "warning");
+        data.put("ruleType", "THRESHOLD");
 
         Response response = getAuthRequest()
             .body(data)
@@ -152,7 +151,7 @@ public class MonitorApiTest extends BaseTest {
     @Order(8)
     public void testUpdateAlertRule_Success() {
         if (testRuleId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test rule to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test rule to update");
             return;
         }
 
@@ -192,7 +191,7 @@ public class MonitorApiTest extends BaseTest {
     @Order(10)
     public void testDeleteAlertRule_Success() {
         if (testRuleId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test rule to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test rule to delete");
             return;
         }
 
@@ -265,11 +264,9 @@ public class MonitorApiTest extends BaseTest {
             .when()
             .post("/alert/record/1/resolve");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then()
-                .statusCode(anyOf(is(404), is(400), is(500)));
         }
     }
 

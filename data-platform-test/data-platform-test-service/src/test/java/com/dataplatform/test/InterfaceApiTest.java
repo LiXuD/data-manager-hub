@@ -103,7 +103,7 @@ public class InterfaceApiTest extends BaseTest {
     @DisplayName("获取接口详情 - 成功")
     public void testGetInterfaceById_Success() {
         if (testInterfaceId == null) {
-            Assumptions.assumeTrue(false, "No test interface created");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test interface created");
             return;
         }
 
@@ -130,7 +130,7 @@ public class InterfaceApiTest extends BaseTest {
     @DisplayName("更新接口 - 成功")
     public void testUpdateInterface_Success() {
         if (testInterfaceId == null) {
-            Assumptions.assumeTrue(false, "No test interface to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test interface to update");
             return;
         }
 
@@ -150,7 +150,7 @@ public class InterfaceApiTest extends BaseTest {
     @DisplayName("更新接口状态 - 成功")
     public void testUpdateInterfaceStatus_Success() {
         if (testInterfaceId == null) {
-            Assumptions.assumeTrue(false, "No test interface to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test interface to update");
             return;
         }
 
@@ -179,7 +179,7 @@ public class InterfaceApiTest extends BaseTest {
     @DisplayName("获取接口Schema - 成功")
     public void testGetInterfaceSchema_Success() {
         if (testInterfaceId == null) {
-            Assumptions.assumeTrue(false, "No test interface");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test interface");
             return;
         }
 
@@ -187,7 +187,8 @@ public class InterfaceApiTest extends BaseTest {
             .when()
             .get("/interface/" + testInterfaceId + "/schema");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -197,7 +198,7 @@ public class InterfaceApiTest extends BaseTest {
     @DisplayName("更新接口Schema - 成功")
     public void testUpdateInterfaceSchema_Success() {
         if (testInterfaceId == null) {
-            Assumptions.assumeTrue(false, "No test interface");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test interface");
             return;
         }
 
@@ -250,7 +251,7 @@ public class InterfaceApiTest extends BaseTest {
     @DisplayName("获取接口调用统计 - 成功")
     public void testGetInterfaceStats_Success() {
         if (testInterfaceId == null) {
-            Assumptions.assumeTrue(false, "No test interface");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test interface");
             return;
         }
 
@@ -258,7 +259,8 @@ public class InterfaceApiTest extends BaseTest {
             .when()
             .get("/interface/" + testInterfaceId + "/stats");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -268,7 +270,7 @@ public class InterfaceApiTest extends BaseTest {
     @DisplayName("获取接口日统计 - 成功")
     public void testGetInterfaceDailyStats_Success() {
         if (testInterfaceId == null) {
-            Assumptions.assumeTrue(false, "No test interface");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test interface");
             return;
         }
 
@@ -276,7 +278,8 @@ public class InterfaceApiTest extends BaseTest {
             .when()
             .get("/interface/" + testInterfaceId + "/stats/daily");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -297,7 +300,7 @@ public class InterfaceApiTest extends BaseTest {
     @DisplayName("删除接口 - 成功")
     public void testDeleteInterface_Success() {
         if (testInterfaceId == null) {
-            Assumptions.assumeTrue(false, "No test interface to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test interface to delete");
             return;
         }
 

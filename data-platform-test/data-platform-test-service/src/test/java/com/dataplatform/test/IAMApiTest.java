@@ -68,11 +68,10 @@ public class IAMApiTest extends BaseTest {
             .when()
             .get("/user/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
             response.then().body("data", notNullValue());
-        } else {
-            response.then().statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -95,8 +94,9 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(5)
     public void testCreateUser_Success() {
+        String username = "testuser_" + System.currentTimeMillis();
         Map<String, Object> userData = new HashMap<>();
-        userData.put("username", "testuser_" + System.currentTimeMillis());
+        userData.put("username", username);
         userData.put("password", "Test123456");
         userData.put("realName", "测试用户");
         userData.put("email", "test@example.com");
@@ -110,9 +110,8 @@ public class IAMApiTest extends BaseTest {
         verifySuccess(response);
 
         Integer id = response.jsonPath().getInt("data.id");
-        if (id != null) {
-            testUserId = id.longValue();
-        }
+        Assertions.assertNotNull(id, "创建用户成功后必须返回用户 ID");
+        testUserId = id.longValue();
     }
 
     /**
@@ -121,9 +120,16 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(6)
     public void testCreateUser_DuplicateUsername() {
+        String username = "duplicate_user_" + System.currentTimeMillis();
         Map<String, Object> userData = new HashMap<>();
-        userData.put("username", "admin");
+        userData.put("username", username);
         userData.put("password", "Test123456");
+
+        Response createResponse = getAuthRequest()
+            .body(userData)
+            .when()
+            .post("/user");
+        verifySuccess(createResponse);
 
         Response response = getAuthRequest()
             .body(userData)
@@ -157,7 +163,7 @@ public class IAMApiTest extends BaseTest {
     @Order(8)
     public void testUpdateUser_Success() {
         if (testUserId == null) {
-            Assumptions.assumeTrue(false, "No test user to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test user to update");
             return;
         }
 
@@ -179,7 +185,7 @@ public class IAMApiTest extends BaseTest {
     @Order(9)
     public void testDeleteUser_Success() {
         if (testUserId == null) {
-            Assumptions.assumeTrue(false, "No test user to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test user to delete");
             return;
         }
 
@@ -201,7 +207,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .patch("/user/1/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -217,7 +224,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .post("/user/1/reset-password");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -232,7 +240,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .get("/user/1/roles");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -248,7 +257,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .post("/user/1/roles");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -293,7 +303,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .get("/role/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -377,7 +388,7 @@ public class IAMApiTest extends BaseTest {
     @Order(27)
     public void testUpdateRole_Success() {
         if (testRoleId == null) {
-            Assumptions.assumeTrue(false, "No test role to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test role to update");
             return;
         }
 
@@ -399,7 +410,7 @@ public class IAMApiTest extends BaseTest {
     @Order(28)
     public void testDeleteRole_Success() {
         if (testRoleId == null) {
-            Assumptions.assumeTrue(false, "No test role to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test role to delete");
             return;
         }
 
@@ -421,7 +432,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .patch("/role/1/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -436,7 +448,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .get("/role/1/permissions");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -452,7 +465,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .post("/role/1/permissions");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -469,7 +483,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .get("/user/1/callers");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -485,7 +500,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .post("/user/1/callers");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -530,7 +546,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .get("/permission/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -583,7 +600,8 @@ public class IAMApiTest extends BaseTest {
             .when()
             .put("/permission/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -605,14 +623,12 @@ public class IAMApiTest extends BaseTest {
             .when()
             .post("/permission");
 
-        if (createResponse.getStatusCode() == 200) {
-            Integer id = createResponse.jsonPath().getInt("data.id");
-            if (id != null) {
-                Response deleteResponse = getAuthRequest()
-                    .when()
-                    .delete("/permission/" + id);
-                deleteResponse.then().statusCode(anyOf(is(200), is(204)));
-            }
-        }
+        verifySuccess(createResponse);
+        Integer id = createResponse.jsonPath().getInt("data.id");
+        org.junit.jupiter.api.Assertions.assertNotNull(id, "创建权限后应返回ID");
+        Response deleteResponse = getAuthRequest()
+            .when()
+            .delete("/permission/" + id);
+        deleteResponse.then().statusCode(anyOf(is(200), is(204)));
     }
 }
