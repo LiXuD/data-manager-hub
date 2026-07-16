@@ -27,7 +27,7 @@ public interface VendorConfigService extends IService<VendorConfig> {
 
     /**
      * 根据厂商编码和接口编码获取配置
-     * TODO: 后续改为主数据域内 ApiInterfaceService 本地查询
+     * 通过主数据域内 ApiInterfaceService 本地查询接口定义。
      */
     VendorConfig getByVendorCodeAndInterfaceCode(String vendorCode, String interfaceCode);
 

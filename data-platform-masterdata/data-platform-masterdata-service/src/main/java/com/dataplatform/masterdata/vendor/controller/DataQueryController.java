@@ -4,16 +4,16 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.dataplatform.common.adapter.VendorAdapterConfig;
 import com.dataplatform.common.adapter.VendorAdapterFactory;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.masterdata.interface_.entity.ApiInterface;
+import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.dataplatform.masterdata.vendor.entity.DataType;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.entity.VendorInfo;
 import com.dataplatform.masterdata.vendor.mapper.DataTypeMapper;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import com.dataplatform.masterdata.vendor.mapper.VendorInfoMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.dataplatform.masterdata.vendor.service.VendorAdapterConfigAssembler;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
@@ -32,8 +32,6 @@ import java.util.Map;
 @RequestMapping("/data")
 public class DataQueryController {
 
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-
     @Autowired
     private VendorConfigMapper vendorConfigMapper;
 
@@ -44,7 +42,10 @@ public class DataQueryController {
     private DataTypeMapper dataTypeMapper;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private ApiInterfaceService apiInterfaceService;
+
+    @Autowired
+    private VendorAdapterConfigAssembler adapterConfigAssembler;
 
     @PostMapping("/query")
     public Map<String, Object> query(@RequestBody Map<String, Object> request) {
@@ -86,14 +87,13 @@ public class DataQueryController {
             .eq(VendorConfig::getDataTypeId, dataType.getId())
             .eq(VendorConfig::getStatus, CommonStatus.ACTIVE);
 
-        // interfaceCode 是接口编码(如 "interface_001")，需要先查 api_interface 表获取 interface_id(bigint)
+        // interfaceCode 是接口编码(如 "interface_001")，统一通过接口定义服务解析。
         if (interfaceCode != null && !interfaceCode.isEmpty()) {
-            List<Long> ids = jdbcTemplate.queryForList(
-                "SELECT id FROM api_interface WHERE interface_code = ? AND deleted = false",
-                Long.class, interfaceCode);
-            if (!ids.isEmpty()) {
-                configWrapper.eq(VendorConfig::getInterfaceId, ids.get(0));
+            ApiInterface apiInterface = apiInterfaceService.getByInterfaceCode(interfaceCode);
+            if (apiInterface == null) {
+                return errorResult("INTERFACE_NOT_FOUND", "接口不存在或已删除: " + interfaceCode);
             }
+            configWrapper.eq(VendorConfig::getInterfaceId, apiInterface.getId());
         }
 
         VendorConfig config = vendorConfigMapper.selectOne(configWrapper);
@@ -102,48 +102,15 @@ public class DataQueryController {
         }
 
         // 4. 映射为 VendorAdapterConfig
-        VendorAdapterConfig adapterConfig = buildAdapterConfig(config, vendor);
+        VendorAdapterConfig adapterConfig;
+        try {
+            adapterConfig = adapterConfigAssembler.build(config, vendor);
+        } catch (IllegalArgumentException e) {
+            return errorResult("INVALID_CONFIG", e.getMessage());
+        }
 
         // 5. 调用适配器
         return VendorAdapterFactory.getAdapter(vendorCode).execute(adapterConfig, params);
-    }
-
-    private VendorAdapterConfig buildAdapterConfig(VendorConfig config, VendorInfo vendor) {
-        VendorAdapterConfig adapterConfig = new VendorAdapterConfig();
-        adapterConfig.setVendorCode(vendor.getVendorCode());
-        adapterConfig.setApiUrl(config.getApiUrl());
-        adapterConfig.setMethod(config.getMethod());
-        adapterConfig.setTimeout(config.getTimeout());
-        adapterConfig.setRetryCount(config.getRetryCount());
-        adapterConfig.setSignType(config.getSignType());
-        adapterConfig.setSecretKey(vendor.getSecretKey());
-        adapterConfig.setRequestTemplate(config.getRequestTemplate());
-        adapterConfig.setResponseMapping(config.getResponseMapping());
-        adapterConfig.setAuthType(config.getAuthType());
-
-        // 解析 headerConfig (JSONB → Map<String, String>)
-        if (config.getHeaderConfig() != null && !config.getHeaderConfig().isEmpty()) {
-            try {
-                Map<String, String> headers = objectMapper.readValue(config.getHeaderConfig(),
-                    new TypeReference<Map<String, String>>() {});
-                adapterConfig.setHeaders(headers);
-            } catch (Exception e) {
-                // ignore parse errors
-            }
-        }
-
-        // 解析 authConfig (TEXT → Map<String, Object>)
-        if (config.getAuthConfig() != null && !config.getAuthConfig().isEmpty()) {
-            try {
-                Map<String, Object> authConfig = objectMapper.readValue(config.getAuthConfig(),
-                    new TypeReference<Map<String, Object>>() {});
-                adapterConfig.setAuthConfig(authConfig);
-            } catch (Exception e) {
-                // ignore parse errors
-            }
-        }
-
-        return adapterConfig;
     }
 
     private Map<String, Object> errorResult(String errorCode, String errorMsg) {

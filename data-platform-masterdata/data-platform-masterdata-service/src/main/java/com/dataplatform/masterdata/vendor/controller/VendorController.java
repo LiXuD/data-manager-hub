@@ -9,6 +9,8 @@ import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorUpdateReqDTO;
 import com.dataplatform.masterdata.vendor.entity.VendorInfo;
 import com.dataplatform.masterdata.vendor.service.VendorService;
+import com.dataplatform.masterdata.vendor.service.VendorHealthService;
+import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,9 +26,14 @@ import java.util.Map;
 public class VendorController {
 
     private final VendorService vendorService;
+    private final VendorConfigService vendorConfigService;
+    private final VendorHealthService vendorHealthService;
 
-    public VendorController(VendorService vendorService) {
+    public VendorController(VendorService vendorService, VendorConfigService vendorConfigService,
+                            VendorHealthService vendorHealthService) {
         this.vendorService = vendorService;
+        this.vendorConfigService = vendorConfigService;
+        this.vendorHealthService = vendorHealthService;
     }
 
     @GetMapping("/list")
@@ -139,7 +146,12 @@ public class VendorController {
         if (existing == null) {
             return Result.error(404, "厂商不存在");
         }
-        return Result.success(Map.of("success", true, "message", "连接正常"));
+        com.dataplatform.masterdata.vendor.entity.VendorConfig config = vendorConfigService.listByVendor(id)
+                .stream().findFirst().orElse(null);
+        if (config == null) {
+            return Result.error(400, "厂商没有可用配置");
+        }
+        return Result.success(vendorHealthService.testConnection(config.getId()));
     }
 
     @GetMapping("/all")

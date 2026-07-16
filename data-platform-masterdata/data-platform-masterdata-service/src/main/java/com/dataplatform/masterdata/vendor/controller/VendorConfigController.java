@@ -10,12 +10,13 @@ import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigUpdateReqDTO;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
+import com.dataplatform.masterdata.vendor.service.VendorHealthService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 /**
  * 主数据域厂商的 Vendor Config Controller。
@@ -26,9 +27,12 @@ import java.util.Map;
 public class VendorConfigController {
 
     private final VendorConfigService vendorConfigService;
+    private final VendorHealthService vendorHealthService;
 
-    public VendorConfigController(VendorConfigService vendorConfigService) {
+    public VendorConfigController(VendorConfigService vendorConfigService,
+                                  VendorHealthService vendorHealthService) {
         this.vendorConfigService = vendorConfigService;
+        this.vendorHealthService = vendorHealthService;
     }
 
     @GetMapping("/list")
@@ -152,17 +156,7 @@ public class VendorConfigController {
             return Result.error(404, "配置不存在");
         }
 
-        Map<String, Object> result = new HashMap<>();
-        try {
-            long startTime = System.currentTimeMillis();
-            long latency = System.currentTimeMillis() - startTime + (long) (Math.random() * 200);
-            result.put("success", true);
-            result.put("latency", latency);
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        return Result.success(result);
+        return Result.success(vendorHealthService.testConnection(id));
     }
 
     @GetMapping("/{id}/mapping")
