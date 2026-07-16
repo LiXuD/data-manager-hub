@@ -14,16 +14,13 @@ import java.math.RoundingMode;
  */
 public class DynamicBillingCalculator implements BillingCalculator {
 
-    /** 默认SLA阈值(毫秒) */
-    private static final int DEFAULT_SLA_THRESHOLD = 2000;
-
-    /** 默认补偿系数 */
-    private static final BigDecimal DEFAULT_COMPENSATION_RATE = new BigDecimal("0.10");
-
     @Override
     public BigDecimal calculate(BillingRuleDO rule, long callCount, Integer latencyMs) {
         if (rule == null || rule.getUnitPrice() == null) {
-            return BigDecimal.ZERO;
+            throw new IllegalArgumentException("Billing rule and unit price are required");
+        }
+        if (callCount < 0) {
+            throw new IllegalArgumentException("Call count must not be negative");
         }
 
         BigDecimal baseAmount = rule.getUnitPrice()
@@ -44,7 +41,7 @@ public class DynamicBillingCalculator implements BillingCalculator {
     @Override
     public BigDecimal calculateSingle(BillingRuleDO rule, Integer latencyMs) {
         if (rule == null || rule.getUnitPrice() == null) {
-            return BigDecimal.ZERO;
+            throw new IllegalArgumentException("Billing rule and unit price are required");
         }
 
         BigDecimal basePrice = rule.getUnitPrice();
@@ -66,9 +63,15 @@ public class DynamicBillingCalculator implements BillingCalculator {
      * 返回值: 0.0 ~ 1.0
      */
     private BigDecimal calculateCompensationFactor(BillingRuleDO rule, Integer latencyMs) {
-        // 使用规则中的SLA阈值，如果未设置则使用默认值
-        int slaThreshold = rule.getSlaThreshold() != null ? rule.getSlaThreshold() : DEFAULT_SLA_THRESHOLD;
-        BigDecimal compensationRate = rule.getCompensationRate() != null ? rule.getCompensationRate() : DEFAULT_COMPENSATION_RATE;
+        if (rule.getSlaThreshold() == null || rule.getCompensationRate() == null) {
+            throw new IllegalArgumentException("Dynamic billing requires SLA threshold and compensation rate");
+        }
+        int slaThreshold = rule.getSlaThreshold();
+        BigDecimal compensationRate = rule.getCompensationRate();
+        if (slaThreshold < 0 || compensationRate.signum() < 0
+                || compensationRate.compareTo(BigDecimal.ONE) > 0) {
+            throw new IllegalArgumentException("Invalid dynamic billing configuration");
+        }
 
         // 响应时间在SLA内，无补偿
         if (latencyMs <= slaThreshold) {

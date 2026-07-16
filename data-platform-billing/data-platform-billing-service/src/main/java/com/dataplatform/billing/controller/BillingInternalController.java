@@ -51,7 +51,7 @@ public class BillingInternalController implements BillingInternalFeignClient {
         boolean success = dto.getSuccess() == null || Boolean.TRUE.equals(dto.getSuccess());
         boolean billable = dto.getBillable() == null || Boolean.TRUE.equals(dto.getBillable());
         BigDecimal cost = success && billable
-                ? billingService.calculateCost(dto.getDataType(), callCount, latency)
+                ? billingService.calculateCost(dto.getVendorCode(), dto.getDataType(), callCount, latency)
                 : BigDecimal.ZERO;
         BillingCalculateRespDTO response = new BillingCalculateRespDTO();
         response.setCost(cost);

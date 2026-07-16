@@ -31,9 +31,9 @@ public interface BillingService extends IService<BillingDaily> {
     BigDecimal calculateCost(String dataType, int callCount, long latency);
 
     /**
-     * 记录每日账单
+     * 按厂商和数据类型计算费用。
      */
-    void recordDailyBilling(LocalDate billingDate);
+    BigDecimal calculateCost(String vendorCode, String dataType, int callCount, long latency);
 
     /**
      * 分页查询账单

@@ -27,7 +27,7 @@ class BillingInternalControllerTest {
     @Test
     void calculatesAndRecordsBillableSuccess() {
         BillingCalculateReqDTO request = request();
-        when(billingService.calculateCost("personal", 1, 120L))
+        when(billingService.calculateCost("vendor-a", "personal", 1, 120L))
                 .thenReturn(new BigDecimal("0.25"));
 
         Result<BillingCalculateRespDTO> result = controller.calculateCost(request);
@@ -44,7 +44,7 @@ class BillingInternalControllerTest {
         Result<BillingCalculateRespDTO> result = controller.calculateCost(request);
 
         assertEquals(BigDecimal.ZERO, result.getData().getCost());
-        verify(billingService, never()).calculateCost(any(), anyInt(), anyLong());
+        verify(billingService, never()).calculateCost(any(), any(), anyInt(), anyLong());
         verify(recorder).record(request, BigDecimal.ZERO);
     }
 

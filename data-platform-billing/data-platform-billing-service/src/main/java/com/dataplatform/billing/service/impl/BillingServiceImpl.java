@@ -8,6 +8,11 @@ import com.dataplatform.billing.entity.BillingRule;
 import com.dataplatform.billing.mapper.BillingDailyMapper;
 import com.dataplatform.billing.mapper.BillingRuleMapper;
 import com.dataplatform.billing.service.BillingService;
+import com.dataplatform.api.Result;
+import com.dataplatform.common.billing.BillingCalculatorFactory;
+import com.dataplatform.common.entity.unified.BillingRuleDO;
+import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
+import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -16,9 +21,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,14 +44,13 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
     @Autowired
     private StringRedisTemplate redisTemplate;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    @Autowired
+    private VendorInternalFeignClient vendorInternalFeignClient;
 
-    // 默认单价 (当没有配置计费规则时使用)
-    private static final Map<String, BigDecimal> DEFAULT_UNIT_PRICES = Map.of(
-        "company_info", new BigDecimal("0.30"),
-        "person_phone", new BigDecimal("0.15"),
-        "id_card_verify", new BigDecimal("0.20")
-    );
+    @Autowired
+    private BillingCalculatorFactory billingCalculatorFactory;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 计算费用 - 支持阶梯计费
@@ -69,101 +71,69 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
      */
     @Override
     public BigDecimal calculateCost(String dataType, int callCount, long latency) {
-        // 1. 获取该数据类型的计费规则
-        BillingRule rule = getBillingRule(dataType);
-        BigDecimal unitPrice = rule != null && rule.getUnitPrice() != null
-            ? rule.getUnitPrice()
-            : DEFAULT_UNIT_PRICES.getOrDefault(dataType, BigDecimal.ZERO);
-
-        // 2. 阶梯折扣
-        BigDecimal tierDiscount = calculateTierDiscount(callCount, rule);
-
-        // 3. 计算基础费用
-        BigDecimal baseCost = unitPrice
-            .multiply(BigDecimal.valueOf(callCount))
-            .multiply(tierDiscount);
-
-        // 4. SLA补偿 (仅在有响应时间且超过SLA阈值时计算)
-        BigDecimal slaDiscount = BigDecimal.ONE;
-        if (latency > 0) {
-            slaDiscount = calculateSlaDiscount(latency, rule);
-        }
-
-        // 5. 计算最终费用
-        BigDecimal totalCost = baseCost
-            .multiply(slaDiscount)
-            .setScale(2, RoundingMode.HALF_UP);
-
-        return totalCost;
+        return calculateWithRule(findApplicableRule(null, dataType, callCount), callCount, latency);
     }
 
-    /**
-     * 计算SLA补偿折扣
-     * 补偿公式: 减免系数 = 1 - compensationRate × (超出时间 / 100ms)
-     * 最低折扣为0.1 (最多减免90%)
-     */
-    private BigDecimal calculateSlaDiscount(long latency, BillingRule rule) {
-        // 获取SLA阈值，默认为2000ms
-        int slaThreshold = rule != null && rule.getSlaThreshold() != null
-            ? rule.getSlaThreshold()
-            : 2000;
+    @Override
+    public BigDecimal calculateCost(String vendorCode, String dataType, int callCount, long latency) {
+        Long vendorId = resolveVendorId(vendorCode);
+        return calculateWithRule(findApplicableRule(vendorId, dataType, callCount), callCount, latency);
+    }
 
-        // 如果响应时间在SLA内，不补偿
-        if (latency <= slaThreshold) {
-            return BigDecimal.ONE;
+    private BigDecimal calculateWithRule(BillingRule rule, int callCount, long latency) {
+        if (callCount < 0) {
+            throw new IllegalArgumentException("调用次数不能为负数");
         }
-
-        // 获取补偿率，默认为0.1 (每超100ms减免10%)
-        BigDecimal compensationRate = rule != null && rule.getCompensationRate() != null
-            ? rule.getCompensationRate()
-            : new BigDecimal("0.1");
-
-        // 计算超出时间(毫秒)
-        long exceedTime = latency - slaThreshold;
-
-        // 计算减免系数
-        BigDecimal discount = BigDecimal.ONE
-            .subtract(compensationRate.multiply(BigDecimal.valueOf(exceedTime / 100.0)));
-
-        // 最低折扣0.1
-        if (discount.compareTo(new BigDecimal("0.1")) < 0) {
-            return new BigDecimal("0.1");
+        if (rule == null || rule.getUnitPrice() == null) {
+            throw new IllegalStateException("没有匹配的启用计费规则");
         }
-
-        return discount;
+        Integer latencyMs = latency > 0
+                ? (int) Math.min(latency, Integer.MAX_VALUE)
+                : null;
+        return billingCalculatorFactory
+                .getCalculator(rule.getBillingType() == null ? "STANDARD" : rule.getBillingType())
+                .calculate(toCalculatorRule(rule), callCount, latencyMs);
     }
 
     /**
      * 获取计费规则
      */
-    private BillingRule getBillingRule(String dataType) {
-        LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BillingRule::getDataType, dataType);
-        wrapper.eq(BillingRule::getStatus, "active");
-        wrapper.orderByDesc(BillingRule::getCreatedAt);
-        wrapper.last("LIMIT 1");
-
-        List<BillingRule> rules = billingRuleMapper.selectList(wrapper);
-        return rules.isEmpty() ? null : rules.get(0);
+    private BillingRule findApplicableRule(Long vendorId, String dataType, int callCount) {
+        BillingRule vendorRule = vendorId == null ? null
+                : selectApplicableRule(vendorId, dataType, callCount);
+        return vendorRule != null ? vendorRule : selectApplicableRule(null, dataType, callCount);
     }
 
-    /**
-     * 计算阶梯折扣
-     */
-    private BigDecimal calculateTierDiscount(int callCount, BillingRule rule) {
-        // 如果有自定义规则，使用规则中的折扣
-        if (rule != null && rule.getDiscount() != null) {
-            return rule.getDiscount();
-        }
+    private BillingRule selectApplicableRule(Long vendorId, String dataType, int callCount) {
+        LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BillingRule::getDataType, dataType)
+                .eq(BillingRule::getStatus, "active")
+                .le(BillingRule::getTierMin, callCount)
+                .and(query -> query.isNull(BillingRule::getTierMax)
+                        .or().ge(BillingRule::getTierMax, callCount));
+        wrapper.eq(vendorId != null, BillingRule::getVendorId, vendorId)
+                .isNull(vendorId == null, BillingRule::getVendorId);
+        wrapper.orderByDesc(BillingRule::getTierMin)
+                .orderByDesc(BillingRule::getCreatedAt)
+                .last("LIMIT 1");
+        return billingRuleMapper.selectOne(wrapper);
+    }
 
-        // 默认阶梯折扣
-        if (callCount > 500000) {
-            return new BigDecimal("0.8");  // 50万次以上 8折
-        } else if (callCount > 100000) {
-            return new BigDecimal("0.9");  // 10-50万次 9折
-        } else {
-            return BigDecimal.ONE;          // 10万次以下 不打折
-        }
+    private BillingRuleDO toCalculatorRule(BillingRule rule) {
+        BillingRuleDO calculatorRule = new BillingRuleDO();
+        calculatorRule.setId(rule.getId());
+        calculatorRule.setVendorId(rule.getVendorId());
+        calculatorRule.setVendorName(rule.getVendorName());
+        calculatorRule.setDataType(rule.getDataType());
+        calculatorRule.setBillingType(rule.getBillingType());
+        calculatorRule.setUnitPrice(rule.getUnitPrice());
+        calculatorRule.setTierMin(rule.getTierMin());
+        calculatorRule.setTierMax(rule.getTierMax());
+        calculatorRule.setDiscount(rule.getDiscount());
+        calculatorRule.setSlaThreshold(rule.getSlaThreshold());
+        calculatorRule.setCompensationRate(rule.getCompensationRate());
+        calculatorRule.setStatus(rule.getStatus());
+        return calculatorRule;
     }
 
     /**
@@ -171,11 +141,6 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
      */
     public BigDecimal calculateSingleCost(String dataType) {
         return calculateCost(dataType, 1);
-    }
-
-    @Override
-    public void recordDailyBilling(LocalDate billingDate) {
-        // Daily aggregation is updated incrementally by BillingUsageRecorder.
     }
 
     @Override
@@ -289,8 +254,14 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
             return null;
         }
 
-        String cacheKey = RULE_CACHE_PREFIX + dataType;
-        String cachedRule = redisTemplate.opsForValue().get(cacheKey);
+        Long vendorId = resolveVendorId(vendorCode);
+        String cacheKey = RULE_CACHE_PREFIX + (vendorId == null ? "global" : vendorId) + ":" + dataType;
+        String cachedRule = null;
+        try {
+            cachedRule = redisTemplate.opsForValue().get(cacheKey);
+        } catch (Exception ignored) {
+            // Redis unavailable: continue with the authoritative database.
+        }
         if (cachedRule != null) {
             try {
                 return objectMapper.readValue(cachedRule, BillingRule.class);
@@ -299,24 +270,43 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
             }
         }
 
-        LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BillingRule::getDataType, dataType);
-        wrapper.eq(BillingRule::getStatus, "active");
-        wrapper.orderByDesc(BillingRule::getCreatedAt);
-        wrapper.last("LIMIT 1");
-
-        BillingRule rule = billingRuleMapper.selectOne(wrapper);
+        BillingRule rule = selectLatestRule(vendorId, dataType);
+        if (rule == null && vendorId != null) {
+            rule = selectLatestRule(null, dataType);
+        }
 
         if (rule != null) {
             try {
-                redisTemplate.opsForValue().set(cacheKey,
-                    objectMapper.writeValueAsString(rule),
-                    RULE_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
-            } catch (JsonProcessingException e) {
+                redisTemplate.opsForValue().set(cacheKey, objectMapper.writeValueAsString(rule),
+                        RULE_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+            } catch (Exception e) {
                 // 缓存写入失败不影响主流程
             }
         }
 
         return rule;
+    }
+
+    private BillingRule selectLatestRule(Long vendorId, String dataType) {
+        LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BillingRule::getDataType, dataType)
+                .eq(BillingRule::getStatus, "active")
+                .eq(vendorId != null, BillingRule::getVendorId, vendorId)
+                .isNull(vendorId == null, BillingRule::getVendorId)
+                .orderByDesc(BillingRule::getCreatedAt)
+                .last("LIMIT 1");
+        return billingRuleMapper.selectOne(wrapper);
+    }
+
+    private Long resolveVendorId(String vendorCode) {
+        if (vendorCode == null || vendorCode.isBlank()) {
+            return null;
+        }
+        Result<VendorInfoDTO> response = vendorInternalFeignClient.getByVendorCode(vendorCode);
+        if (response == null || !Integer.valueOf(200).equals(response.getCode())
+                || response.getData() == null || response.getData().getId() == null) {
+            throw new IllegalArgumentException("厂商不存在或主数据服务不可用: " + vendorCode);
+        }
+        return response.getData().getId();
     }
 }

@@ -3,6 +3,7 @@ package com.dataplatform.billing;
 import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
 import com.dataplatform.governance.api.feign.GovernanceInternalFeignClient;
 import com.dataplatform.governance.log.api.LogClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -17,7 +18,8 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 @EnableFeignClients(clients = {
         CallStatsInternalFeignClient.class,
         GovernanceInternalFeignClient.class,
-        LogClient.class
+        LogClient.class,
+        VendorInternalFeignClient.class
 })
 @EnableDiscoveryClient
 @MapperScan("com.dataplatform.billing.mapper")
