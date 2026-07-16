@@ -392,6 +392,7 @@ CREATE TABLE IF NOT EXISTS alert_record (
     fired_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resolved_at TIMESTAMP,
     resolved_by BIGINT,
+    resolution TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_alert_record_rule FOREIGN KEY (rule_id) REFERENCES alert_rule(id)
 );
@@ -450,55 +451,6 @@ CREATE TABLE IF NOT EXISTS operation_log (
 CREATE INDEX idx_operation_log_user ON operation_log(user_id);
 CREATE INDEX idx_operation_log_time ON operation_log(created_at);
 CREATE INDEX idx_operation_log_module ON operation_log(operation_module);
-
--- =====================================================
--- 初始数据
--- =====================================================
-
--- 租户数据
-INSERT INTO tenant_info (tenant_code, tenant_name, tenant_type, status, contact_person, contact_email)
-VALUES 
-    ('TENANT001', '测试租户', 'enterprise', 'active', '张三', 'zhangsan@example.com'),
-    ('TENANT002', '银行A', 'enterprise', 'active', '李四', 'lisi@banka.com');
-
--- 厂商数据
-INSERT INTO vendor_info (vendor_code, vendor_name, vendor_type, status, contact_person)
-VALUES 
-    ('tianyancha', '天眼查', 'enterprise_data', 'active', '天眼查客服'),
-    ('qichacha', '企查查', 'enterprise_data', 'active', '企查查客服'),
-    ('yidun', '网易易盾', 'security', 'active', '易盾客服');
-
--- 数据类型
-INSERT INTO data_type (data_type_code, data_type_name, data_category, pricing_model, unit_price)
-VALUES 
-    ('company_info', '工商信息', 'enterprise', 'per_call', 0.30),
-    ('person_phone', '手机号验证', 'personal', 'per_call', 0.15),
-    ('id_card_verify', '身份证验证', 'personal', 'per_call', 0.20);
-
--- 角色
-INSERT INTO role_info (role_code, role_name, description)
-VALUES 
-    ('ADMIN', '系统管理员', '拥有所有权限'),
-    ('TENANT_ADMIN', '租户管理员', '管理租户内的所有资源'),
-    ('OPERATOR', '操作员', '可以进行日常操作'),
-    ('VIEWER', '只读用户', '只能查看数据');
-
--- 默认管理员用户 (密码: Test123456)
-INSERT INTO user_info (username, nickname, password, real_name, email, status, tenant_id)
-VALUES 
-    ('admin', '系统管理员', 'Test123456', '管理员', 'admin@example.com', 'active', 1);
-
--- 用户角色关联
-INSERT INTO user_role (user_id, role_id)
-VALUES (1, 1);
-
--- 告警规则示例
-INSERT INTO alert_rule (rule_name, rule_type, metric_name, condition, threshold, time_window, severity, notification_channels, status)
-VALUES 
-    ('厂商响应超时告警', 'vendor_latency', 'avg_latency', '>', 5000, 300, 'warning', 'email,sms', 'active'),
-    ('API调用失败率告警', 'vendor_error', 'error_rate', '>', 10, 300, 'critical', 'email,sms,phone', 'active'),
-    ('额度不足告警', 'quota', 'quota_used_percent', '>', 80, 60, 'warning', 'email', 'active'),
-    ('熔断触发告警', 'circuit', 'circuit_state', '=', 1, 0, 'critical', 'email,sms', 'active');
 
 -- 提交
 COMMIT;
