@@ -35,8 +35,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         List<String> excludes = new ArrayList<>(List.of(
-                        "/auth/**",
-                        "/identity/auth/**",
                         "/internal-auth/v1/token",
                         "/actuator/**",
                         "/health/**",

@@ -13,8 +13,6 @@ import org.springframework.http.MediaType;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * 认证拦截器 - 验证请求的Authorization token
@@ -27,16 +25,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     // 不需要认证的路径
-    private static final List<String> EXCLUDE_PATHS = Arrays.asList(
-        "/auth/login",
-        "/auth/verify",
-        "/actuator",
-        "/health"
-    );
-
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String path = request.getRequestURI();
+        String path = request.getServletPath();
 
         // 检查是否是不需要认证的路径
         if (isExcludePath(path)) {
@@ -84,12 +75,11 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     private boolean isExcludePath(String path) {
-        for (String excludePath : EXCLUDE_PATHS) {
-            if (path.contains(excludePath)) {
-                return true;
-            }
-        }
-        return false;
+        return "/auth/login".equals(path)
+                || "/auth/verify".equals(path)
+                || "/health".equals(path)
+                || "/actuator".equals(path)
+                || path.startsWith("/actuator/");
     }
 
     private boolean isBlank(String str) {
