@@ -272,6 +272,9 @@ NACOS_NAMESPACE=dev
 # 服务间认证（dev 默认开启；启动脚本自动生成本地 RSA 密钥）
 INTERNAL_AUTH_ENABLED=true
 INTERNAL_AUTH_TOKEN_URI=http://localhost:8086/internal-auth/v1/token
+
+# 字段加密主密钥（32字节随机值的Base64；必须由密钥管理系统注入）
+PLATFORM_ENCRYPTION_MASTER_KEY=<base64-encoded-32-byte-key>
 ```
 
 ---
