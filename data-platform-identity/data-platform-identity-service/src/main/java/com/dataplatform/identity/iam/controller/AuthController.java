@@ -16,6 +16,7 @@ import com.dataplatform.identity.iam.mapper.UserRoleMapper;
 import com.dataplatform.identity.iam.service.RolePermissionService;
 import com.dataplatform.identity.tenant.entity.TenantInfo;
 import com.dataplatform.identity.tenant.mapper.TenantMapper;
+import com.dataplatform.identity.security.service.PasswordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,6 +46,8 @@ public class AuthController {
     private RoleMapper roleMapper;
     @Autowired
     private TenantMapper tenantMapper;
+    @Autowired
+    private PasswordService passwordService;
 
     @OperationLog(module = "认证管理", operation = "用户登录")
     @PostMapping("/login")
@@ -60,8 +63,15 @@ public class AuthController {
                 .eq(User::getUsername, username)
                 .eq(User::getStatus, "active"));
 
-        if (user == null || !password.equals(user.getPassword())) {
+        if (user == null || !passwordService.matches(password, user.getPassword())) {
             return Result.error(401, "用户名或密码错误");
+        }
+
+        if (!passwordService.isEncoded(user.getPassword())) {
+            User passwordUpgrade = new User();
+            passwordUpgrade.setId(user.getId());
+            passwordUpgrade.setPassword(passwordService.encode(password));
+            userMapper.updateById(passwordUpgrade);
         }
 
         List<String> permissionCodes = getUserPermissions(user.getId());
@@ -157,7 +167,7 @@ public class AuthController {
         User user = userMapper.selectById(UserContext.getCurrentUserId());
         String oldPassword = body.get("oldPassword");
         String newPassword = body.get("newPassword");
-        if (user == null || oldPassword == null || !oldPassword.equals(user.getPassword())) {
+        if (user == null || oldPassword == null || !passwordService.matches(oldPassword, user.getPassword())) {
             return Result.error(400, "当前密码错误");
         }
         if (newPassword == null || newPassword.length() < 8
@@ -166,7 +176,7 @@ public class AuthController {
         }
         User update = new User();
         update.setId(user.getId());
-        update.setPassword(newPassword);
+        update.setPassword(passwordService.encode(newPassword));
         userMapper.updateById(update);
         return Result.success(null);
     }
