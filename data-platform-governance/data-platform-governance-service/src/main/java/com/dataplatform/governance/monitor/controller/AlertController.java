@@ -53,24 +53,6 @@ public class AlertController {
     @OperationLog(module = "告警规则管理", operation = "新增告警规则")
     @PostMapping("/rule")
     public ResponseEntity<Result<AlertRule>> createRule(@RequestBody AlertRule rule) {
-        // 兼容测试用例格式: 使用 metric 作为 targetType, condition 作为 conditionType
-        if (rule.getTargetType() == null && rule.getMetric() != null) {
-            rule.setTargetType(rule.getMetric());
-        }
-        if (rule.getConditionType() == null && rule.getCondition() != null) {
-            rule.setConditionType(rule.getCondition());
-        }
-        if (rule.getRuleType() == null) {
-            rule.setRuleType("THRESHOLD");
-        }
-        if (rule.getThreshold() != null && rule.getThresholdValue() == null) {
-            Object threshold = rule.getThreshold();
-            if (threshold instanceof Number) {
-                rule.setThresholdValue(new java.math.BigDecimal(threshold.toString()));
-            }
-        }
-
-        // 校验必填字段
         if (rule.getRuleName() == null || rule.getRuleName().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "规则名称不能为空"));
@@ -78,6 +60,12 @@ public class AlertController {
         if (rule.getTargetType() == null || rule.getTargetType().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "目标类型不能为空"));
+        }
+        if (rule.getRuleType() == null || rule.getRuleType().isBlank()
+                || rule.getConditionType() == null || rule.getConditionType().isBlank()
+                || rule.getThresholdValue() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "规则类型、条件和阈值不能为空"));
         }
 
         rule.setId(null);

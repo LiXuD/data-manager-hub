@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.common.enums.AlertStatus;
 import com.dataplatform.common.result.PageResult;
+import com.dataplatform.common.util.UserContext;
 import com.dataplatform.governance.monitor.entity.AlertRule;
 import com.dataplatform.governance.monitor.entity.AlertRecord;
 import com.dataplatform.governance.monitor.mapper.AlertRecordMapper;
@@ -121,6 +122,8 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
         record.setId(id);
         record.setStatus("resolved");
         record.setResolvedTime(LocalDateTime.now());
+        record.setResolvedBy(UserContext.getCurrentUserId());
+        record.setResolution(resolution);
         alertRecordMapper.updateById(record);
     }
 

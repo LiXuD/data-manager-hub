@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.AlertStatus;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -18,11 +19,14 @@ public class AlertRule {
     private Long id;
     private String ruleName;
     private String ruleType;
+    @JsonAlias("metric")
     @TableField("metric_name")
     private String targetType;
     private Long targetId;
+    @JsonAlias("condition")
     @TableField("condition")
     private String conditionType;
+    @JsonAlias("threshold")
     @TableField("threshold")
     private BigDecimal thresholdValue;
     @TableField("time_window")
@@ -30,6 +34,7 @@ public class AlertRule {
     @TableField("notification_channels")
     private String notifyChannels;
     private AlertStatus status;
+    @JsonAlias("level")
     @TableField("severity")
     private String severity;
     @TableField("tenant_id")
@@ -38,16 +43,6 @@ public class AlertRule {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Boolean deleted;
-
-    // Alias fields for test compatibility
-    @TableField(exist = false)
-    private String metric;
-    @TableField(exist = false)
-    private Object threshold;
-    @TableField(exist = false)
-    private String condition;
-    @TableField(exist = false)
-    private String level;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -82,18 +77,4 @@ public class AlertRule {
     public Boolean getDeleted() { return deleted; }
     public void setDeleted(Boolean deleted) { this.deleted = deleted; }
 
-    // Alias getters/setters for test compatibility
-    public String getMetric() { return metric; }
-    public void setMetric(String metric) { this.metric = metric; if (this.targetType == null) this.targetType = metric; }
-    public Object getThreshold() { return threshold; }
-    public void setThreshold(Object threshold) {
-        this.threshold = threshold;
-        if (threshold instanceof Number) {
-            this.thresholdValue = new BigDecimal(threshold.toString());
-        }
-    }
-    public String getCondition() { return condition; }
-    public void setCondition(String condition) { this.condition = condition; if (this.conditionType == null) this.conditionType = condition; }
-    public String getLevel() { return level; }
-    public void setLevel(String level) { this.level = level; }
 }

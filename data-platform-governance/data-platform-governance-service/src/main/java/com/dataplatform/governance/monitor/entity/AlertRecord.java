@@ -32,6 +32,7 @@ public class AlertRecord {
     private String status;
     private LocalDateTime resolvedAt;
     private Long resolvedBy;
+    private String resolution;
     private LocalDateTime createdAt;
 
     public Long getId() { return id; }
@@ -52,6 +53,8 @@ public class AlertRecord {
     public void setResolvedAt(LocalDateTime resolvedAt) { this.resolvedAt = resolvedAt; }
     public Long getResolvedBy() { return resolvedBy; }
     public void setResolvedBy(Long resolvedBy) { this.resolvedBy = resolvedBy; }
+    public String getResolution() { return resolution; }
+    public void setResolution(String resolution) { this.resolution = resolution; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public Long getTenantId() { return tenantId; }
