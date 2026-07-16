@@ -2,7 +2,7 @@
 # smoke-test-api.sh — P1 核心链路 API 冒烟测试
 #
 # 用法:
-#   bash smoke-test-api.sh              # 使用默认凭据登录
+#   TEST_USER=xxx TEST_PASS=xxx bash smoke-test-api.sh
 #   TOKEN=Bearer-xxx bash smoke-test-api.sh  # 使用指定 token
 #
 # 前置: 五域服务已启动 (8081/8082/8084/8086)
@@ -68,9 +68,14 @@ echo ""
 echo "--- 0. 获取认证 Token ---"
 
 if [ -z "${TOKEN:-}" ]; then
+    if [ -z "${TEST_USER:-}" ] || [ -z "${TEST_PASS:-}" ]; then
+        echo "  ❌ 未提供认证信息，请设置 TOKEN，或同时设置 TEST_USER 和 TEST_PASS"
+        exit 1
+    fi
+
     LOGIN_RESP=$(curl -s -X POST "$IDENTITY/identity/auth/login" \
         -H "Content-Type: application/json" \
-        -d "{\"username\":\"${TEST_USER:-admin}\",\"password\":\"${TEST_PASS:-Test123456}\"}" 2>/dev/null || echo '{}')
+        -d "{\"username\":\"${TEST_USER}\",\"password\":\"${TEST_PASS}\"}" 2>/dev/null || echo '{}')
 
     TOKEN=$(echo "$LOGIN_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('token',''))" 2>/dev/null || echo "")
 
@@ -78,9 +83,8 @@ if [ -z "${TOKEN:-}" ]; then
         TOKEN="Bearer $TOKEN"
         echo "  ✅ Token 获取成功"
     else
-        echo "  ❌ Token 获取失败，使用无认证模式测试公开端点"
-        echo "  (提示: 确认服务已重启并确保 /identity/auth/login 端点可访问)"
-        TOKEN="Bearer-test-token-for-validation-only-1234567890"
+        echo "  ❌ Token 获取失败，请检查凭据和 /identity/auth/login 端点"
+        exit 1
     fi
 else
     echo "  ✅ 使用指定 Token"
