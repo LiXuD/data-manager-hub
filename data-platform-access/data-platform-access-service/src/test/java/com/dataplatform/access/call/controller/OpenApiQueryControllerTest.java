@@ -30,8 +30,10 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -172,5 +174,12 @@ class OpenApiQueryControllerTest {
         Result<OpenApiQueryRespVO> result = controller.query("test-key", null, null, new OpenApiQueryReqVO(), null);
 
         assertEquals(400, result.getCode());
+    }
+
+    @Test
+    void shouldRejectUnknownParameterType() {
+        Boolean matches = ReflectionTestUtils.invokeMethod(controller, "matchesParamType", "value", "unknown");
+
+        assertFalse(Boolean.TRUE.equals(matches));
     }
 }

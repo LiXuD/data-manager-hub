@@ -3,6 +3,8 @@ package com.dataplatform.access.call.service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -14,6 +16,8 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 public class RateLimitService {
+
+    private static final Logger log = LoggerFactory.getLogger(RateLimitService.class);
 
     @Autowired
     private StringRedisTemplate redisTemplate;
@@ -28,6 +32,9 @@ public class RateLimitService {
      * @return 是否允许通过
      */
     public boolean checkRateLimit(String apiKey, int limit) {
+        if (limit <= 0) {
+            return false;
+        }
         if (apiKey == null || apiKey.isEmpty()) {
             apiKey = "anonymous";
         }
@@ -43,13 +50,10 @@ public class RateLimitService {
                 redisTemplate.expire(windowKey, WINDOW_SIZE_SECONDS + 5, TimeUnit.SECONDS);
             }
 
-            if (count != null && count > limit) {
-                return false;
-            }
-            return true;
+            return count != null && count <= limit;
         } catch (Exception e) {
-            // Redis异常时，降级放行
-            return true;
+            log.error("限流状态读取失败，拒绝本次请求: {}", e.getMessage());
+            return false;
         }
     }
 
@@ -65,7 +69,7 @@ public class RateLimitService {
      */
     public long getRemainingQuota(String apiKey) {
         if (apiKey == null || apiKey.isEmpty()) {
-            return DEFAULT_RATE_LIMIT;
+            apiKey = "anonymous";
         }
 
         String key = "rate_limit:" + apiKey;
@@ -77,7 +81,8 @@ public class RateLimitService {
             long used = value != null ? Long.parseLong(value) : 0;
             return Math.max(0, DEFAULT_RATE_LIMIT - used);
         } catch (Exception e) {
-            return DEFAULT_RATE_LIMIT;
+            log.error("剩余额度读取失败: {}", e.getMessage());
+            return 0;
         }
     }
 }

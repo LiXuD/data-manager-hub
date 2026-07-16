@@ -68,12 +68,12 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
 
         Object keyIdObj = exchange.getAttribute("keyId");
         if (keyIdObj == null) {
-            return chain.filter(exchange);
+            return writeError(exchange, 401, "API Key 认证上下文缺失");
         }
         Long keyId = asLong(keyIdObj);
         if (keyId == null) {
-            log.warn("Rate limit skipped because keyId is invalid: {}", keyIdObj);
-            return chain.filter(exchange);
+            log.warn("Rate limit rejected because keyId is invalid: {}", keyIdObj);
+            return writeError(exchange, 401, "API Key 认证上下文无效");
         }
 
         return loadRateLimitConfig(keyId)
@@ -99,9 +99,23 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
                             });
                 })
                 .onErrorResume(e -> {
-                    log.warn("Rate limit check failed, passing through: {}", e.getMessage());
-                    return chain.filter(exchange);
+                    log.error("Rate limit check failed, rejecting request: {}", e.getMessage());
+                    return writeError(exchange, 503, "限流服务暂时不可用");
                 });
+    }
+
+    private Mono<Void> writeError(ServerWebExchange exchange, int code, String message) {
+        Result<Void> result = Result.error(code, message);
+        try {
+            byte[] bytes = objectMapper.writeValueAsBytes(result);
+            exchange.getResponse().setStatusCode(HttpStatus.valueOf(code));
+            exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+            exchange.getResponse().getHeaders().setContentLength(bytes.length);
+            DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(bytes);
+            return exchange.getResponse().writeWith(Mono.just(buffer));
+        } catch (Exception e) {
+            return Mono.error(e);
+        }
     }
 
     @SuppressWarnings("unchecked")

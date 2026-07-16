@@ -33,8 +33,8 @@ public class CallRecordEventConsumer {
         try {
             record = objectMapper.readValue(payload, CallRecord.class);
         } catch (Exception ex) {
-            log.warn("解析调用记录事件失败，跳过该事件", ex);
-            return;
+            log.warn("解析调用记录事件失败，交由Kafka错误处理器重试或投递死信", ex);
+            throw new IllegalArgumentException("Invalid call-record event", ex);
         }
 
         if (StringUtils.hasText(record.getRequestId()) && existsByRequestId(record.getRequestId())) {

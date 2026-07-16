@@ -315,7 +315,7 @@ public class OpenApiQueryController {
         if ("array".equalsIgnoreCase(type)) {
             return value instanceof List;
         }
-        return true;
+        return false;
     }
 
     private boolean checkRateLimit(ApiKey apiKeyEntity) {

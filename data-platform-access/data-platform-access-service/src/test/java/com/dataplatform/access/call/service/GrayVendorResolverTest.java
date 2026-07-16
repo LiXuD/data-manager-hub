@@ -164,6 +164,23 @@ class GrayVendorResolverTest {
     }
 
     @Test
+    void conditionalRuleWithoutContextDoesNotBypassCondition() {
+        GrayRuleDTO rule = createRule("caller", "42", 100);
+        when(graylogFeignClient.getActiveRule("TEST_API")).thenReturn(Result.success(rule));
+
+        assertNull(resolver.resolve("TEST_API", List.of(stableConfig, grayConfig), null));
+    }
+
+    @Test
+    void unknownConditionTypeDoesNotRouteToGray() {
+        GrayRuleDTO rule = createRule("unsupported", "anything", 100);
+        when(graylogFeignClient.getActiveRule("TEST_API")).thenReturn(Result.success(rule));
+
+        GrayVendorResolver.GrayRequestContext ctx = createContext(null, 42L, null);
+        assertNull(resolver.resolve("TEST_API", List.of(stableConfig, grayConfig), ctx));
+    }
+
+    @Test
     void ipConditionMatchReturnsGray() {
         GrayRuleDTO rule = createRule("ip", "10.0.0.0/8", 100);
         when(graylogFeignClient.getActiveRule("TEST_API")).thenReturn(Result.success(rule));

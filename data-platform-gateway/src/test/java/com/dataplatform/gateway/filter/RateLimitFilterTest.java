@@ -108,7 +108,7 @@ class RateLimitFilterTest {
     }
 
     @Test
-    void shouldPassThroughWhenRedisFails() {
+    void shouldReturn503WhenRedisFails() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         when(valueOps.get("openapi:rate_limit:1")).thenReturn(Mono.error(new RuntimeException("Redis down")));
 
@@ -116,10 +116,22 @@ class RateLimitFilterTest {
         ServerWebExchange exchange = MockServerWebExchange.from(request);
         exchange.getAttributes().put("keyId", 1L);
         GatewayFilterChain chain = mock(GatewayFilterChain.class);
-        when(chain.filter(exchange)).thenReturn(Mono.empty());
 
         filter.filter(exchange, chain).block();
 
-        verify(chain).filter(exchange);
+        assertEquals(503, exchange.getResponse().getStatusCode().value());
+        verifyNoInteractions(chain);
+    }
+
+    @Test
+    void shouldRejectOpenapiRequestWithoutAuthenticatedKeyId() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test").build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(401, exchange.getResponse().getStatusCode().value());
+        verifyNoInteractions(chain);
     }
 }
