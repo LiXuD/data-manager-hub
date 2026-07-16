@@ -28,5 +28,6 @@ public class BudgetScheduler {
     @Scheduled(cron = "0 0 * * * ?")
     public void checkBudgetStatus() {
         log.debug("检查预算状态...");
+        budgetAlertService.checkAllActiveBudgets();
     }
 }

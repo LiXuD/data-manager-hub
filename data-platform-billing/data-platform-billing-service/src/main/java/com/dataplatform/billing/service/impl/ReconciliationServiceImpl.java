@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -37,10 +38,11 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     @Autowired
     private CallStatsInternalFeignClient callStatsClient;
 
-    @Autowired(required = false)
+    @Autowired
     private GovernanceInternalFeignClient governanceFeignClient;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void reconcile(Long vendorId, LocalDate billingDate) {
         log.info("开始对账: vendorId={}, date={}", vendorId, billingDate);
 
@@ -60,6 +62,7 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int importVendorBills(String csvContent) {
         List<VendorBillCsvParser.VendorBillRow> rows = VendorBillCsvParser.parse(csvContent);
         for (VendorBillCsvParser.VendorBillRow row : rows) {
@@ -207,23 +210,18 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     }
 
     private void publishDiffAlert(BillingReconciliation reconciliation) {
-        if (governanceFeignClient == null) {
-            log.warn("GovernanceFeignClient不可用，跳过对账差异告警: reconciliationId={}", reconciliation.getId());
-            return;
-        }
-        try {
-            AlertRecordCreateDTO dto = new AlertRecordCreateDTO();
-            dto.setAlertType("billing_reconciliation");
-            dto.setAlertTitle("计费对账差异");
-            dto.setLevel("diff_error".equals(reconciliation.getStatus()) ? "error" : "warning");
-            dto.setAlertMessage("厂商 " + reconciliation.getVendorName()
-                    + " 在 " + reconciliation.getBillingDate()
-                    + " 存在对账差异，差异率 " + reconciliation.getDiffRate());
-            dto.setTriggeredValue(reconciliation.getDiffRate());
-            dto.setStatus("pending");
-            governanceFeignClient.createAlertRecord(dto);
-        } catch (Exception ex) {
-            log.warn("发送对账差异告警失败: reconciliationId={}", reconciliation.getId(), ex);
+        AlertRecordCreateDTO dto = new AlertRecordCreateDTO();
+        dto.setAlertType("billing_reconciliation");
+        dto.setAlertTitle("计费对账差异");
+        dto.setLevel("diff_error".equals(reconciliation.getStatus()) ? "error" : "warning");
+        dto.setAlertMessage("厂商 " + reconciliation.getVendorName()
+                + " 在 " + reconciliation.getBillingDate()
+                + " 存在对账差异，差异率 " + reconciliation.getDiffRate());
+        dto.setTriggeredValue(reconciliation.getDiffRate());
+        dto.setStatus("pending");
+        Result<Void> result = governanceFeignClient.createAlertRecord(dto);
+        if (result == null || !Integer.valueOf(200).equals(result.getCode())) {
+            throw new IllegalStateException("发送对账差异告警失败: reconciliationId=" + reconciliation.getId());
         }
     }
 }
