@@ -15,6 +15,8 @@ import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
 import com.dataplatform.masterdata.interface_.mapper.ApiInterfaceMapper;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,9 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private VendorConfigService vendorConfigService;
 
     @Override
     public PageResult<ApiInterfaceVO> list(Long vendorId, Long dataTypeId, String status, int page, int pageSize) {
@@ -117,9 +122,7 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
 
     @Override
     public boolean hasApiConfig(Long interfaceId) {
-        // 检查是否已配置API（需要查询vendor_config表）
-        // 这里返回false，实际实现需要注入VendorConfigService
-        return false;
+        return interfaceId != null && vendorConfigService.getByInterfaceId(interfaceId) != null;
     }
 
     @Override
@@ -155,8 +158,26 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
         }
 
         try {
-            objectMapper.readTree(schema);
-            return true;
+            JsonNode root = objectMapper.readTree(schema);
+            if (!root.isObject()) {
+                return false;
+            }
+            JsonNode type = root.get("type");
+            if (type != null && !type.isTextual()) {
+                return false;
+            }
+            JsonNode properties = root.get("properties");
+            if (properties != null && !properties.isObject()) {
+                return false;
+            }
+            JsonNode required = root.get("required");
+            if (required != null && (!required.isArray()
+                    || !java.util.stream.StreamSupport.stream(required.spliterator(), false)
+                    .allMatch(JsonNode::isTextual))) {
+                return false;
+            }
+            return type != null || properties != null || root.has("$schema") || root.has("allOf")
+                    || root.has("anyOf") || root.has("oneOf");
         } catch (Exception e) {
             return false;
         }
