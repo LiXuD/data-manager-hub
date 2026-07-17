@@ -15,7 +15,8 @@
         <result column="requestSchema" property="requestSchema"/>
         <result column="responseSchema" property="responseSchema"/>
         <result column="sort" property="sort"/>
-        <result column="status" property="status"/>
+        <result column="status" property="status"
+                typeHandler="com.dataplatform.common.handler.CommonStatusTypeHandler"/>
         <result column="createdBy" property="createdBy"/>
         <result column="createdAt" property="createdAt"/>
         <result column="updatedBy" property="updatedBy"/>

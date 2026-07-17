@@ -1,6 +1,7 @@
 package com.dataplatform.billing;
 
 import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
+import com.dataplatform.common.billing.BillingCalculatorFactory;
 import com.dataplatform.governance.api.feign.GovernanceInternalFeignClient;
 import com.dataplatform.governance.log.api.LogClient;
 import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
@@ -9,6 +10,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.context.annotation.Import;
 
 /**
  * 计费域计费计算的 Billing Application。
@@ -23,6 +25,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 })
 @EnableDiscoveryClient
 @MapperScan("com.dataplatform.billing.mapper")
+@Import(BillingCalculatorFactory.class)
 public class BillingApplication {
     public static void main(String[] args) {
         SpringApplication.run(BillingApplication.class, args);

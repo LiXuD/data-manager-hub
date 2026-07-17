@@ -2,18 +2,16 @@ package com.dataplatform.common.config;
 
 import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.autoconfigure.MybatisPlusPropertiesCustomizer;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import org.apache.ibatis.reflection.MetaObject;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 import javax.sql.DataSource;
 import java.time.LocalDateTime;
@@ -22,10 +20,9 @@ import java.time.LocalDateTime;
  * 公共持久化层配置的 Mybatis Plus Config。
  * <p>配置组件，集中声明本模块运行所需的 Spring Bean 或框架参数。</p>
  */
-@Configuration
+@AutoConfiguration(after = DataSourceAutoConfiguration.class)
 @ConditionalOnClass(name = {"com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor", "javax.sql.DataSource"})
 @ConditionalOnBean(DataSource.class)
-@AutoConfigureAfter(DataSourceAutoConfiguration.class)
 public class MybatisPlusConfig {
 
     @Bean
@@ -40,20 +37,6 @@ public class MybatisPlusConfig {
     @ConditionalOnMissingBean
     public MetaObjectHandler metaObjectHandler() {
         return new CommonMetaObjectHandler();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public MybatisPlusPropertiesCustomizer typeHandlersPackageCustomizer() {
-        return properties -> {
-            String handlerPackage = "com.dataplatform.common.handler";
-            String existing = properties.getTypeHandlersPackage();
-            if (existing == null || existing.isBlank()) {
-                properties.setTypeHandlersPackage(handlerPackage);
-            } else if (!existing.contains(handlerPackage)) {
-                properties.setTypeHandlersPackage(existing + "," + handlerPackage);
-            }
-        };
     }
 
     public static class CommonMetaObjectHandler implements MetaObjectHandler {
