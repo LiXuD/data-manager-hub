@@ -19,7 +19,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableFeignClients(clients = LogClient.class)
 @MapperScan({
         "com.dataplatform.identity.tenant.mapper",
-        "com.dataplatform.identity.iam.mapper"
+        "com.dataplatform.identity.iam.mapper",
+        "com.dataplatform.identity.security.mapper"
 })
 @ComponentScan(basePackages = {
         "com.dataplatform.identity",
