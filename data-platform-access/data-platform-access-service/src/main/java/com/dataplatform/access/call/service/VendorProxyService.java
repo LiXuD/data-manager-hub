@@ -6,10 +6,16 @@ import com.dataplatform.common.adapter.VendorAdapterConfig;
 import com.dataplatform.common.adapter.VendorAdapterFactory;
 import com.dataplatform.common.circuitbreaker.CircuitBreakerManager;
 import com.dataplatform.common.constant.StatusConstants;
+import com.dataplatform.common.security.pipeline.SecurityDirection;
+import com.dataplatform.common.security.pipeline.SecurityStepConfig;
+import com.dataplatform.common.security.pipeline.SecurityStepType;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
+import com.dataplatform.masterdata.vendor.api.dto.VendorRuntimeSecurityDTO;
+import com.dataplatform.masterdata.vendor.api.dto.VendorSecurityStepDTO;
 import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
 import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorSecurityInternalFeignClient;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -22,6 +28,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.LinkedHashMap;
 
 /**
  * 厂商代理服务
@@ -37,6 +44,9 @@ public class VendorProxyService {
 
     @Autowired
     private VendorInternalFeignClient vendorFeignClient;
+
+    @Autowired
+    private VendorSecurityInternalFeignClient vendorSecurityFeignClient;
 
     @Autowired
     private CircuitBreakerManager circuitBreakerManager;
@@ -223,6 +233,7 @@ public class VendorProxyService {
         adapterConfig.setRequestTemplate(config.getRequestTemplate());
         adapterConfig.setResponseMapping(config.getResponseMapping());
         adapterConfig.setSignType(config.getSignType());
+        adapterConfig.setAuthType(config.getAuthType());
 
         Result<String> secretKeyResult = vendorConfigFeignClient.getSecretKey(vendorCode);
         adapterConfig.setSecretKey(secretKeyResult != null ? secretKeyResult.getData() : null);
@@ -237,7 +248,49 @@ public class VendorProxyService {
             }
         }
 
+        if (config.getAuthConfig() != null && !config.getAuthConfig().isEmpty()) {
+            try {
+                Map<String, Object> authConfig = objectMapper.readValue(config.getAuthConfig(),
+                        new TypeReference<Map<String, Object>>() {});
+                adapterConfig.setAuthConfig(authConfig);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("解析认证配置失败", e);
+            }
+        }
+
+        if (config.getId() != null) {
+            try {
+                Result<VendorRuntimeSecurityDTO> runtimeResult = vendorSecurityFeignClient.getRuntimeSecurity(config.getId());
+                VendorRuntimeSecurityDTO runtime = runtimeResult != null ? runtimeResult.getData() : null;
+                if (runtime != null) {
+                    adapterConfig.setSecuritySteps(runtime.getSteps().stream().map(this::toRuntimeStep).toList());
+                    Map<String, String> secrets = new LinkedHashMap<>(runtime.getResolvedSecrets());
+                    if (adapterConfig.getSecretKey() != null) {
+                        secrets.putIfAbsent("vendor.secretKey", adapterConfig.getSecretKey());
+                    }
+                    adapterConfig.setResolvedSecrets(secrets);
+                }
+            } catch (Exception e) {
+                if (config.getSignType() == null || config.getSignType().isBlank()) {
+                    throw new IllegalStateException("加载厂商安全流水线失败，已阻止未加密或未签名调用", e);
+                }
+                log.warn("加载厂商安全流水线失败，回退到旧签名配置: vendor={}, error={}", vendorCode, e.getMessage());
+            }
+        }
+
         return adapterConfig;
+    }
+
+    private SecurityStepConfig toRuntimeStep(VendorSecurityStepDTO dto) {
+        SecurityStepConfig step = new SecurityStepConfig();
+        step.setId(dto.getStepKey());
+        step.setDirection(SecurityDirection.valueOf(dto.getDirection()));
+        step.setStepType(SecurityStepType.valueOf(dto.getStepType()));
+        step.setStepName(dto.getStepName());
+        step.setSortNo(dto.getSortNo());
+        step.setEnabled(dto.getEnabled());
+        step.setConfig(dto.getConfig());
+        return step;
     }
 
     private Map<String, Object> errorResult(String errorCode, String errorMsg) {

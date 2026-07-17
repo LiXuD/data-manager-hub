@@ -6,6 +6,7 @@ import com.dataplatform.masterdata.graylog.api.feign.GraylogInternalFeignClient;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
 import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorSecurityInternalFeignClient;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -23,6 +24,7 @@ import org.springframework.context.annotation.ComponentScan;
         ApiInterfaceFeignClient.class,
         VendorConfigInternalFeignClient.class,
         VendorInternalFeignClient.class,
+        VendorSecurityInternalFeignClient.class,
         GraylogInternalFeignClient.class,
         BillingInternalFeignClient.class,
         LogClient.class
