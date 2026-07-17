@@ -17,7 +17,21 @@ public interface VendorExtendedConfigService extends IService<VendorExtendedConf
 
     List<VendorExtendedConfig> getByVendor(Long vendorId);
 
+    VendorExtendedConfig getForDisplay(Long id);
+
+    VendorExtendedConfig saveSecure(VendorExtendedConfig config);
+
+    VendorExtendedConfig updateSecure(Long id, VendorExtendedConfig config);
+
+    boolean removeSecure(Long id);
+
+    boolean updateStatusSecure(Long id, String status);
+
     String getConfig(String configKey);
+
+    String getConfig(Long vendorId, String configKey);
+
+    String getDisplayValue(String configKey);
 
     boolean updateConfig(String configKey, String configValue, Long updatedBy);
 

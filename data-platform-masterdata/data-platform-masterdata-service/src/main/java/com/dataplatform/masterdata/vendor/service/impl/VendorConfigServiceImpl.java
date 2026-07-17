@@ -134,6 +134,12 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
     }
 
     @Override
+    public Long getDataTypeIdByCode(String dataTypeCode) {
+        DataType dataType = getDataTypeByCode(dataTypeCode);
+        return dataType != null ? dataType.getId() : null;
+    }
+
+    @Override
     public String getSecretKey(String vendorCode) {
         if (!StringUtils.hasText(vendorCode)) {
             return null;

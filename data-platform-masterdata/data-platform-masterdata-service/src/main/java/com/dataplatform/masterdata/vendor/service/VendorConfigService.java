@@ -37,6 +37,11 @@ public interface VendorConfigService extends IService<VendorConfig> {
     VendorConfig getByVendorIdAndDataTypeCode(Long vendorId, String dataTypeCode);
 
     /**
+     * Resolve an active data type code for vendor configuration persistence.
+     */
+    Long getDataTypeIdByCode(String dataTypeCode);
+
+    /**
      * 获取厂商密钥
      */
     String getSecretKey(String vendorCode);

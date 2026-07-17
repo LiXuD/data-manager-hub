@@ -3,8 +3,10 @@ package com.dataplatform.masterdata.vendor.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.dataplatform.api.Result;
+import com.dataplatform.api.PageResult;
 import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
+import com.dataplatform.common.util.UserContext;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigCreateReqDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigUpdateReqDTO;
@@ -41,6 +43,9 @@ public class VendorConfigController {
             @RequestParam(required = false) Long dataTypeId,
             @RequestParam(required = false) Long interfaceId,
             @RequestParam(required = false) String status) {
+        if (!canView()) {
+            return forbiddenPage();
+        }
         LambdaQueryWrapper<VendorConfig> wrapper = new LambdaQueryWrapper<>();
         if (vendorId != null) {
             wrapper.eq(VendorConfig::getVendorId, vendorId);
@@ -66,11 +71,13 @@ public class VendorConfigController {
 
     @GetMapping("/{id}")
     public Result<VendorConfigDTO> getById(@PathVariable("id") Long id) {
+        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
         return Result.success(toDTO(vendorConfigService.getById(id)));
     }
 
     @GetMapping("/vendor/{vendorId}")
     public Result<List<VendorConfigDTO>> listByVendorId(@PathVariable("vendorId") Long vendorId) {
+        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
         LambdaQueryWrapper<VendorConfig> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(VendorConfig::getVendorId, vendorId)
                 .orderByDesc(VendorConfig::getCreatedAt);
@@ -81,6 +88,7 @@ public class VendorConfigController {
 
     @GetMapping("/interface/{interfaceId}")
     public Result<List<VendorConfigDTO>> listByInterface(@PathVariable Long interfaceId) {
+        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
         LambdaQueryWrapper<VendorConfig> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(VendorConfig::getInterfaceId, interfaceId)
                 .orderByDesc(VendorConfig::getCreatedAt);
@@ -92,6 +100,7 @@ public class VendorConfigController {
     @OperationLog(module = "厂商配置管理", operation = "新增厂商配置")
     @PostMapping
     public Result<VendorConfigDTO> create(@RequestBody VendorConfigCreateReqDTO dto) {
+        if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
         VendorConfig config = toEntity(dto);
         if (config.getVendorId() == null) {
             return Result.error(400, "厂商ID不能为空");
@@ -99,6 +108,11 @@ public class VendorConfigController {
         if (config.getInterfaceId() == null) {
             return Result.error(400, "接口ID不能为空");
         }
+        Long dataTypeId = vendorConfigService.getDataTypeIdByCode(dto.getDataTypeCode());
+        if (dataTypeId == null) {
+            return Result.error(400, "数据类型不存在或未启用");
+        }
+        config.setDataTypeId(dataTypeId);
         if (config.getApiUrl() == null || config.getApiUrl().trim().isEmpty()) {
             return Result.error(400, "API地址不能为空");
         }
@@ -112,6 +126,7 @@ public class VendorConfigController {
     @PutMapping("/{id}")
     public Result<VendorConfigDTO> update(@PathVariable("id") Long id,
                                           @RequestBody VendorConfigUpdateReqDTO dto) {
+        if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
         VendorConfig config = toEntity(dto);
         config.setId(id);
         boolean success = vendorConfigService.updateById(config);
@@ -124,6 +139,7 @@ public class VendorConfigController {
     @OperationLog(module = "厂商配置管理", operation = "删除厂商配置")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
+        if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
         boolean success = vendorConfigService.removeById(id);
         if (!success) {
             return Result.error(404, "配置不存在");
@@ -134,6 +150,7 @@ public class VendorConfigController {
     @OperationLog(module = "厂商配置管理", operation = "更新配置状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
         String status = body.get("status");
         CommonStatus statusEnum = CommonStatus.fromCode(status);
         if (statusEnum == null) {
@@ -151,6 +168,7 @@ public class VendorConfigController {
 
     @PostMapping("/{id}/test")
     public Result<Map<String, Object>> testConnection(@PathVariable Long id) {
+        if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
         VendorConfig config = vendorConfigService.getById(id);
         if (config == null) {
             return Result.error(404, "配置不存在");
@@ -161,6 +179,7 @@ public class VendorConfigController {
 
     @GetMapping("/{id}/mapping")
     public Result<Map<String, Object>> getParamMapping(@PathVariable Long id) {
+        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
         VendorConfig config = vendorConfigService.getById(id);
         if (config == null) {
             return Result.error(404, "配置不存在");
@@ -175,6 +194,7 @@ public class VendorConfigController {
     @OperationLog(module = "厂商配置管理", operation = "更新参数映射")
     @PutMapping("/{id}/mapping")
     public Result<Void> updateParamMapping(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
         VendorConfig config = vendorConfigService.getById(id);
         if (config == null) {
             return Result.error(404, "配置不存在");
@@ -191,18 +211,15 @@ public class VendorConfigController {
     public Result<VendorConfigDTO> getByVendorCodeAndDataTypeCode(
             @RequestParam("vendorCode") String vendorCode,
             @RequestParam("dataTypeCode") String dataTypeCode) {
+        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
         return Result.success(toDTO(vendorConfigService.getByVendorCodeAndDataTypeCode(vendorCode, dataTypeCode)));
-    }
-
-    @GetMapping("/secretKey")
-    public Result<String> getSecretKey(@RequestParam("vendorCode") String vendorCode) {
-        return Result.success(vendorConfigService.getSecretKey(vendorCode));
     }
 
     @GetMapping("/byVendorIdAndDataTypeCode")
     public Result<VendorConfigDTO> getByVendorIdAndDataTypeCode(
             @RequestParam("vendorId") Long vendorId,
             @RequestParam("dataTypeCode") String dataTypeCode) {
+        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
         return Result.success(toDTO(vendorConfigService.getByVendorIdAndDataTypeCode(vendorId, dataTypeCode)));
     }
 
@@ -210,7 +227,23 @@ public class VendorConfigController {
     public Result<VendorConfigDTO> getByVendorCodeAndInterfaceCode(
             @RequestParam("vendorCode") String vendorCode,
             @RequestParam("interfaceCode") String interfaceCode) {
+        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
         return Result.success(toDTO(vendorConfigService.getByVendorCodeAndInterfaceCode(vendorCode, interfaceCode)));
+    }
+
+    private boolean canView() {
+        return UserContext.hasPermission("vendor:view");
+    }
+
+    private boolean canEdit() {
+        return UserContext.hasPermission("vendor:edit");
+    }
+
+    private PageResult<VendorConfigDTO> forbiddenPage() {
+        PageResult<VendorConfigDTO> result = PageResult.of(List.of(), 0L, 1, 10);
+        result.setCode(403);
+        result.setMsg("没有厂商配置查看权限");
+        return result;
     }
 
     private void applyDefaults(VendorConfig config) {
@@ -240,6 +273,7 @@ public class VendorConfigController {
         }
         VendorConfigDTO dto = new VendorConfigDTO();
         BeanUtils.copyProperties(entity, dto);
+        dto.setAuthConfig(null);
         if (entity.getStatus() != null) {
             dto.setStatus(entity.getStatus().getCode());
         }
