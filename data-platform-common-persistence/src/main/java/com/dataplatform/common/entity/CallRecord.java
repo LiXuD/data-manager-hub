@@ -35,6 +35,9 @@ public class CallRecord {
     private String requestHash;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String responseData;
+    private Boolean responseContractValid;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String responseContractErrors;
     private Boolean success;
     private String errorCode;
     private String errorMsg;
@@ -89,6 +92,10 @@ public class CallRecord {
     public void setRequestHash(String requestHash) { this.requestHash = requestHash; }
     public String getResponseData() { return responseData; }
     public void setResponseData(String responseData) { this.responseData = responseData; }
+    public Boolean getResponseContractValid() { return responseContractValid; }
+    public void setResponseContractValid(Boolean responseContractValid) { this.responseContractValid = responseContractValid; }
+    public String getResponseContractErrors() { return responseContractErrors; }
+    public void setResponseContractErrors(String responseContractErrors) { this.responseContractErrors = responseContractErrors; }
     public Boolean getSuccess() { return success; }
     public void setSuccess(Boolean success) { this.success = success; }
     public String getErrorCode() { return errorCode; }

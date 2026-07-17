@@ -9,6 +9,7 @@ import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.access.call.service.VendorProxyService;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
+import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.math.BigDecimal;
@@ -17,6 +18,9 @@ import java.util.LinkedHashMap;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
+import io.micrometer.core.instrument.Metrics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -25,6 +29,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class OpenApiQueryService {
+
+    private static final Logger log = LoggerFactory.getLogger(OpenApiQueryService.class);
 
     private static final String DEFAULT_API_VERSION = "v1";
     private static final String MASKED_VALUE = "***MASKED***";
@@ -193,6 +199,7 @@ public class OpenApiQueryService {
         record.setRequestTime(requestTime);
         record.setResponseAt(responseTime);
         record.setCallTime(requestTime);
+        applyResponseContractResult(record, context, result);
         try {
             record.setRequestParams(objectMapper.writeValueAsString(sanitizeForRecord(context.getParams())));
             Map<String, Object> responseForRecord = Boolean.TRUE.equals(context.getUseCache())
@@ -203,6 +210,35 @@ public class OpenApiQueryService {
             record.setResponseData("{}");
         }
         return record;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyResponseContractResult(CallRecord record, OpenApiCallContext context,
+                                             Map<String, Object> result) {
+        InterfaceContractDTO contract = context.getInterfaceContract();
+        if (contract == null || contract.getResponseFields() == null || contract.getResponseFields().isEmpty()) {
+            return;
+        }
+        Object rawData = result.get("data");
+        InterfaceContractValidator.ValidationResult validation;
+        if (rawData instanceof Map<?, ?> map) {
+            validation = InterfaceContractValidator.validate(
+                    contract.getResponseFields(), (Map<String, Object>) map, false);
+        } else {
+            validation = new InterfaceContractValidator.ValidationResult(
+                    false, java.util.List.of("data类型必须为object"));
+        }
+        record.setResponseContractValid(validation.valid());
+        if (!validation.valid()) {
+            try {
+                record.setResponseContractErrors(objectMapper.writeValueAsString(validation.errors()));
+            } catch (Exception ignored) {
+                record.setResponseContractErrors("[]");
+            }
+            Metrics.counter("openapi.response.contract.invalid", "apiCode", context.getApiCode()).increment();
+            log.warn("OpenAPI响应契约不匹配: requestId={}, apiCode={}, errors={}",
+                    record.getRequestId(), context.getApiCode(), validation.errors());
+        }
     }
 
     private String buildRequestHash(Map<String, Object> params) {
@@ -276,6 +312,7 @@ public class OpenApiQueryService {
         private Integer cacheDays;
         private String cacheScope;
         private Map<String, Object> params;
+        private InterfaceContractDTO interfaceContract;
 
         public String getExternalRequestId() { return externalRequestId; }
         public void setExternalRequestId(String externalRequestId) { this.externalRequestId = externalRequestId; }
@@ -317,5 +354,7 @@ public class OpenApiQueryService {
         public void setCacheScope(String cacheScope) { this.cacheScope = cacheScope; }
         public Map<String, Object> getParams() { return params; }
         public void setParams(Map<String, Object> params) { this.params = params; }
+        public InterfaceContractDTO getInterfaceContract() { return interfaceContract; }
+        public void setInterfaceContract(InterfaceContractDTO interfaceContract) { this.interfaceContract = interfaceContract; }
     }
 }
