@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS vendor_config (
     request_template JSONB,
     response_mapping JSONB,
     fallback_vendor_id BIGINT,
+    security_version INTEGER NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -99,6 +100,39 @@ CREATE TABLE IF NOT EXISTS vendor_config (
 CREATE INDEX idx_vendor_config_vendor ON vendor_config(vendor_id);
 CREATE INDEX idx_vendor_config_datatype ON vendor_config(data_type_id);
 CREATE INDEX IF NOT EXISTS idx_vendor_config_data_type_code ON vendor_config(data_type_code);
+
+CREATE TABLE IF NOT EXISTS vendor_interface_security_step (
+    id BIGSERIAL PRIMARY KEY,
+    vendor_config_id BIGINT NOT NULL REFERENCES vendor_config(id) ON DELETE CASCADE,
+    step_key VARCHAR(100) NOT NULL,
+    direction VARCHAR(16) NOT NULL CHECK (direction IN ('REQUEST', 'RESPONSE')),
+    step_type VARCHAR(32) NOT NULL,
+    step_name VARCHAR(100),
+    sort_no INTEGER NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(vendor_config_id, direction, step_key),
+    UNIQUE(vendor_config_id, direction, sort_no)
+);
+
+CREATE TABLE IF NOT EXISTS vendor_interface_security_version (
+    id BIGSERIAL PRIMARY KEY,
+    vendor_config_id BIGINT NOT NULL REFERENCES vendor_config(id) ON DELETE CASCADE,
+    version_no INTEGER NOT NULL,
+    config_snapshot JSONB NOT NULL,
+    created_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(vendor_config_id, version_no)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vendor_security_step_config
+    ON vendor_interface_security_step(vendor_config_id, direction, sort_no);
+CREATE INDEX IF NOT EXISTS idx_vendor_security_version_config
+    ON vendor_interface_security_version(vendor_config_id, version_no DESC);
 
 -- 5. 调用方信息表
 CREATE TABLE IF NOT EXISTS caller_info (
@@ -244,6 +278,8 @@ ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_scope VARCHAR(20) NOT NUL
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_source_record_id BIGINT;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS request_time TIMESTAMP;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS response_at TIMESTAMP;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS response_contract_valid BOOLEAN;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS response_contract_errors JSONB;
 
 -- 分区策略: 按月分区，初始化当前月和下月，避免时间推进后写入失败
 CREATE OR REPLACE FUNCTION create_monthly_partition(partition_date DATE)
