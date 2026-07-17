@@ -3,6 +3,9 @@ package com.dataplatform.common.adapter;
 import com.dataplatform.common.auth.AuthHandler;
 import com.dataplatform.common.auth.AuthHandlerFactory;
 import com.dataplatform.common.security.SignatureBuilder;
+import com.dataplatform.common.security.pipeline.SecurityDirection;
+import com.dataplatform.common.security.pipeline.SecurityExecutionContext;
+import com.dataplatform.common.security.pipeline.SecurityPipelineExecutor;
 import com.dataplatform.common.util.LogTruncationUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import okhttp3.*;
@@ -12,6 +15,8 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -25,6 +30,7 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
     private final String vendorCode;
     private final OkHttpClient httpClient;
     private final AuthHandlerFactory authHandlerFactory;
+    private final SecurityPipelineExecutor securityPipelineExecutor = new SecurityPipelineExecutor();
 
     public HttpVendorAdapter(String vendorCode) {
         this(vendorCode, new AuthHandlerFactory());
@@ -62,13 +68,25 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         String method = config.getMethod() != null ? config.getMethod().toUpperCase() : "POST";
 
         Map<String, Object> vendorParams = transformRequest(params, config.getRequestTemplate());
+        SecurityExecutionContext requestContext = new SecurityExecutionContext(
+                SecurityDirection.REQUEST,
+                vendorParams,
+                config.getHeaders(),
+                Map.of(),
+                config.getResolvedSecrets());
+        if (hasEnabledSecuritySteps(config, SecurityDirection.REQUEST)) {
+            securityPipelineExecutor.execute(SecurityDirection.REQUEST, config.getSecuritySteps(), requestContext);
+        } else {
+            requestContext.getParams().clear();
+            requestContext.getParams().putAll(addSignature(config, vendorParams));
+        }
         if (log.isInfoEnabled()) {
             log.info("[VENDOR-REQ] {} {} | vendor={} | params={}", method, url, vendorCode,
                     LogTruncationUtil.truncate(vendorParams, LogTruncationUtil.SHORT));
         }
 
         try {
-            Request request = buildRequest(config, vendorParams, method);
+            Request request = buildRequest(config, requestContext, method);
 
             try (Response response = httpClient.newCall(request).execute()) {
                 long latency = System.currentTimeMillis() - startTime;
@@ -97,19 +115,19 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         }
     }
 
-    private Request buildRequest(VendorAdapterConfig config, Map<String, Object> params, String method) throws IOException {
+    private Request buildRequest(VendorAdapterConfig config, SecurityExecutionContext context, String method) throws IOException {
         String url = config.getApiUrl();
 
-        Map<String, Object> signedParams = addSignature(config, params);
-        String jsonBody = objectMapper.writeValueAsString(signedParams);
+        Map<String, Object> requestParams = context.getParams();
+        String jsonBody = context.getBody() != null ? context.getBody() : objectMapper.writeValueAsString(requestParams);
         RequestBody body = RequestBody.create(jsonBody, JSON_MEDIA_TYPE);
 
         Request.Builder builder = new Request.Builder().url(url);
 
-        if (config.getHeaders() != null) {
-            for (Map.Entry<String, String> header : config.getHeaders().entrySet()) {
+        if (context.getHeaders() != null) {
+            for (Map.Entry<String, String> header : context.getHeaders().entrySet()) {
                 String value = header.getValue();
-                if (value.contains("{secretKey}") && config.getSecretKey() != null) {
+                if (value != null && value.contains("{secretKey}") && config.getSecretKey() != null) {
                     value = value.replace("{secretKey}", config.getSecretKey());
                 }
                 builder.addHeader(header.getKey(), value);
@@ -124,12 +142,28 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
                 throw new IllegalArgumentException("Invalid URL: " + url);
             }
             HttpUrl.Builder urlBuilder = httpUrl.newBuilder();
-            for (Map.Entry<String, Object> entry : signedParams.entrySet()) {
+            for (Map.Entry<String, Object> entry : requestParams.entrySet()) {
                 urlBuilder.addQueryParameter(entry.getKey(), String.valueOf(entry.getValue()));
             }
+            context.getQuery().forEach(urlBuilder::addQueryParameter);
             builder.url(urlBuilder.build()).get();
         } else {
-            builder.post(body);
+            if (!context.getQuery().isEmpty()) {
+                HttpUrl httpUrl = HttpUrl.parse(url);
+                if (httpUrl == null) {
+                    throw new IllegalArgumentException("Invalid URL: " + url);
+                }
+                HttpUrl.Builder urlBuilder = httpUrl.newBuilder();
+                context.getQuery().forEach(urlBuilder::addQueryParameter);
+                builder.url(urlBuilder.build());
+            }
+            switch (method) {
+                case "POST" -> builder.post(body);
+                case "PUT" -> builder.put(body);
+                case "PATCH" -> builder.patch(body);
+                case "DELETE" -> builder.delete(body);
+                default -> throw new IllegalArgumentException("Unsupported HTTP method: " + method);
+            }
         }
 
         return builder.build();
@@ -139,17 +173,22 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         String authType = config.getAuthType();
         Map<String, Object> authConfig = config.getAuthConfig();
 
-        if (!StringUtils.hasText(authType) || authConfig == null) {
+        if (!StringUtils.hasText(authType) || "NONE".equalsIgnoreCase(authType.trim())) {
             return;
         }
-
-        AuthHandler handler = authHandlerFactory.getHandler(authType);
-        if (handler != null) {
-            handler.applyAuth(builder, authConfig, Collections.singletonMap("vendorCode", vendorCode));
-            log.debug("应用认证: type={}", authType);
-        } else {
-            log.warn("未知的认证类型: vendor={}, authType={}", vendorCode, authType);
+        if (authConfig == null) {
+            throw new IllegalArgumentException("认证类型已配置但认证参数为空: " + authType);
         }
+
+        if (!authHandlerFactory.supports(authType)) {
+            throw new IllegalArgumentException("未知的认证类型: " + authType);
+        }
+        AuthHandler handler = authHandlerFactory.getHandler(authType);
+        if (handler == null) {
+            throw new IllegalArgumentException("未知的认证类型: " + authType);
+        }
+        handler.applyAuth(builder, authConfig, Collections.singletonMap("vendorCode", vendorCode));
+        log.debug("应用认证: type={}", authType);
     }
 
     private Map<String, Object> addSignature(VendorAdapterConfig config, Map<String, Object> params) {
@@ -183,12 +222,51 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         }
 
         String logResponse = LogTruncationUtil.truncate(rawBody, LogTruncationUtil.SHORT);
-        Map<String, Object> vendorResponse = objectMapper.readValue(rawBody,
-            new TypeReference<Map<String, Object>>() {});
+        Map<String, Object> vendorResponse = new LinkedHashMap<>();
+        try {
+            vendorResponse.putAll(objectMapper.readValue(rawBody,
+                    new TypeReference<Map<String, Object>>() {}));
+        } catch (IOException parseError) {
+            if (!hasEnabledSecuritySteps(config, SecurityDirection.RESPONSE)) {
+                throw parseError;
+            }
+            log.debug("响应体不是JSON对象，将先执行响应安全流水线");
+        }
+
+        if (hasEnabledSecuritySteps(config, SecurityDirection.RESPONSE)) {
+            Map<String, String> responseHeaders = new LinkedHashMap<>();
+            response.headers().toMultimap().forEach((name, values) -> {
+                if (!values.isEmpty()) {
+                    responseHeaders.put(name, values.get(values.size() - 1));
+                }
+            });
+            SecurityExecutionContext responseContext = new SecurityExecutionContext(
+                    SecurityDirection.RESPONSE,
+                    vendorResponse,
+                    responseHeaders,
+                    new LinkedHashMap<>(),
+                    config.getResolvedSecrets());
+            responseContext.setBody(rawBody);
+            securityPipelineExecutor.execute(SecurityDirection.RESPONSE, config.getSecuritySteps(), responseContext);
+            if (!Objects.equals(rawBody, responseContext.getBody())) {
+                Map<String, Object> decryptedBody = objectMapper.readValue(responseContext.getBody(),
+                        new TypeReference<Map<String, Object>>() {});
+                responseContext.getParams().clear();
+                responseContext.getParams().putAll(decryptedBody);
+            }
+            vendorResponse = responseContext.getParams();
+        }
 
         Map<String, Object> transformedResponse = transformResponse(vendorResponse, config.getResponseMapping());
 
         return new VendorCallResult(true, transformedResponse, logResponse, null, null, latency);
+    }
+
+    private boolean hasEnabledSecuritySteps(VendorAdapterConfig config, SecurityDirection direction) {
+        return config.getSecuritySteps() != null && config.getSecuritySteps().stream()
+                .anyMatch(step -> step != null
+                        && step.getDirection() == direction
+                        && !Boolean.FALSE.equals(step.getEnabled()));
     }
 
     private record VendorCallResult(boolean success, Map<String, Object> data, String rawResponse,
