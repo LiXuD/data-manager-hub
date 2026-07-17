@@ -44,6 +44,10 @@ public class VendorConfigDTO implements Serializable {
 
     private Long fallbackVendorId;
 
+    private String authType;
+
+    private String authConfig;
+
     private String paramMapping;
 
     private String status;
@@ -194,6 +198,22 @@ public class VendorConfigDTO implements Serializable {
 
     public void setFallbackVendorId(Long fallbackVendorId) {
         this.fallbackVendorId = fallbackVendorId;
+    }
+
+    public String getAuthType() {
+        return authType;
+    }
+
+    public void setAuthType(String authType) {
+        this.authType = authType;
+    }
+
+    public String getAuthConfig() {
+        return authConfig;
+    }
+
+    public void setAuthConfig(String authConfig) {
+        this.authConfig = authConfig;
     }
 
     public String getParamMapping() {
