@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import type { ApiInterface, InterfaceParam, ListResponse } from '@/types'
+import type { ApiInterface, InterfaceContract, InterfaceParam, ListResponse } from '@/types'
 
 export const getInterfaceList = (params: {
   page: number
@@ -30,6 +30,21 @@ export const getInterfaceOptions = (params: {
 
 export const getInterfaceParams = (interfaceId: number) => {
   return request.get<{ data: InterfaceParam[] }>(`/interface/${interfaceId}/params`)
+}
+
+export const getInterfaceContract = async (interfaceId: number) => {
+  const response = await request.get<{ data: InterfaceContract }>(`/interface/${interfaceId}/contract`)
+  return response.data
+}
+
+export const saveInterfaceContract = async (interfaceId: number, contract: Partial<InterfaceContract>) => {
+  const response = await request.put<{ data: InterfaceContract }>(`/interface/${interfaceId}/contract`, contract)
+  return response.data
+}
+
+export const importInterfaceSchema = async (interfaceId: number) => {
+  const response = await request.post<{ data: InterfaceContract }>(`/interface/${interfaceId}/contract/import-schema`)
+  return response.data
 }
 
 export const createInterface = (data: Partial<ApiInterface>) => {

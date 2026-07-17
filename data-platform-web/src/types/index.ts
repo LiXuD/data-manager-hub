@@ -179,15 +179,43 @@ export interface ApiInterface {
 export interface InterfaceParam {
   id?: number
   interfaceId?: number
+  direction?: 'REQUEST' | 'RESPONSE'
+  parentId?: number
   paramName: string
   description?: string
-  paramType?: 'string' | 'number' | 'boolean' | 'object' | 'array' | string
+  paramType?: 'string' | 'integer' | 'number' | 'boolean' | 'object' | 'array' | string
+  arrayItemType?: 'string' | 'integer' | 'number' | 'boolean' | 'object'
   required?: boolean
   defaultValue?: string
   validationRule?: string
+  exampleValue?: string
+  constraintConfig?: string
   sort?: number
+  children?: InterfaceParam[]
   createdAt?: string
   updatedAt?: string
+}
+
+export interface InterfaceContract {
+  interfaceId: number
+  interfaceCode: string
+  interfaceName: string
+  description?: string
+  requestSchema: string
+  responseSchema: string
+  requestFields: InterfaceParam[]
+  responseFields: InterfaceParam[]
+  updatedAt?: string
+}
+
+export interface OpenApiDocument {
+  contract: InterfaceContract
+  baseUrl: string
+  auth: { type: string; headers: string[] }
+  endpoints: Array<{ method: string; path: string; name: string }>
+  errorCodes: Array<{ code: number; description: string }>
+  curl: string
+  openapi: Record<string, any>
 }
 
 // 数据查询请求
@@ -493,6 +521,62 @@ export interface SignConfig {
   type: SignType
   secretKey?: string
   signFields?: string[]
+}
+
+export type SecurityDirection = 'REQUEST' | 'RESPONSE'
+
+export type SecurityStepType =
+  | 'FIELD_SELECT'
+  | 'GENERATE'
+  | 'CANONICALIZE'
+  | 'DIGEST'
+  | 'HMAC'
+  | 'SIGN'
+  | 'ENCRYPT'
+  | 'DECRYPT'
+  | 'VERIFY'
+  | 'ENCODE'
+  | 'DECODE'
+  | 'INJECT'
+  | 'REMOVE_FIELD'
+
+export interface VendorSecurityStep {
+  id?: number
+  stepKey: string
+  direction: SecurityDirection
+  stepType: SecurityStepType
+  stepName?: string
+  sortNo: number
+  enabled: boolean
+  config: Record<string, any>
+}
+
+export interface VendorSecurityStepList {
+  version: number
+  steps: VendorSecurityStep[]
+}
+
+export interface VendorSecurityCapability {
+  stepType: SecurityStepType
+  name: string
+  directions: SecurityDirection[]
+  algorithms: string[]
+  defaults: Record<string, any>
+  legacy: boolean
+}
+
+export interface VendorSecurityPreview {
+  params: Record<string, any>
+  headers: Record<string, string>
+  query: Record<string, string>
+  body?: string
+  stepResults: Record<string, any>
+}
+
+export interface VendorSecurityVersion {
+  id: number
+  version: number
+  createdAt: string
 }
 
 // 认证配置

@@ -29,6 +29,10 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8888',
         changeOrigin: true
+      },
+      '^/openapi/': {
+        target: 'http://localhost:8888',
+        changeOrigin: true
       }
     }
   },

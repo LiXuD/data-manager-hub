@@ -79,6 +79,9 @@ instance.interceptors.response.use(
         case 408:
           msg = '请求超时'
           break
+        case 409:
+          msg = data?.message || data?.msg || '数据已被其他用户修改，请刷新后重试'
+          break
         case 500:
           msg = '服务器内部错误'
           break
