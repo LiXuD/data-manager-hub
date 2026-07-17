@@ -51,13 +51,14 @@ public class BaseTest {
     /** 注册按 ID 删除的清理任务 */
     protected void registerDeleteById(String urlTemplate, Long id) {
         cleanupTasks.add(() -> {
-            try {
-                given()
-                    .contentType("application/json")
-                    .header("Authorization", "Bearer " + authToken)
-                    .when()
-                    .delete(GATEWAY_URL + "/api/v1" + urlTemplate, id);
-            } catch (Exception ignored) {
+            Response response = given()
+                .contentType("application/json")
+                .header("Authorization", "Bearer " + authToken)
+                .when()
+                .delete(GATEWAY_URL + "/api/v1" + urlTemplate, id);
+            int status = response.statusCode();
+            if (status != 200 && status != 204 && status != 404) {
+                throw new AssertionError("清理测试资源失败: " + urlTemplate + ", id=" + id + ", status=" + status);
             }
         });
     }
@@ -66,8 +67,17 @@ public class BaseTest {
     static void cleanupAll() {
         List<Runnable> reversed = new ArrayList<>(cleanupTasks);
         Collections.reverse(reversed);
-        reversed.forEach(Runnable::run);
+        List<Throwable> failures = new ArrayList<>();
+        for (Runnable task : reversed) {
+            try {
+                task.run();
+            } catch (Throwable failure) {
+                failures.add(failure);
+            }
+        }
         cleanupTasks.clear();
+        org.junit.jupiter.api.Assertions.assertTrue(failures.isEmpty(),
+                () -> "测试资源清理失败: " + failures.stream().map(Throwable::getMessage).toList());
     }
 
     static {
@@ -121,8 +131,13 @@ public class BaseTest {
     protected void verifySuccess(Response response) {
         response.then()
             .statusCode(200)
-            .body("code", equalTo(200))
-            .body("message", notNullValue());
+            .body("code", equalTo(200));
+        String message = response.jsonPath().getString("msg");
+        if (message == null) {
+            message = response.jsonPath().getString("message");
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(message != null && !message.isBlank(),
+                "成功响应必须包含非空的msg或message");
     }
 
     /**
