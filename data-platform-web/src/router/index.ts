@@ -66,6 +66,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '接口管理' }
       },
       {
+        path: '/interface/:id/docs',
+        name: 'InterfaceDocs',
+        component: () => import('@/views/interface/docs.vue'),
+        meta: { title: '接口文档' }
+      },
+      {
         path: '/call',
         name: 'Call',
         component: () => import('@/views/call/index.vue'),
@@ -122,6 +128,12 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/openapi-docs',
+    name: 'CallerOpenApiDocs',
+    component: () => import('@/views/openapi-docs/index.vue'),
+    meta: { title: '内部接口文档', public: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/not-found/index.vue'),
@@ -145,6 +157,8 @@ router.beforeEach((to, _from, next) => {
     } else {
       next()
     }
+  } else if (to.meta.public) {
+    next()
   } else {
     if (userStore.isLoggedIn) {
       next()
