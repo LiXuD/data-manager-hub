@@ -660,6 +660,7 @@ export interface ApiKeyDTO {
   callerId: number
   apiKey: string
   apiSecret?: string
+  rateLimitEnabled?: boolean
   rateLimit?: number
   quotaLimit?: number
   quotaUsed?: number
