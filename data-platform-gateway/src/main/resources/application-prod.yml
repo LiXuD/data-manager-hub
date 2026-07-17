@@ -57,6 +57,12 @@ spring:
             - Path=/api/v1/caller/**
           filters:
             - StripPrefix=2
+        - id: openapi-docs-access-service
+          uri: lb://data-platform-access
+          predicates:
+            - Path=/api/v1/openapi-docs/**
+          filters:
+            - StripPrefix=2
         - id: billing-service
           uri: lb://data-platform-billing
           predicates:

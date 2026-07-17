@@ -61,3 +61,6 @@ platform.security.internal:
   token-uri: ${INTERNAL_AUTH_TOKEN_URI:http://localhost:8086/internal-auth/v1/token}
   client-secret: ${INTERNAL_AUTH_ACCESS_SECRET:dev-access-internal-secret}
   public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH:}
+
+platform.openapi:
+  public-base-url: ${OPENAPI_PUBLIC_BASE_URL:http://localhost:8888}
