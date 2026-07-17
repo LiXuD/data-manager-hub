@@ -38,6 +38,7 @@ public class VendorConfig {
     private Long fallbackVendorId;
     private String authType;
     private String authConfig;
+    private Integer securityVersion;
 
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String paramMapping;
@@ -94,6 +95,8 @@ public class VendorConfig {
     public void setAuthType(String authType) { this.authType = authType; }
     public String getAuthConfig() { return authConfig; }
     public void setAuthConfig(String authConfig) { this.authConfig = authConfig; }
+    public Integer getSecurityVersion() { return securityVersion; }
+    public void setSecurityVersion(Integer securityVersion) { this.securityVersion = securityVersion; }
     public String getParamMapping() { return paramMapping; }
     public void setParamMapping(String paramMapping) { this.paramMapping = paramMapping; }
     public CommonStatus getStatus() { return status; }
