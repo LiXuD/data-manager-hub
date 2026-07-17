@@ -8,6 +8,8 @@ import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.dataplatform.masterdata.interface_.service.InterfaceParamService;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
+import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
+import com.dataplatform.masterdata.interface_.service.InterfaceContractService;
 import com.dataplatform.common.security.InternalScope;
 import java.util.List;
 import org.springframework.beans.BeanUtils;
@@ -31,6 +33,9 @@ public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {
 
     @Autowired
     private InterfaceParamService interfaceParamService;
+
+    @Autowired
+    private InterfaceContractService interfaceContractService;
 
     @GetMapping("/by-code/{code}")
     @Override
@@ -59,13 +64,24 @@ public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {
             return Result.error(404, "接口不存在");
         }
         return Result.success(interfaceParamService.listByInterfaceId(id).stream()
+                .filter(param -> param.getDirection() == null || "REQUEST".equalsIgnoreCase(param.getDirection()))
                 .map(this::toParamDTO)
                 .toList());
+    }
+
+    @GetMapping("/{id}/contract")
+    @Override
+    public Result<InterfaceContractDTO> getContract(@PathVariable("id") Long id) {
+        if (apiInterfaceService.getById(id) == null) {
+            return Result.error(404, "接口不存在");
+        }
+        return Result.success(interfaceContractService.getContract(id));
     }
 
     private ApiInterfaceDTO toDTO(ApiInterface entity) {
         ApiInterfaceDTO dto = new ApiInterfaceDTO();
         BeanUtils.copyProperties(entity, dto);
+        dto.setStatus(entity.getStatus() != null ? entity.getStatus().getCode() : null);
         return dto;
     }
 

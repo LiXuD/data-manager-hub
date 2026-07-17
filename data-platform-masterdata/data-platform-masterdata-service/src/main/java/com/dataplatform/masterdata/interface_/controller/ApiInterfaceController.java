@@ -4,20 +4,26 @@ import com.dataplatform.api.PageResult;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
+import com.dataplatform.common.util.UserContext;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceCreateReqDTO;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceUpdateReqDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
+import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
 import com.dataplatform.masterdata.interface_.entity.InterfaceParam;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.dataplatform.masterdata.interface_.service.InterfaceParamService;
+import com.dataplatform.masterdata.interface_.service.InterfaceContractService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -31,11 +37,14 @@ public class ApiInterfaceController {
 
     private final ApiInterfaceService apiInterfaceService;
     private final InterfaceParamService interfaceParamService;
+    private final InterfaceContractService interfaceContractService;
 
     public ApiInterfaceController(ApiInterfaceService apiInterfaceService,
-                                  InterfaceParamService interfaceParamService) {
+                                  InterfaceParamService interfaceParamService,
+                                  InterfaceContractService interfaceContractService) {
         this.apiInterfaceService = apiInterfaceService;
         this.interfaceParamService = interfaceParamService;
+        this.interfaceContractService = interfaceContractService;
     }
 
     @GetMapping("/list")
@@ -83,6 +92,9 @@ public class ApiInterfaceController {
     @OperationLog(module = "接口管理", operation = "新增接口")
     @PostMapping
     public Result<ApiInterfaceDTO> create(@RequestBody ApiInterfaceCreateReqDTO dto) {
+        if (dto.getRequestSchema() != null || dto.getResponseSchema() != null) {
+            return Result.error(400, "请在接口创建后通过契约接口配置请求和响应结构");
+        }
         ApiInterface apiInterface = toEntity(dto);
         if (apiInterface.getInterfaceCode() == null || apiInterface.getInterfaceCode().trim().isEmpty()) {
             return Result.error(400, "接口编码不能为空");
@@ -110,6 +122,9 @@ public class ApiInterfaceController {
     @OperationLog(module = "接口管理", operation = "更新接口")
     @PutMapping("/{id}")
     public Result<ApiInterfaceDTO> update(@PathVariable("id") Long id, @RequestBody ApiInterfaceUpdateReqDTO dto) {
+        if (dto.getRequestSchema() != null || dto.getResponseSchema() != null) {
+            return Result.error(400, "Schema快照不可直接修改，请使用接口契约或兼容Schema接口");
+        }
         ApiInterface existing = apiInterfaceService.getById(id);
         if (existing == null) {
             return Result.error(404, "接口不存在");
@@ -153,6 +168,9 @@ public class ApiInterfaceController {
 
     @GetMapping("/{id}/schema")
     public Result<Map<String, Object>> getSchema(@PathVariable("id") Long id) {
+        if (!UserContext.hasPermission("interface:view")) {
+            return Result.error(403, "没有接口契约查看权限");
+        }
         Map<String, Object> schema = apiInterfaceService.getInterfaceSchema(id);
         if (schema == null) {
             return Result.error(404, "接口不存在");
@@ -163,6 +181,9 @@ public class ApiInterfaceController {
     @OperationLog(module = "接口管理", operation = "更新接口Schema")
     @PutMapping("/{id}/schema")
     public Result<Void> updateSchema(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
+        if (!UserContext.hasPermission("interface:edit")) {
+            return Result.error(403, "没有接口契约编辑权限");
+        }
         String requestSchema = body.get("requestSchema");
         String responseSchema = body.get("responseSchema");
 
@@ -173,16 +194,55 @@ public class ApiInterfaceController {
             return Result.error(400, "响应 Schema 格式无效");
         }
 
-        boolean updated = apiInterfaceService.updateSchema(id, requestSchema, responseSchema);
-        if (!updated) {
+        if (apiInterfaceService.getById(id) == null) {
             return Result.error(404, "接口不存在");
         }
+        interfaceContractService.saveLegacySchemas(id, requestSchema, responseSchema);
         return Result.success(null);
+    }
+
+    @GetMapping("/{id}/contract")
+    public Result<InterfaceContractDTO> getContract(@PathVariable("id") Long id) {
+        if (!UserContext.hasPermission("interface:view")) {
+            return Result.error(403, "没有接口契约查看权限");
+        }
+        if (apiInterfaceService.getById(id) == null) {
+            return Result.error(404, "接口不存在");
+        }
+        return Result.success(interfaceContractService.getContract(id));
+    }
+
+    @OperationLog(module = "接口管理", operation = "更新接口调用契约")
+    @PutMapping("/{id}/contract")
+    public Result<InterfaceContractDTO> updateContract(@PathVariable("id") Long id,
+                                                       @RequestBody InterfaceContractDTO contract) {
+        if (!UserContext.hasPermission("interface:edit")) {
+            return Result.error(403, "没有接口契约编辑权限");
+        }
+        if (apiInterfaceService.getById(id) == null) {
+            return Result.error(404, "接口不存在");
+        }
+        return Result.success(interfaceContractService.saveContract(id, contract));
+    }
+
+    @OperationLog(module = "接口管理", operation = "导入接口Schema")
+    @PostMapping("/{id}/contract/import-schema")
+    public Result<InterfaceContractDTO> importSchema(@PathVariable("id") Long id) {
+        if (!UserContext.hasPermission("interface:edit")) {
+            return Result.error(403, "没有接口契约编辑权限");
+        }
+        if (apiInterfaceService.getById(id) == null) {
+            return Result.error(404, "接口不存在");
+        }
+        return Result.success(interfaceContractService.importLegacySchemas(id));
     }
 
     @OperationLog(module = "接口管理", operation = "验证Schema")
     @PostMapping("/schema/validate")
     public Result<Map<String, Object>> validateSchema(@RequestBody Map<String, String> body) {
+        if (!UserContext.hasPermission("interface:edit")) {
+            return Result.error(403, "没有接口契约编辑权限");
+        }
         boolean valid = apiInterfaceService.validateSchema(body.get("schema"));
         return Result.success(Map.of("valid", valid));
     }
@@ -209,54 +269,57 @@ public class ApiInterfaceController {
 
     @GetMapping("/{id}/params")
     public Result<List<InterfaceParamDTO>> listParams(@PathVariable("id") Long id) {
+        if (!UserContext.hasPermission("interface:view")) {
+            return Result.error(403, "没有接口契约查看权限");
+        }
         ApiInterface apiInterface = apiInterfaceService.getById(id);
         if (apiInterface == null) {
             return Result.error(404, "接口不存在");
         }
-        return Result.success(interfaceParamService.listByInterfaceId(id).stream()
-                .map(this::toDTO)
-                .toList());
+        return Result.success(flatten(interfaceContractService.getContract(id).getRequestFields()));
     }
 
     @OperationLog(module = "接口管理", operation = "新增接口参数")
     @PostMapping("/{id}/params")
     public Result<InterfaceParamDTO> addParam(@PathVariable("id") Long id, @RequestBody InterfaceParamDTO dto) {
-        InterfaceParam param = toEntity(dto);
-        if (param.getParamName() == null || param.getParamName().trim().isEmpty()) {
+        if (!UserContext.hasPermission("interface:edit")) {
+            return Result.error(403, "没有接口契约编辑权限");
+        }
+        if (dto == null || dto.getParamName() == null || dto.getParamName().trim().isEmpty()) {
             return Result.error(400, "参数名不能为空");
         }
         ApiInterface apiInterface = apiInterfaceService.getById(id);
         if (apiInterface == null) {
             return Result.error(404, "接口不存在");
         }
-        InterfaceParam existing = interfaceParamService.getByInterfaceIdAndParamName(id, param.getParamName());
-        if (existing != null) {
-            return Result.error(400, "参数名已存在: " + param.getParamName());
+        InterfaceContractDTO contract = interfaceContractService.getContract(id);
+        if (contract.getRequestFields().stream().anyMatch(field -> dto.getParamName().trim().equals(field.getParamName()))) {
+            return Result.error(400, "参数名已存在: " + dto.getParamName());
         }
-        param.setId(null);
-        param.setInterfaceId(id);
-        applyParamDefaults(param);
-        interfaceParamService.save(param);
-        return Result.success(toDTO(param));
+        dto.setId(null);
+        dto.setInterfaceId(id);
+        dto.setDirection("REQUEST");
+        dto.setParentId(null);
+        contract.getRequestFields().add(dto);
+        InterfaceContractDTO saved = interfaceContractService.saveContract(id, contract);
+        return Result.success(saved.getRequestFields().stream()
+                .filter(field -> dto.getParamName().trim().equals(field.getParamName()))
+                .findFirst().orElseThrow());
     }
 
     @OperationLog(module = "接口管理", operation = "批量保存接口参数")
     @PutMapping("/{id}/params/batch")
     public Result<Void> batchSaveParams(@PathVariable("id") Long id, @RequestBody List<InterfaceParamDTO> params) {
+        if (!UserContext.hasPermission("interface:edit")) {
+            return Result.error(403, "没有接口契约编辑权限");
+        }
         ApiInterface apiInterface = apiInterfaceService.getById(id);
         if (apiInterface == null) {
             return Result.error(404, "接口不存在");
         }
-        List<InterfaceParam> entities = params == null ? List.of() : params.stream()
-                .map(this::toEntity)
-                .toList();
-        if (!entities.isEmpty()) {
-            List<String> paramNames = entities.stream().map(InterfaceParam::getParamName).toList();
-            if (paramNames.size() != paramNames.stream().distinct().count()) {
-                return Result.error(400, "参数名不能重复");
-            }
-        }
-        interfaceParamService.batchSave(id, entities);
+        InterfaceContractDTO contract = interfaceContractService.getContract(id);
+        contract.setRequestFields(params == null ? List.of() : params);
+        interfaceContractService.saveContract(id, contract);
         return Result.success(null);
     }
 
@@ -264,28 +327,116 @@ public class ApiInterfaceController {
     @PutMapping("/params/{paramId}")
     public Result<InterfaceParamDTO> updateParam(@PathVariable("paramId") Long paramId,
                                                  @RequestBody InterfaceParamDTO dto) {
+        if (!UserContext.hasPermission("interface:edit")) {
+            return Result.error(403, "没有接口契约编辑权限");
+        }
         InterfaceParam existing = interfaceParamService.getById(paramId);
         if (existing == null) {
             return Result.error(404, "参数定义不存在");
         }
-        InterfaceParam param = toEntity(dto);
-        param.setId(paramId);
-        interfaceParamService.updateById(param);
-        return Result.success(toDTO(interfaceParamService.getById(paramId)));
+        InterfaceContractDTO contract = interfaceContractService.getContract(existing.getInterfaceId());
+        List<Integer> fieldPath = findFieldPath(contract.getRequestFields(), paramId);
+        if (fieldPath == null) {
+            return Result.error(404, "请求参数定义不存在");
+        }
+        InterfaceParamDTO current = fieldAtPath(contract.getRequestFields(), fieldPath);
+        mergeField(current, dto);
+        InterfaceContractDTO saved = interfaceContractService.saveContract(existing.getInterfaceId(), contract);
+        return Result.success(fieldAtPath(saved.getRequestFields(), fieldPath));
     }
 
     @OperationLog(module = "接口管理", operation = "删除接口参数")
     @DeleteMapping("/params/{paramId}")
     public Result<Void> deleteParam(@PathVariable("paramId") Long paramId) {
+        if (!UserContext.hasPermission("interface:edit")) {
+            return Result.error(403, "没有接口契约编辑权限");
+        }
         InterfaceParam existing = interfaceParamService.getById(paramId);
         if (existing == null) {
             return Result.error(404, "参数定义不存在");
         }
-        interfaceParamService.removeById(paramId);
+        InterfaceContractDTO contract = interfaceContractService.getContract(existing.getInterfaceId());
+        if (!removeField(contract.getRequestFields(), paramId)) {
+            return Result.error(404, "请求参数定义不存在");
+        }
+        interfaceContractService.saveContract(existing.getInterfaceId(), contract);
         return Result.success(null);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Result<Void>> handleContractValidation(IllegalArgumentException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Result.error(400, exception.getMessage()));
+    }
+
+    private List<InterfaceParamDTO> flatten(List<InterfaceParamDTO> fields) {
+        List<InterfaceParamDTO> result = new ArrayList<>();
+        for (InterfaceParamDTO field : fields) {
+            result.add(field);
+            result.addAll(flatten(field.getChildren()));
+        }
+        return result;
+    }
+
+    private List<Integer> findFieldPath(List<InterfaceParamDTO> fields, Long id) {
+        for (int index = 0; index < fields.size(); index++) {
+            InterfaceParamDTO field = fields.get(index);
+            if (id.equals(field.getId())) {
+                return new ArrayList<>(List.of(index));
+            }
+            List<Integer> nestedPath = findFieldPath(field.getChildren(), id);
+            if (nestedPath != null) {
+                nestedPath.add(0, index);
+                return nestedPath;
+            }
+        }
+        return null;
+    }
+
+    private InterfaceParamDTO fieldAtPath(List<InterfaceParamDTO> fields, List<Integer> path) {
+        InterfaceParamDTO current = fields.get(path.get(0));
+        for (int index = 1; index < path.size(); index++) {
+            current = current.getChildren().get(path.get(index));
+        }
+        return current;
+    }
+
+    private boolean removeField(List<InterfaceParamDTO> fields, Long id) {
+        for (int index = 0; index < fields.size(); index++) {
+            InterfaceParamDTO field = fields.get(index);
+            if (id.equals(field.getId())) {
+                fields.remove(index);
+                return true;
+            }
+            if (removeField(field.getChildren(), id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void mergeField(InterfaceParamDTO target, InterfaceParamDTO source) {
+        if (source == null) {
+            throw new IllegalArgumentException("参数定义不能为空");
+        }
+        target.setParamName(source.getParamName());
+        target.setDescription(source.getDescription());
+        target.setParamType(source.getParamType());
+        target.setArrayItemType(source.getArrayItemType());
+        target.setRequired(source.getRequired());
+        target.setDefaultValue(source.getDefaultValue());
+        target.setValidationRule(source.getValidationRule());
+        target.setExampleValue(source.getExampleValue());
+        target.setConstraintConfig(source.getConstraintConfig());
+        target.setSort(source.getSort());
+        if (source.getChildren() != null && !source.getChildren().isEmpty()) {
+            target.setChildren(source.getChildren());
+        }
+    }
+
     private void applyParamDefaults(InterfaceParam param) {
+        if (param.getDirection() == null) {
+            param.setDirection("REQUEST");
+        }
         if (param.getParamType() == null) {
             param.setParamType("string");
         }
