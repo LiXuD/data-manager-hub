@@ -2,6 +2,7 @@ package com.dataplatform.common.config;
 
 import com.dataplatform.common.filter.HttpLoggingFilter;
 import com.dataplatform.common.filter.TraceIdMdcFilter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -26,9 +27,9 @@ public class TraceWebAutoConfiguration {
     }
 
     @Bean
-    public FilterRegistrationBean<HttpLoggingFilter> httpLoggingFilter() {
+    public FilterRegistrationBean<HttpLoggingFilter> httpLoggingFilter(ObjectMapper objectMapper) {
         FilterRegistrationBean<HttpLoggingFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new HttpLoggingFilter());
+        registration.setFilter(new HttpLoggingFilter(objectMapper));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 20);
         return registration;

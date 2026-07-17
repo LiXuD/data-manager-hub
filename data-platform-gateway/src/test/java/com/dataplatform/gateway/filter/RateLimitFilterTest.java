@@ -53,6 +53,19 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void shouldAuthenticateButNotRateLimitDocumentationPath() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/v1/docs/interfaces").build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(chain.filter(exchange)).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        verify(chain).filter(exchange);
+        verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
     void shouldUseDefaultConfigWhenNoneConfigured() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         when(valueOps.get("openapi:rate_limit:1")).thenReturn(Mono.empty());

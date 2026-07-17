@@ -32,6 +32,7 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
 
     private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
     private static final String OPENAPI_PREFIX = "/openapi/";
+    private static final String OPENAPI_DOCS_PREFIX = "/openapi/v1/docs";
 
     private static final String LUA_SCRIPT = """
             local key = KEYS[1]
@@ -62,7 +63,7 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
-        if (!path.startsWith(OPENAPI_PREFIX)) {
+        if (!path.startsWith(OPENAPI_PREFIX) || path.startsWith(OPENAPI_DOCS_PREFIX)) {
             return chain.filter(exchange);
         }
 

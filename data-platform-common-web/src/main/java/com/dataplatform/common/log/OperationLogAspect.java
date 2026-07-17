@@ -3,6 +3,7 @@ package com.dataplatform.common.log;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.util.IpUtil;
 import com.dataplatform.common.util.LogTruncationUtil;
+import com.dataplatform.common.util.SensitiveLogSanitizer;
 import com.dataplatform.common.util.UserContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -59,7 +60,9 @@ public class OperationLogAspect {
                 try {
                     Object[] args = point.getArgs();
                     if (args != null && args.length > 0) {
-                        record.setParams(LogTruncationUtil.truncate(objectMapper.writeValueAsString(args), LogTruncationUtil.FULL));
+                        String params = SensitiveLogSanitizer.sanitizeBody(
+                                objectMapper.writeValueAsString(args), objectMapper);
+                        record.setParams(LogTruncationUtil.truncate(params, LogTruncationUtil.FULL));
                     }
                 } catch (Exception ignored) {
                 }
@@ -70,7 +73,9 @@ public class OperationLogAspect {
             record.setStatus(StatusConstants.SUCCESS);
             if (operationLog.saveResult() && objectMapper != null && result != null) {
                 try {
-                    record.setResult(LogTruncationUtil.truncate(objectMapper.writeValueAsString(result), LogTruncationUtil.FULL));
+                    String serializedResult = SensitiveLogSanitizer.sanitizeBody(
+                            objectMapper.writeValueAsString(result), objectMapper);
+                    record.setResult(LogTruncationUtil.truncate(serializedResult, LogTruncationUtil.FULL));
                 } catch (Exception ignored) {
                 }
             }

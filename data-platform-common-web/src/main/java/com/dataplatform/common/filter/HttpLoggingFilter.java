@@ -2,6 +2,8 @@ package com.dataplatform.common.filter;
 
 import com.dataplatform.common.constant.TraceConstants;
 import com.dataplatform.common.util.LogTruncationUtil;
+import com.dataplatform.common.util.SensitiveLogSanitizer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,7 +27,16 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(HttpLoggingFilter.class);
     private static final String[] SKIP_PATTERNS = {"/actuator/", "/health/", "/favicon.ico"};
+    private static final String[] SENSITIVE_RESPONSE_PATTERNS = {
+            "/internal/v1/masterdata/vendor-security/",
+            "/internal/v1/masterdata/vendor-config/secret-key"
+    };
     private static final Set<String> NO_BODY_METHODS = Set.of("GET", "HEAD", "OPTIONS");
+    private final ObjectMapper objectMapper;
+
+    public HttpLoggingFilter(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -67,11 +78,13 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
                 String traceId = MDC.get(TraceConstants.TRACE_ID_MDC_KEY);
                 String requestBody = requestWrapper != null
                     ? readBody(requestWrapper.getContentAsByteArray()) : "[no-body]";
-                String responseBody = readBody(responseWrapper.getContentAsByteArray());
+                String responseBody = isSensitiveResponse(uri)
+                        ? "[redacted]"
+                        : readBody(responseWrapper.getContentAsByteArray());
 
                 log.info("[HTTP] {} {} | traceId={} | status={} | {}ms | req={} | res={}",
                         method,
-                        uri + (queryString != null ? "?" + queryString : ""),
+                        uri + (queryString != null ? "?" + SensitiveLogSanitizer.sanitizeQueryString(queryString) : ""),
                         traceId != null ? traceId : "-",
                         statusCode,
                         duration,
@@ -95,10 +108,24 @@ public class HttpLoggingFilter extends OncePerRequestFilter {
         return false;
     }
 
+    private boolean isSensitiveResponse(String uri) {
+        if (uri == null) {
+            return false;
+        }
+        for (String pattern : SENSITIVE_RESPONSE_PATTERNS) {
+            if (uri.startsWith(pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private String readBody(byte[] body) {
         if (body.length == 0) {
             return "[empty]";
         }
-        return LogTruncationUtil.truncate(new String(body, StandardCharsets.UTF_8), LogTruncationUtil.MEDIUM);
+        String sanitized = SensitiveLogSanitizer.sanitizeBody(
+                new String(body, StandardCharsets.UTF_8), objectMapper);
+        return LogTruncationUtil.truncate(sanitized, LogTruncationUtil.MEDIUM);
     }
 }
