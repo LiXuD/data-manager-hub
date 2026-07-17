@@ -20,6 +20,7 @@ public class ApiKey {
     private String keyName;
     private String apiKey;
     private String apiSecret;
+    private Boolean rateLimitEnabled;
     private Integer rateLimit;
     private Long quotaLimit;
     private Long quotaUsed;
@@ -47,6 +48,8 @@ public class ApiKey {
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
     public String getApiSecret() { return apiSecret; }
     public void setApiSecret(String apiSecret) { this.apiSecret = apiSecret; }
+    public Boolean getRateLimitEnabled() { return rateLimitEnabled; }
+    public void setRateLimitEnabled(Boolean rateLimitEnabled) { this.rateLimitEnabled = rateLimitEnabled; }
     public Integer getRateLimit() { return rateLimit; }
     public void setRateLimit(Integer rateLimit) { this.rateLimit = rateLimit; }
     public Long getQuotaLimit() { return quotaLimit; }

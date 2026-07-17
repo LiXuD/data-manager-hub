@@ -9,6 +9,7 @@ import com.dataplatform.access.caller.service.ApiKeyProductService;
 import com.dataplatform.access.caller.service.ApiKeyInterfaceService;
 import com.dataplatform.access.caller.service.ApiKeyService;
 import com.dataplatform.access.caller.service.CallerProductService;
+import com.dataplatform.access.caller.vo.ApiKeyRateLimitUpdateVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/caller/apikey")
 public class ApiKeyController {
+
+    private static final int MAX_RATE_LIMIT_PER_MINUTE = 1_000_000;
 
     @Autowired
     private ApiKeyService apiKeyService;
@@ -85,6 +88,29 @@ public class ApiKeyController {
         apiKey.setStatus(statusEnum);
         apiKeyService.updateById(apiKey);
         return Result.success(apiKey);
+    }
+
+    @OperationLog(module = "API Key管理", operation = "更新限流策略")
+    @PutMapping("/{id}/rate-limit")
+    public ResponseEntity<Result<ApiKey>> updateRateLimit(
+            @PathVariable Long id,
+            @RequestBody ApiKeyRateLimitUpdateVO request) {
+        if (request == null || request.getRateLimitEnabled() == null || request.getRateLimit() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "限流开关和每分钟最大请求数不能为空"));
+        }
+        if (request.getRateLimit() < 1 || request.getRateLimit() > MAX_RATE_LIMIT_PER_MINUTE) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "每分钟最大请求数必须在1到1000000之间"));
+        }
+
+        ApiKey apiKey = apiKeyService.updateRateLimitPolicy(
+                id, request.getRateLimitEnabled(), request.getRateLimit());
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "API Key不存在"));
+        }
+        return ResponseEntity.ok(Result.success(apiKey));
     }
 
     @GetMapping("/{id}/interfaces")

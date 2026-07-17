@@ -14,6 +14,7 @@ public class ApiKeyDTO implements Serializable {
     private Long callerId;
     private String apiKey;
     private String apiSecret;
+    private Boolean rateLimitEnabled;
     private Integer rateLimit;
     private String description;
     private String status;
@@ -50,6 +51,14 @@ public class ApiKeyDTO implements Serializable {
 
     public void setApiSecret(String apiSecret) {
         this.apiSecret = apiSecret;
+    }
+
+    public Boolean getRateLimitEnabled() {
+        return rateLimitEnabled;
+    }
+
+    public void setRateLimitEnabled(Boolean rateLimitEnabled) {
+        this.rateLimitEnabled = rateLimitEnabled;
     }
 
     public Integer getRateLimit() {

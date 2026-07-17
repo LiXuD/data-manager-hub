@@ -28,6 +28,7 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
     implements ApiKeyService {
 
     private static final Logger log = LoggerFactory.getLogger(ApiKeyServiceImpl.class);
+    private static final int MAX_RATE_LIMIT_PER_MINUTE = 1_000_000;
 
     private final ApiKeyCacheService apiKeyCacheService;
 
@@ -49,6 +50,7 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         apiKey.setKeyName(keyName);
         apiKey.setApiKey("dp_" + IdUtil.fastSimpleUUID());
         apiKey.setApiSecret(IdUtil.fastSimpleUUID());
+        apiKey.setRateLimitEnabled(true);
         apiKey.setRateLimit(100);
         apiKey.setQuotaLimit(100000L);
         apiKey.setQuotaUsed(0L);
@@ -100,6 +102,21 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         return getOne(new LambdaQueryWrapper<ApiKey>()
             .eq(ApiKey::getApiKey, apiKey)
             .eq(ApiKey::getStatus, "active"));
+    }
+
+    @Override
+    @Transactional
+    public ApiKey updateRateLimitPolicy(Long id, boolean rateLimitEnabled, int rateLimit) {
+        if (id == null || rateLimit < 1 || rateLimit > MAX_RATE_LIMIT_PER_MINUTE) {
+            throw new IllegalArgumentException("每分钟最大请求数必须在1到1000000之间");
+        }
+        ApiKey apiKey = getById(id);
+        if (apiKey == null) {
+            return null;
+        }
+        apiKey.setRateLimitEnabled(rateLimitEnabled);
+        apiKey.setRateLimit(rateLimit);
+        return updateById(apiKey) ? apiKey : null;
     }
 
     @Override

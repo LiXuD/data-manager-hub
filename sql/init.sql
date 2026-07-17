@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS api_key (
     key_name VARCHAR(100),
     api_key VARCHAR(64) NOT NULL UNIQUE,
     api_secret VARCHAR(128) NOT NULL,
+    rate_limit_enabled BOOLEAN NOT NULL DEFAULT true,
     rate_limit INTEGER NOT NULL DEFAULT 100,
     quota_limit BIGINT NOT NULL DEFAULT 100000,
     quota_used BIGINT NOT NULL DEFAULT 0,

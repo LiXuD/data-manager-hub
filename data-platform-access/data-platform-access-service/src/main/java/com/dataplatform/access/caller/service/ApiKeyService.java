@@ -18,6 +18,8 @@ public interface ApiKeyService extends IService<ApiKey> {
     List<ApiKey> listByCaller(Long callerId);
     
     ApiKey getByKey(String apiKey);
+
+    ApiKey updateRateLimitPolicy(Long id, boolean rateLimitEnabled, int rateLimit);
     
     boolean validateAndConsumeQuota(String apiKey, long count);
 }

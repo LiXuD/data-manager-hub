@@ -51,6 +51,7 @@ public class ApiKeyCacheService {
                     "status", callerActive ? 1 : 0
             ));
             redisTemplate.opsForValue().set(RATE_LIMIT_PREFIX + apiKey.getId(), Map.of(
+                    "enabled", !Boolean.FALSE.equals(apiKey.getRateLimitEnabled()),
                     "windowSec", DEFAULT_WINDOW_SEC,
                     "maxReqs", apiKey.getRateLimit() != null ? apiKey.getRateLimit() : 100
             ));
