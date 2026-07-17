@@ -1,6 +1,7 @@
 package com.dataplatform.gateway.filter;
 
 import com.dataplatform.common.result.Result;
+import com.dataplatform.common.ratelimit.SlidingWindowRateLimitAlgorithm;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.List;
@@ -34,16 +35,6 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     private static final String OPENAPI_PREFIX = "/openapi/";
     private static final String OPENAPI_DOCS_PREFIX = "/openapi/v1/docs";
 
-    private static final String LUA_SCRIPT = """
-            local key = KEYS[1]
-            local window = tonumber(ARGV[1])
-            local now = tonumber(ARGV[2])
-            local member = ARGV[3]
-            redis.call('ZADD', key, now, member)
-            redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
-            return redis.call('ZCARD', key)
-            """;
-
     private final ReactiveRedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
     private final RedisScript<Long> rateLimitScript;
@@ -57,7 +48,7 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     public RateLimitFilter(ReactiveRedisTemplate<String, Object> redisTemplate, ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
-        this.rateLimitScript = new DefaultRedisScript<>(LUA_SCRIPT, Long.class);
+        this.rateLimitScript = new DefaultRedisScript<>(SlidingWindowRateLimitAlgorithm.ACQUIRE_SCRIPT, Long.class);
     }
 
     @Override
@@ -79,6 +70,10 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
 
         return loadRateLimitConfig(keyId)
                 .flatMap(config -> {
+                    boolean enabled = !config.containsKey("enabled") || asBoolean(config.get("enabled"), true);
+                    if (!enabled) {
+                        return chain.filter(exchange);
+                    }
                     int windowSec = config.containsKey("windowSec")
                             ? asInt(config.get("windowSec"), defaultWindowSec) : defaultWindowSec;
                     int maxReqs = config.containsKey("maxReqs")
@@ -86,7 +81,7 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
 
                     long now = System.currentTimeMillis();
                     String windowKey = "openapi:window:" + keyId;
-                    String member = now + "-" + Thread.currentThread().threadId();
+                    String member = SlidingWindowRateLimitAlgorithm.uniqueMember(now);
 
                     return redisTemplate.execute(rateLimitScript,
                                     Collections.singletonList(windowKey),
@@ -130,6 +125,28 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     private int asInt(Object value, int defaultValue) {
         Long parsed = asLong(value);
         return parsed != null ? parsed.intValue() : defaultValue;
+    }
+
+    private boolean asBoolean(Object value, boolean defaultValue) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        if (value instanceof List<?> list && list.size() >= 2) {
+            return asBoolean(list.get(1), defaultValue);
+        }
+        if (value instanceof String text) {
+            if ("1".equals(text)) {
+                return true;
+            }
+            if ("0".equals(text)) {
+                return false;
+            }
+            return Boolean.parseBoolean(text);
+        }
+        return defaultValue;
     }
 
     private Long asLong(Object value) {

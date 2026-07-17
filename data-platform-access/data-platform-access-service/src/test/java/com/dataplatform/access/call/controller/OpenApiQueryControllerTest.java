@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class OpenApiQueryControllerTest {
@@ -175,6 +176,19 @@ class OpenApiQueryControllerTest {
         ArgumentCaptor<OpenApiCallContext> contextCaptor = ArgumentCaptor.forClass(OpenApiCallContext.class);
         verify(openApiQueryService).query(contextCaptor.capture());
         assertEquals("trace-1", contextCaptor.getValue().getTraceId());
+    }
+
+    @Test
+    void shouldSkipAccessRateLimitWhenPolicyIsDisabled() {
+        ApiKey apiKey = new ApiKey();
+        apiKey.setApiKey("test-key");
+        apiKey.setRateLimitEnabled(false);
+        apiKey.setRateLimit(50);
+
+        Boolean allowed = ReflectionTestUtils.invokeMethod(controller, "checkRateLimit", apiKey);
+
+        assertTrue(Boolean.TRUE.equals(allowed));
+        verifyNoInteractions(rateLimitService);
     }
 
     @Test

@@ -311,6 +311,9 @@ public class OpenApiQueryController {
     }
 
     private boolean checkRateLimit(ApiKey apiKeyEntity) {
+        if (Boolean.FALSE.equals(apiKeyEntity.getRateLimitEnabled())) {
+            return true;
+        }
         Integer rateLimit = apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : DEFAULT_RATE_LIMIT;
         return rateLimitService.checkRateLimit(apiKeyEntity.getApiKey(), rateLimit);
     }

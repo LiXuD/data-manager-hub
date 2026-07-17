@@ -63,7 +63,9 @@ public class DataQueryController {
             return Result.error(403, "API Key没有访问该接口的权限");
         }
 
-        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
+        if (!Boolean.FALSE.equals(apiKeyEntity.getRateLimitEnabled())
+                && !rateLimitService.checkRateLimit(apiKey,
+                apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
         }
 
@@ -96,7 +98,9 @@ public class DataQueryController {
             return Result.error(403, "API Key没有访问该接口的权限");
         }
 
-        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
+        if (!Boolean.FALSE.equals(apiKeyEntity.getRateLimitEnabled())
+                && !rateLimitService.checkRateLimit(apiKey,
+                apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
         }
 

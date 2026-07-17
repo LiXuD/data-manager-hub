@@ -1,5 +1,6 @@
 package com.dataplatform.gateway.filter;
 
+import com.dataplatform.common.ratelimit.SlidingWindowRateLimitAlgorithm;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.data.redis.core.script.RedisScript;
 
@@ -84,6 +86,13 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void shouldUseSharedSlidingWindowScript() {
+        RedisScript<?> script = (RedisScript<?>) ReflectionTestUtils.getField(filter, "rateLimitScript");
+
+        assertEquals(SlidingWindowRateLimitAlgorithm.ACQUIRE_SCRIPT, script.getScriptAsString());
+    }
+
+    @Test
     void shouldPassWhenUnderLimit() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         when(valueOps.get("openapi:rate_limit:1")).thenReturn(Mono.just(Map.of("windowSec", 60, "maxReqs", 100)));
@@ -99,6 +108,24 @@ class RateLimitFilterTest {
         filter.filter(exchange, chain).block();
 
         verify(chain).filter(exchange);
+    }
+
+    @Test
+    void shouldSkipCounterWhenRateLimitIsDisabled() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:rate_limit:1"))
+                .thenReturn(Mono.just(Map.of("enabled", false, "windowSec", 60, "maxReqs", 100)));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test").build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        exchange.getAttributes().put("keyId", 1L);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(chain.filter(exchange)).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        verify(chain).filter(exchange);
+        verify(redisTemplate, never()).execute(any(), anyList(), any(Object[].class));
     }
 
     @Test
