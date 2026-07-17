@@ -1,13 +1,14 @@
 package com.dataplatform.masterdata.interface_.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.common.handler.JsonbTypeHandler;
 import java.time.LocalDateTime;
 
 /**
  * 接口参数定义实体
  * 挂在接口级，定义该接口有哪些请求参数，所有厂商共用。
  */
-@TableName("interface_param")
+@TableName(value = "interface_param", autoResultMap = true)
 public class InterfaceParam {
 
     @TableId(type = IdType.AUTO)
@@ -15,17 +16,28 @@ public class InterfaceParam {
 
     private Long interfaceId;
 
+    private String direction;
+
+    private Long parentId;
+
     private String paramName;
 
     private String description;
 
     private String paramType;
 
+    private String arrayItemType;
+
     private Boolean required;
 
     private String defaultValue;
 
     private String validationRule;
+
+    private String exampleValue;
+
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String constraintConfig;
 
     private Integer sort;
 
@@ -41,6 +53,12 @@ public class InterfaceParam {
     public Long getInterfaceId() { return interfaceId; }
     public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
 
+    public String getDirection() { return direction; }
+    public void setDirection(String direction) { this.direction = direction; }
+
+    public Long getParentId() { return parentId; }
+    public void setParentId(Long parentId) { this.parentId = parentId; }
+
     public String getParamName() { return paramName; }
     public void setParamName(String paramName) { this.paramName = paramName; }
 
@@ -50,6 +68,9 @@ public class InterfaceParam {
     public String getParamType() { return paramType; }
     public void setParamType(String paramType) { this.paramType = paramType; }
 
+    public String getArrayItemType() { return arrayItemType; }
+    public void setArrayItemType(String arrayItemType) { this.arrayItemType = arrayItemType; }
+
     public Boolean getRequired() { return required; }
     public void setRequired(Boolean required) { this.required = required; }
 
@@ -58,6 +79,12 @@ public class InterfaceParam {
 
     public String getValidationRule() { return validationRule; }
     public void setValidationRule(String validationRule) { this.validationRule = validationRule; }
+
+    public String getExampleValue() { return exampleValue; }
+    public void setExampleValue(String exampleValue) { this.exampleValue = exampleValue; }
+
+    public String getConstraintConfig() { return constraintConfig; }
+    public void setConstraintConfig(String constraintConfig) { this.constraintConfig = constraintConfig; }
 
     public Integer getSort() { return sort; }
     public void setSort(Integer sort) { this.sort = sort; }
