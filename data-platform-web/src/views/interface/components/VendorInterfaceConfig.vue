@@ -8,7 +8,9 @@ import {
   updateVendorConfig,
   deleteVendorConfig,
   updateVendorConfigStatus,
-  testVendorConfig
+  testVendorConfig,
+  getVendorSecuritySteps,
+  saveVendorSecuritySteps
 } from '@/api/vendor-config'
 import { useCacheStore } from '@/stores'
 import { getStatusType } from '@/utils/status'
@@ -20,13 +22,13 @@ import type {
   RequestMappingItem,
   ResponseMappingItem,
   AuthConfig,
-  SignConfig,
+  VendorSecurityStep,
   ContentType
 } from '@/types'
 import HeaderEditor from './config/HeaderEditor.vue'
 import ParamsMappingEditor from './config/ParamsMappingEditor.vue'
 import AuthConfigComponent from './config/AuthConfig.vue'
-import SignConfigComponent from './config/SignConfig.vue'
+import SecurityPipelineEditor from './config/SecurityPipelineEditor.vue'
 import RequestBodyEditor from './config/RequestBodyEditor.vue'
 
 interface Props {
@@ -70,8 +72,9 @@ const form = ref({
   // 参数映射
   requestMapping: [] as RequestMappingItem[],
   responseMapping: [] as ResponseMappingItem[],
-  // 签名配置
-  signConfig: { type: 'NONE' as const } as SignConfig,
+  // 安全处理流水线
+  securitySteps: [] as VendorSecurityStep[],
+  securityVersion: 0,
   // 认证配置
   authConfig: { type: 'NONE' as const } as AuthConfig,
   // 降级配置
@@ -146,7 +149,8 @@ const handleAdd = () => {
     contentType: 'application/json',
     requestMapping: [],
     responseMapping: [],
-    signConfig: { type: 'NONE' },
+    securitySteps: [],
+    securityVersion: 0,
     authConfig: { type: 'NONE' },
     fallbackVendorId: undefined,
     status: 'active'
@@ -156,7 +160,7 @@ const handleAdd = () => {
 }
 
 // 编辑配置
-const handleEdit = (config: VendorInterfaceConfig) => {
+const handleEdit = async (config: VendorInterfaceConfig) => {
   isEdit.value = true
   currentConfig.value = config
 
@@ -165,7 +169,6 @@ const handleEdit = (config: VendorInterfaceConfig) => {
   let requestMapping: RequestMappingItem[] = []
   let responseMapping: ResponseMappingItem[] = []
   let authConfig: AuthConfig = { type: 'NONE' }
-  let signConfig: SignConfig = { type: 'NONE' }
   let requestBody = ''
   let contentType: ContentType = 'application/json'
 
@@ -226,6 +229,17 @@ const handleEdit = (config: VendorInterfaceConfig) => {
     }
   } catch {}
 
+  let securitySteps: VendorSecurityStep[] = []
+  let securityVersion = 0
+  try {
+    const securityRes = await getVendorSecuritySteps(config.id)
+    securitySteps = securityRes.data?.steps || []
+    securityVersion = securityRes.data?.version || 0
+  } catch (error) {
+    console.error('加载安全配置失败:', error)
+    ElMessage.error('加载安全配置失败')
+  }
+
   form.value = {
     vendorId: config.vendorId,
     dataTypeId: config.dataTypeId,
@@ -240,7 +254,8 @@ const handleEdit = (config: VendorInterfaceConfig) => {
     contentType,
     requestMapping,
     responseMapping,
-    signConfig,
+    securitySteps,
+    securityVersion,
     authConfig,
     fallbackVendorId: config.fallbackVendorId,
     status: config.status
@@ -341,7 +356,8 @@ const handleSubmit = async () => {
       retryCount: form.value.retryCount,
       circuitThreshold: form.value.circuitThreshold,
       circuitTimeout: form.value.circuitTimeout,
-      signType: form.value.signConfig.type === 'NONE' ? undefined : form.value.signConfig.type,
+      signType: undefined,
+      encryptType: undefined,
       headerConfig: hasHeaderConfig ? JSON.stringify(headerConfig) : undefined,
       requestTemplate: hasRequestTemplate ? JSON.stringify(requestTemplate) : undefined,
       responseMapping: hasResponseMapping ? JSON.stringify(validResponseMapping) : undefined,
@@ -351,13 +367,23 @@ const handleSubmit = async () => {
       status: form.value.status
     }
 
+    let configId: number
     if (isEdit.value && currentConfig.value) {
       await updateVendorConfig(currentConfig.value.id, data)
-      ElMessage.success('更新成功')
+      configId = currentConfig.value.id
     } else {
-      await createVendorConfig(data)
-      ElMessage.success('创建成功')
+      const created = await createVendorConfig(data)
+      configId = created.data.id
     }
+
+    const securityResult = await saveVendorSecuritySteps(
+      configId,
+      form.value.securityVersion,
+      form.value.securitySteps
+    )
+    form.value.securityVersion = securityResult.data.version
+    form.value.securitySteps = securityResult.data.steps
+    ElMessage.success(isEdit.value ? '更新成功' : '创建成功')
 
     formVisible.value = false
     loadConfigList()
@@ -594,9 +620,14 @@ const handleSubmit = async () => {
             />
           </el-tab-pane>
 
-          <!-- 签名配置 Tab -->
-          <el-tab-pane label="签名配置" name="sign">
-            <SignConfigComponent v-model="form.signConfig" />
+          <!-- 安全处理 Tab -->
+          <el-tab-pane label="安全处理" name="security">
+            <SecurityPipelineEditor
+              v-model="form.securitySteps"
+              v-model:version="form.securityVersion"
+              :config-id="currentConfig?.id"
+              :vendor-id="form.vendorId"
+            />
           </el-tab-pane>
 
           <!-- 认证配置 Tab -->
