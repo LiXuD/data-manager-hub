@@ -64,12 +64,13 @@ instance.interceptors.response.use(
         case 400:
           msg = data?.message || data?.msg || '请求参数错误'
           break
-        case 401:
+        case 401: {
           msg = '登录已过期，请重新登录'
           const userStore = useUserStore()
           userStore.logout()
           window.location.href = '/login'
           break
+        }
         case 403:
           msg = '没有权限访问'
           break

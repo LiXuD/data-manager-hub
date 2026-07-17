@@ -156,7 +156,11 @@ function handleDrop(targetIndex: number) {
 
 function toggleExpanded(stepKey: string) {
   const next = new Set(expandedKeys.value)
-  next.has(stepKey) ? next.delete(stepKey) : next.add(stepKey)
+  if (next.has(stepKey)) {
+    next.delete(stepKey)
+  } else {
+    next.add(stepKey)
+  }
   expandedKeys.value = next
 }
 
