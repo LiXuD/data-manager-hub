@@ -2,6 +2,7 @@ package com.dataplatform.gateway.filter;
 
 import com.dataplatform.common.result.Result;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +17,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+/**
+ * 网关层过滤器的 Auth Filter。
+ * <p>请求过滤器，处理网关或 Web 链路中的横切逻辑。</p>
+ */
 @Component
 public class AuthFilter implements GlobalFilter, Ordered {
 
@@ -49,14 +54,19 @@ public class AuthFilter implements GlobalFilter, Ordered {
         return redisTemplate.opsForValue().get(REDIS_KEY_PREFIX + apiKey)
                 .switchIfEmpty(Mono.defer(() -> writeError(exchange, 401, "API Key 无效或已过期")))
                 .flatMap(value -> {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> keyInfo = objectMapper.convertValue(value, Map.class);
-                    Integer status = (Integer) keyInfo.get("status");
-                    if (status == null || status != 1) {
+                    Map<String, Object> keyInfo = parseKeyInfo(value);
+                    if (!isActive(keyInfo.get("status"))) {
                         return writeError(exchange, 403, "调用方已禁用");
                     }
-                    exchange.getAttributes().put("callerId", keyInfo.get("callerId"));
-                    exchange.getAttributes().put("keyId", keyInfo.get("keyId"));
+                    Long callerId = asLong(keyInfo.get("callerId"));
+                    Long keyId = asLong(keyInfo.get("keyId"));
+                    if (callerId == null || keyId == null) {
+                        log.warn("Invalid OpenAPI key cache numeric fields: callerId={}, keyId={}",
+                                keyInfo.get("callerId"), keyInfo.get("keyId"));
+                        return writeError(exchange, 401, "API Key 无效或已过期");
+                    }
+                    exchange.getAttributes().put("callerId", callerId);
+                    exchange.getAttributes().put("keyId", keyId);
                     exchange.getAttributes().put("callerName", keyInfo.get("callerName"));
                     return chain.filter(exchange);
                 });
@@ -70,6 +80,45 @@ public class AuthFilter implements GlobalFilter, Ordered {
         String auth = exchange.getRequest().getHeaders().getFirst(AUTH_HEADER);
         if (auth != null && auth.startsWith(BEARER_PREFIX)) {
             return auth.substring(BEARER_PREFIX.length());
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseKeyInfo(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        if (value instanceof String text) {
+            try {
+                return objectMapper.readValue(text, Map.class);
+            } catch (Exception e) {
+                log.warn("Invalid OpenAPI key cache payload: {}", e.getMessage());
+            }
+        }
+        return objectMapper.convertValue(value, Map.class);
+    }
+
+    private boolean isActive(Object status) {
+        if (status instanceof Number number) {
+            return number.intValue() == 1;
+        }
+        return "1".equals(String.valueOf(status)) || "active".equalsIgnoreCase(String.valueOf(status));
+    }
+
+    private Long asLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof List<?> list && list.size() >= 2) {
+            return asLong(list.get(1));
+        }
+        if (value instanceof String text) {
+            try {
+                return Long.parseLong(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
         }
         return null;
     }

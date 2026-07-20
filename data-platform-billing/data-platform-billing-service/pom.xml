@@ -66,10 +66,6 @@
             <artifactId>postgresql</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
@@ -96,6 +92,16 @@
         <dependency>
             <groupId>com.dataplatform</groupId>
             <artifactId>data-platform-governance-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-access-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-masterdata-api</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

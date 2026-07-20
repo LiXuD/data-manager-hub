@@ -20,6 +20,10 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+/**
+ * 访问域数据调用的 Data Query Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/data")
 public class DataQueryController {
@@ -59,7 +63,9 @@ public class DataQueryController {
             return Result.error(403, "API Key没有访问该接口的权限");
         }
 
-        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
+        if (!Boolean.FALSE.equals(apiKeyEntity.getRateLimitEnabled())
+                && !rateLimitService.checkRateLimit(apiKey,
+                apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
         }
 
@@ -92,7 +98,9 @@ public class DataQueryController {
             return Result.error(403, "API Key没有访问该接口的权限");
         }
 
-        if (!rateLimitService.checkRateLimit(apiKey, apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
+        if (!Boolean.FALSE.equals(apiKeyEntity.getRateLimitEnabled())
+                && !rateLimitService.checkRateLimit(apiKey,
+                apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : 100)) {
             return Result.error(429, "请求过于频繁，请稍后再试");
         }
 
@@ -129,23 +137,21 @@ public class DataQueryController {
 
     private boolean validateInterfacePermission(Long apiKeyId, String interfaceCode) {
         if (interfaceCode == null || interfaceCode.trim().isEmpty()) {
-            return true; // 没有指定接口code，可能是旧版调用，暂时允许
+            return false;
         }
 
         try {
-            // 获取接口信息
             Result<ApiInterfaceDTO> interfaceResult = apiInterfaceFeignClient.getByInterfaceCode(interfaceCode);
             if (interfaceResult == null || interfaceResult.getData() == null) {
-                return true; // 接口不存在，暂时允许
+                return false;
             }
 
             Long interfaceId = interfaceResult.getData().getId();
 
-            // 检查该API Key是否有该接口权限
             return apiKeyInterfaceService.hasInterfacePermission(apiKeyId, interfaceId);
         } catch (Exception e) {
-            log.warn("检查接口权限失败，默认允许: {}", e.getMessage());
-            return true;
+            log.warn("检查接口权限失败，拒绝访问: {}", e.getMessage());
+            return false;
         }
     }
 

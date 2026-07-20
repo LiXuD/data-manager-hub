@@ -13,7 +13,10 @@ public class TieredBillingCalculator implements BillingCalculator {
     @Override
     public BigDecimal calculate(BillingRuleDO rule, long callCount, Integer latencyMs) {
         if (rule == null || rule.getUnitPrice() == null) {
-            return BigDecimal.ZERO;
+            throw new IllegalArgumentException("Billing rule and unit price are required");
+        }
+        if (callCount < 0) {
+            throw new IllegalArgumentException("Call count must not be negative");
         }
 
         BigDecimal baseAmount = rule.getUnitPrice()
@@ -29,7 +32,7 @@ public class TieredBillingCalculator implements BillingCalculator {
     @Override
     public BigDecimal calculateSingle(BillingRuleDO rule, Integer latencyMs) {
         if (rule == null || rule.getUnitPrice() == null) {
-            return BigDecimal.ZERO;
+            throw new IllegalArgumentException("Billing rule and unit price are required");
         }
 
         // 单次调用使用折扣后的价格
@@ -40,24 +43,16 @@ public class TieredBillingCalculator implements BillingCalculator {
 
     /**
      * 确定折扣率
-     * 规则：
-     * - 0-10万次: 1.0 (无折扣)
-     * - 10-50万次: 0.9 (9折)
-     * - 50万次以上: 0.8 (8折)
+     * 阶梯区间由上游选择规则，本计算器只应用规则中配置的折扣。
      */
     private BigDecimal determineDiscount(long callCount, BillingRuleDO rule) {
-        // 如果规则中指定了折扣，优先使用规则折扣
-        if (rule.getDiscount() != null && rule.getDiscount().compareTo(BigDecimal.ZERO) > 0) {
-            return rule.getDiscount();
-        }
-
-        // 默认阶梯折扣
-        if (callCount > 500_000) {
-            return new BigDecimal("0.80");
-        } else if (callCount > 100_000) {
-            return new BigDecimal("0.90");
-        } else {
+        if (rule.getDiscount() == null) {
             return BigDecimal.ONE;
         }
+        if (rule.getDiscount().compareTo(BigDecimal.ZERO) <= 0
+                || rule.getDiscount().compareTo(BigDecimal.ONE) > 0) {
+            throw new IllegalArgumentException("Discount must be greater than 0 and at most 1");
+        }
+        return rule.getDiscount();
     }
 }

@@ -45,6 +45,15 @@ class CallRecordEventConsumerTest {
         assertThrows(RuntimeException.class, () -> consumer.consume(objectMapper.writeValueAsString(record)));
     }
 
+    @Test
+    void rethrowsMalformedPayloadSoKafkaDoesNotSilentlyLoseIt() {
+        CallRecordService service = mock(CallRecordService.class);
+        CallRecordEventConsumer consumer = new CallRecordEventConsumer(service, new ObjectMapper());
+
+        assertThrows(IllegalArgumentException.class, () -> consumer.consume("not-json"));
+        verify(service, never()).save(any(CallRecord.class));
+    }
+
     private CallRecord record(String requestId) {
         CallRecord record = new CallRecord();
         record.setRequestId(requestId);

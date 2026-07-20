@@ -6,11 +6,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.access.call.mapper.CallRecordMapper;
 import com.dataplatform.access.call.service.CallRecordService;
+import com.dataplatform.access.call.vo.InterfaceQualityVO;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.common.result.PageResult;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -18,6 +20,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 访问域数据调用的 Call Record Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRecord>
     implements CallRecordService {
@@ -75,7 +81,7 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
         Page<CallRecord> result = this.page(new Page<>(page, pageSize), wrapper);
 
         PageResult<CallRecord> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());
@@ -122,6 +128,7 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
         wrapper.eq(CallRecord::getApiCode, apiCode)
                 .eq(CallRecord::getRequestHash, requestHash)
                 .eq(CallRecord::getSuccess, true)
+                .eq(CallRecord::getUseCache, true)
                 .ge(CallRecord::getCallTime, since);
         if ("CALLER".equalsIgnoreCase(cacheScope)) {
             wrapper.eq(CallRecord::getCallerId, callerId);
@@ -146,6 +153,10 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
                 dataType, cacheHit, startTime, endTime, List.of("scene_code")));
         stats.put("byCallerProductScene", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
                 dataType, cacheHit, startTime, endTime, List.of("caller_id", "product_code", "scene_code")));
+        stats.put("byVendor", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+                dataType, cacheHit, startTime, endTime, List.of("vendor_code")));
+        stats.put("byDataType", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+                dataType, cacheHit, startTime, endTime, List.of("data_type")));
         return stats;
     }
 
@@ -203,6 +214,83 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
                     "minDurationMs", 0);
         }
         return rows.get(0);
+    }
+
+    @Override
+    public List<InterfaceQualityVO> getInterfaceQualityReport(String vendorCode, String dataType,
+                                                               String apiCode, LocalDateTime startTime,
+                                                               LocalDateTime endTime) {
+        if (startTime == null && endTime == null) {
+            endTime = LocalDateTime.now();
+            startTime = endTime.minusDays(90);
+        }
+
+        QueryWrapper<CallRecord> wrapper = buildDimensionStatsWrapper(
+                null, null, null, apiCode, vendorCode, dataType, null, startTime, endTime);
+        wrapper.select(
+                "vendor_code",
+                "data_type",
+                "api_code",
+                "COUNT(*) AS \"totalCount\"",
+                "SUM(CASE WHEN success THEN 1 ELSE 0 END) AS \"successCount\"",
+                "SUM(CASE WHEN NOT success THEN 1 ELSE 0 END) AS \"failCount\"",
+                "COALESCE(AVG(duration_ms), 0) AS \"avgLatency\"",
+                "COALESCE(CAST(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration_ms) AS int), 0) AS \"p50Latency\"",
+                "COALESCE(CAST(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms) AS int), 0) AS \"p95Latency\"",
+                "COALESCE(CAST(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY duration_ms) AS int), 0) AS \"p99Latency\"",
+                "MAX(duration_ms) AS \"maxLatency\"",
+                "COALESCE(SUM(cost), 0) AS \"totalCost\""
+        );
+        wrapper.groupBy("vendor_code", "data_type", "api_code");
+        wrapper.orderByDesc("totalCount");
+
+        List<Map<String, Object>> rows = baseMapper.selectMaps(wrapper);
+
+        List<InterfaceQualityVO> result = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            InterfaceQualityVO vo = new InterfaceQualityVO();
+            vo.setVendorCode((String) row.get("vendor_code"));
+            vo.setDataType((String) row.get("data_type"));
+            vo.setApiCode((String) row.get("api_code"));
+
+            long totalCount = toLong(row.get("totalCount"));
+            long successCount = toLong(row.get("successCount"));
+
+            vo.setTotalCount(totalCount);
+            vo.setSuccessCount(successCount);
+            vo.setFailCount(toLong(row.get("failCount")));
+            vo.setSuccessRate(totalCount > 0 ? (double) successCount / totalCount * 100 : 0.0);
+            vo.setFailRate(totalCount > 0 ? 100.0 - vo.getSuccessRate() : 0.0);
+
+            vo.setAvgLatency(toInt(row.get("avgLatency")));
+            vo.setP50Latency(toInt(row.get("p50Latency")));
+            vo.setP95Latency(toInt(row.get("p95Latency")));
+            vo.setP99Latency(toInt(row.get("p99Latency")));
+            vo.setMaxLatency(toInt(row.get("maxLatency")));
+            vo.setTotalCost(toBigDecimal(row.get("totalCost")));
+
+            result.add(vo);
+        }
+        return result;
+    }
+
+    private Integer toInt(Object val) {
+        if (val == null) return 0;
+        if (val instanceof Number) return ((Number) val).intValue();
+        return Integer.parseInt(val.toString());
+    }
+
+    private Long toLong(Object val) {
+        if (val == null) return 0L;
+        if (val instanceof Number) return ((Number) val).longValue();
+        return Long.parseLong(val.toString());
+    }
+
+    private BigDecimal toBigDecimal(Object val) {
+        if (val == null) return BigDecimal.ZERO;
+        if (val instanceof BigDecimal) return (BigDecimal) val;
+        if (val instanceof Number) return new BigDecimal(val.toString());
+        return new BigDecimal(val.toString());
     }
 
     @Override

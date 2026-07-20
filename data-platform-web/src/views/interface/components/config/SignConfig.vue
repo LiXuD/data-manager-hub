@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ElInput, ElRadioGroup, ElRadioButton, ElFormItem, ElCheckbox, ElCheckboxGroup, ElMessage } from 'element-plus'
 import type { SignType } from '@/types'
 

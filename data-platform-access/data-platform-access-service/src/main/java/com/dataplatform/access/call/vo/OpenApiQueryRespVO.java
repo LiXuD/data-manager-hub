@@ -4,6 +4,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+/**
+ * 访问域数据调用的 Open Api Query Resp VO。
+ * <p>Web 层请求或响应视图对象，用于隔离页面接口与数据库实体。</p>
+ */
 public class OpenApiQueryRespVO {
 
     private String requestId;

@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx --fix"
+    "lint": "eslint . --cache --cache-location node_modules/.cache/eslint",
+    "lint:fix": "npm run lint -- --fix"
   },
   "dependencies": {
     "@types/nprogress": "^0.2.3",
@@ -20,10 +21,14 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@vitejs/plugin-vue": "^5.0.0",
     "eslint": "^9.0.0",
+    "eslint-plugin-vue": "^10.9.2",
+    "globals": "^17.7.0",
     "sass-embedded": "^1.99.0",
     "typescript": "^5.6.0",
+    "typescript-eslint": "^8.64.0",
     "unplugin-auto-import": "^0.17.0",
     "unplugin-vue-components": "^0.27.0",
     "vite": "^6.0.0",

@@ -1,5 +1,9 @@
 package com.dataplatform.common.mapping;
 
+/**
+ * 公共运行时层参数映射的 Request Mapping Item。
+ * <p>映射处理组件，负责请求或响应字段的规则化转换。</p>
+ */
 public class RequestMappingItem {
 
     private String targetField;

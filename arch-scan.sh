@@ -6,6 +6,9 @@
 #   3. 禁止全包扫描 @SpringBootApplication(scanBasePackages = "com.dataplatform")
 #   4. 禁止跨域 import 他域 entity/mapper/service/controller
 #   5. 旧小服务不在根 POM modules 中
+#   6. Feign 仅用于带作用域保护的内部契约
+#   7. 各域只读取自己拥有的数据表
+#   8. Billing 不通过 Kafka 消费 Access 调用记录
 
 set -euo pipefail
 
@@ -143,6 +146,65 @@ for old_svc in "${OLD_SERVICES[@]}"; do
         warn "[旧目录] data-platform-${old_svc}/ 目录仍存在 (可考虑归档)"
     fi
 done
+echo ""
+
+# -------------------------------------------------------
+# 检查 6: Feign 仅用于内部契约，且显式注册
+# -------------------------------------------------------
+echo "--- 检查 6: Feign 内部契约与显式注册 ---"
+while IFS= read -r file; do
+    if ! rg -q 'path\s*=\s*"/internal/' "$file"; then
+        fail "[公共Feign] ${file#"$PROJECT_ROOT/"} 未使用 /internal/ 契约路径"
+    fi
+    if ! rg -q '@InternalFeignContract' "$file"; then
+        fail "[内部Feign无标记] ${file#"$PROJECT_ROOT/"} 缺少 @InternalFeignContract"
+    fi
+done < <(rg -l '@FeignClient' "$PROJECT_ROOT"/data-platform-*/data-platform-*-api/src/main/java --glob '*.java' || true)
+
+while IFS= read -r file; do
+    if ! rg -q 'clients\s*=' "$file"; then
+        fail "[隐式Feign扫描] ${file#"$PROJECT_ROOT/"} 必须通过 clients 显式注册契约"
+    fi
+done < <(rg -l '@EnableFeignClients' "$PROJECT_ROOT"/data-platform-*/data-platform-*-service/src/main/java --glob '*.java' || true)
+
+while IFS= read -r file; do
+    if ! rg -q '@InternalScope' "$file"; then
+        fail "[内部接口无作用域] ${file#"$PROJECT_ROOT/"} 缺少 @InternalScope"
+    fi
+done < <(rg -l '@RequestMapping\("/internal/' "$PROJECT_ROOT"/data-platform-*/data-platform-*-service/src/main/java --glob '*.java' || true)
+echo ""
+
+# -------------------------------------------------------
+# 检查 7: 禁止跨域读取领域表
+# -------------------------------------------------------
+echo "--- 检查 7: 领域数据所有权 ---"
+for domain in masterdata billing identity governance; do
+    service_src="$PROJECT_ROOT/data-platform-${domain}/data-platform-${domain}-service/src"
+    if rg -n -i --pcre2 '\b(?:from|join|update|into)\s+[`"]?call_record\b' \
+        "$service_src" --glob '*.{java,xml,sql}' 2>/dev/null; then
+        fail "[跨域读表] ${domain} 域直接引用了 Access 域 call_record 表"
+    fi
+done
+
+for domain in access billing identity governance; do
+    service_src="$PROJECT_ROOT/data-platform-${domain}/data-platform-${domain}-service/src"
+    if rg -n -i --pcre2 '\b(?:from|join|update|into)\s+[`"]?data_type\b' \
+        "$service_src" --glob '*.{java,xml,sql}' 2>/dev/null; then
+        fail "[跨域读表] ${domain} 域直接引用了 Masterdata 域 data_type 表"
+    fi
+done
+echo ""
+
+# -------------------------------------------------------
+# 检查 8: Billing 不消费 Access 调用记录事件
+# -------------------------------------------------------
+echo "--- 检查 8: Billing 跨域事件 ---"
+billing_src="$PROJECT_ROOT/data-platform-billing/data-platform-billing-service/src"
+while IFS= read -r file; do
+    if rg -q -i 'call[-_.]?record' "$file"; then
+        fail "[跨域Kafka] ${file#"$PROJECT_ROOT/"} 消费了 Access 调用记录事件"
+    fi
+done < <(rg -l '@KafkaListener' "$billing_src" --glob '*.java' || true)
 echo ""
 
 # -------------------------------------------------------

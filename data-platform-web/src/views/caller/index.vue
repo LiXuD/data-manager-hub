@@ -70,6 +70,39 @@
       </div>
     </el-card>
 
+    <el-dialog v-model="callerDialogVisible" :title="callerForm.id ? '编辑调用方' : '新增调用方'" width="520px">
+      <el-form :model="callerForm" label-width="100px">
+        <el-form-item label="调用方编码" required>
+          <el-input v-model="callerForm.callerCode" :disabled="Boolean(callerForm.id)" />
+        </el-form-item>
+        <el-form-item label="调用方名称" required>
+          <el-input v-model="callerForm.callerName" />
+        </el-form-item>
+        <el-form-item label="调用方类型">
+          <el-input v-model="callerForm.callerType" />
+        </el-form-item>
+        <el-form-item label="联系人">
+          <el-input v-model="callerForm.contactPerson" />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="callerForm.contactPhone" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="callerForm.description" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="callerForm.status" style="width: 100%">
+            <el-option label="启用" value="active" />
+            <el-option label="禁用" value="inactive" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="callerDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveCaller">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 产品配置弹窗 -->
     <el-dialog v-model="productVisible" title="调用方产品配置" width="760px" class="form-dialog">
       <el-form :model="productForm" inline class="inline-form">
@@ -112,7 +145,7 @@
     </el-dialog>
 
     <!-- API Key弹窗 -->
-    <el-dialog v-model="apiKeyVisible" title="API Key管理" width="700px" class="form-dialog">
+    <el-dialog v-model="apiKeyVisible" title="API Key管理" width="820px" class="form-dialog">
       <div class="api-key-header">
         <el-button type="primary" @click="handleCreateApiKey">创建API Key</el-button>
       </div>
@@ -122,8 +155,11 @@
             <code class="api-key-value">{{ row.apiKey }}</code>
           </template>
         </el-table-column>
-        <el-table-column prop="rateLimit" label="速率限制" width="100" align="center">
-          <template #default="{ row }">{{ row.rateLimit || 1000 }}/min</template>
+        <el-table-column prop="rateLimit" label="速率限制" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.rateLimitEnabled === false" type="info" size="small">不限流</el-tag>
+            <span v-else>{{ row.rateLimit ?? 100 }}/min</span>
+          </template>
         </el-table-column>
         <el-table-column prop="quotaUsed" label="已用/配额" width="120" align="center">
           <template #default="{ row }">{{ row.quotaUsed || 0 }} / {{ row.quotaLimit || '-' }}</template>
@@ -133,14 +169,41 @@
             <el-tag :type="row.status === COMMON_STATUS.ACTIVE ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260">
+        <el-table-column label="操作" width="340">
           <template #default="{ row }">
             <el-button type="primary" link @click="handleInterfaceAuth(row.id!)">接口授权</el-button>
             <el-button type="primary" link @click="handleProductAuth(row.id!)">产品授权</el-button>
+            <el-button type="primary" link @click="handleRateLimitConfig(row)">限流配置</el-button>
             <el-button type="danger" link @click="handleDeleteApiKey(row.id!)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="rateLimitDialogVisible" title="API Key限流配置" width="480px">
+      <el-form :model="rateLimitForm" label-width="140px">
+        <el-form-item label="启用限流">
+          <el-switch v-model="rateLimitForm.rateLimitEnabled" />
+        </el-form-item>
+        <el-form-item label="每分钟最大请求数" required>
+          <el-input-number
+            v-model="rateLimitForm.rateLimit"
+            :min="1"
+            :max="1000000"
+            :step="10"
+            :disabled="!rateLimitForm.rateLimitEnabled"
+            controls-position="right"
+            class="rate-limit-input"
+          />
+        </el-form-item>
+        <div class="policy-hint">
+          关闭限流后，该 API Key 不再执行每分钟请求数检查；重新开启时继续使用已保存的请求上限。
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="rateLimitDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveRateLimit">保存</el-button>
+      </template>
     </el-dialog>
 
     <!-- 接口授权弹窗 -->
@@ -178,9 +241,11 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getCallerList,
+  createCaller,
   deleteCaller,
   getApiKeyList,
   createApiKey,
+  updateApiKeyRateLimit,
   deleteApiKey,
   updateCallerStatus,
   getApiKeyInterfaces,
@@ -188,7 +253,8 @@ import {
   getCallerProducts,
   createCallerProduct,
   getApiKeyProducts,
-  assignApiKeyProducts
+  assignApiKeyProducts,
+  updateCaller
 } from '@/api/caller'
 import type { Caller, ApiKey, CallerProduct } from '@/api/caller'
 import { getInterfaceList } from '@/api/interface'
@@ -202,6 +268,7 @@ const loading = ref(false)
 const submitting = ref(false)
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const apiKeyVisible = ref(false)
+const rateLimitDialogVisible = ref(false)
 const productVisible = ref(false)
 const currentCallerId = ref<number>(0)
 const apiKeyList = ref<ApiKey[]>([])
@@ -218,6 +285,20 @@ const selectedInterfaces = ref<number[]>([])
 const productAuthVisible = ref(false)
 const selectedProducts = ref<number[]>([])
 const currentApiKeyId = ref<number | null>(null)
+const rateLimitForm = reactive({
+  rateLimitEnabled: true,
+  rateLimit: 100
+})
+const callerDialogVisible = ref(false)
+const callerForm = reactive<Caller>({
+  callerCode: '',
+  callerName: '',
+  callerType: '',
+  description: '',
+  contactPerson: '',
+  contactPhone: '',
+  status: 'active'
+})
 
 const loadData = async () => {
   loading.value = true
@@ -236,8 +317,33 @@ const loadData = async () => {
 
 const handleSearch = () => { pagination.page = 1; loadData() }
 const handleReset = () => { searchForm.keyword = ''; searchForm.status = ''; loadData() }
-const handleAdd = () => { ElMessage.info('新增功能开发中') }
-const handleEdit = (_row: Caller) => { ElMessage.info('编辑功能开发中') }
+const handleAdd = () => {
+  Object.assign(callerForm, { id: undefined, callerCode: '', callerName: '', callerType: '', description: '', contactPerson: '', contactPhone: '', status: 'active' })
+  callerDialogVisible.value = true
+}
+const handleEdit = (row: Caller) => {
+  Object.assign(callerForm, { ...row })
+  callerDialogVisible.value = true
+}
+const handleSaveCaller = async () => {
+  if (!callerForm.callerCode.trim() || !callerForm.callerName.trim()) {
+    ElMessage.warning('请填写调用方编码和名称')
+    return
+  }
+  submitting.value = true
+  try {
+    if (callerForm.id) {
+      await updateCaller(callerForm.id, { ...callerForm })
+    } else {
+      await createCaller({ ...callerForm })
+    }
+    ElMessage.success('保存成功')
+    callerDialogVisible.value = false
+    loadData()
+  } finally {
+    submitting.value = false
+  }
+}
 const handleDelete = async (row: Caller) => { await ElMessageBox.confirm(`确认删除"${row.callerName}"?`, '提示', { type: 'warning' }); await deleteCaller(row.id!); ElMessage.success('删除成功'); loadData() }
 const resetProductForm = () => {
   productForm.productCode = ''
@@ -292,6 +398,36 @@ const handleCreateApiKey = async () => {
   const apiKey = res.data
   ElMessage.success('创建成功')
   if (apiKey) apiKeyList.value = [...apiKeyList.value, apiKey]
+}
+const handleRateLimitConfig = (apiKey: ApiKey) => {
+  currentApiKeyId.value = apiKey.id!
+  rateLimitForm.rateLimitEnabled = apiKey.rateLimitEnabled !== false
+  rateLimitForm.rateLimit = apiKey.rateLimit ?? 100
+  rateLimitDialogVisible.value = true
+}
+const handleSaveRateLimit = async () => {
+  if (!currentApiKeyId.value) return
+  if (!Number.isInteger(rateLimitForm.rateLimit)
+      || rateLimitForm.rateLimit < 1
+      || rateLimitForm.rateLimit > 1000000) {
+    ElMessage.warning('每分钟最大请求数必须是1到1000000之间的整数')
+    return
+  }
+  submitting.value = true
+  try {
+    const response = await updateApiKeyRateLimit(currentApiKeyId.value, {
+      rateLimitEnabled: rateLimitForm.rateLimitEnabled,
+      rateLimit: rateLimitForm.rateLimit
+    })
+    const updated = response.data
+    apiKeyList.value = apiKeyList.value.map(apiKey => apiKey.id === currentApiKeyId.value
+      ? { ...apiKey, ...updated }
+      : apiKey)
+    ElMessage.success('限流策略保存成功')
+    rateLimitDialogVisible.value = false
+  } finally {
+    submitting.value = false
+  }
 }
 const handleDeleteApiKey = async (id: number) => { await deleteApiKey(id); ElMessage.success('删除成功'); apiKeyList.value = apiKeyList.value.filter(k => k.id !== id) }
 const handleStatusChange = async (row: Caller) => {
@@ -384,4 +520,6 @@ onMounted(() => { loadData() })
 .api-key-value { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); background: var(--color-bg-light); padding: 4px 8px; border-radius: 4px; word-break: break-all; }
 .inline-form { margin-bottom: 16px; }
 .cache-scope-select { width: 140px; }
+.rate-limit-input { width: 100%; }
+.policy-hint { margin-left: 140px; color: var(--color-text-tertiary); font-size: 12px; line-height: 1.6; }
 </style>

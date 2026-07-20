@@ -8,6 +8,10 @@ import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+/**
+ * 主数据域接口定义的 Api Interface Mapper。
+ * <p>MyBatis-Plus 数据访问接口，封装对应表的持久化操作。</p>
+ */
 @Mapper
 public interface ApiInterfaceMapper extends BaseMapper<ApiInterface> {
 

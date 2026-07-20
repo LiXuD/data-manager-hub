@@ -8,6 +8,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+/**
+ * 网关层过滤器的 Trace Id Filter。
+ * <p>请求过滤器，处理网关或 Web 链路中的横切逻辑。</p>
+ */
 @Component
 public class TraceIdFilter implements GlobalFilter, Ordered {
 

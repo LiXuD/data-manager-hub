@@ -71,11 +71,9 @@ public class CallApiTest extends BaseTest {
             .when()
             .get("/call-record/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then()
-                .statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -118,7 +116,8 @@ public class CallApiTest extends BaseTest {
             .when()
             .get("/call-record/stats");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -160,7 +159,8 @@ public class CallApiTest extends BaseTest {
             .when()
             .post("/call-record/query");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -195,7 +195,8 @@ public class CallApiTest extends BaseTest {
             .when()
             .get("/call-record/export");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             response.then()
                 .contentType(anyOf(containsString("csv"), containsString("excel"), containsString("octet")));
         }
@@ -207,14 +208,12 @@ public class CallApiTest extends BaseTest {
     @Test
     @Order(12)
     public void testExportCallRecord_NoPermission() {
-        Response response = getAuthRequest()
+        Response response = given()
+            .contentType("application/json")
             .when()
             .get("/call-record/export");
 
-        if (response.getStatusCode() == 403) {
-            response.then()
-                .statusCode(403);
-        }
+        response.then().statusCode(anyOf(is(401), is(403)));
     }
 
     /**
@@ -230,7 +229,8 @@ public class CallApiTest extends BaseTest {
             .when()
             .get("/call-record/export");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             response.then()
                 .contentType(anyOf(containsString("csv"), containsString("excel"), containsString("octet")));
         }

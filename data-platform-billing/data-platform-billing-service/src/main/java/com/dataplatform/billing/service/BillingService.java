@@ -10,6 +10,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 计费域计费计算的 Billing Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 public interface BillingService extends IService<BillingDaily> {
 
     /**
@@ -27,14 +31,14 @@ public interface BillingService extends IService<BillingDaily> {
     BigDecimal calculateCost(String dataType, int callCount, long latency);
 
     /**
-     * 记录每日账单
+     * 按厂商和数据类型计算费用。
      */
-    void recordDailyBilling(LocalDate billingDate);
+    BigDecimal calculateCost(String vendorCode, String dataType, int callCount, long latency);
 
     /**
      * 分页查询账单
      */
-    Page<BillingDaily> pageQuery(Long tenantId, LocalDate startDate, LocalDate endDate,
+    Page<BillingDaily> pageQuery(Long tenantId, Long vendorId, LocalDate startDate, LocalDate endDate,
                                   Integer page, Integer pageSize);
 
     /**

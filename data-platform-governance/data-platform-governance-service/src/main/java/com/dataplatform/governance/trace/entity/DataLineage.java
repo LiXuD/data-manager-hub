@@ -7,6 +7,10 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
+/**
+ * 观测治理域数据血缘的 Data Lineage。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("data_lineage")
 public class DataLineage {
 

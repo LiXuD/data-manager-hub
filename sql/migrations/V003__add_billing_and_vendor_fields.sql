@@ -20,7 +20,18 @@ COMMENT ON COLUMN billing_rule.sla_threshold IS 'SLA阈值(毫秒), 超过此时
 COMMENT ON COLUMN billing_rule.compensation_rate IS '补偿系数, 每超100ms减少的费用比例';
 
 -- 添加约束
-ALTER TABLE billing_rule ADD CONSTRAINT IF NOT EXISTS chk_compensation_rate CHECK (compensation_rate >= 0 AND compensation_rate <= 1);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_compensation_rate'
+          AND conrelid = 'billing_rule'::regclass
+    ) THEN
+        ALTER TABLE billing_rule
+            ADD CONSTRAINT chk_compensation_rate CHECK (compensation_rate >= 0 AND compensation_rate <= 1);
+    END IF;
+END $$;
 
 -- 3. 创建对账记录表
 CREATE TABLE IF NOT EXISTS billing_reconciliation (

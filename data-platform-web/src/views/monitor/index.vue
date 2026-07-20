@@ -89,8 +89,8 @@
 
           <!-- 健康状态表格 -->
           <el-table :data="tableData" v-loading="loading" stripe>
-            <el-table-column prop="id" label="ID" width="80" />
             <el-table-column prop="serviceName" label="服务名称" width="150" />
+            <el-table-column prop="instanceCount" label="实例数" width="90" />
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
                 <div class="status-cell" :class="row.status">
@@ -136,24 +136,24 @@
 
           <el-table :data="alertData" stripe>
             <el-table-column prop="ruleName" label="规则名称" width="180" />
-            <el-table-column prop="metric" label="监控指标" width="150">
+            <el-table-column prop="targetType" label="监控指标" width="150">
               <template #default="{ row }">
-                <span class="metric-tag">{{ row.metric }}</span>
+                <span class="metric-tag">{{ row.targetType }}</span>
               </template>
             </el-table-column>
             <el-table-column label="阈值" width="120">
               <template #default="{ row }">
-                <span class="threshold-cell">{{ row.operator }} {{ row.threshold }}</span>
+                <span class="threshold-cell">{{ row.conditionType }} {{ row.thresholdValue }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="level" label="告警级别" width="100">
+            <el-table-column prop="severity" label="告警级别" width="100">
               <template #default="{ row }">
-                <el-tag :type="getLevelType(row.level)" size="small">{{ getLevelTextLocalized(row.level) }}</el-tag>
+                <el-tag :type="getLevelType(row.severity || row.level || 'warning')" size="small">{{ getLevelTextLocalized(row.severity || row.level || 'warning') }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
-                <el-switch v-model="row.status" active-value="active" inactive-value="inactive" />
+                <el-switch v-model="row.status" active-value="active" inactive-value="inactive" @change="handleRuleStatusChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="操作" width="150" fixed="right">
@@ -165,37 +165,137 @@
           </el-table>
         </el-tab-pane>
 
+        <el-tab-pane label="告警记录" name="record">
+          <el-table :data="alertRecords" stripe>
+            <el-table-column prop="alertTitle" label="告警标题" min-width="180" />
+            <el-table-column prop="alertMessage" label="告警内容" min-width="240" show-overflow-tooltip />
+            <el-table-column prop="level" label="级别" width="100">
+              <template #default="{ row }">
+                <el-tag :type="getLevelType(row.level)" size="small">{{ getLevelTextLocalized(row.level) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">{{ row.status === 'resolved' ? '已处理' : '待处理' }}</template>
+            </el-table-column>
+            <el-table-column prop="alertTime" label="告警时间" width="180" />
+            <el-table-column label="操作" width="100">
+              <template #default="{ row }">
+                <el-button v-if="row.status !== 'resolved'" type="primary" link @click="openResolveDialog(row)">处理</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
         <!-- 监控图表 -->
         <el-tab-pane label="监控图表" name="chart">
-          <el-empty description="监控图表功能开发中...">
-            <el-button type="primary">配置图表</el-button>
-          </el-empty>
+          <div v-if="tableData.length" class="health-chart">
+            <div v-for="item in tableData" :key="item.serviceName" class="chart-row">
+              <span class="chart-label">{{ item.serviceName }}</span>
+              <div class="chart-track">
+                <div class="chart-bar" :class="item.status" :style="{ width: `${Math.max(2, item.uptime)}%` }"></div>
+              </div>
+              <span class="chart-value">{{ item.uptime }}%</span>
+            </div>
+          </div>
+          <el-empty v-else description="暂无服务健康数据" />
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <el-dialog v-model="ruleDialogVisible" :title="ruleForm.id ? '编辑告警规则' : '新增告警规则'" width="560px">
+      <el-form :model="ruleForm" label-width="100px">
+        <el-form-item label="规则名称" required>
+          <el-input v-model="ruleForm.ruleName" />
+        </el-form-item>
+        <el-form-item label="监控指标" required>
+          <el-input v-model="ruleForm.targetType" placeholder="例如 response_time" />
+        </el-form-item>
+        <el-form-item label="触发条件" required>
+          <el-select v-model="ruleForm.conditionType" style="width: 100%">
+            <el-option label="大于" value="gt" />
+            <el-option label="大于等于" value="gte" />
+            <el-option label="小于" value="lt" />
+            <el-option label="小于等于" value="lte" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="阈值" required>
+          <el-input-number v-model="ruleForm.thresholdValue" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="时间窗口">
+          <el-input-number v-model="ruleForm.timeWindowMinutes" :min="1" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="告警级别">
+          <el-select v-model="ruleForm.severity" style="width: 100%">
+            <el-option label="提示" value="info" />
+            <el-option label="警告" value="warning" />
+            <el-option label="严重" value="critical" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="通知渠道">
+          <el-input v-model="ruleForm.notifyChannels" placeholder="例如 email,webhook" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="ruleDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="ruleSubmitting" @click="handleSaveRule">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="resolveDialogVisible" title="处理告警" width="500px">
+      <el-input v-model="resolution" type="textarea" :rows="4" placeholder="请输入处理结果" />
+      <template #footer>
+        <el-button @click="resolveDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="resolving" @click="handleResolveAlert">确认处理</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAlertRuleList, deleteAlertRule } from '@/api/monitor'
-import type { AlertRule } from '@/types'
+import {
+  checkServiceHealth,
+  createAlertRule,
+  deleteAlertRule,
+  getAlertRecordList,
+  getAlertRuleList,
+  getServiceHealth,
+  resolveAlertRecord,
+  updateAlertRule,
+  updateAlertRuleStatus,
+  type ServiceHealth
+} from '@/api/monitor'
+import type { AlertRecord, AlertRule } from '@/types'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
-
-interface HealthStatus {
-  id: number
-  serviceName: string
-  status: string
-  responseTime: number
-  uptime: number
-  lastCheck: string
-}
+import { extractPageData } from '@/utils/pagination'
 
 const loading = ref(false)
+const router = useRouter()
 const activeTab = ref('health')
-const tableData = ref<HealthStatus[]>([])
-const alertData = ref<AlertRule[]>([])
+const tableData = ref<ServiceHealth[]>([])
+type AlertRuleView = AlertRule & { severity?: string }
+const alertData = ref<AlertRuleView[]>([])
+const alertRecords = ref<AlertRecord[]>([])
+const ruleDialogVisible = ref(false)
+const ruleSubmitting = ref(false)
+const resolveDialogVisible = ref(false)
+const resolving = ref(false)
+const resolution = ref('')
+const resolvingRecordId = ref<number | null>(null)
+const ruleForm = reactive({
+  id: null as number | null,
+  ruleName: '',
+  ruleType: 'THRESHOLD',
+  targetType: '',
+  conditionType: 'gt',
+  thresholdValue: 0,
+  timeWindowMinutes: 5,
+  notifyChannels: '',
+  severity: 'warning',
+  status: 'active' as 'active' | 'inactive'
+})
 
 const healthOptions = [
   { label: '全部', value: '' },
@@ -210,16 +310,21 @@ const searchForm = reactive({
 })
 
 const statsData = reactive({
-  totalServices: 6,
-  healthyCount: 5,
-  unhealthyCount: 1,
-  avgResponseTime: 528
+  totalServices: 0,
+  healthyCount: 0,
+  unhealthyCount: 0,
+  avgResponseTime: 0
 })
 
 const fetchHealth = async () => {
   loading.value = true
   try {
-    tableData.value = []
+    const response = await getServiceHealth({
+      serviceName: searchForm.serviceName || undefined,
+      status: searchForm.status || undefined
+    })
+    tableData.value = response.data.list || []
+    Object.assign(statsData, response.data.stats)
   } catch {
     tableData.value = []
   } finally {
@@ -230,16 +335,74 @@ const fetchHealth = async () => {
 const fetchAlerts = async () => {
   try {
     const res = await getAlertRuleList({ page: 1, pageSize: 100 })
-    alertData.value = (res as any).data?.list || res.list || []
+    alertData.value = extractPageData<AlertRuleView>(res).list
   } catch {
     alertData.value = []
   }
 }
 
+const fetchAlertRecords = async () => {
+  const response = await getAlertRecordList({ page: 1, pageSize: 100 })
+  alertRecords.value = extractPageData<AlertRecord>(response).list
+}
+
 const handleSearch = () => { fetchHealth() }
 const handleReset = () => { searchForm.serviceName = ''; searchForm.status = ''; fetchHealth() }
-const handleAddRule = () => { ElMessage.info('新增告警规则') }
-const handleEditRule = (row: AlertRule) => { ElMessage.info(`编辑告警规则: ${row.ruleName}`) }
+const handleAddRule = () => {
+  Object.assign(ruleForm, { id: null, ruleName: '', ruleType: 'THRESHOLD', targetType: '', conditionType: 'gt', thresholdValue: 0, timeWindowMinutes: 5, notifyChannels: '', severity: 'warning', status: 'active' })
+  ruleDialogVisible.value = true
+}
+const handleEditRule = (row: AlertRuleView) => {
+  Object.assign(ruleForm, { ...row })
+  ruleDialogVisible.value = true
+}
+const handleSaveRule = async () => {
+  if (!ruleForm.ruleName.trim() || !ruleForm.targetType.trim()) {
+    ElMessage.warning('请填写规则名称和监控指标')
+    return
+  }
+  ruleSubmitting.value = true
+  try {
+    const payload = { ...ruleForm, id: undefined }
+    if (ruleForm.id) {
+      await updateAlertRule(ruleForm.id, payload)
+    } else {
+      await createAlertRule(payload)
+    }
+    ElMessage.success('保存成功')
+    ruleDialogVisible.value = false
+    fetchAlerts()
+  } finally {
+    ruleSubmitting.value = false
+  }
+}
+const handleRuleStatusChange = async (row: AlertRule) => {
+  try {
+    await updateAlertRuleStatus(row.id, row.status)
+  } catch {
+    row.status = row.status === 'active' ? 'inactive' : 'active'
+  }
+}
+const openResolveDialog = (row: AlertRecord) => {
+  resolvingRecordId.value = row.id
+  resolution.value = ''
+  resolveDialogVisible.value = true
+}
+const handleResolveAlert = async () => {
+  if (!resolvingRecordId.value || !resolution.value.trim()) {
+    ElMessage.warning('请输入处理结果')
+    return
+  }
+  resolving.value = true
+  try {
+    await resolveAlertRecord(resolvingRecordId.value, resolution.value.trim())
+    ElMessage.success('告警已处理')
+    resolveDialogVisible.value = false
+    fetchAlertRecords()
+  } finally {
+    resolving.value = false
+  }
+}
 const handleDeleteRule = async (row: AlertRule) => {
   try {
     await ElMessageBox.confirm(`确定要删除告警规则"${row.ruleName}"吗？`, '提示', { type: 'warning' })
@@ -257,10 +420,16 @@ const getStatusTextLocalized = (status: string) => getStatusText('health', statu
 const getLevelType = (level: string) => getTagType('enabled', level)
 const getLevelTextLocalized = (level: string) => getStatusText('level', level)
 
-const handleCheckNow = (row: HealthStatus) => { ElMessage.info(`立即检查: ${row.serviceName}`) }
-const handleViewLogs = (row: HealthStatus) => { ElMessage.info(`查看日志: ${row.serviceName}`) }
+const handleCheckNow = async (row: ServiceHealth) => {
+  const response = await checkServiceHealth(row.serviceName)
+  Object.assign(row, response.data)
+  ElMessage.success('检查完成')
+}
+const handleViewLogs = (row: ServiceHealth) => {
+  router.push({ path: '/audit', query: { keyword: row.serviceName } })
+}
 
-onMounted(() => { Promise.all([fetchHealth(), fetchAlerts()]) })
+onMounted(() => { Promise.all([fetchHealth(), fetchAlerts(), fetchAlertRecords()]) })
 </script>
 
 <style scoped>
@@ -325,6 +494,14 @@ onMounted(() => { Promise.all([fetchHealth(), fetchAlerts()]) })
 .time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
 .metric-tag { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); background: var(--color-bg-light); padding: 2px 8px; border-radius: 4px; }
 .threshold-cell { font-family: var(--font-mono); color: var(--color-text-secondary); }
+.health-chart { display: flex; flex-direction: column; gap: 16px; padding: 12px 4px; }
+.chart-row { display: grid; grid-template-columns: 180px 1fr 64px; gap: 12px; align-items: center; }
+.chart-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-track { height: 12px; overflow: hidden; border-radius: 6px; background: var(--color-bg-light); }
+.chart-bar { height: 100%; border-radius: 6px; background: #909399; }
+.chart-bar.healthy { background: #67C23A; }
+.chart-bar.unhealthy { background: #F56C6C; }
+.chart-value { text-align: right; font-family: var(--font-mono); }
 
 :deep(.el-tabs__item) { font-size: 14px; }
 :deep(.el-tabs__item.is-active) { color: var(--color-primary); }

@@ -9,6 +9,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+/**
+ * 公共 Web 层远程调用的 Trace Feign Request Interceptor。
+ * <p>请求拦截器，处理认证、上下文或链路增强等横切逻辑。</p>
+ */
 public class TraceFeignRequestInterceptor implements RequestInterceptor {
 
     @Override

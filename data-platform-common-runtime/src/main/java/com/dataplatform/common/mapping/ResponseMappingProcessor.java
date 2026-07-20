@@ -8,6 +8,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 公共运行时层参数映射的 Response Mapping Processor。
+ * <p>映射处理组件，负责请求或响应字段的规则化转换。</p>
+ */
 public class ResponseMappingProcessor {
 
     public Map<String, Object> mapResponse(Map<String, Object> response, List<ResponseMappingItem> mappings) {

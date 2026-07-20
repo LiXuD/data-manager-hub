@@ -3,7 +3,7 @@ package com.dataplatform.access.call.service;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.util.IpUtil;
 import com.dataplatform.masterdata.graylog.api.dto.GrayRuleDTO;
-import com.dataplatform.masterdata.graylog.api.feign.GraylogFeignClient;
+import com.dataplatform.masterdata.graylog.api.feign.GraylogInternalFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -27,10 +27,10 @@ public class GrayVendorResolver {
     private static final Logger log = LoggerFactory.getLogger(GrayVendorResolver.class);
     private static final long CACHE_TTL_MS = 30_000;
 
-    private final GraylogFeignClient graylogFeignClient;
+    private final GraylogInternalFeignClient graylogFeignClient;
     private final ConcurrentHashMap<String, CachedRule> cache = new ConcurrentHashMap<>();
 
-    public GrayVendorResolver(GraylogFeignClient graylogFeignClient) {
+    public GrayVendorResolver(GraylogInternalFeignClient graylogFeignClient) {
         this.graylogFeignClient = graylogFeignClient;
     }
 
@@ -63,7 +63,11 @@ public class GrayVendorResolver {
         }
 
         // 权重选择
-        int weight = rule.getWeight() != null ? rule.getWeight() : 10;
+        if (rule.getWeight() == null || rule.getWeight() < 0 || rule.getWeight() > 100) {
+            log.warn("Gray rule {} has invalid weight: {}", rule.getId(), rule.getWeight());
+            return null;
+        }
+        int weight = rule.getWeight();
         int roll = ThreadLocalRandom.current().nextInt(100);
         if (roll < weight) {
             log.debug("Gray routing: interface={}, weight={}, roll={} -> gray vendor (configs[1])", interfaceCode, weight, roll);
@@ -76,26 +80,27 @@ public class GrayVendorResolver {
         String conditionType = rule.getConditionType();
         String conditionValue = rule.getConditionValue();
 
-        if (conditionType == null || "random".equals(conditionType)) {
+        if ("random".equals(conditionType)) {
             return true;
         }
-        if (ctx == null) {
-            return true;
+        if (conditionType == null || ctx == null) {
+            return false;
         }
 
         switch (conditionType) {
             case "header":
-                if (conditionValue == null || ctx.request == null) return true;
+                if (conditionValue == null || ctx.request == null) return false;
                 return ctx.request.getHeader(conditionValue) != null;
             case "caller":
-                if (conditionValue == null) return true;
+                if (conditionValue == null) return false;
                 return String.valueOf(ctx.callerId).equals(conditionValue)
                         || (ctx.callerCode != null && ctx.callerCode.equals(conditionValue));
             case "ip":
-                if (conditionValue == null || ctx.clientIp == null) return true;
+                if (conditionValue == null || ctx.clientIp == null) return false;
                 return matchesCidr(ctx.clientIp, conditionValue);
             default:
-                return true;
+                log.warn("Unsupported gray condition type: {}", conditionType);
+                return false;
         }
     }
 

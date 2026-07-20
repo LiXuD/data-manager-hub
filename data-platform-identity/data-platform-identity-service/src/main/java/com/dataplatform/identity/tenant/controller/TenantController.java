@@ -15,6 +15,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 身份租户域租户的 Tenant Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/tenant")
 public class TenantController {
@@ -32,7 +36,7 @@ public class TenantController {
         Page<TenantInfo> pageResult = tenantService.listPage(page, pageSize, keyword, status);
 
         PageResult<TenantInfo> result = new PageResult<>();
-        result.setCode(0);
+        result.setCode(200);
         result.setMessage("success");
         result.setData(pageResult.getRecords());
         result.setTotal(pageResult.getTotal());

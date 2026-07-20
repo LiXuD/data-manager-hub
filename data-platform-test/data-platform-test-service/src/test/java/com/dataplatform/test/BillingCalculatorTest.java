@@ -63,9 +63,7 @@ class BillingCalculatorTest {
     void testStandardCalculator_NullRule() {
         BillingCalculator calculator = new StandardBillingCalculator();
 
-        BigDecimal result = calculator.calculate(null, 100, 100);
-
-        assertEquals(BigDecimal.ZERO, result);
+        assertThrows(IllegalArgumentException.class, () -> calculator.calculate(null, 100, 100));
     }
 
     @Test
@@ -91,20 +89,22 @@ class BillingCalculatorTest {
     }
 
     @Test
-    @DisplayName("阶梯计费 - 第二阶梯(10-50万次) - 9折")
+    @DisplayName("阶梯计费 - 使用配置的9折")
     void testTieredCalculator_Tier2() {
         BillingCalculator calculator = new TieredBillingCalculator();
 
+        rule.setDiscount(new BigDecimal("0.90"));
         BigDecimal result = calculator.calculate(rule, 200_000, 100);
 
         assertEquals(new BigDecimal("1800.0000"), result);
     }
 
     @Test
-    @DisplayName("阶梯计费 - 第三阶梯(50万次以上) - 8折")
+    @DisplayName("阶梯计费 - 使用配置的8折")
     void testTieredCalculator_Tier3() {
         BillingCalculator calculator = new TieredBillingCalculator();
 
+        rule.setDiscount(new BigDecimal("0.80"));
         BigDecimal result = calculator.calculate(rule, 1_000_000, 100);
 
         assertEquals(new BigDecimal("8000.0000"), result);
@@ -149,6 +149,7 @@ class BillingCalculatorTest {
     void testDynamicCalculator_NormalLatency() {
         BillingCalculator calculator = new DynamicBillingCalculator();
         rule.setSlaThreshold(2000);
+        rule.setCompensationRate(new BigDecimal("0.05"));
 
         BigDecimal result = calculator.calculate(rule, 100, 500);
 
@@ -187,6 +188,8 @@ class BillingCalculatorTest {
     @DisplayName("动态计费 - 单次调用")
     void testDynamicCalculator_SingleCall() {
         BillingCalculator calculator = new DynamicBillingCalculator();
+        rule.setSlaThreshold(2000);
+        rule.setCompensationRate(new BigDecimal("0.05"));
 
         BigDecimal result = calculator.calculateSingle(rule, 500);
 
@@ -225,21 +228,15 @@ class BillingCalculatorTest {
     }
 
     @Test
-    @DisplayName("工厂 - 未知类型返回标准计费器")
+    @DisplayName("工厂 - 未知类型拒绝")
     void testFactory_UnknownType() {
-        BillingCalculator calculator = factory.getCalculator("UNKNOWN");
-
-        assertNotNull(calculator);
-        assertTrue(calculator instanceof StandardBillingCalculator);
+        assertThrows(IllegalArgumentException.class, () -> factory.getCalculator("UNKNOWN"));
     }
 
     @Test
-    @DisplayName("工厂 - 空类型返回标准计费器")
+    @DisplayName("工厂 - 空类型拒绝")
     void testFactory_NullType() {
-        BillingCalculator calculator = factory.getCalculator((String) null);
-
-        assertNotNull(calculator);
-        assertTrue(calculator instanceof StandardBillingCalculator);
+        assertThrows(IllegalArgumentException.class, () -> factory.getCalculator((String) null));
     }
 
     // ========== 精度测试 ==========

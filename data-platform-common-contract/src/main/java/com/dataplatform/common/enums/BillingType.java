@@ -15,12 +15,12 @@ public enum BillingType {
     }
     public static BillingType fromCode(String code) {
         if (code == null || code.isEmpty()) {
-            return STANDARD;
+            return null;
         }
         try {
             return valueOf(code.toUpperCase());
         } catch (IllegalArgumentException e) {
-            return STANDARD;
+            return null;
         }
     }
 }

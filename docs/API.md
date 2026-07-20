@@ -1,6 +1,6 @@
 # 数据管理平台 API 文档
 
-**版本**: 2026-05-16
+**版本**: 2026-07-10
 **Base URL**: `http://localhost:8888/api/v1`
 **认证方式**: Bearer Token
 **Content-Type**: `application/json`
@@ -34,6 +34,8 @@
 ---
 
 ## 认证
+
+本文件仅描述外部 HTTP API。服务间调用使用 `/internal/v1/**` 专用契约和短期 Service JWT，这些路径不经 Gateway 暴露，也不能使用用户 Token 或 API Key 访问。
 
 ### 请求头
 
@@ -320,6 +322,60 @@ Authorization: Bearer {token}
 
 ```http
 GET /interface/{id}
+Authorization: Bearer {token}
+```
+
+### 获取接口参数定义
+
+```http
+GET /interface/{id}/params
+Authorization: Bearer {token}
+```
+
+返回参数按 `sort` 升序排列。每项包含 `paramName`、`description`、`paramType`（`string`、`number`、`boolean`、`object` 或 `array`）、`required`、`defaultValue`、`validationRule` 和 `sort`。
+
+### 新增接口参数定义
+
+```http
+POST /interface/{id}/params
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "paramName": "companyName",
+  "description": "企业名称",
+  "paramType": "string",
+  "required": true,
+  "defaultValue": null,
+  "validationRule": null,
+  "sort": 1
+}
+```
+
+### 批量保存接口参数定义
+
+```http
+PUT /interface/{id}/params/batch
+Authorization: Bearer {token}
+Content-Type: application/json
+
+[
+  {
+    "paramName": "companyName",
+    "paramType": "string",
+    "required": true,
+    "sort": 1
+  }
+]
+```
+
+批量保存会以本次请求内容替换该接口现有的参数定义；同一接口内参数名不能重复。
+
+### 更新或删除接口参数定义
+
+```http
+PUT /interface/params/{paramId}
+DELETE /interface/params/{paramId}
 Authorization: Bearer {token}
 ```
 
@@ -816,6 +872,24 @@ Authorization: Bearer {token}
 GET /call-record/stats?days=7
 Authorization: Bearer {token}
 ```
+
+### 多维统计
+
+```http
+GET /call-record/dimension-stats?vendorCode=tianyancha&dataType=company_info&startTime=2026-06-01&endTime=2026-06-22
+Authorization: Bearer {token}
+```
+
+返回按 caller、product、scene、vendor、dataType 等维度分组的调用统计（总数、成功/失败数、费用、延迟）。
+
+### 接口质量报表
+
+```http
+GET /call-record/quality-report?startTime=2026-06-01&endTime=2026-06-22
+Authorization: Bearer {token}
+```
+
+按 vendor + dataType + apiCode 分组返回接口质量指标：成功率、失败率、平均/P50/P95/P99 延迟、总费用。默认查询最近 90 天。
 
 ---
 

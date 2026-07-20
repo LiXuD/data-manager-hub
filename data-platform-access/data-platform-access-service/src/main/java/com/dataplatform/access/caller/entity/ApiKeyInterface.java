@@ -4,6 +4,10 @@ import com.baomidou.mybatisplus.annotation.*;
 
 import java.time.LocalDateTime;
 
+/**
+ * 访问域调用方的 Api Key Interface。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("api_key_interface")
 public class ApiKeyInterface {
 

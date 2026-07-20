@@ -60,7 +60,7 @@
                   <el-input v-model="formData.nickname" />
                 </el-form-item>
                 <el-form-item>
-                  <el-button type="primary" @click="handleSaveInfo">保存修改</el-button>
+                  <el-button type="primary" :loading="savingInfo" @click="handleSaveInfo">保存修改</el-button>
                 </el-form-item>
               </el-form>
             </el-tab-pane>
@@ -77,7 +77,7 @@
                   <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
                 </el-form-item>
                 <el-form-item>
-                  <el-button type="primary" @click="handleChangePassword">修改密码</el-button>
+                  <el-button type="primary" :loading="changingPassword" @click="handleChangePassword">修改密码</el-button>
                 </el-form-item>
               </el-form>
             </el-tab-pane>
@@ -125,6 +125,7 @@ import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { STORAGE_KEYS, THEME_MODE } from '@/constants'
 import { applyTheme, getStoredTheme, setStoredTheme } from '@/composables/useTheme'
+import { changePassword, getProfile, updateProfile, type ProfileInfo } from '@/api/auth'
 
 const activeTab = ref('info')
 
@@ -144,14 +145,17 @@ const setupMediaQuery = () => {
 }
 
 const userStore = useUserStore()
+const profile = ref<ProfileInfo | null>(null)
+const savingInfo = ref(false)
+const changingPassword = ref(false)
 
 const userInfo = computed(() => ({
-  username: userStore.userInfo?.username || '未登录',
-  role: userStore.userInfo?.roles?.[0] || '未知角色',
-  tenant: '默认租户',
-  email: userStore.userInfo?.email || '-',
-  phone: userStore.userInfo?.phone ? `${userStore.userInfo.phone.substring(0, 3)}****${userStore.userInfo.phone.substring(7)}` : '-',
-  lastLogin: '-'
+  username: profile.value?.username || userStore.userInfo?.username || '未登录',
+  role: profile.value?.roles?.[0] || userStore.userInfo?.roles?.[0] || '未知角色',
+  tenant: profile.value?.tenantName || userStore.userInfo?.tenantName || (profile.value?.tenantId ? `租户 ${profile.value.tenantId}` : '-'),
+  email: profile.value?.email || '-',
+  phone: profile.value?.phone ? `${profile.value.phone.substring(0, 3)}****${profile.value.phone.substring(7)}` : '-',
+  lastLogin: profile.value?.lastLoginTime || '-'
 }))
 
 const formData = reactive({
@@ -180,11 +184,49 @@ watch(() => preferenceForm.theme, (newTheme) => {
   window.dispatchEvent(new Event('theme-change'))
 })
 
-const handleSaveInfo = () => {
-  ElMessage.success('信息已更新')
+const syncProfile = (data: ProfileInfo) => {
+  profile.value = data
+  Object.assign(formData, {
+    username: data.username,
+    email: data.email || '',
+    phone: data.phone || '',
+    nickname: data.nickname || ''
+  })
+  userStore.setUserInfo({
+    id: String(data.userId),
+    username: data.username,
+    nickname: data.nickname || data.username,
+    email: data.email,
+    phone: data.phone,
+    roles: data.roles || [],
+    tenantId: data.tenantId,
+    tenantName: data.tenantName,
+    lastLoginTime: data.lastLoginTime,
+    permissions: data.permissions || []
+  })
 }
 
-const handleChangePassword = () => {
+const loadProfile = async () => {
+  const response = await getProfile()
+  syncProfile(response.data)
+}
+
+const handleSaveInfo = async () => {
+  savingInfo.value = true
+  try {
+    const response = await updateProfile({
+      email: formData.email,
+      phone: formData.phone,
+      nickname: formData.nickname
+    })
+    syncProfile(response.data)
+    ElMessage.success('信息已更新')
+  } finally {
+    savingInfo.value = false
+  }
+}
+
+const handleChangePassword = async () => {
   if (!passwordForm.oldPassword || !passwordForm.newPassword) {
     ElMessage.warning('请填写完整密码信息')
     return
@@ -193,10 +235,20 @@ const handleChangePassword = () => {
     ElMessage.error('两次输入的密码不一致')
     return
   }
-  ElMessage.success('密码已修改')
-  passwordForm.oldPassword = ''
-  passwordForm.newPassword = ''
-  passwordForm.confirmPassword = ''
+  if (passwordForm.newPassword.length < 8 || !/[A-Za-z]/.test(passwordForm.newPassword) || !/\d/.test(passwordForm.newPassword)) {
+    ElMessage.warning('新密码至少8位，且包含数字和字母')
+    return
+  }
+  changingPassword.value = true
+  try {
+    await changePassword({ oldPassword: passwordForm.oldPassword, newPassword: passwordForm.newPassword })
+    ElMessage.success('密码已修改')
+    passwordForm.oldPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+  } finally {
+    changingPassword.value = false
+  }
 }
 
 const handleSavePreference = () => {
@@ -207,7 +259,8 @@ const handleSavePreference = () => {
   ElMessage.success('偏好设置已保存')
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await loadProfile()
   applyTheme(preferenceForm.theme)
   setupMediaQuery()
 })

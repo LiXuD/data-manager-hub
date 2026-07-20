@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { LineChart, PieChart } from 'echarts/charts'
 import {
   GridComponent,
@@ -7,6 +8,11 @@ import {
 } from 'echarts/components'
 import { graphic, init, use, type ECharts } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
+import { getCallDimensionStats, getCallRecordList, getCallStats } from '@/api/call'
+import { getVendorAll } from '@/api/vendor'
+import { getCallerList } from '@/api/caller'
+import { extractPageData } from '@/utils/pagination'
+import type { CallRecord, CallerDTO, Vendor } from '@/types'
 
 use([
   LineChart,
@@ -16,12 +22,13 @@ use([
   CanvasRenderer
 ])
 
-// 统计数据
+const router = useRouter()
+
 const statsData = ref([
-  { label: '调用总量', value: '12,847,592', unit: '次', trend: '+12.5%', trendUp: true },
-  { label: '今日调用', value: '156,847', unit: '次', trend: '+5.2%', trendUp: true },
-  { label: '活跃厂商', value: '48', unit: '家', trend: '+3', trendUp: true },
-  { label: '调用方', value: '23', unit: '个', trend: '+1', trendUp: true }
+  { label: '调用总量', value: '0', unit: '次', note: '成功率 0%' },
+  { label: '今日调用', value: '0', unit: '次', note: '实时统计' },
+  { label: '活跃厂商', value: '0', unit: '家', note: '启用中' },
+  { label: '调用方', value: '0', unit: '个', note: '已接入' }
 ])
 
 // 快捷入口
@@ -32,14 +39,9 @@ const quickActions = [
   { label: '告警处理', icon: 'alarm', route: '/monitor' }
 ]
 
-// 最近调用记录
-const recentCalls = ref([
-  { id: 1, vendor: '天眼查', type: '工商信息', caller: '风控系统', status: 'success', time: '10:23:45', cost: 0.15 },
-  { id: 2, vendor: '企查查', type: '企业征信', caller: '信贷系统', status: 'success', time: '10:23:42', cost: 2.50 },
-  { id: 3, vendor: '信鸽', type: '手机验证', caller: '核心系统', status: 'failed', time: '10:23:38', cost: 0.08 },
-  { id: 4, vendor: '天眼查', type: '企业征信', caller: '风控系统', status: 'success', time: '10:23:35', cost: 2.50 },
-  { id: 5, vendor: '华炎魔方', type: '法律诉讼', caller: '法务系统', status: 'success', time: '10:23:30', cost: 1.20 }
-])
+const recentCalls = ref<Array<{ id: number; vendor: string; type: string; caller: string; status: string; time: string; cost: number }>>([])
+const hourlyCounts = ref<number[]>(Array(24).fill(0))
+const vendorDistribution = ref<Array<{ value: number; name: string }>>([])
 
 // 图表引用
 const trendChartRef = ref<HTMLDivElement>()
@@ -84,7 +86,7 @@ const initTrendChart = () => {
     yAxis: {
       type: 'value',
       axisLine: { show: false },
-      axisLabel: { color: '#5A6A7E', fontSize: 11, formatter: (v: number) => (v / 10000).toFixed(0) + '万' },
+      axisLabel: { color: '#5A6A7E', fontSize: 11, formatter: (v: number) => v.toLocaleString() },
       splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } }
     },
     series: [{
@@ -99,7 +101,7 @@ const initTrendChart = () => {
           { offset: 1, color: 'rgba(0, 212, 170, 0)' }
         ])
       },
-      data: [12000, 15000, 18000, 22000, 19000, 25000, 28000, 32000, 35000, 31000, 28000, 25000, 22000, 26000, 30000, 35000, 38000, 42000, 45000, 40000, 35000, 30000, 25000, 20000]
+      data: hourlyCounts.value
     }]
   })
 }
@@ -131,13 +133,7 @@ const initVendorChart = () => {
         itemStyle: { shadowBlur: 20, shadowColor: 'rgba(0, 212, 170, 0.5)' }
       },
       labelLine: { show: false },
-      data: [
-        { value: 35, name: '天眼查', itemStyle: { color: '#00D4AA' } },
-        { value: 25, name: '企查查', itemStyle: { color: '#6366F1' } },
-        { value: 18, name: '信鸽', itemStyle: { color: '#F59E0B' } },
-        { value: 12, name: '华炎魔方', itemStyle: { color: '#10B981' } },
-        { value: 10, name: '其他', itemStyle: { color: '#5A6A7E' } }
-      ]
+      data: vendorDistribution.value
     }]
   })
 }
@@ -148,7 +144,69 @@ const handleResize = () => {
   vendorChart?.resize()
 }
 
-onMounted(() => {
+const formatDateTime = (date: Date) => {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+const loadDashboard = async () => {
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const [allStatsResponse, todayStatsResponse, todayRecordsResponse, recentRecordsResponse, vendorsResponse, callersResponse] = await Promise.all([
+    getCallDimensionStats({}),
+    getCallStats({ startTime: formatDateTime(todayStart), endTime: formatDateTime(now) }),
+    getCallRecordList({ page: 1, pageSize: 100, startTime: formatDateTime(todayStart), endTime: formatDateTime(now) }),
+    getCallRecordList({ page: 1, pageSize: 5 }),
+    getVendorAll(),
+    getCallerList({ page: 1, pageSize: 100 })
+  ])
+
+  const allStats = allStatsResponse.data as Record<string, any>
+  const todayStats = todayStatsResponse.data as Record<string, any>
+  const vendors = vendorsResponse.data || []
+  const callersPage = extractPageData<CallerDTO>(callersResponse)
+  const activeVendors = vendors.filter(vendor => vendor.status === 'active' || vendor.status === 'enabled')
+  const totalCount = Number(allStats.totalCount || 0)
+  const successCount = Number(allStats.successCount || 0)
+  const successRate = totalCount ? (successCount / totalCount * 100).toFixed(1) : '0.0'
+
+  statsData.value = [
+    { label: '调用总量', value: totalCount.toLocaleString(), unit: '次', note: `成功率 ${successRate}%` },
+    { label: '今日调用', value: Number(todayStats.totalCount || 0).toLocaleString(), unit: '次', note: '实时统计' },
+    { label: '活跃厂商', value: activeVendors.length.toLocaleString(), unit: '家', note: `共 ${vendors.length} 家` },
+    { label: '调用方', value: callersPage.total.toLocaleString(), unit: '个', note: '已接入' }
+  ]
+
+  const vendorNameMap = new Map<string, string>(vendors.map((vendor: Vendor) => [vendor.vendorCode, vendor.vendorName]))
+  const callerNameMap = new Map<number, string>(callersPage.list.filter(item => item.id != null).map(item => [item.id!, item.callerName]))
+  const records = extractPageData<CallRecord>(todayRecordsResponse).list
+  const recentRecords = extractPageData<CallRecord>(recentRecordsResponse).list
+  recentCalls.value = recentRecords.map(record => ({
+    id: record.id,
+    vendor: vendorNameMap.get(record.vendorCode) || record.vendorCode || String(record.vendorId),
+    type: record.dataType || record.dataTypeCode || '-',
+    caller: callerNameMap.get(record.callerId) || String(record.callerId),
+    status: record.success ? 'success' : 'failed',
+    time: (record.callTime || record.createdAt || '').slice(11, 19),
+    cost: Number(record.cost || 0)
+  }))
+
+  hourlyCounts.value = Array(24).fill(0)
+  records.forEach(record => {
+    const hour = Number((record.callTime || record.createdAt || '').slice(11, 13))
+    if (Number.isInteger(hour) && hour >= 0 && hour < 24) hourlyCounts.value[hour] += 1
+  })
+
+  const byVendor = Array.isArray(allStats.byVendor) ? allStats.byVendor : []
+  vendorDistribution.value = byVendor.map((item: Record<string, any>) => {
+    const code = String(item.vendorCode || item.vendor_code || '未知厂商')
+    return { name: vendorNameMap.get(code) || code, value: Number(item.totalCount || 0) }
+  })
+}
+
+onMounted(async () => {
+  await loadDashboard()
+  await nextTick()
   initTrendChart()
   initVendorChart()
   window.addEventListener('resize', handleResize)
@@ -180,15 +238,7 @@ onUnmounted(() => {
       <div v-for="(stat, index) in statsData" :key="index" class="stat-card">
         <div class="stat-header">
           <span class="stat-label">{{ stat.label }}</span>
-          <span class="stat-trend" :class="{ up: stat.trendUp, down: !stat.trendUp }">
-            <svg v-if="stat.trendUp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="m18 15-6-6-6 6"/>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="m6 9 6 6 6-6"/>
-            </svg>
-            {{ stat.trend }}
-          </span>
+          <span class="stat-trend up">{{ stat.note }}</span>
         </div>
         <div class="stat-value">
           <span class="value-number">{{ stat.value }}</span>
@@ -205,7 +255,7 @@ onUnmounted(() => {
 
     <!-- 快捷入口 -->
     <div class="quick-actions">
-      <div v-for="action in quickActions" :key="action.label" class="action-item">
+      <div v-for="action in quickActions" :key="action.label" class="action-item" @click="router.push(action.route)">
         <div class="action-icon">
           <svg v-if="action.icon === 'plus'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M5 12h14"/>
@@ -230,12 +280,7 @@ onUnmounted(() => {
       <el-card class="chart-card trend-chart">
         <template #header>
           <div class="chart-header">
-            <span class="chart-title">今日调用趋势</span>
-            <div class="chart-tabs">
-              <button class="chart-tab active">小时</button>
-              <button class="chart-tab">天</button>
-              <button class="chart-tab">周</button>
-            </div>
+            <span class="chart-title">今日最近调用时段分布</span>
           </div>
         </template>
         <div ref="trendChartRef" class="chart-container"></div>
@@ -257,7 +302,7 @@ onUnmounted(() => {
       <template #header>
         <div class="chart-header">
           <span class="chart-title">最近调用记录</span>
-          <el-button type="primary" link>查看全部</el-button>
+          <el-button type="primary" link @click="router.push('/call')">查看全部</el-button>
         </div>
       </template>
       <el-table :data="recentCalls" stripe class="recent-table">

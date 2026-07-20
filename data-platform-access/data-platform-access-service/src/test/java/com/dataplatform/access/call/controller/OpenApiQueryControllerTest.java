@@ -7,6 +7,7 @@ import com.dataplatform.access.call.service.OpenApiQueryService;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
 import com.dataplatform.access.call.vo.OpenApiQueryReqVO;
+import com.dataplatform.access.call.vo.OpenApiBatchQueryReqVO;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
 import com.dataplatform.access.caller.entity.ApiKey;
 import com.dataplatform.access.caller.entity.CallerInfo;
@@ -23,19 +24,25 @@ import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
-import com.dataplatform.masterdata.vendor.api.feign.VendorConfigFeignClient;
-import com.dataplatform.masterdata.vendor.api.feign.VendorFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class OpenApiQueryControllerTest {
@@ -49,8 +56,8 @@ class OpenApiQueryControllerTest {
     private CallerService callerService;
     private CallSceneService callSceneService;
     private ApiInterfaceFeignClient apiInterfaceFeignClient;
-    private VendorConfigFeignClient vendorConfigFeignClient;
-    private VendorFeignClient vendorFeignClient;
+    private VendorConfigInternalFeignClient vendorConfigFeignClient;
+    private VendorInternalFeignClient vendorFeignClient;
     private GrayVendorResolver grayVendorResolver;
     private OpenApiQueryController controller;
 
@@ -65,8 +72,8 @@ class OpenApiQueryControllerTest {
         callerService = mock(CallerService.class);
         callSceneService = mock(CallSceneService.class);
         apiInterfaceFeignClient = mock(ApiInterfaceFeignClient.class);
-        vendorConfigFeignClient = mock(VendorConfigFeignClient.class);
-        vendorFeignClient = mock(VendorFeignClient.class);
+        vendorConfigFeignClient = mock(VendorConfigInternalFeignClient.class);
+        vendorFeignClient = mock(VendorInternalFeignClient.class);
         grayVendorResolver = mock(GrayVendorResolver.class);
         controller = new OpenApiQueryController(
                 openApiQueryService,
@@ -119,6 +126,8 @@ class OpenApiQueryControllerTest {
         apiInterface.setInterfaceCode("PERSONAL_QUERY");
         when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY")).thenReturn(Result.success(apiInterface));
         when(apiKeyInterfaceService.hasInterfacePermission(10L, 30L)).thenReturn(true);
+        when(apiInterfaceFeignClient.listParams(30L)).thenReturn(Result.success(List.of()));
+        when(apiKeyService.validateAndConsumeQuota("test-key", 1)).thenReturn(true);
 
         VendorConfigDTO config = new VendorConfigDTO();
         config.setVendorId(40L);
@@ -151,8 +160,12 @@ class OpenApiQueryControllerTest {
         request.setSceneCode("pre-loan-review");
         request.setParams(params);
 
-        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, "trace-1", request, null);
+        ResponseEntity<Result<OpenApiQueryRespVO>> response =
+                controller.query("test-key", null, "trace-1", request, null);
+        Result<OpenApiQueryRespVO> result = response.getBody();
 
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(result);
         assertEquals(200, result.getCode());
         assertEquals("client-req-1", result.getData().getRequestId());
         assertEquals("req_platform_1", result.getData().getPlatformRequestId());
@@ -166,9 +179,51 @@ class OpenApiQueryControllerTest {
     }
 
     @Test
-    void shouldRejectMissingApiCode() {
-        Result<OpenApiQueryRespVO> result = controller.query("test-key", null, null, new OpenApiQueryReqVO(), null);
+    void shouldSkipAccessRateLimitWhenPolicyIsDisabled() {
+        ApiKey apiKey = new ApiKey();
+        apiKey.setApiKey("test-key");
+        apiKey.setRateLimitEnabled(false);
+        apiKey.setRateLimit(50);
 
+        Boolean allowed = ReflectionTestUtils.invokeMethod(controller, "checkRateLimit", apiKey);
+
+        assertTrue(Boolean.TRUE.equals(allowed));
+        verifyNoInteractions(rateLimitService);
+    }
+
+    @Test
+    void shouldRejectMissingApiCode() {
+        ResponseEntity<Result<OpenApiQueryRespVO>> response =
+                controller.query("test-key", null, null, new OpenApiQueryReqVO(), null);
+        Result<OpenApiQueryRespVO> result = response.getBody();
+
+        assertEquals(400, response.getStatusCode().value());
+        assertNotNull(result);
         assertEquals(400, result.getCode());
+    }
+
+    @Test
+    void shouldRejectUnknownParameterType() {
+        Boolean matches = ReflectionTestUtils.invokeMethod(controller, "matchesParamType", "value", "unknown");
+
+        assertFalse(Boolean.TRUE.equals(matches));
+    }
+
+    @Test
+    void shouldRejectNullBatchItemBeforeAuthentication() {
+        OpenApiBatchQueryReqVO request = new OpenApiBatchQueryReqVO();
+        request.setApiCode("WORLD_TIME");
+        request.setProductCode("time-service");
+        request.setSceneCode("internal-call");
+        List<OpenApiBatchQueryReqVO.QueryItem> items = new ArrayList<>();
+        items.add(null);
+        request.setItems(items);
+
+        ResponseEntity<Result<com.dataplatform.access.call.vo.OpenApiBatchQueryRespVO>> response =
+                controller.batchQuery(null, null, null, request, null);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertEquals(400, response.getBody().getCode());
+        assertTrue(response.getBody().getMsg().contains("items[0]"));
     }
 }

@@ -3,16 +3,19 @@ package com.dataplatform.billing.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.dataplatform.access.call.api.dto.VendorCallSummaryDTO;
+import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
+import com.dataplatform.api.Result;
 import com.dataplatform.billing.entity.BillingReconciliation;
 import com.dataplatform.billing.mapper.BillingReconciliationMapper;
-import com.dataplatform.billing.mapper.CallRecordMapper;
 import com.dataplatform.billing.service.ReconciliationService;
 import com.dataplatform.governance.api.dto.AlertRecordCreateDTO;
-import com.dataplatform.governance.api.feign.GovernanceFeignClient;
+import com.dataplatform.governance.api.feign.GovernanceInternalFeignClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -22,6 +25,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * 计费域计费计算的 Reconciliation Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliationMapper, BillingReconciliation>
     implements ReconciliationService {
@@ -29,12 +36,13 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     private static final Logger log = LoggerFactory.getLogger(ReconciliationServiceImpl.class);
 
     @Autowired
-    private CallRecordMapper callRecordMapper;
+    private CallStatsInternalFeignClient callStatsClient;
 
-    @Autowired(required = false)
-    private GovernanceFeignClient governanceFeignClient;
+    @Autowired
+    private GovernanceInternalFeignClient governanceFeignClient;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void reconcile(Long vendorId, LocalDate billingDate) {
         log.info("开始对账: vendorId={}, date={}", vendorId, billingDate);
 
@@ -54,6 +62,7 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public int importVendorBills(String csvContent) {
         List<VendorBillCsvParser.VendorBillRow> rows = VendorBillCsvParser.parse(csvContent);
         for (VendorBillCsvParser.VendorBillRow row : rows) {
@@ -73,11 +82,13 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     }
 
     private void reconcileImportedRow(BillingReconciliation reconciliation) {
-        Map<String, Object> platform = callRecordMapper.selectPlatformSummaryByVendorAndDate(
-                reconciliation.getVendorId(), reconciliation.getBillingDate());
-
-        Long platformCount = longValue(platform.get("platform_count"));
-        BigDecimal platformAmount = decimalValue(platform.get("platform_amount"));
+        Result<VendorCallSummaryDTO> response = callStatsClient.getVendorDailySummary(
+                reconciliation.getVendorId(), reconciliation.getBillingDate().toString());
+        if (response == null || !Integer.valueOf(200).equals(response.getCode()) || response.getData() == null) {
+            throw new IllegalStateException("Access 调用汇总查询失败");
+        }
+        Long platformCount = Objects.requireNonNullElse(response.getData().getCallCount(), 0L);
+        BigDecimal platformAmount = Objects.requireNonNullElse(response.getData().getTotalAmount(), BigDecimal.ZERO);
         Long vendorCount = Objects.requireNonNullElse(reconciliation.getVendorCount(), 0L);
         BigDecimal vendorAmount = Objects.requireNonNullElse(reconciliation.getVendorAmount(), BigDecimal.ZERO);
 
@@ -194,45 +205,23 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
                 .last("LIMIT 1"));
     }
 
-    private Long longValue(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        return value == null ? 0L : Long.parseLong(value.toString());
-    }
-
-    private BigDecimal decimalValue(Object value) {
-        if (value instanceof BigDecimal decimal) {
-            return decimal;
-        }
-        if (value instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue());
-        }
-        return value == null ? BigDecimal.ZERO : new BigDecimal(value.toString());
-    }
-
     private boolean shouldPublishDiffAlert(String previousStatus, String status) {
         return !"matched".equals(status) && !status.equals(previousStatus);
     }
 
     private void publishDiffAlert(BillingReconciliation reconciliation) {
-        if (governanceFeignClient == null) {
-            log.warn("GovernanceFeignClient不可用，跳过对账差异告警: reconciliationId={}", reconciliation.getId());
-            return;
-        }
-        try {
-            AlertRecordCreateDTO dto = new AlertRecordCreateDTO();
-            dto.setAlertType("billing_reconciliation");
-            dto.setAlertTitle("计费对账差异");
-            dto.setLevel("diff_error".equals(reconciliation.getStatus()) ? "error" : "warning");
-            dto.setAlertMessage("厂商 " + reconciliation.getVendorName()
-                    + " 在 " + reconciliation.getBillingDate()
-                    + " 存在对账差异，差异率 " + reconciliation.getDiffRate());
-            dto.setTriggeredValue(reconciliation.getDiffRate());
-            dto.setStatus("pending");
-            governanceFeignClient.createAlertRecord(dto);
-        } catch (Exception ex) {
-            log.warn("发送对账差异告警失败: reconciliationId={}", reconciliation.getId(), ex);
+        AlertRecordCreateDTO dto = new AlertRecordCreateDTO();
+        dto.setAlertType("billing_reconciliation");
+        dto.setAlertTitle("计费对账差异");
+        dto.setLevel("diff_error".equals(reconciliation.getStatus()) ? "error" : "warning");
+        dto.setAlertMessage("厂商 " + reconciliation.getVendorName()
+                + " 在 " + reconciliation.getBillingDate()
+                + " 存在对账差异，差异率 " + reconciliation.getDiffRate());
+        dto.setTriggeredValue(reconciliation.getDiffRate());
+        dto.setStatus("pending");
+        Result<Void> result = governanceFeignClient.createAlertRecord(dto);
+        if (result == null || !Integer.valueOf(200).equals(result.getCode())) {
+            throw new IllegalStateException("发送对账差异告警失败: reconciliationId=" + reconciliation.getId());
         }
     }
 }

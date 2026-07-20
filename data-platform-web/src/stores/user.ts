@@ -10,6 +10,8 @@ interface UserInfo {
   phone?: string
   roles: string[]
   tenantId?: number
+  tenantName?: string
+  lastLoginTime?: string
   permissions?: string[]
 }
 

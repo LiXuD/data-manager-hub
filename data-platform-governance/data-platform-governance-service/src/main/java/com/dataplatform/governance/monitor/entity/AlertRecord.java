@@ -7,6 +7,10 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 观测治理域监控告警的 Alert Record。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("alert_record")
 public class AlertRecord {
     @TableId(type = IdType.AUTO)
@@ -28,6 +32,7 @@ public class AlertRecord {
     private String status;
     private LocalDateTime resolvedAt;
     private Long resolvedBy;
+    private String resolution;
     private LocalDateTime createdAt;
 
     public Long getId() { return id; }
@@ -48,6 +53,8 @@ public class AlertRecord {
     public void setResolvedAt(LocalDateTime resolvedAt) { this.resolvedAt = resolvedAt; }
     public Long getResolvedBy() { return resolvedBy; }
     public void setResolvedBy(Long resolvedBy) { this.resolvedBy = resolvedBy; }
+    public String getResolution() { return resolution; }
+    public void setResolution(String resolution) { this.resolution = resolution; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public Long getTenantId() { return tenantId; }

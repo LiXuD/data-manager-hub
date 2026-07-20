@@ -2,7 +2,7 @@ package com.dataplatform.access.call.service;
 
 import com.dataplatform.api.Result;
 import com.dataplatform.masterdata.graylog.api.dto.GrayRuleDTO;
-import com.dataplatform.masterdata.graylog.api.feign.GraylogFeignClient;
+import com.dataplatform.masterdata.graylog.api.feign.GraylogInternalFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +18,7 @@ import static org.mockito.Mockito.*;
 
 class GrayVendorResolverTest {
 
-    private GraylogFeignClient graylogFeignClient;
+    private GraylogInternalFeignClient graylogFeignClient;
     private GrayVendorResolver resolver;
 
     private VendorConfigDTO stableConfig;
@@ -26,7 +26,7 @@ class GrayVendorResolverTest {
 
     @BeforeEach
     void setUp() {
-        graylogFeignClient = mock(GraylogFeignClient.class);
+        graylogFeignClient = mock(GraylogInternalFeignClient.class);
         resolver = new GrayVendorResolver(graylogFeignClient);
 
         stableConfig = new VendorConfigDTO();
@@ -161,6 +161,23 @@ class GrayVendorResolverTest {
         VendorConfigDTO result = resolver.resolve("TEST_API", List.of(stableConfig, grayConfig), ctx);
 
         assertNull(result);
+    }
+
+    @Test
+    void conditionalRuleWithoutContextDoesNotBypassCondition() {
+        GrayRuleDTO rule = createRule("caller", "42", 100);
+        when(graylogFeignClient.getActiveRule("TEST_API")).thenReturn(Result.success(rule));
+
+        assertNull(resolver.resolve("TEST_API", List.of(stableConfig, grayConfig), null));
+    }
+
+    @Test
+    void unknownConditionTypeDoesNotRouteToGray() {
+        GrayRuleDTO rule = createRule("unsupported", "anything", 100);
+        when(graylogFeignClient.getActiveRule("TEST_API")).thenReturn(Result.success(rule));
+
+        GrayVendorResolver.GrayRequestContext ctx = createContext(null, 42L, null);
+        assertNull(resolver.resolve("TEST_API", List.of(stableConfig, grayConfig), ctx));
     }
 
     @Test

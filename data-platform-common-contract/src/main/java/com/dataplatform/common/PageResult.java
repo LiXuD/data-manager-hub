@@ -26,7 +26,7 @@ public class PageResult<T> extends Result<List<T>> implements Serializable {
 
     public static <T> PageResult<T> of(List<T> data, Long total, Integer page, Integer pageSize) {
         PageResult<T> result = new PageResult<>();
-        result.setCode(0);
+        result.setCode(200);
         result.setMessage("success");
         result.setData(data);
         result.setTotal(total);

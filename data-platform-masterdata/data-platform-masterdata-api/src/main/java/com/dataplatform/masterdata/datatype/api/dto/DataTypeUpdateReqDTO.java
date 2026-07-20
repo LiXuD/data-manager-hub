@@ -3,6 +3,10 @@ package com.dataplatform.masterdata.datatype.api.dto;
 import java.io.Serializable;
 import java.math.BigDecimal;
 
+/**
+ * 主数据域数据类型的 Data Type Update Req DTO。
+ * <p>跨服务契约数据对象，用于 api 模块暴露远程接口时传递稳定字段。</p>
+ */
 public class DataTypeUpdateReqDTO implements Serializable {
 
     private String dataTypeName;

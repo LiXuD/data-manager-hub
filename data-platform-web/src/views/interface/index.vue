@@ -100,12 +100,14 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="330" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
               <el-button type="warning" link @click="handleStats(row)">统计</el-button>
-              <el-button type="success" link @click="handleConfig(row)">配置</el-button>
+              <el-button type="primary" link @click="handleContract(row)">契约</el-button>
+              <el-button type="success" link @click="handleConfig(row)">厂商</el-button>
+              <el-button type="info" link @click="handleDocs(row)">文档</el-button>
               <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
             </div>
           </template>
@@ -143,6 +145,12 @@
       @success="handleConfigSuccess"
     />
 
+    <InterfaceContractConfig
+      v-model="contractVisible"
+      :interface-data="currentRow"
+      @success="handleConfigSuccess"
+    />
+
     <!-- 统计弹窗 -->
     <InterfaceStats
       v-model="statsVisible"
@@ -153,6 +161,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getInterfaceList,
@@ -164,10 +173,13 @@ import { useCacheStore } from '@/stores'
 import type { ApiInterface } from '@/types'
 import InterfaceForm from './components/InterfaceForm.vue'
 import VendorInterfaceConfig from './components/VendorInterfaceConfig.vue'
+import InterfaceContractConfig from './components/InterfaceContractConfig.vue'
 import InterfaceStats from './components/InterfaceStats.vue'
 import { COMMON_STATUS } from '@/constants'
+import { extractPageData } from '@/utils/pagination'
 
 const cacheStore = useCacheStore()
+const router = useRouter()
 
 // 搜索表单
 const searchForm = reactive({
@@ -207,6 +219,7 @@ const currentRow = ref<ApiInterface | null>(null)
 
 // 配置弹窗
 const configVisible = ref(false)
+const contractVisible = ref(false)
 
 // 统计弹窗
 const statsVisible = ref(false)
@@ -223,23 +236,9 @@ const loadData = async () => {
       status: searchForm.status as typeof COMMON_STATUS.ACTIVE | typeof COMMON_STATUS.INACTIVE | undefined
     }
     const res = await getInterfaceList(params)
-    // 处理不同格式的响应
-    let list: ApiInterface[] = []
-    if (res) {
-      const data = (res as any).data
-      const records = (res as any).records
-      if (Array.isArray(data)) {
-        list = data
-      } else if (data && Array.isArray(data.records)) {
-        list = data.records
-      } else if (Array.isArray(records)) {
-        list = records
-      } else if (Array.isArray(res)) {
-        list = res
-      }
-    }
-    tableData.value = list
-    pagination.total = res.total || 0
+    const page = extractPageData<ApiInterface>(res)
+    tableData.value = page.list
+    pagination.total = page.total
   } catch (error) {
     console.error('加载失败:', error)
     ElMessage.error('加载数据失败，请稍后重试')
@@ -298,6 +297,15 @@ const handleEdit = (row: ApiInterface) => {
 const handleConfig = (row: ApiInterface) => {
   currentRow.value = { ...row }
   configVisible.value = true
+}
+
+const handleContract = (row: ApiInterface) => {
+  currentRow.value = { ...row }
+  contractVisible.value = true
+}
+
+const handleDocs = (row: ApiInterface) => {
+  router.push(`/interface/${row.id}/docs`)
 }
 
 // 统计

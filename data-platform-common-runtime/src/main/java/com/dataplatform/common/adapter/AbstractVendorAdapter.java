@@ -13,6 +13,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 公共运行时层厂商适配的 Abstract Vendor Adapter。
+ * <p>厂商适配组件，封装外部数据源调用、认证和结果转换逻辑。</p>
+ */
 public abstract class AbstractVendorAdapter implements VendorAdapter {
 
     protected final Logger log = LoggerFactory.getLogger(getClass());
@@ -40,14 +44,8 @@ public abstract class AbstractVendorAdapter implements VendorAdapter {
                 return requestMappingProcessor.mapRequest(params, items);
             }
             if (wrapper.values().stream().allMatch(String.class::isInstance)) {
-                Map<String, String> fieldMapping = objectMapper.convertValue(wrapper,
-                    new TypeReference<Map<String, String>>() {});
-                Map<String, Object> transformed = new HashMap<>();
-                for (Map.Entry<String, Object> entry : params.entrySet()) {
-                    String targetField = fieldMapping.getOrDefault(entry.getKey(), entry.getKey());
-                    transformed.put(targetField, entry.getValue());
-                }
-                return transformed;
+                return applySimpleFieldMapping(params, objectMapper.convertValue(wrapper,
+                    new TypeReference<Map<String, String>>() {}));
             }
             // 对只有 body/contentType 等模板元数据、没有 requestMapping 的配置，保持原始参数
             return new HashMap<>(params);
@@ -60,12 +58,7 @@ public abstract class AbstractVendorAdapter implements VendorAdapter {
                 try {
                     Map<String, String> fieldMapping = objectMapper.readValue(mapping,
                         new TypeReference<Map<String, String>>() {});
-                    Map<String, Object> transformed = new HashMap<>();
-                    for (Map.Entry<String, Object> entry : params.entrySet()) {
-                        String targetField = fieldMapping.getOrDefault(entry.getKey(), entry.getKey());
-                        transformed.put(targetField, entry.getValue());
-                    }
-                    return transformed;
+                    return applySimpleFieldMapping(params, fieldMapping);
                 } catch (Exception e3) {
                     log.warn("请求参数转换失败, 使用原始参数: {}", e3.getMessage());
                     return new HashMap<>(params);
@@ -103,6 +96,15 @@ public abstract class AbstractVendorAdapter implements VendorAdapter {
                 return new HashMap<>(response);
             }
         }
+    }
+
+    private Map<String, Object> applySimpleFieldMapping(Map<String, Object> params, Map<String, String> fieldMapping) {
+        Map<String, Object> transformed = new HashMap<>();
+        for (Map.Entry<String, Object> entry : params.entrySet()) {
+            String targetField = fieldMapping.getOrDefault(entry.getKey(), entry.getKey());
+            transformed.put(targetField, entry.getValue());
+        }
+        return transformed;
     }
 
     protected Object getNestedValue(Map<String, Object> map, String path) {

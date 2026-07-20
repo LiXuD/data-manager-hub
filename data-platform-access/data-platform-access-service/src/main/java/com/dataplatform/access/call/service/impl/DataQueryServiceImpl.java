@@ -4,13 +4,13 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.dataplatform.api.Result;
 import com.dataplatform.billing.api.dto.BillingCalculateReqDTO;
 import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
-import com.dataplatform.billing.api.feign.BillingFeignClient;
+import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.access.call.service.CallRecordService;
 import com.dataplatform.access.call.service.DataQueryService;
 import com.dataplatform.access.call.service.VendorProxyService;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
-import com.dataplatform.masterdata.vendor.api.feign.VendorConfigFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +24,10 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 访问域数据调用的 Data Query Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class DataQueryServiceImpl implements DataQueryService {
 
@@ -36,10 +40,10 @@ public class DataQueryServiceImpl implements DataQueryService {
     private VendorProxyService vendorProxyService;
 
     @Autowired
-    private VendorConfigFeignClient vendorConfigFeignClient;
+    private VendorConfigInternalFeignClient vendorConfigFeignClient;
 
     @Autowired
-    private BillingFeignClient billingFeignClient;
+    private BillingInternalFeignClient billingFeignClient;
 
     @Autowired
     private StringRedisTemplate redisTemplate;
@@ -88,7 +92,7 @@ public class DataQueryServiceImpl implements DataQueryService {
             Map<String, Object> vendorResult = vendorProxyService.callVendor(vendorCode, effectiveDataType, params, config);
 
             long latency = System.currentTimeMillis() - startTime;
-            BigDecimal cost = calculateCost(vendorCode, effectiveDataType, latency);
+            BigDecimal cost = calculateCost(requestId, callerId, vendorCode, effectiveDataType, latency);
 
             boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
 
@@ -171,23 +175,24 @@ public class DataQueryServiceImpl implements DataQueryService {
         return result;
     }
 
-    private BigDecimal calculateCost(String vendorCode, String dataType, long latencyMs) {
-        try {
-            BillingCalculateReqDTO req = new BillingCalculateReqDTO();
-            req.setVendorCode(vendorCode);
-            req.setDataType(dataType);
-            req.setCallCount(1);
-            req.setLatency(latencyMs);
-            Result<BillingCalculateRespDTO> costResult = billingFeignClient.calculateCost(req);
-            BillingCalculateRespDTO resp = costResult != null ? costResult.getData() : null;
-            if (resp != null && resp.getCost() != null) {
-                return resp.getCost();
-            }
-        } catch (Exception e) {
-            log.warn("远程计费计算失败，使用默认价格: {}", e.getMessage());
+    private BigDecimal calculateCost(String requestId, Long callerId, String vendorCode,
+                                     String dataType, long latencyMs) {
+        BillingCalculateReqDTO req = new BillingCalculateReqDTO();
+        req.setVendorCode(vendorCode);
+        req.setDataType(dataType);
+        req.setCallCount(1);
+        req.setLatency(latencyMs);
+        req.setRequestId(requestId);
+        req.setCallerId(callerId);
+        req.setSuccess(true);
+        req.setBillable(true);
+        req.setCallTime(LocalDateTime.now());
+        Result<BillingCalculateRespDTO> costResult = billingFeignClient.calculateCost(req);
+        BillingCalculateRespDTO resp = costResult != null ? costResult.getData() : null;
+        if (resp != null && resp.getCost() != null) {
+            return resp.getCost();
         }
-
-        return new BigDecimal("0.10");
+        throw new IllegalStateException("Billing service returned an empty cost");
     }
 
     private String generateRequestId() {

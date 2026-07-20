@@ -1,11 +1,16 @@
 package com.dataplatform.access.caller.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.dataplatform.access.caller.handler.ApiKeyStatusTypeHandler;
 import com.dataplatform.common.enums.ApiKeyStatus;
 import java.time.LocalDateTime;
 
 
-@TableName("api_key")
+/**
+ * 访问域调用方的 Api Key。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
+@TableName(value = "api_key", autoResultMap = true)
 public class ApiKey {
 
     @TableId(type = IdType.AUTO)
@@ -15,9 +20,11 @@ public class ApiKey {
     private String keyName;
     private String apiKey;
     private String apiSecret;
+    private Boolean rateLimitEnabled;
     private Integer rateLimit;
     private Long quotaLimit;
     private Long quotaUsed;
+    @TableField(typeHandler = ApiKeyStatusTypeHandler.class)
     private ApiKeyStatus status;
     private LocalDateTime expireTime;
     
@@ -41,6 +48,8 @@ public class ApiKey {
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
     public String getApiSecret() { return apiSecret; }
     public void setApiSecret(String apiSecret) { this.apiSecret = apiSecret; }
+    public Boolean getRateLimitEnabled() { return rateLimitEnabled; }
+    public void setRateLimitEnabled(Boolean rateLimitEnabled) { this.rateLimitEnabled = rateLimitEnabled; }
     public Integer getRateLimit() { return rateLimit; }
     public void setRateLimit(Integer rateLimit) { this.rateLimit = rateLimit; }
     public Long getQuotaLimit() { return quotaLimit; }

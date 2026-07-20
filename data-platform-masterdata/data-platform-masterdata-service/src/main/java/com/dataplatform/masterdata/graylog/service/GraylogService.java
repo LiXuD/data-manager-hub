@@ -11,6 +11,10 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 主数据域灰度规则的 Graylog Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class GraylogService extends ServiceImpl<GrayRuleMapper, GrayRule> {
 
@@ -29,7 +33,7 @@ public class GraylogService extends ServiceImpl<GrayRuleMapper, GrayRule> {
         Page<GrayRule> result = this.page(new Page<>(page, pageSize), wrapper);
 
         PageResult<GrayRule> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());

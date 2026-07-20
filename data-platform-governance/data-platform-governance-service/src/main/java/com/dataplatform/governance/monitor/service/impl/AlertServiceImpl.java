@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.common.enums.AlertStatus;
 import com.dataplatform.common.result.PageResult;
+import com.dataplatform.common.util.UserContext;
 import com.dataplatform.governance.monitor.entity.AlertRule;
 import com.dataplatform.governance.monitor.entity.AlertRecord;
 import com.dataplatform.governance.monitor.mapper.AlertRecordMapper;
@@ -16,6 +17,10 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 观测治理域监控告警的 Alert Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
     implements AlertService {
@@ -64,7 +69,7 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
         Page<AlertRule> result = this.page(new Page<>(page, pageSize), wrapper);
 
         PageResult<AlertRule> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());
@@ -102,7 +107,7 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
         Page<AlertRecord> result = alertRecordMapper.selectPage(new Page<>(page, pageSize), wrapper);
 
         PageResult<AlertRecord> response = new PageResult<>();
-        response.setCode(0);
+        response.setCode(200);
         response.setMessage("success");
         response.setData(result.getRecords());
         response.setTotal(result.getTotal());
@@ -117,6 +122,8 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
         record.setId(id);
         record.setStatus("resolved");
         record.setResolvedTime(LocalDateTime.now());
+        record.setResolvedBy(UserContext.getCurrentUserId());
+        record.setResolution(resolution);
         alertRecordMapper.updateById(record);
     }
 

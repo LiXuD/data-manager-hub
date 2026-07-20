@@ -54,10 +54,3 @@ COMMENT ON COLUMN vendor_config.interface_id IS '接口ID';
 
 -- 3. 添加索引
 CREATE INDEX IF NOT EXISTS idx_vendor_config_interface ON vendor_config(interface_id);
-
--- 4. 插入示例数据
-INSERT INTO api_interface (interface_code, interface_name, data_type_id, path, description, status) VALUES
-('COMPANY_BASE', '企业基本信息', 1, '/company/base', '查询企业基本工商信息', 'active'),
-('COMPANY_SHAREHOLDER', '股东信息', 1, '/company/shareholder', '查询企业股东信息', 'active'),
-('COMPANY_BRANCH', '分支机构', 1, '/company/branch', '查询企业分支机构信息', 'active'),
-('PERSONAL_CREDIT', '个人征信报告', 2, '/personal/credit', '查询个人征信报告', 'active');

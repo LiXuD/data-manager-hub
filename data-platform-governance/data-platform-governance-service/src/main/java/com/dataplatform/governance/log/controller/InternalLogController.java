@@ -1,6 +1,7 @@
 package com.dataplatform.governance.log.controller;
 
 import com.dataplatform.common.result.Result;
+import com.dataplatform.common.security.InternalScope;
 import com.dataplatform.governance.log.entity.OperationLog;
 import com.dataplatform.governance.log.service.LogService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,14 +10,19 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+/**
+ * 观测治理域操作日志的 Internal Log Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
-@RequestMapping("/log/internal")
+@RequestMapping("/internal/v1/governance/logs")
+@InternalScope("governance:log")
 public class InternalLogController {
 
     @Autowired
     private LogService logService;
 
-    @PostMapping("/save")
+    @PostMapping
     public Result<Void> saveLog(@RequestBody Map<String, Object> logData) {
         OperationLog log = new OperationLog();
         if (logData.get("userId") != null) {
@@ -36,7 +42,7 @@ public class InternalLogController {
         log.setStatus((String) logData.get("status"));
         log.setCreatedAt(LocalDateTime.now());
 
-        logService.save(log);
+        logService.saveLog(log);
         return Result.success(null);
     }
 }

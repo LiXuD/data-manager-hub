@@ -35,7 +35,7 @@ export const getRolePermissions = (roleId: number) => {
 }
 
 export const assignPermissions = (roleId: number, permissionIds: number[]) => {
-  return request.post<void>(`/role/${roleId}/permissions`, { permissionIds })
+  return request.post<void>(`/role/${roleId}/permissions`, permissionIds)
 }
 
 export const getRolePermissionIds = (roleId: number) => {

@@ -11,7 +11,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
+/**
+ * 观测治理域数据质量的 Quality Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/quality")
 public class QualityController {
@@ -36,8 +41,12 @@ public class QualityController {
                 .body(Result.error(400, "数据类型不能为空"));
         }
 
-        qualityService.addRule(rule);
-        return ResponseEntity.ok(Result.success(rule));
+        try {
+            qualityService.addRule(rule);
+            return ResponseEntity.ok(Result.success(rule));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Result.error(400, e.getMessage()));
+        }
     }
 
     @GetMapping("/rules")
@@ -50,7 +59,8 @@ public class QualityController {
     @PostMapping("/check")
     public ResponseEntity<Result<QualityScore>> checkQuality(
             @RequestParam(required = false) String dataType,
-            @RequestParam(required = false) Long dataId) {
+            @RequestParam(required = false) Long dataId,
+            @RequestBody(required = false) Map<String, Object> data) {
         // 参数验证
         if (dataType == null || dataType.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -60,9 +70,20 @@ public class QualityController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "dataId不能为空"));
         }
+        if (data == null || data.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(400, "待检查数据不能为空"));
+        }
 
-        QualityScore score = qualityService.checkQuality(dataType, dataId);
-        return ResponseEntity.ok(Result.success(score));
+        try {
+            QualityScore score = qualityService.checkQuality(dataType, dataId, data);
+            return ResponseEntity.ok(Result.success(score));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Result.error(400, e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                    .body(Result.error(422, e.getMessage()));
+        }
     }
 
     @GetMapping("/history")

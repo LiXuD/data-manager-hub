@@ -10,6 +10,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+/**
+ * 访问域数据调用的 Call Record Event Consumer。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class CallRecordEventConsumer {
 
@@ -29,8 +33,8 @@ public class CallRecordEventConsumer {
         try {
             record = objectMapper.readValue(payload, CallRecord.class);
         } catch (Exception ex) {
-            log.warn("解析调用记录事件失败，跳过该事件", ex);
-            return;
+            log.warn("解析调用记录事件失败，交由Kafka错误处理器重试或投递死信", ex);
+            throw new IllegalArgumentException("Invalid call-record event", ex);
         }
 
         if (StringUtils.hasText(record.getRequestId()) && existsByRequestId(record.getRequestId())) {

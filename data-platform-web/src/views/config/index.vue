@@ -135,6 +135,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getConfigList, createConfig, updateConfig, deleteConfig, updateConfigStatus } from '@/api/config'
 import { useCacheStore } from '@/stores/cache'
+import { extractPageData } from '@/utils/pagination'
 
 // 本地类型 - 直接使用通用 Config 类型
 import type { Config } from '@/types'
@@ -185,10 +186,12 @@ const fetchList = async () => {
       vendorId: searchForm.vendorId || undefined,
       keyword: searchForm.configKey || undefined
     })
-    tableData.value = res.data?.data?.records || res.data?.data || res.data || []
-    total.value = res.data?.total || 0
+    const page = extractPageData<Config>(res)
+    tableData.value = page.list
+    total.value = page.total
   } catch {
     tableData.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }

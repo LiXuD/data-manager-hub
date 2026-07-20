@@ -109,33 +109,15 @@ public class AuditBusinessFlowTest extends BaseTest {
 
     @Test
     @Order(6)
-    @DisplayName("链路3-1: 内部接口写入日志 → 验证成功")
-    void testInternalLogSave() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("userId", 1L);
-        data.put("username", "test_user");
-        data.put("module", "测试模块");
-        data.put("operation", "测试操作");
-        data.put("method", "POST");
-        data.put("params", "{}");
-        data.put("result", "success");
-        data.put("ip", "127.0.0.1");
-        data.put("duration", 100);
-        data.put("status", "success");
-
-        // 内部接口不需要认证（/log/internal/** 在 auth 排除路径中）
-        Response response = given()
+    @DisplayName("链路3-1: 经网关访问内部接口 → 验证拒绝")
+    void testInternalLogBlockedByGateway() {
+        given()
             .contentType("application/json")
-            .body(data)
+            .body(Map.of("module", "测试模块"))
             .when()
-            .post(GATEWAY_URL + "/api/v1/log/internal/save");
-
-        // 内部接口可能返回 200 或 401（取决于网关配置）
-        if (response.getStatusCode() == 200) {
-            log.info("内部日志写入成功");
-        } else {
-            log.info("内部日志写入返回 {}, 可能需要认证", response.getStatusCode());
-        }
+            .post(GATEWAY_URL + "/internal/v1/governance/logs")
+            .then()
+            .statusCode(404);
     }
 
     // ==================== 链路4：联动验证 ====================
@@ -164,35 +146,27 @@ public class AuditBusinessFlowTest extends BaseTest {
             .when()
             .post("/vendor");
 
-        if (createResp.getStatusCode() == 200) {
-            Long vendorId = extractId(createResp);
-            if (vendorId != null) {
-                // 删除临时厂商
-                getAuthRequest()
-                    .when()
-                    .delete("/vendor/" + vendorId);
+        verifySuccess(createResp);
+        Long vendorId = extractId(createResp);
+        Assertions.assertNotNull(vendorId, "临时厂商创建后应返回ID");
+        getAuthRequest().when().delete("/vendor/" + vendorId).then().statusCode(200);
 
-                // 等待异步日志写入
-                try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
-
-                // 再查日志，总数应该增加了
-                Response afterResp = getAuthRequest()
-                    .queryParam("page", 1)
-                    .queryParam("pageSize", 1)
-                    .when()
-                    .get("/log/list");
-
-                verifySuccess(afterResp);
-                int afterTotal = afterResp.jsonPath().getInt("total");
-
-                // 用 assumeTrue 而非 assertTrue，异步日志可能延迟
-                Assumptions.assumeTrue(afterTotal > beforeTotal,
-                    "操作后日志总数应增加（异步日志可能延迟）: before=" + beforeTotal + ", after=" + afterTotal);
-                log.info("操作日志联动验证通过: before={}, after={}", beforeTotal, afterTotal);
-            }
-        } else {
-            log.info("厂商创建失败，跳过联动验证");
+        try { Thread.sleep(2000); } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            Assertions.fail("等待异步日志时被中断", exception);
         }
+
+        Response afterResp = getAuthRequest()
+            .queryParam("page", 1)
+            .queryParam("pageSize", 1)
+            .when()
+            .get("/log/list");
+
+        verifySuccess(afterResp);
+        int afterTotal = afterResp.jsonPath().getInt("total");
+        org.junit.jupiter.api.Assertions.assertTrue(afterTotal > beforeTotal,
+            "操作后日志总数应增加: before=" + beforeTotal + ", after=" + afterTotal);
+        log.info("操作日志联动验证通过: before={}, after={}", beforeTotal, afterTotal);
     }
 
     // ==================== 链路5：边界测试 ====================

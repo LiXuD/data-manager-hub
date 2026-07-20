@@ -12,6 +12,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+/**
+ * 主数据域厂商的 Params Mapping Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class ParamsMappingService extends ServiceImpl<VendorParamsMappingMapper, VendorParamsMapping> {
 

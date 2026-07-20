@@ -23,6 +23,10 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 主数据域厂商的 Vendor Config Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 @RefreshScope
 public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, VendorConfig>
@@ -127,6 +131,12 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
             .eq(VendorConfig::getVendorId, vendorId)
             .eq(VendorConfig::getDataTypeId, dataType.getId())
             .eq(VendorConfig::getStatus, StatusConstants.ACTIVE));
+    }
+
+    @Override
+    public Long getDataTypeIdByCode(String dataTypeCode) {
+        DataType dataType = getDataTypeByCode(dataTypeCode);
+        return dataType != null ? dataType.getId() : null;
     }
 
     @Override

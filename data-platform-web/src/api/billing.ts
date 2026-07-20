@@ -1,7 +1,7 @@
 import { request } from '@/utils/request'
 import type { PageParams, BillingRuleDTO, BillingRecordDTO } from '@/types'
 
-export const getBillingList = (params: PageParams & { vendorId?: number; startDate?: string; endDate?: string }) => {
+export const getBillingList = (params: PageParams & { tenantId?: number; vendorId?: number; startDate?: string; endDate?: string }) => {
   return request.get('/billing/list', { params })
 }
 
@@ -9,12 +9,12 @@ export const getBillingById = (id: number) => {
   return request.get<{ data: BillingRecordDTO }>(`/billing/${id}`)
 }
 
-export const getBillingStats = (params: { startDate?: string; endDate?: string }) => {
-  return request.get<{ data: { totalAmount: number; totalCalls: number; avgPrice: number; overdueCount: number } }>('/billing/stats', { params })
+export const getBillingStats = (params: { tenantId?: number; startDate?: string; endDate?: string }) => {
+  return request.get<{ data: { totalCost: number; totalCallCount: number; days: number } }>('/billing/stats', { params })
 }
 
-export const exportBilling = (params: { startDate: string; endDate: string; vendorId?: number }) => {
-  return request.get<void>('/billing/export', { params })
+export const exportBilling = (params: { startDate?: string; endDate?: string; vendorId?: number }) => {
+  return request.get<Blob>('/billing/export', { params, responseType: 'blob' })
 }
 
 // 计费规则

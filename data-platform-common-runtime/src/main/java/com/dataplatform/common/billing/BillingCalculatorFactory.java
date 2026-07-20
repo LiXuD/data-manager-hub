@@ -18,7 +18,11 @@ public class BillingCalculatorFactory {
      * 获取计费计算器
      */
     public BillingCalculator getCalculator(String billingType) {
-        return getCalculator(BillingType.fromCode(billingType));
+        BillingType parsed = BillingType.fromCode(billingType);
+        if (parsed == null) {
+            throw new IllegalArgumentException("Unsupported billing type: " + billingType);
+        }
+        return getCalculator(parsed);
     }
 
     /**
@@ -26,7 +30,7 @@ public class BillingCalculatorFactory {
      */
     public BillingCalculator getCalculator(BillingType billingType) {
         if (billingType == null) {
-            return STANDARD;
+            throw new IllegalArgumentException("Billing type is required");
         }
 
         switch (billingType) {

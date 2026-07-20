@@ -39,7 +39,8 @@ public class TraceApiTest extends BaseTest {
             .when()
             .post("/trace/lineage");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
             Integer id = response.jsonPath().getInt("data.id");
             if (id != null) {
@@ -80,7 +81,8 @@ public class TraceApiTest extends BaseTest {
             .when()
             .get("/trace/lineage/upstream");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -112,7 +114,8 @@ public class TraceApiTest extends BaseTest {
             .when()
             .get("/trace/lineage/downstream");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -144,7 +147,8 @@ public class TraceApiTest extends BaseTest {
             .when()
             .get("/trace/lineage/full");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }

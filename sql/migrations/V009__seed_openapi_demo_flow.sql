@@ -1,0 +1,4 @@
+-- Reserved migration number.
+-- Production schema migrations must not install mock vendors, fixed API keys,
+-- caller fixtures, or deterministic demo responses. Create integration-test
+-- fixtures explicitly in the test environment instead.

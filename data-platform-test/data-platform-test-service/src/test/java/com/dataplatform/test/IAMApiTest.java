@@ -23,6 +23,9 @@ public class IAMApiTest extends BaseTest {
 
     private static Long testUserId;
     private static Long testRoleId;
+    private static String testRoleCode;
+    private static Long testPermissionId;
+    private static Long testCallerId;
 
     // ==================== 用户管理测试 ====================
 
@@ -62,17 +65,17 @@ public class IAMApiTest extends BaseTest {
      * 测试用户详情查询 - 正常场景
      */
     @Test
-    @Order(3)
+    @Order(4)
     public void testGetUserById_Success() {
+        skipIfNull(testUserId, "user");
         Response response = getAuthRequest()
             .when()
-            .get("/user/1");
+            .get("/user/" + testUserId);
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
             response.then().body("data", notNullValue());
-        } else {
-            response.then().statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -80,7 +83,7 @@ public class IAMApiTest extends BaseTest {
      * 测试用户详情查询 - 不存在
      */
     @Test
-    @Order(4)
+    @Order(5)
     public void testGetUserById_NotFound() {
         Response response = getAuthRequest()
             .when()
@@ -93,10 +96,11 @@ public class IAMApiTest extends BaseTest {
      * 测试创建用户 - 正常场景
      */
     @Test
-    @Order(5)
+    @Order(3)
     public void testCreateUser_Success() {
+        String username = "testuser_" + System.currentTimeMillis();
         Map<String, Object> userData = new HashMap<>();
-        userData.put("username", "testuser_" + System.currentTimeMillis());
+        userData.put("username", username);
         userData.put("password", "Test123456");
         userData.put("realName", "测试用户");
         userData.put("email", "test@example.com");
@@ -110,9 +114,9 @@ public class IAMApiTest extends BaseTest {
         verifySuccess(response);
 
         Integer id = response.jsonPath().getInt("data.id");
-        if (id != null) {
-            testUserId = id.longValue();
-        }
+        Assertions.assertNotNull(id, "创建用户成功后必须返回用户 ID");
+        testUserId = id.longValue();
+        registerDeleteById("/user/{id}", testUserId);
     }
 
     /**
@@ -121,9 +125,19 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(6)
     public void testCreateUser_DuplicateUsername() {
+        String username = "duplicate_user_" + System.currentTimeMillis();
         Map<String, Object> userData = new HashMap<>();
-        userData.put("username", "admin");
+        userData.put("username", username);
         userData.put("password", "Test123456");
+
+        Response createResponse = getAuthRequest()
+            .body(userData)
+            .when()
+            .post("/user");
+        verifySuccess(createResponse);
+        Long duplicateUserId = extractId(createResponse);
+        Assertions.assertNotNull(duplicateUserId, "重复用户名测试的前置用户创建失败");
+        registerDeleteById("/user/{id}", duplicateUserId);
 
         Response response = getAuthRequest()
             .body(userData)
@@ -157,7 +171,7 @@ public class IAMApiTest extends BaseTest {
     @Order(8)
     public void testUpdateUser_Success() {
         if (testUserId == null) {
-            Assumptions.assumeTrue(false, "No test user to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test user to update");
             return;
         }
 
@@ -176,10 +190,10 @@ public class IAMApiTest extends BaseTest {
      * 测试删除用户 - 正常场景
      */
     @Test
-    @Order(9)
+    @Order(45)
     public void testDeleteUser_Success() {
         if (testUserId == null) {
-            Assumptions.assumeTrue(false, "No test user to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test user to delete");
             return;
         }
 
@@ -196,12 +210,14 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(10)
     public void testUpdateUserStatus_Success() {
+        skipIfNull(testUserId, "user");
         Response response = getAuthRequest()
-            .body(Map.of("status", "1"))
+            .body(Map.of("status", "inactive"))
             .when()
-            .patch("/user/1/status");
+            .patch("/user/" + testUserId + "/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -212,12 +228,14 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(11)
     public void testResetPassword_Success() {
+        skipIfNull(testUserId, "user");
         Response response = getAuthRequest()
             .body(Map.of("password", "NewPass123"))
             .when()
-            .post("/user/1/reset-password");
+            .post("/user/" + testUserId + "/reset-password");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -228,11 +246,13 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(12)
     public void testGetUserRoles_Success() {
+        skipIfNull(testUserId, "user");
         Response response = getAuthRequest()
             .when()
-            .get("/user/1/roles");
+            .get("/user/" + testUserId + "/roles");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -241,14 +261,17 @@ public class IAMApiTest extends BaseTest {
      * 测试分配用户角色 - 正常场景
      */
     @Test
-    @Order(13)
+    @Order(34)
     public void testAssignUserRoles_Success() {
+        skipIfNull(testUserId, "user");
+        skipIfNull(testRoleId, "role");
         Response response = getAuthRequest()
-            .body(Map.of("roleIds", new Integer[]{1}))
+            .body(Map.of("roleIds", new Long[]{testRoleId}))
             .when()
-            .post("/user/1/roles");
+            .post("/user/" + testUserId + "/roles");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -287,13 +310,15 @@ public class IAMApiTest extends BaseTest {
      * 测试角色详情查询 - 正常场景
      */
     @Test
-    @Order(22)
+    @Order(23)
     public void testGetRoleById_Success() {
+        skipIfNull(testRoleId, "role");
         Response response = getAuthRequest()
             .when()
-            .get("/role/1");
+            .get("/role/" + testRoleId);
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -302,7 +327,7 @@ public class IAMApiTest extends BaseTest {
      * 测试角色详情查询 - 不存在
      */
     @Test
-    @Order(23)
+    @Order(24)
     public void testGetRoleById_NotFound() {
         Response response = getAuthRequest()
             .when()
@@ -315,11 +340,12 @@ public class IAMApiTest extends BaseTest {
      * 测试创建角色 - 正常场景
      */
     @Test
-    @Order(24)
+    @Order(22)
     public void testCreateRole_Success() {
         Map<String, Object> data = new HashMap<>();
         data.put("roleName", "测试角色_" + System.currentTimeMillis());
-        data.put("roleCode", "TEST_ROLE_" + System.currentTimeMillis());
+        testRoleCode = "TEST_ROLE_" + System.currentTimeMillis();
+        data.put("roleCode", testRoleCode);
         data.put("description", "测试角色描述");
 
         Response response = getAuthRequest()
@@ -330,16 +356,16 @@ public class IAMApiTest extends BaseTest {
         verifySuccess(response);
 
         Integer id = response.jsonPath().getInt("data.id");
-        if (id != null) {
-            testRoleId = id.longValue();
-        }
+        Assertions.assertNotNull(id, "创建角色成功后必须返回角色 ID");
+        testRoleId = id.longValue();
+        registerDeleteById("/role/{id}", testRoleId);
     }
 
     /**
      * 测试创建角色 - 必填参数缺失
      */
     @Test
-    @Order(25)
+    @Order(26)
     public void testCreateRole_MissingRequired() {
         Map<String, Object> data = new HashMap<>();
         data.put("description", "测试角色描述");
@@ -356,11 +382,12 @@ public class IAMApiTest extends BaseTest {
      * 测试创建角色 - 角色代码重复
      */
     @Test
-    @Order(26)
+    @Order(27)
     public void testCreateRole_DuplicateCode() {
+        skipIfNull(testRoleId, "role");
         Map<String, Object> data = new HashMap<>();
-        data.put("roleName", "管理员");
-        data.put("roleCode", "ADMIN");
+        data.put("roleName", "重复测试角色");
+        data.put("roleCode", testRoleCode);
 
         Response response = getAuthRequest()
             .body(data)
@@ -374,10 +401,10 @@ public class IAMApiTest extends BaseTest {
      * 测试更新角色 - 正常场景
      */
     @Test
-    @Order(27)
+    @Order(28)
     public void testUpdateRole_Success() {
         if (testRoleId == null) {
-            Assumptions.assumeTrue(false, "No test role to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test role to update");
             return;
         }
 
@@ -396,10 +423,10 @@ public class IAMApiTest extends BaseTest {
      * 测试删除角色 - 正常场景
      */
     @Test
-    @Order(28)
+    @Order(46)
     public void testDeleteRole_Success() {
         if (testRoleId == null) {
-            Assumptions.assumeTrue(false, "No test role to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test role to delete");
             return;
         }
 
@@ -416,12 +443,14 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(29)
     public void testUpdateRoleStatus_Success() {
+        skipIfNull(testRoleId, "role");
         Response response = getAuthRequest()
-            .body(Map.of("status", "1"))
+            .body(Map.of("status", "inactive"))
             .when()
-            .patch("/role/1/status");
+            .patch("/role/" + testRoleId + "/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -432,11 +461,13 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(30)
     public void testGetRolePermissions_Success() {
+        skipIfNull(testRoleId, "role");
         Response response = getAuthRequest()
             .when()
-            .get("/role/1/permissions");
+            .get("/role/" + testRoleId + "/permissions");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -447,29 +478,54 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(31)
     public void testAssignRolePermissions_Success() {
+        skipIfNull(testRoleId, "role");
+        skipIfNull(testPermissionId, "permission");
         Response response = getAuthRequest()
-            .body(Map.of("permissionIds", new Integer[]{1, 2, 3}))
+            .body(Map.of("permissionIds", new Long[]{testPermissionId}))
             .when()
-            .post("/role/1/permissions");
+            .post("/role/" + testRoleId + "/permissions");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
 
     // ==================== 用户调用方关联测试 ====================
 
+    @Test
+    @Order(34)
+    public void testCreateCallerForUserAssignment() {
+        String unique = String.valueOf(System.currentTimeMillis());
+        Map<String, Object> data = new HashMap<>();
+        data.put("callerName", "IAM关联测试调用方_" + unique);
+        data.put("callerCode", "IAM_CALLER_" + unique);
+        data.put("contactName", "IAM测试联系人");
+
+        Response response = getAuthRequest()
+            .body(data)
+            .when()
+            .post("/caller");
+
+        verifySuccess(response);
+        testCallerId = extractId(response);
+        skipIfNull(testCallerId, "caller");
+        registerDeleteById("/caller/{id}", testCallerId);
+    }
+
     /**
      * 测试获取用户调用方列表 - 正常场景
      */
     @Test
-    @Order(32)
+    @Order(35)
     public void testGetUserCallers_Success() {
+        skipIfNull(testUserId, "user");
         Response response = getAuthRequest()
             .when()
-            .get("/user/1/callers");
+            .get("/user/" + testUserId + "/callers");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -478,14 +534,17 @@ public class IAMApiTest extends BaseTest {
      * 测试分配用户调用方 - 正常场景
      */
     @Test
-    @Order(33)
+    @Order(36)
     public void testAssignUserCallers_Success() {
+        skipIfNull(testUserId, "user");
+        skipIfNull(testCallerId, "caller");
         Response response = getAuthRequest()
-            .body(Map.of("callerIds", new Integer[]{1}))
+            .body(Map.of("callerIds", new Long[]{testCallerId}))
             .when()
-            .post("/user/1/callers");
+            .post("/user/" + testUserId + "/callers");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -526,11 +585,13 @@ public class IAMApiTest extends BaseTest {
     @Test
     @Order(42)
     public void testGetPermissionById_Success() {
+        skipIfNull(testPermissionId, "permission");
         Response response = getAuthRequest()
             .when()
-            .get("/permission/1");
+            .get("/permission/" + testPermissionId);
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -539,7 +600,7 @@ public class IAMApiTest extends BaseTest {
      * 测试创建权限 - 正常场景
      */
     @Test
-    @Order(43)
+    @Order(25)
     public void testCreatePermission_Success() {
         Map<String, Object> data = new HashMap<>();
         data.put("permissionCode", "TEST_PERM_" + System.currentTimeMillis());
@@ -553,13 +614,17 @@ public class IAMApiTest extends BaseTest {
             .post("/permission");
 
         verifySuccess(response);
+        Integer id = response.jsonPath().getInt("data.id");
+        Assertions.assertNotNull(id, "创建权限成功后必须返回权限 ID");
+        testPermissionId = id.longValue();
+        registerDeleteById("/permission/{id}", testPermissionId);
     }
 
     /**
      * 测试创建权限 - 必填参数缺失
      */
     @Test
-    @Order(44)
+    @Order(43)
     public void testCreatePermission_MissingRequired() {
         Map<String, Object> data = new HashMap<>();
         data.put("permissionName", "测试权限");
@@ -576,14 +641,16 @@ public class IAMApiTest extends BaseTest {
      * 测试更新权限 - 正常场景
      */
     @Test
-    @Order(45)
+    @Order(44)
     public void testUpdatePermission_Success() {
+        skipIfNull(testPermissionId, "permission");
         Response response = getAuthRequest()
             .body(Map.of("description", "更新后的描述"))
             .when()
-            .put("/permission/1");
+            .put("/permission/" + testPermissionId);
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -592,27 +659,12 @@ public class IAMApiTest extends BaseTest {
      * 测试删除权限 - 正常场景
      */
     @Test
-    @Order(46)
+    @Order(47)
     public void testDeletePermission_Success() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("permissionCode", "TEMP_DELETE_" + System.currentTimeMillis());
-        data.put("permissionName", "临时权限");
-        data.put("resource", "temp");
-        data.put("action", "test");
-
-        Response createResponse = getAuthRequest()
-            .body(data)
+        skipIfNull(testPermissionId, "permission");
+        Response deleteResponse = getAuthRequest()
             .when()
-            .post("/permission");
-
-        if (createResponse.getStatusCode() == 200) {
-            Integer id = createResponse.jsonPath().getInt("data.id");
-            if (id != null) {
-                Response deleteResponse = getAuthRequest()
-                    .when()
-                    .delete("/permission/" + id);
-                deleteResponse.then().statusCode(anyOf(is(200), is(204)));
-            }
-        }
+            .delete("/permission/" + testPermissionId);
+        deleteResponse.then().statusCode(anyOf(is(200), is(204)));
     }
 }

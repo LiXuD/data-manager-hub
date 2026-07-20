@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS vendor_config (
     request_template JSONB,
     response_mapping JSONB,
     fallback_vendor_id BIGINT,
+    security_version INTEGER NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     created_by BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -99,6 +100,39 @@ CREATE TABLE IF NOT EXISTS vendor_config (
 CREATE INDEX idx_vendor_config_vendor ON vendor_config(vendor_id);
 CREATE INDEX idx_vendor_config_datatype ON vendor_config(data_type_id);
 CREATE INDEX IF NOT EXISTS idx_vendor_config_data_type_code ON vendor_config(data_type_code);
+
+CREATE TABLE IF NOT EXISTS vendor_interface_security_step (
+    id BIGSERIAL PRIMARY KEY,
+    vendor_config_id BIGINT NOT NULL REFERENCES vendor_config(id) ON DELETE CASCADE,
+    step_key VARCHAR(100) NOT NULL,
+    direction VARCHAR(16) NOT NULL CHECK (direction IN ('REQUEST', 'RESPONSE')),
+    step_type VARCHAR(32) NOT NULL,
+    step_name VARCHAR(100),
+    sort_no INTEGER NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by BIGINT,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(vendor_config_id, direction, step_key),
+    UNIQUE(vendor_config_id, direction, sort_no)
+);
+
+CREATE TABLE IF NOT EXISTS vendor_interface_security_version (
+    id BIGSERIAL PRIMARY KEY,
+    vendor_config_id BIGINT NOT NULL REFERENCES vendor_config(id) ON DELETE CASCADE,
+    version_no INTEGER NOT NULL,
+    config_snapshot JSONB NOT NULL,
+    created_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(vendor_config_id, version_no)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vendor_security_step_config
+    ON vendor_interface_security_step(vendor_config_id, direction, sort_no);
+CREATE INDEX IF NOT EXISTS idx_vendor_security_version_config
+    ON vendor_interface_security_version(vendor_config_id, version_no DESC);
 
 -- 5. 调用方信息表
 CREATE TABLE IF NOT EXISTS caller_info (
@@ -144,8 +178,10 @@ CREATE INDEX idx_caller_product_status ON caller_product(status);
 CREATE TABLE IF NOT EXISTS api_key (
     id BIGSERIAL PRIMARY KEY,
     caller_id BIGINT NOT NULL,
+    key_name VARCHAR(100),
     api_key VARCHAR(64) NOT NULL UNIQUE,
     api_secret VARCHAR(128) NOT NULL,
+    rate_limit_enabled BOOLEAN NOT NULL DEFAULT true,
     rate_limit INTEGER NOT NULL DEFAULT 100,
     quota_limit BIGINT NOT NULL DEFAULT 100000,
     quota_used BIGINT NOT NULL DEFAULT 0,
@@ -159,6 +195,7 @@ CREATE TABLE IF NOT EXISTS api_key (
 
 CREATE INDEX idx_api_key ON api_key(api_key);
 CREATE INDEX idx_apikey_caller ON api_key(caller_id);
+CREATE INDEX IF NOT EXISTS idx_apikey_key_name ON api_key(key_name);
 
 CREATE TABLE IF NOT EXISTS api_key_product (
     id BIGSERIAL PRIMARY KEY,
@@ -242,16 +279,30 @@ ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_scope VARCHAR(20) NOT NUL
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_source_record_id BIGINT;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS request_time TIMESTAMP;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS response_at TIMESTAMP;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS response_contract_valid BOOLEAN;
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS response_contract_errors JSONB;
 
--- 分区策略: 按月分区，提前创建未来12个月的分区
-CREATE TABLE IF NOT EXISTS call_record_2026_04 PARTITION OF call_record
-    FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
+-- 分区策略: 按月分区，初始化当前月和下月，避免时间推进后写入失败
+CREATE OR REPLACE FUNCTION create_monthly_partition(partition_date DATE)
+RETURNS VOID AS $$
+DECLARE
+    partition_name TEXT;
+    start_date DATE;
+    end_date DATE;
+BEGIN
+    start_date := DATE_TRUNC('month', partition_date);
+    end_date := start_date + INTERVAL '1 month';
+    partition_name := 'call_record_' || TO_CHAR(start_date, 'YYYY_MM');
 
-CREATE TABLE IF NOT EXISTS call_record_2026_05 PARTITION OF call_record
-    FOR VALUES FROM ('2026-05-01') TO ('2026-06-01');
+    EXECUTE format(
+        'CREATE TABLE IF NOT EXISTS %I PARTITION OF call_record FOR VALUES FROM (%L) TO (%L)',
+        partition_name, start_date, end_date
+    );
+END;
+$$ LANGUAGE plpgsql;
 
-CREATE TABLE IF NOT EXISTS call_record_2026_06 PARTITION OF call_record
-    FOR VALUES FROM ('2026-06-01') TO ('2026-07-01');
+SELECT create_monthly_partition(CURRENT_DATE::DATE);
+SELECT create_monthly_partition((CURRENT_DATE + INTERVAL '1 month')::DATE);
 
 -- 索引
 CREATE INDEX idx_call_record_request ON call_record(request_id);
@@ -378,6 +429,7 @@ CREATE TABLE IF NOT EXISTS alert_record (
     fired_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resolved_at TIMESTAMP,
     resolved_by BIGINT,
+    resolution TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_alert_record_rule FOREIGN KEY (rule_id) REFERENCES alert_rule(id)
 );
@@ -437,61 +489,13 @@ CREATE INDEX idx_operation_log_user ON operation_log(user_id);
 CREATE INDEX idx_operation_log_time ON operation_log(created_at);
 CREATE INDEX idx_operation_log_module ON operation_log(operation_module);
 
--- =====================================================
--- 初始数据
--- =====================================================
-
--- 租户数据
-INSERT INTO tenant_info (tenant_code, tenant_name, tenant_type, status, contact_person, contact_email)
-VALUES 
-    ('TENANT001', '测试租户', 'enterprise', 'active', '张三', 'zhangsan@example.com'),
-    ('TENANT002', '银行A', 'enterprise', 'active', '李四', 'lisi@banka.com');
-
--- 厂商数据
-INSERT INTO vendor_info (vendor_code, vendor_name, vendor_type, status, contact_person)
-VALUES 
-    ('tianyancha', '天眼查', 'enterprise_data', 'active', '天眼查客服'),
-    ('qichacha', '企查查', 'enterprise_data', 'active', '企查查客服'),
-    ('yidun', '网易易盾', 'security', 'active', '易盾客服');
-
--- 数据类型
-INSERT INTO data_type (data_type_code, data_type_name, data_category, pricing_model, unit_price)
-VALUES 
-    ('company_info', '工商信息', 'enterprise', 'per_call', 0.30),
-    ('person_phone', '手机号验证', 'personal', 'per_call', 0.15),
-    ('id_card_verify', '身份证验证', 'personal', 'per_call', 0.20);
-
--- 角色
-INSERT INTO role_info (role_code, role_name, description)
-VALUES 
-    ('ADMIN', '系统管理员', '拥有所有权限'),
-    ('TENANT_ADMIN', '租户管理员', '管理租户内的所有资源'),
-    ('OPERATOR', '操作员', '可以进行日常操作'),
-    ('VIEWER', '只读用户', '只能查看数据');
-
--- 默认管理员用户 (密码: Test123456)
-INSERT INTO user_info (username, nickname, password, real_name, email, status, tenant_id)
-VALUES 
-    ('admin', '系统管理员', 'Test123456', '管理员', 'admin@example.com', 'active', 1);
-
--- 用户角色关联
-INSERT INTO user_role (user_id, role_id)
-VALUES (1, 1);
-
--- 告警规则示例
-INSERT INTO alert_rule (rule_name, rule_type, metric_name, condition, threshold, time_window, severity, notification_channels, status)
-VALUES 
-    ('厂商响应超时告警', 'vendor_latency', 'avg_latency', '>', 5000, 300, 'warning', 'email,sms', 'active'),
-    ('API调用失败率告警', 'vendor_error', 'error_rate', '>', 10, 300, 'critical', 'email,sms,phone', 'active'),
-    ('额度不足告警', 'quota', 'quota_used_percent', '>', 80, 60, 'warning', 'email', 'active'),
-    ('熔断触发告警', 'circuit', 'circuit_state', '=', 1, 0, 'critical', 'email,sms', 'active');
-
 -- 提交
 COMMIT;
 
 -- 计费规则表
 CREATE TABLE IF NOT EXISTS billing_rule (
     id BIGSERIAL PRIMARY KEY,
+    rule_name VARCHAR(100) NOT NULL DEFAULT '默认计费规则',
     vendor_id BIGINT,
     vendor_name VARCHAR(100),
     data_type VARCHAR(50),

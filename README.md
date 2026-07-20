@@ -71,38 +71,27 @@ data-platform/
 
 > **当前服务边界**: 项目已收敛为 masterdata / access / billing / identity / governance 五个业务域；旧 vendor/caller/call/tenant/iam/log/monitor/trace/quality/interface/graylog/security 小服务已退役。
 
----
+同步跨域调用只依赖目标域 `*-api` 中的 Internal Feign 契约，统一使用 `/internal/v1/**` 和 Identity 签发的短期 Service JWT；每个客户端按 audience 获取最小 scope，Gateway 不暴露内部路径。领域表由所属域独占访问，跨域统计通过 Access 内部契约查询。
 
-## 🗄️ 数据库表 (22张)
-
-| 序号 | 表名 | 说明 |
-|------|------|------|
-| 1 | tenant_info | 租户信息 |
-| 2 | vendor_info | 厂商信息 |
-| 3 | data_type | 数据类型 |
-| 4 | vendor_config | 厂商配置 |
-| 5 | vendor_config_extended | 厂商扩展配置 |
-| 6 | caller_info | 调用方信息 |
-| 7 | caller_product | 调用方产品配置 |
-| 8 | api_key | API Key |
-| 9 | api_key_product | API Key 产品授权 |
-| 10 | call_scene | 调用场景字典 |
-| 11 | call_record | 调用记录 (按月分区) |
-| 12 | billing_daily | 日账单 |
-| 13 | billing_daily_event | 计费事件 (Kafka 异步) |
-| 14 | billing_rule | 计费规则 |
-| 15 | user_info | 用户 |
-| 16 | role_info | 角色 |
-| 17 | user_role | 用户角色关联 |
-| 18 | alert_rule | 告警规则 |
-| 19 | alert_record | 告警记录 |
-| 20 | circuit_breaker | 熔断记录 |
-| 21 | operation_log | 操作日志 |
-| 22 | gray_rule | 灰度规则 |
+`call-record` Kafka 仅承担 Access 域内调用记录异步落库。Access 同步调用 Billing 完成费用计算与幂等日聚合，计费失败直接向上游返回错误，不生成假价格。
 
 ---
 
-## 📡 API 接口 (56个)
+## 🗄️ 数据库模型
+
+核心表由 `sql/init.sql` 与 `sql/migrations/` 共同定义；`call_record` 按月分区。
+
+| 领域 | 核心表 |
+|------|--------|
+| masterdata | `vendor_info`、`data_type`、`vendor_config`、`vendor_config_extended`、`api_interface`、`interface_param`、`gray_rule` |
+| access | `caller_info`、`caller_product`、`api_key`、`api_key_product`、`call_scene`、`call_record` |
+| billing | `billing_rule`、`billing_daily`、`billing_daily_event`（幂等请求账本） |
+| identity | `tenant_info`、`user_info`、`role_info`、`user_role` |
+| governance | `alert_rule`、`alert_record`、`circuit_breaker`、`operation_log`、`data_lineage`、`quality_rule`、`quality_score` |
+
+---
+
+## 📡 核心 API
 
 ### 厂商管理 (/api/v1/vendor)
 
@@ -152,6 +141,11 @@ data-platform/
 | GET | `/interface/{id}/stats` | 接口调用统计 |
 | GET | `/interface/{id}/stats/daily` | 接口日统计 |
 | GET | `/interface/by-data-type/{dataTypeId}` | 按数据类型获取接口 |
+| GET | `/interface/{id}/params` | 获取接口参数定义 |
+| POST | `/interface/{id}/params` | 新增接口参数定义 |
+| PUT | `/interface/{id}/params/batch` | 批量保存接口参数定义 |
+| PUT | `/interface/params/{paramId}` | 更新接口参数定义 |
+| DELETE | `/interface/params/{paramId}` | 删除接口参数定义 |
 
 ### 计费管理 (/api/v1/billing)
 
@@ -196,8 +190,7 @@ data-platform/
 ### 1. 启动本地基础设施
 
 ```bash
-cd data-platform
-docker-compose up -d
+docker compose up -d
 ```
 
 > `docker-compose.yml` 仅用于本地开发/测试，不作为生产部署模板。
@@ -207,13 +200,16 @@ docker-compose up -d
 - Redis: 6379
 - Nacos: 8848
 
-如果本机已安装 PostgreSQL 并占用 5432，可使用 `POSTGRES_PORT=15432 docker-compose up -d postgres` 为 compose 内数据库改用备用宿主端口；启动 Java 服务前同时设置 `DB_PORT=15432`。
+如果本机已安装 PostgreSQL 并占用 5432，可使用 `POSTGRES_PORT=15432 docker compose up -d postgres` 为 compose 内数据库改用备用宿主端口；启动 Java 服务前同时设置 `DB_PORT=15432`。
 
 ### 2. 初始化数据库
 
 ```bash
-# 执行 DDL 脚本
+# 初始化基础表，并按顺序应用迁移脚本（用于全新数据库）
 psql -h localhost -U postgres -d dataplatform -f sql/init.sql
+for migration in sql/migrations/*.sql; do
+  psql -h localhost -U postgres -d dataplatform -f "$migration"
+done
 ```
 
 ### 3. 编译后端
@@ -272,6 +268,13 @@ REDIS_PASSWORD=redis_password
 # Nacos 配置
 NACOS_SERVER_ADDR=localhost:8848
 NACOS_NAMESPACE=dev
+
+# 服务间认证（dev 默认开启；启动脚本自动生成本地 RSA 密钥）
+INTERNAL_AUTH_ENABLED=true
+INTERNAL_AUTH_TOKEN_URI=http://localhost:8086/internal-auth/v1/token
+
+# 字段加密主密钥（32字节随机值的Base64；必须由密钥管理系统注入）
+PLATFORM_ENCRYPTION_MASTER_KEY=<base64-encoded-32-byte-key>
 ```
 
 ---
@@ -281,7 +284,8 @@ NACOS_NAMESPACE=dev
 ```
 data-platform/
 ├── sql/
-│   └── init.sql                    # DDL 脚本 (21表)
+│   ├── init.sql                    # 基础 DDL 脚本
+│   └── migrations/                 # 增量迁移脚本
 ├── pom.xml                         # 父 POM
 ├── docker-compose.yml              # 基础设施
 ├── data-platform-common-contract/   # 通用契约
@@ -327,12 +331,19 @@ data-platform/
 | SkyWalking Agent 自动采集桥接 | ✅ 100% | 2026-05-27 |
 | SDK 多语言生成 (Freemarker) | ✅ 100% | 2026-05-27 |
 | 灰度发布增强 (厂商灰度路由) | ✅ 100% | 2026-05-27 |
+| 全链路监控 (HTTP报文 + 厂商API日志) | ✅ 100% | 2026-06-22 |
+| 上线就绪修复与本地运行态验证 | ✅ 100% | 2026-06-17 |
+| 数据测试页自动填充接口参数 | ✅ 100% | 2026-07-10 |
+| 跨域调用最小权限与领域数据边界整改 | ✅ 100% | 2026-07-14 |
 
 ---
 
-## 📝 设计文档
+## 📝 文档入口
 
-详见: [设计文档](../2026-04-17-data-management-platform-design.md)
+- [架构知识库](CODE_WIKI.md)
+- [API 文档](docs/API.md)
+- [部署文档](docs/DEPLOYMENT.md)
+- [当前任务清单](PENDING_TASKS.md)
 
 ---
 

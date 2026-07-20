@@ -123,7 +123,7 @@ WHERE NOT EXISTS (SELECT 1 FROM role_info WHERE role_code = 'user');
 INSERT INTO role_permission (role_id, permission_id, created_at)
 SELECT r.id, p.id, NOW()
 FROM role_info r, permission p
-WHERE r.role_code = 'admin'
+WHERE LOWER(r.role_code) = 'admin'
   AND NOT EXISTS (SELECT 1 FROM role_permission rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
 
 -- 更新 admin 用户的 tenantId（如果未设置）

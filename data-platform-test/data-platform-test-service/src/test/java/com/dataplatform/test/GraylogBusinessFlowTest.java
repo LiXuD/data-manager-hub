@@ -96,7 +96,7 @@ public class GraylogBusinessFlowTest extends BaseTest {
     @Order(4)
     @DisplayName("链路2-1: 查询灰度规则详情 → 验证创建数据一致")
     void testGrayRuleDetail() {
-        Assumptions.assumeTrue(testGrayRuleId != null, "需要测试灰度规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testGrayRuleId != null, "需要测试灰度规则ID");
 
         Response response = getAuthRequest()
             .when()
@@ -127,7 +127,7 @@ public class GraylogBusinessFlowTest extends BaseTest {
     @Order(6)
     @DisplayName("链路2-3: 按服务查询活跃灰度规则")
     void testGetActiveRuleByService() {
-        Assumptions.assumeTrue(testGrayRuleId != null, "需要测试灰度规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testGrayRuleId != null, "需要测试灰度规则ID");
 
         // 用创建时的 serviceName 查询
         Response response = getAuthRequest()
@@ -135,11 +135,10 @@ public class GraylogBusinessFlowTest extends BaseTest {
             .get("/graylog/active/data-platform-masterdata");
 
         // 可能返回 200（有活跃规则）或 404（刚创建的规则可能不在）
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             response.then().body("data", notNullValue());
             log.info("按服务查询活跃规则成功");
-        } else {
-            log.info("该服务暂无活跃灰度规则 (status={})", response.getStatusCode());
         }
     }
 
@@ -149,7 +148,7 @@ public class GraylogBusinessFlowTest extends BaseTest {
     @Order(7)
     @DisplayName("链路3-1: 灰度规则状态切换 → inactive→active")
     void testGrayRuleStatusToggle() {
-        Assumptions.assumeTrue(testGrayRuleId != null, "需要测试灰度规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testGrayRuleId != null, "需要测试灰度规则ID");
 
         // 切换为 inactive
         Response inactiveResp = getAuthRequest()
@@ -174,7 +173,7 @@ public class GraylogBusinessFlowTest extends BaseTest {
     @Order(8)
     @DisplayName("链路3-2: 灰度规则状态切换 → expired→pending")
     void testGrayRuleStatusToggleExtra() {
-        Assumptions.assumeTrue(testGrayRuleId != null, "需要测试灰度规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testGrayRuleId != null, "需要测试灰度规则ID");
 
         // 切换为 expired
         Response expiredResp = getAuthRequest()
@@ -209,7 +208,7 @@ public class GraylogBusinessFlowTest extends BaseTest {
     @Order(9)
     @DisplayName("链路4-1: 更新灰度规则 → 验证修改生效")
     void testUpdateGrayRule() {
-        Assumptions.assumeTrue(testGrayRuleId != null, "需要测试灰度规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testGrayRuleId != null, "需要测试灰度规则ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("ruleName", uniqueId("GRAY_RULE_UPDATED"));
@@ -232,7 +231,7 @@ public class GraylogBusinessFlowTest extends BaseTest {
     @Order(10)
     @DisplayName("链路5-1: 删除灰度规则 → 验证已删除")
     void testDeleteGrayRule() {
-        Assumptions.assumeTrue(testGrayRuleId != null, "没有需要删除的灰度规则");
+        org.junit.jupiter.api.Assertions.assertTrue(testGrayRuleId != null, "没有需要删除的灰度规则");
 
         Response response = getAuthRequest()
             .when()
@@ -285,7 +284,7 @@ public class GraylogBusinessFlowTest extends BaseTest {
     @Order(22)
     @DisplayName("边界-3: 无效状态值 → 验证400")
     void testGrayRuleStatusInvalid() {
-        Assumptions.assumeTrue(testGrayRuleId != null, "需要测试灰度规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testGrayRuleId != null, "需要测试灰度规则ID");
 
         // 需要一个还存在的规则来测，如果已被删除就用新创建的
         // 先创建一个临时规则
@@ -298,12 +297,9 @@ public class GraylogBusinessFlowTest extends BaseTest {
             .when()
             .post("/graylog");
 
-        if (createResp.getStatusCode() != 200) {
-            Assumptions.assumeTrue(false, "临时规则创建失败，跳过状态校验测试");
-            return;
-        }
-
+        verifySuccess(createResp);
         Long tempId = extractId(createResp);
+        Assertions.assertNotNull(tempId, "临时规则创建后应返回ID");
         registerDeleteById("/graylog/{id}", tempId);
 
         // 传无效状态值

@@ -16,6 +16,11 @@ public interface VendorHealthService {
     boolean checkHealth(Long vendorId);
 
     /**
+     * 使用指定配置执行一次真实连接测试。
+     */
+    Map<String, Object> testConnection(Long configId);
+
+    /**
      * 批量检测多个厂商
      * @param vendorIds 厂商ID列表
      * @return 厂商ID -> 健康状态

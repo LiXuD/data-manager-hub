@@ -1,6 +1,8 @@
 package com.dataplatform.common.interceptor;
 
+import com.dataplatform.common.security.InternalActorContext;
 import com.dataplatform.common.result.Result;
+import com.dataplatform.common.util.UserContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -11,8 +13,6 @@ import org.springframework.http.MediaType;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * 认证拦截器 - 验证请求的Authorization token
@@ -25,16 +25,9 @@ public class AuthInterceptor implements HandlerInterceptor {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     // 不需要认证的路径
-    private static final List<String> EXCLUDE_PATHS = Arrays.asList(
-        "/auth/login",
-        "/auth/verify",
-        "/actuator",
-        "/health"
-    );
-
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        String path = request.getRequestURI();
+        String path = request.getServletPath();
 
         // 检查是否是不需要认证的路径
         if (isExcludePath(path)) {
@@ -57,36 +50,36 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        String token = authHeader.substring(BEARER_PREFIX.length());
-
-        // 检查token是否为空
-        if (isBlank(token)) {
+        if (isBlank(authHeader.substring(BEARER_PREFIX.length()))) {
             log.warn("请求路径: {} token为空", path);
             sendUnauthorizedResponse(response, "token为空");
             return false;
         }
 
-        // 简单验证：token长度需要大于10
-        if (token.length() < 10) {
-            log.warn("请求路径: {} token格式无效", path);
-            sendUnauthorizedResponse(response, "无效的token");
+        try {
+            if (!UserContext.isLoggedIn()) {
+                sendUnauthorizedResponse(response, "会话已过期");
+                return false;
+            }
+            Long userId = UserContext.getCurrentUserId();
+            Long tenantId = UserContext.getCurrentTenantId();
+            request.setAttribute("username", UserContext.getCurrentUsername());
+            request.setAttribute(InternalActorContext.ACTOR_ID_ATTRIBUTE, userId);
+            request.setAttribute(InternalActorContext.TENANT_ID_ATTRIBUTE, tenantId);
+            return true;
+        } catch (Exception e) {
+            log.warn("请求路径: {} token校验失败", path);
+            sendUnauthorizedResponse(response, "无效或已过期的token");
             return false;
         }
-
-        // 验证通过，将用户信息存入请求属性
-        request.setAttribute("token", token);
-        request.setAttribute("username", "admin");
-
-        return true;
     }
 
     private boolean isExcludePath(String path) {
-        for (String excludePath : EXCLUDE_PATHS) {
-            if (path.contains(excludePath)) {
-                return true;
-            }
-        }
-        return false;
+        return "/auth/login".equals(path)
+                || "/auth/verify".equals(path)
+                || "/health".equals(path)
+                || "/actuator".equals(path)
+                || path.startsWith("/actuator/");
     }
 
     private boolean isBlank(String str) {

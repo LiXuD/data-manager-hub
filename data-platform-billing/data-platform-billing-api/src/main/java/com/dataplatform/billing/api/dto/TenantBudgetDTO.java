@@ -3,6 +3,10 @@ package com.dataplatform.billing.api.dto;
 import java.io.Serializable;
 import java.math.BigDecimal;
 
+/**
+ * 计费域计费计算的 Tenant Budget DTO。
+ * <p>跨服务契约数据对象，用于 api 模块暴露远程接口时传递稳定字段。</p>
+ */
 public class TenantBudgetDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 

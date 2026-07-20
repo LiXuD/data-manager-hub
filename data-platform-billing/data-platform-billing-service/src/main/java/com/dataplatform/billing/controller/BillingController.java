@@ -2,6 +2,8 @@ package com.dataplatform.billing.controller;
 
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
+import com.dataplatform.common.result.PageResult;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.dataplatform.billing.entity.BillingDaily;
 import com.dataplatform.billing.entity.BillingRule;
 import com.dataplatform.billing.entity.BillingReconciliation;
@@ -23,6 +25,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 计费域计费计算的 Billing Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/billing")
 public class BillingController {
@@ -36,8 +42,22 @@ public class BillingController {
     private static final List<String> VALID_STATUSES = List.of(StatusConstants.ACTIVE, StatusConstants.INACTIVE, StatusConstants.PENDING);
 
     @GetMapping("/list")
-    public Result<List<BillingDaily>> list() {
-        return Result.success(billingService.list());
+    public PageResult<BillingDaily> list(
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) Long vendorId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        Page<BillingDaily> result = billingService.pageQuery(tenantId, vendorId, startDate, endDate, page, pageSize);
+        PageResult<BillingDaily> response = new PageResult<>();
+        response.setCode(200);
+        response.setMessage("success");
+        response.setData(result.getRecords());
+        response.setTotal(result.getTotal());
+        response.setPage(page);
+        response.setPageSize(pageSize);
+        return response;
     }
 
     @GetMapping("/{id}")
@@ -51,8 +71,11 @@ public class BillingController {
     }
 
     @GetMapping("/stats")
-    public Result<Map<String, Object>> stats() {
-        return Result.success(billingService.getStats());
+    public Result<Map<String, Object>> stats(
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return Result.success(billingService.getBillingStats(tenantId, startDate, endDate));
     }
 
     @GetMapping("/export")

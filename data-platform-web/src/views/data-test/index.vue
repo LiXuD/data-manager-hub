@@ -158,20 +158,88 @@
         </div>
       </div>
 
-      <!-- JSON参数编辑器 -->
-      <div class="json-editor-section">
+      <!-- 请求参数 -->
+      <div class="params-section">
         <div class="editor-header">
-          <label class="selector-label">请求参数 (JSON)</label>
-          <el-button size="small" @click="formatJson">格式化</el-button>
+          <label class="selector-label">请求参数</label>
+          <el-tag v-if="selectedInterfaceId && interfaceParams.length > 0" size="small" type="info">
+            {{ interfaceParams.length }} 个参数
+          </el-tag>
         </div>
-        <el-input
-          v-model="requestParams"
-          type="textarea"
-          :rows="8"
-          placeholder='请输入JSON格式的请求参数，例如: {"name": "张三"}'
-          class="json-textarea"
-        />
-        <div v-if="jsonError" class="json-error">{{ jsonError }}</div>
+
+        <div v-if="!selectedInterfaceId" class="params-empty">
+          请选择接口后填写调用参数
+        </div>
+        <div v-else-if="paramsLoading" class="params-empty">
+          正在加载接口参数...
+        </div>
+        <div v-else-if="interfaceParams.length === 0" class="params-empty">
+          当前接口未配置调用参数，可直接执行查询
+        </div>
+        <div v-else class="params-grid">
+          <div
+            v-for="param in interfaceParams"
+            :key="param.id || param.paramName"
+            class="param-field"
+          >
+            <label class="param-label">
+              <span>{{ getParamLabel(param) }}</span>
+              <el-tag v-if="param.required" size="small" type="danger" effect="plain">必填</el-tag>
+              <span class="param-code">{{ param.paramName }}</span>
+            </label>
+
+            <el-input-number
+              v-if="getParamInputType(param) === 'number'"
+              v-model="paramValues[param.paramName]"
+              :controls="false"
+              :placeholder="getParamPlaceholder(param)"
+              class="param-control"
+              @change="syncAdvancedJsonFromValues"
+            />
+            <el-switch
+              v-else-if="getParamInputType(param) === 'boolean'"
+              v-model="paramValues[param.paramName]"
+              @change="syncAdvancedJsonFromValues"
+            />
+            <el-input
+              v-else-if="['object', 'array'].includes(getParamInputType(param))"
+              v-model="paramValues[param.paramName]"
+              type="textarea"
+              :rows="4"
+              :placeholder="getParamPlaceholder(param)"
+              class="param-json-control"
+              @input="syncAdvancedJsonFromValues"
+            />
+            <el-input
+              v-else
+              v-model="paramValues[param.paramName]"
+              :placeholder="getParamPlaceholder(param)"
+              clearable
+              class="param-control"
+              @input="syncAdvancedJsonFromValues"
+            />
+          </div>
+        </div>
+
+        <div class="advanced-json-section">
+          <el-button link size="small" @click="advancedJsonVisible = !advancedJsonVisible">
+            {{ advancedJsonVisible ? '收起高级 JSON' : '高级 JSON 参数' }}
+          </el-button>
+          <div v-if="advancedJsonVisible" class="json-editor-section">
+            <div class="editor-header">
+              <label class="selector-label">最终请求参数 (JSON)</label>
+              <el-button size="small" @click="formatJson">格式化</el-button>
+            </div>
+            <el-input
+              v-model="requestParams"
+              type="textarea"
+              :rows="8"
+              placeholder='请输入JSON格式的请求参数，例如: {"name": "张三"}'
+              class="json-textarea"
+            />
+          </div>
+          <div v-if="jsonError" class="json-error">{{ jsonError }}</div>
+        </div>
       </div>
 
       <!-- 执行按钮 -->
@@ -247,13 +315,16 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getVendorList } from '@/api/vendor'
 import { getDataTypeList } from '@/api/datatype'
-import { getInterfaceOptions } from '@/api/interface'
+import { getInterfaceOptions, getInterfaceParams } from '@/api/interface'
 import { executeOpenApiQuery } from '@/api/data-query'
 import { getCallerList, getCallerProducts } from '@/api/caller'
 import { getCallSceneList } from '@/api/call-scene'
-import type { Vendor, DataType, ApiInterface, DataQueryResponse, CallerDTO, CallerProductDTO, CallSceneDTO } from '@/types'
+import type { Vendor, DataType, ApiInterface, InterfaceParam, DataQueryResponse, CallerDTO, CallerProductDTO, CallSceneDTO } from '@/types'
 
 type CallerOption = CallerDTO & { id: number }
+type ParamInputType = 'string' | 'number' | 'boolean' | 'object' | 'array'
+
+const EMPTY_PARAMS_JSON = '{}'
 
 // 选择器数据
 const vendorList = ref<Vendor[]>([])
@@ -276,8 +347,13 @@ const useCache = ref(false)
 const cacheDays = ref(3)
 
 // 请求参数
-const requestParams = ref('{\n  \n}')
+const interfaceParams = ref<InterfaceParam[]>([])
+const paramValues = ref<Record<string, any>>({})
+const paramsLoading = ref(false)
+const advancedJsonVisible = ref(false)
+const requestParams = ref(EMPTY_PARAMS_JSON)
 const jsonError = ref('')
+let paramsLoadSeq = 0
 
 // 执行状态
 const loading = ref(false)
@@ -294,7 +370,7 @@ const filteredDataTypeList = computed(() => {
 
 // 是否可以执行查询
 const canExecute = computed(() => {
-  return Boolean(apiKey.value.trim() && selectedInterfaceId.value && productCode.value.trim() && sceneCode.value)
+  return Boolean(apiKey.value.trim() && selectedInterfaceId.value && productCode.value.trim() && sceneCode.value && !paramsLoading.value)
 })
 
 // 是否有结果
@@ -321,6 +397,183 @@ const formattedResultData = computed(() => {
   }
   return ''
 })
+
+const getParamInputType = (param: InterfaceParam): ParamInputType => {
+  const type = (param.paramType || 'string').toLowerCase()
+  if (type === 'number' || type === 'boolean' || type === 'object' || type === 'array') {
+    return type
+  }
+  return 'string'
+}
+
+const getParamLabel = (param: InterfaceParam) => {
+  return param.description || param.paramName
+}
+
+const getParamPlaceholder = (param: InterfaceParam) => {
+  const type = getParamInputType(param)
+  if (type === 'object') return '请输入 JSON 对象，例如: {"name":"张三"}'
+  if (type === 'array') return '请输入 JSON 数组，例如: ["A","B"]'
+  if (param.defaultValue) return `默认值: ${param.defaultValue}`
+  return `请输入${getParamLabel(param)}`
+}
+
+const normalizeDefaultValue = (param: InterfaceParam) => {
+  const type = getParamInputType(param)
+  const value = param.defaultValue
+
+  if (type === 'boolean') {
+    return value === 'true' || value === '1'
+  }
+  if (type === 'number') {
+    if (value === undefined || value === null || value === '') return undefined
+    const num = Number(value)
+    return Number.isNaN(num) ? undefined : num
+  }
+  if (type === 'object' || type === 'array') {
+    if (!value) return ''
+    try {
+      return JSON.stringify(JSON.parse(value), null, 2)
+    } catch {
+      return value
+    }
+  }
+  return value || ''
+}
+
+const isEmptyValue = (value: any, type: ParamInputType) => {
+  if (type === 'boolean') return false
+  if (value === undefined || value === null) return true
+  if (type === 'number') return value === '' || Number.isNaN(Number(value))
+  return String(value).trim() === ''
+}
+
+const buildParamsSnapshot = () => {
+  const params: Record<string, any> = {}
+
+  for (const param of interfaceParams.value) {
+    const type = getParamInputType(param)
+    const value = paramValues.value[param.paramName]
+    if (isEmptyValue(value, type)) continue
+
+    if (type === 'object' || type === 'array') {
+      try {
+        params[param.paramName] = JSON.parse(String(value))
+      } catch {
+        params[param.paramName] = value
+      }
+    } else {
+      params[param.paramName] = value
+    }
+  }
+
+  return params
+}
+
+const syncAdvancedJsonFromValues = () => {
+  requestParams.value = JSON.stringify(buildParamsSnapshot(), null, 2)
+  jsonError.value = ''
+}
+
+const resetRequestParams = (invalidateLoad = true) => {
+  if (invalidateLoad) {
+    paramsLoadSeq += 1
+  }
+  interfaceParams.value = []
+  paramValues.value = {}
+  paramsLoading.value = false
+  advancedJsonVisible.value = false
+  requestParams.value = EMPTY_PARAMS_JSON
+  jsonError.value = ''
+}
+
+const initParamValues = (params: InterfaceParam[]) => {
+  const values: Record<string, any> = {}
+  for (const param of params) {
+    values[param.paramName] = normalizeDefaultValue(param)
+  }
+  paramValues.value = values
+  syncAdvancedJsonFromValues()
+}
+
+const loadInterfaceParams = async (interfaceId: number) => {
+  const currentSeq = ++paramsLoadSeq
+  paramsLoading.value = true
+  interfaceParams.value = []
+  paramValues.value = {}
+  requestParams.value = EMPTY_PARAMS_JSON
+  jsonError.value = ''
+
+  try {
+    const res = await getInterfaceParams(interfaceId)
+    if (currentSeq !== paramsLoadSeq) return
+
+    const params = [...(res.data || [])].sort((a, b) => {
+      const sortA = a.sort ?? 0
+      const sortB = b.sort ?? 0
+      if (sortA !== sortB) return sortA - sortB
+      return a.paramName.localeCompare(b.paramName)
+    })
+
+    interfaceParams.value = params
+    initParamValues(params)
+  } catch (error) {
+    if (currentSeq !== paramsLoadSeq) return
+    console.error('加载接口参数失败:', error)
+    ElMessage.error('加载接口参数失败')
+    resetRequestParams(false)
+  } finally {
+    if (currentSeq === paramsLoadSeq) {
+      paramsLoading.value = false
+    }
+  }
+}
+
+const buildParamsFromForm = (source?: Record<string, any>) => {
+  const params: Record<string, any> = {}
+
+  for (const param of interfaceParams.value) {
+    const type = getParamInputType(param)
+    const rawValue = source ? source[param.paramName] : paramValues.value[param.paramName]
+    const label = getParamLabel(param)
+
+    if (isEmptyValue(rawValue, type)) {
+      if (param.required) {
+        return { error: `请填写必填参数：${label}` }
+      }
+      continue
+    }
+
+    if (type === 'object' || type === 'array') {
+      const parsed = source ? rawValue : (() => { try { return JSON.parse(String(rawValue)) } catch { return null } })()
+      if (parsed === null && !source) {
+        return { error: `${label} JSON 格式错误` }
+      }
+      if (type === 'object' && (Array.isArray(parsed) || parsed === null || typeof parsed !== 'object')) {
+        return { error: `${label} 必须是 JSON 对象` }
+      }
+      if (type === 'array' && !Array.isArray(parsed)) {
+        return { error: `${label} 必须是 JSON 数组` }
+      }
+      params[param.paramName] = parsed
+    } else if (type === 'number') {
+      const num = source ? rawValue : Number(rawValue)
+      if (typeof num !== 'number' || Number.isNaN(num)) {
+        return { error: `${label} 必须是数字` }
+      }
+      params[param.paramName] = num
+    } else if (type === 'boolean' && source) {
+      if (typeof rawValue !== 'boolean') {
+        return { error: `${label} 必须是布尔值` }
+      }
+      params[param.paramName] = rawValue
+    } else {
+      params[param.paramName] = rawValue
+    }
+  }
+
+  return { params }
+}
 
 // 加载厂商列表
 const loadVendors = async () => {
@@ -366,6 +619,7 @@ const handleVendorChange = async () => {
   selectedInterfaceId.value = null
   interfaceList.value = []
   vendorInterfaceOptions.value = []
+  resetRequestParams()
   result.value = null
 
   if (!selectedVendorId.value) return
@@ -380,6 +634,7 @@ const handleVendorChange = async () => {
 // 数据类型变更处理
 const handleDataTypeChange = async () => {
   selectedInterfaceId.value = null
+  resetRequestParams()
   result.value = null
 
   if (selectedDataTypeId.value) {
@@ -400,8 +655,12 @@ const handleDataTypeChange = async () => {
 }
 
 // 接口变更处理
-const handleInterfaceChange = () => {
+const handleInterfaceChange = async () => {
+  resetRequestParams()
   result.value = null
+  if (selectedInterfaceId.value) {
+    await loadInterfaceParams(selectedInterfaceId.value)
+  }
 }
 
 const handleCallerChange = async () => {
@@ -430,14 +689,30 @@ const formatJson = () => {
 
 // 执行查询
 const handleExecute = async () => {
-  // 验证JSON
   let params: Record<string, any> = {}
-  try {
-    params = JSON.parse(requestParams.value || '{}')
+
+  if (advancedJsonVisible.value) {
+    try {
+      params = JSON.parse(requestParams.value || EMPTY_PARAMS_JSON)
+      jsonError.value = ''
+    } catch {
+      jsonError.value = 'JSON格式错误，请检查输入'
+      return
+    }
+    const built = buildParamsFromForm(params)
+    if (built.error) {
+      ElMessage.warning(built.error)
+      return
+    }
+  } else {
+    const built = buildParamsFromForm()
+    if (built.error) {
+      ElMessage.warning(built.error)
+      return
+    }
+    params = built.params || {}
+    requestParams.value = JSON.stringify(params, null, 2)
     jsonError.value = ''
-  } catch {
-    jsonError.value = 'JSON格式错误，请检查输入'
-    return
   }
 
   // 获取选中的对象
@@ -497,8 +772,7 @@ const handleClear = () => {
   sceneCode.value = ''
   useCache.value = false
   cacheDays.value = 3
-  requestParams.value = '{\n  \n}'
-  jsonError.value = ''
+  resetRequestParams()
   result.value = null
   interfaceList.value = []
   vendorInterfaceOptions.value = []
@@ -591,8 +865,8 @@ onMounted(() => {
   width: 112px;
 }
 
-/* JSON编辑器 */
-.json-editor-section {
+/* 请求参数 */
+.params-section {
   margin-bottom: 20px;
 }
 
@@ -601,6 +875,62 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+}
+
+.params-empty {
+  padding: 20px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+  text-align: center;
+  background: var(--color-bg-light);
+}
+
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.param-field {
+  min-width: 0;
+}
+
+.param-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  margin-bottom: 8px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.param-code {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.param-control {
+  width: 100%;
+}
+
+.param-json-control :deep(textarea) {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.advanced-json-section {
+  margin-top: 12px;
+}
+
+.json-editor-section {
+  margin-top: 8px;
 }
 
 .json-textarea :deep(textarea) {

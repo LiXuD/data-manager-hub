@@ -18,6 +18,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 观测治理域监控告警的 Alert Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/alert")
 public class AlertController {
@@ -49,24 +53,6 @@ public class AlertController {
     @OperationLog(module = "告警规则管理", operation = "新增告警规则")
     @PostMapping("/rule")
     public ResponseEntity<Result<AlertRule>> createRule(@RequestBody AlertRule rule) {
-        // 兼容测试用例格式: 使用 metric 作为 targetType, condition 作为 conditionType
-        if (rule.getTargetType() == null && rule.getMetric() != null) {
-            rule.setTargetType(rule.getMetric());
-        }
-        if (rule.getConditionType() == null && rule.getCondition() != null) {
-            rule.setConditionType(rule.getCondition());
-        }
-        if (rule.getRuleType() == null) {
-            rule.setRuleType("THRESHOLD");
-        }
-        if (rule.getThreshold() != null && rule.getThresholdValue() == null) {
-            Object threshold = rule.getThreshold();
-            if (threshold instanceof Number) {
-                rule.setThresholdValue(new java.math.BigDecimal(threshold.toString()));
-            }
-        }
-
-        // 校验必填字段
         if (rule.getRuleName() == null || rule.getRuleName().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "规则名称不能为空"));
@@ -74,6 +60,12 @@ public class AlertController {
         if (rule.getTargetType() == null || rule.getTargetType().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "目标类型不能为空"));
+        }
+        if (rule.getRuleType() == null || rule.getRuleType().isBlank()
+                || rule.getConditionType() == null || rule.getConditionType().isBlank()
+                || rule.getThresholdValue() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "规则类型、条件和阈值不能为空"));
         }
 
         rule.setId(null);
@@ -94,6 +86,24 @@ public class AlertController {
         rule.setId(id);
         alertService.updateRule(rule);
         return ResponseEntity.ok(Result.success(alertService.getRuleById(id)));
+    }
+
+    @OperationLog(module = "告警规则管理", operation = "更新告警规则状态")
+    @PatchMapping("/rule/{id}/status")
+    public ResponseEntity<Result<Void>> updateRuleStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        AlertRule rule = alertService.getRuleById(id);
+        if (rule == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "告警规则不存在"));
+        }
+        try {
+            rule.setStatus(AlertStatus.fromCode(body.get("status")));
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "无效的状态值"));
+        }
+        alertService.updateRule(rule);
+        return ResponseEntity.ok(Result.success(null));
     }
 
     @OperationLog(module = "告警规则管理", operation = "删除告警规则")
@@ -118,6 +128,16 @@ public class AlertController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
         return alertService.listRecords(status, level, page, pageSize);
+    }
+
+    @GetMapping("/record/{id}")
+    public ResponseEntity<Result<AlertRecord>> getRecordById(@PathVariable Long id) {
+        AlertRecord record = alertService.getRecordById(id);
+        if (record == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "告警记录不存在"));
+        }
+        return ResponseEntity.ok(Result.success(record));
     }
 
     @OperationLog(module = "告警记录管理", operation = "处理告警")

@@ -7,6 +7,10 @@ import com.dataplatform.access.call.mapper.CallSceneMapper;
 import com.dataplatform.common.constant.StatusConstants;
 import org.springframework.stereotype.Service;
 
+/**
+ * 访问域数据调用的 Call Scene Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class CallSceneService extends ServiceImpl<CallSceneMapper, CallScene> {
 

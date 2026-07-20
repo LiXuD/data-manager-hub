@@ -7,26 +7,35 @@ import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.masterdata.vendor.api.dto.VendorCreateReqDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorUpdateReqDTO;
-import com.dataplatform.masterdata.vendor.api.feign.VendorFeignClient;
 import com.dataplatform.masterdata.vendor.entity.VendorInfo;
 import com.dataplatform.masterdata.vendor.service.VendorService;
+import com.dataplatform.masterdata.vendor.service.VendorHealthService;
+import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 主数据域厂商的 Vendor Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/vendor")
-public class VendorController implements VendorFeignClient {
+public class VendorController {
 
     private final VendorService vendorService;
+    private final VendorConfigService vendorConfigService;
+    private final VendorHealthService vendorHealthService;
 
-    public VendorController(VendorService vendorService) {
+    public VendorController(VendorService vendorService, VendorConfigService vendorConfigService,
+                            VendorHealthService vendorHealthService) {
         this.vendorService = vendorService;
+        this.vendorConfigService = vendorConfigService;
+        this.vendorHealthService = vendorHealthService;
     }
 
-    @Override
     @GetMapping("/list")
     public PageResult<VendorInfoDTO> list(
             @RequestParam(name = "page", defaultValue = "1") Integer page,
@@ -42,7 +51,6 @@ public class VendorController implements VendorFeignClient {
                 result.getPageSize());
     }
 
-    @Override
     @GetMapping("/{id}")
     public Result<VendorInfoDTO> getById(@PathVariable("id") Long id) {
         VendorInfo vendor = vendorService.getById(id);
@@ -52,7 +60,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(toDTO(vendor));
     }
 
-    @Override
     @GetMapping("/code/{vendorCode}")
     public Result<VendorInfoDTO> getByVendorCode(@PathVariable("vendorCode") String vendorCode) {
         VendorInfo vendor = vendorService.getByVendorCode(vendorCode);
@@ -62,7 +69,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(toDTO(vendor));
     }
 
-    @Override
     @OperationLog(module = "厂商管理", operation = "新增厂商")
     @PostMapping
     public Result<VendorInfoDTO> create(@RequestBody VendorCreateReqDTO dto) {
@@ -88,7 +94,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(toDTO(vendor));
     }
 
-    @Override
     @OperationLog(module = "厂商管理", operation = "更新厂商")
     @PutMapping("/{id}")
     public Result<VendorInfoDTO> update(@PathVariable("id") Long id, @RequestBody VendorUpdateReqDTO dto) {
@@ -102,7 +107,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(toDTO(vendorService.getById(id)));
     }
 
-    @Override
     @OperationLog(module = "厂商管理", operation = "删除厂商")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
@@ -114,7 +118,6 @@ public class VendorController implements VendorFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @OperationLog(module = "厂商管理", operation = "更新厂商状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
@@ -143,7 +146,12 @@ public class VendorController implements VendorFeignClient {
         if (existing == null) {
             return Result.error(404, "厂商不存在");
         }
-        return Result.success(Map.of("success", true, "message", "连接正常"));
+        com.dataplatform.masterdata.vendor.entity.VendorConfig config = vendorConfigService.listByVendor(id)
+                .stream().findFirst().orElse(null);
+        if (config == null) {
+            return Result.error(400, "厂商没有可用配置");
+        }
+        return Result.success(vendorHealthService.testConnection(config.getId()));
     }
 
     @GetMapping("/all")

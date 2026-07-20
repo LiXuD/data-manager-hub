@@ -71,7 +71,7 @@ public class TenantBusinessFlowTest extends BaseTest {
     @Order(3)
     @DisplayName("链路1-3: 创建重复 tenantCode → 验证409冲突")
     void testCreateTenantDuplicateCode() {
-        Assumptions.assumeTrue(testTenantId != null, "需要测试租户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testTenantId != null, "需要测试租户ID");
 
         // 用已创建租户的 code 再次创建
         Response detail = getAuthRequest()
@@ -79,7 +79,7 @@ public class TenantBusinessFlowTest extends BaseTest {
             .get("/tenant/" + testTenantId);
 
         String existingCode = detail.jsonPath().getString("data.tenantCode");
-        Assumptions.assumeTrue(existingCode != null, "需要已有租户代码");
+        org.junit.jupiter.api.Assertions.assertTrue(existingCode != null, "需要已有租户代码");
 
         Map<String, Object> data = new HashMap<>();
         data.put("tenantCode", existingCode);
@@ -100,7 +100,7 @@ public class TenantBusinessFlowTest extends BaseTest {
     @Order(4)
     @DisplayName("链路2-1: 查询租户详情 → 验证创建数据一致")
     void testTenantDetail() {
-        Assumptions.assumeTrue(testTenantId != null, "需要测试租户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testTenantId != null, "需要测试租户ID");
 
         Response response = getAuthRequest()
             .when()
@@ -133,7 +133,7 @@ public class TenantBusinessFlowTest extends BaseTest {
     @Order(6)
     @DisplayName("链路3-1: 更新租户信息")
     void testUpdateTenant() {
-        Assumptions.assumeTrue(testTenantId != null, "需要测试租户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testTenantId != null, "需要测试租户ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("contactPerson", "更新后的联系人");
@@ -164,7 +164,7 @@ public class TenantBusinessFlowTest extends BaseTest {
     @Order(8)
     @DisplayName("链路4-1: 切换状态 inactive → suspended → active")
     void testTenantStatusToggle() {
-        Assumptions.assumeTrue(testTenantId != null, "需要测试租户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testTenantId != null, "需要测试租户ID");
 
         // 切换为 inactive
         Response inactiveResp = getAuthRequest()
@@ -199,7 +199,7 @@ public class TenantBusinessFlowTest extends BaseTest {
     @Order(11)
     @DisplayName("链路5-1: 删除租户 → 验证已删除")
     void testDeleteTenant() {
-        Assumptions.assumeTrue(testTenantId != null, "需要测试租户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testTenantId != null, "需要测试租户ID");
 
         Response response = getAuthRequest()
             .when()
@@ -212,12 +212,7 @@ public class TenantBusinessFlowTest extends BaseTest {
             .when()
             .get("/tenant/" + testTenantId);
 
-        int status = check.getStatusCode();
-        if (status == 404 || status == 400) {
-            log.info("租户已确认删除 ({}返回)", status);
-        } else {
-            log.warn("租户删除后仍可查询 (status={})", status);
-        }
+        check.then().statusCode(anyOf(is(404), is(400)));
 
         testTenantId = null;
     }
@@ -294,7 +289,7 @@ public class TenantBusinessFlowTest extends BaseTest {
             .get("/tenant/list");
 
         String tenantId = listResp.jsonPath().getString("data[0].id");
-        Assumptions.assumeTrue(tenantId != null, "需要已有租户数据");
+        org.junit.jupiter.api.Assertions.assertTrue(tenantId != null, "需要已有租户数据");
 
         Response response = getAuthRequest()
             .body(Map.of("status", "invalid_status"))

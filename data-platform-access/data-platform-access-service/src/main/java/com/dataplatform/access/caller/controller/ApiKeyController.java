@@ -9,6 +9,7 @@ import com.dataplatform.access.caller.service.ApiKeyProductService;
 import com.dataplatform.access.caller.service.ApiKeyInterfaceService;
 import com.dataplatform.access.caller.service.ApiKeyService;
 import com.dataplatform.access.caller.service.CallerProductService;
+import com.dataplatform.access.caller.vo.ApiKeyRateLimitUpdateVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,9 +18,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 访问域调用方的 Api Key Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/caller/apikey")
 public class ApiKeyController {
+
+    private static final int MAX_RATE_LIMIT_PER_MINUTE = 1_000_000;
 
     @Autowired
     private ApiKeyService apiKeyService;
@@ -31,8 +38,8 @@ public class ApiKeyController {
     private CallerProductService callerProductService;
 
     @GetMapping("/list")
-    public Result<List<ApiKey>> list() {
-        return Result.success(apiKeyService.list());
+    public Result<List<ApiKey>> list(@RequestParam(value = "callerId", required = false) Long callerId) {
+        return Result.success(callerId != null ? apiKeyService.listByCaller(callerId) : apiKeyService.list());
     }
 
     @GetMapping("/{id}")
@@ -49,12 +56,8 @@ public class ApiKeyController {
                     .body(Result.error(400, "name不能为空"));
         }
 
-        ApiKey apiKey = new ApiKey();
-        apiKey.setCallerId(callerId);
-        apiKey.setKeyName(name);
-        apiKey.setStatus(ApiKeyStatus.ACTIVE);
-        apiKeyService.save(apiKey);
-        return ResponseEntity.ok(Result.success(apiKeyService.getById(apiKey.getId())));
+        ApiKey apiKey = apiKeyService.createApiKey(callerId, name);
+        return ResponseEntity.ok(Result.success(apiKey));
     }
 
     @OperationLog(module = "API Key管理", operation = "新增API Key")
@@ -66,12 +69,8 @@ public class ApiKeyController {
                     .body(Result.error(400, "name不能为空"));
         }
 
-        ApiKey apiKey = new ApiKey();
-        apiKey.setCallerId(callerId);
-        apiKey.setKeyName(name);
-        apiKey.setStatus(ApiKeyStatus.ACTIVE);
-        apiKeyService.save(apiKey);
-        return ResponseEntity.ok(Result.success(apiKeyService.getById(apiKey.getId())));
+        ApiKey apiKey = apiKeyService.createApiKey(callerId, name);
+        return ResponseEntity.ok(Result.success(apiKey));
     }
 
     @OperationLog(module = "API Key管理", operation = "更新API Key状态")
@@ -89,6 +88,29 @@ public class ApiKeyController {
         apiKey.setStatus(statusEnum);
         apiKeyService.updateById(apiKey);
         return Result.success(apiKey);
+    }
+
+    @OperationLog(module = "API Key管理", operation = "更新限流策略")
+    @PutMapping("/{id}/rate-limit")
+    public ResponseEntity<Result<ApiKey>> updateRateLimit(
+            @PathVariable Long id,
+            @RequestBody ApiKeyRateLimitUpdateVO request) {
+        if (request == null || request.getRateLimitEnabled() == null || request.getRateLimit() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "限流开关和每分钟最大请求数不能为空"));
+        }
+        if (request.getRateLimit() < 1 || request.getRateLimit() > MAX_RATE_LIMIT_PER_MINUTE) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "每分钟最大请求数必须在1到1000000之间"));
+        }
+
+        ApiKey apiKey = apiKeyService.updateRateLimitPolicy(
+                id, request.getRateLimitEnabled(), request.getRateLimit());
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "API Key不存在"));
+        }
+        return ResponseEntity.ok(Result.success(apiKey));
     }
 
     @GetMapping("/{id}/interfaces")
@@ -141,6 +163,18 @@ public class ApiKeyController {
             }
         }
         apiKeyProductService.assignProducts(id, productIds);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    @OperationLog(module = "API Key管理", operation = "删除API Key")
+    @DeleteMapping("/api-key/{id}")
+    public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
+        ApiKey apiKey = apiKeyService.getById(id);
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "API Key不存在"));
+        }
+        apiKeyService.removeById(id);
         return ResponseEntity.ok(Result.success(null));
     }
 }

@@ -5,15 +5,21 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.common.handler.CommonStatusTypeHandler;
 import java.time.LocalDateTime;
 
-@TableName("role_info")
+/**
+ * 身份租户域用户权限的 Role。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
+@TableName(value = "role_info", autoResultMap = true)
 public class Role {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String roleCode;
     private String roleName;
     private String description;
+    @TableField(typeHandler = CommonStatusTypeHandler.class)
     private CommonStatus status;
     private Long createdBy;
     private LocalDateTime createdAt;

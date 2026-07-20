@@ -4,8 +4,8 @@ import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,26 +31,16 @@ import static org.hamcrest.Matchers.*;
  * - governance: 8085 (alert, log, quality, trace)
  * - identity: 8086 (tenant, auth, user, role, security)
  */
+@Tag("integration")
 public class BaseTest {
 
     private static final Logger log = LoggerFactory.getLogger(BaseTest.class);
 
     /** Gateway 统一入口 */
-    protected static final String GATEWAY_URL = "http://localhost:8888";
+    protected static final String GATEWAY_URL = configOrDefault("test.gateway-url", "GATEWAY_URL", "http://localhost:8888");
 
     /** ID used to test "not found" scenarios */
     protected static final Long NON_EXISTENT_ID = 999999999L;
-
-    // 各服务直连端口（用于调试）
-    protected static final String VENDOR_URL = "http://localhost:8081";
-    protected static final String CALLER_URL = "http://localhost:8082";
-    protected static final String BILLING_URL = "http://localhost:8084";
-    protected static final String GOVERNANCE_URL = "http://localhost:8085";
-    protected static final String TENANT_URL = "http://localhost:8086";
-
-    protected static final String DB_URL = "jdbc:postgresql://localhost:5432/dataplatform";
-    protected static final String DB_USER = "postgres";
-    protected static final String DB_PASSWORD = "123456";
 
     protected String authToken;
     protected static Long testTenantId;
@@ -61,13 +51,14 @@ public class BaseTest {
     /** 注册按 ID 删除的清理任务 */
     protected void registerDeleteById(String urlTemplate, Long id) {
         cleanupTasks.add(() -> {
-            try {
-                given()
-                    .contentType("application/json")
-                    .header("Authorization", "Bearer " + authToken)
-                    .when()
-                    .delete(GATEWAY_URL + "/api/v1" + urlTemplate, id);
-            } catch (Exception ignored) {
+            Response response = given()
+                .contentType("application/json")
+                .header("Authorization", "Bearer " + authToken)
+                .when()
+                .delete(GATEWAY_URL + "/api/v1" + urlTemplate, id);
+            int status = response.statusCode();
+            if (status != 200 && status != 204 && status != 404) {
+                throw new AssertionError("清理测试资源失败: " + urlTemplate + ", id=" + id + ", status=" + status);
             }
         });
     }
@@ -76,8 +67,17 @@ public class BaseTest {
     static void cleanupAll() {
         List<Runnable> reversed = new ArrayList<>(cleanupTasks);
         Collections.reverse(reversed);
-        reversed.forEach(Runnable::run);
+        List<Throwable> failures = new ArrayList<>();
+        for (Runnable task : reversed) {
+            try {
+                task.run();
+            } catch (Throwable failure) {
+                failures.add(failure);
+            }
+        }
         cleanupTasks.clear();
+        org.junit.jupiter.api.Assertions.assertTrue(failures.isEmpty(),
+                () -> "测试资源清理失败: " + failures.stream().map(Throwable::getMessage).toList());
     }
 
     static {
@@ -89,12 +89,6 @@ public class BaseTest {
 
     @BeforeEach
     public void setUp() {
-        Assumptions.assumeTrue(
-            Boolean.parseBoolean(System.getProperty(
-                "integration.tests",
-                System.getenv().getOrDefault("INTEGRATION_TESTS", "false"))),
-            "External API integration tests are disabled by default. Set -Dintegration.tests=true or INTEGRATION_TESTS=true to run them."
-        );
         login();
     }
 
@@ -103,8 +97,8 @@ public class BaseTest {
      */
     protected void login() {
         Map<String, String> loginData = new HashMap<>();
-        loginData.put("username", "admin");
-        loginData.put("password", "Test123456");
+        loginData.put("username", requiredConfig("test.username", "TEST_USERNAME"));
+        loginData.put("password", requiredConfig("test.password", "TEST_PASSWORD"));
 
         Response response = given()
             .contentType("application/json")
@@ -112,13 +106,10 @@ public class BaseTest {
             .when()
             .post("/auth/login");
 
-        if (response.getStatusCode() == 200) {
-            authToken = response.jsonPath().getString("data.token");
-            log.info("登录成功, 获取 token: {}", authToken != null ? "***" + authToken.substring(Math.max(0, authToken.length() - 4)) : "null");
-        } else {
-            log.error("登录失败, 状态码: {}, 响应: {}", response.getStatusCode(), response.getBody().asString());
-            throw new RuntimeException("登录失败, 状态码: " + response.getStatusCode());
-        }
+        response.then().statusCode(200).body("code", equalTo(200));
+        authToken = response.jsonPath().getString("data.token");
+        org.junit.jupiter.api.Assertions.assertNotNull(authToken, "登录响应缺少token");
+        log.info("登录成功, 获取 token: ***{}", authToken.substring(Math.max(0, authToken.length() - 4)));
     }
 
     /**
@@ -140,8 +131,13 @@ public class BaseTest {
     protected void verifySuccess(Response response) {
         response.then()
             .statusCode(200)
-            .body("code", equalTo(0))
-            .body("message", notNullValue());
+            .body("code", equalTo(200));
+        String message = response.jsonPath().getString("msg");
+        if (message == null) {
+            message = response.jsonPath().getString("message");
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(message != null && !message.isBlank(),
+                "成功响应必须包含非空的msg或message");
     }
 
     /**
@@ -150,7 +146,7 @@ public class BaseTest {
     protected void verifyError(Response response, int expectedStatus) {
         response.then()
             .statusCode(expectedStatus)
-            .body("code", not(equalTo(0)));
+            .body("code", not(equalTo(200)));
     }
 
     /** 验证响应为 404 或 400 (资源不存在或请求错误) */
@@ -174,15 +170,32 @@ public class BaseTest {
         return id != null ? id.longValue() : null;
     }
 
-    /** 跳过测试如果 ID 为 null */
+    /** 前置资源创建失败时立即让测试失败。 */
     protected void skipIfNull(Long id, String entityName) {
-        if (id == null) {
-            Assumptions.assumeTrue(false, "No test " + entityName + " available");
-        }
+        org.junit.jupiter.api.Assertions.assertNotNull(id, "No test " + entityName + " available");
     }
 
     /** 生成唯一标识符 (名称/代码) */
     protected String uniqueId(String prefix) {
         return prefix + "_" + System.currentTimeMillis();
+    }
+
+    private static String requiredConfig(String property, String environment) {
+        String value = System.getProperty(property);
+        if (value == null || value.isBlank()) {
+            value = System.getenv(environment);
+        }
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("Missing required integration-test setting: " + environment);
+        }
+        return value;
+    }
+
+    private static String configOrDefault(String property, String environment, String defaultValue) {
+        String value = System.getProperty(property);
+        if (value == null || value.isBlank()) {
+            value = System.getenv(environment);
+        }
+        return value == null || value.isBlank() ? defaultValue : value;
     }
 }

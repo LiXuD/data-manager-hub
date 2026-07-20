@@ -1,5 +1,7 @@
 package com.dataplatform.common.adapter;
 
+import com.dataplatform.common.security.pipeline.SecurityStepConfig;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,6 +24,8 @@ public class VendorAdapterConfig {
     // 认证配置
     private String authType;
     private Map<String, Object> authConfig;
+    private List<SecurityStepConfig> securitySteps;
+    private Map<String, String> resolvedSecrets;
 
     // Getters and Setters
     public String getVendorCode() { return vendorCode; }
@@ -50,4 +54,8 @@ public class VendorAdapterConfig {
     public void setAuthType(String authType) { this.authType = authType; }
     public Map<String, Object> getAuthConfig() { return authConfig; }
     public void setAuthConfig(Map<String, Object> authConfig) { this.authConfig = authConfig; }
+    public List<SecurityStepConfig> getSecuritySteps() { return securitySteps; }
+    public void setSecuritySteps(List<SecurityStepConfig> securitySteps) { this.securitySteps = securitySteps; }
+    public Map<String, String> getResolvedSecrets() { return resolvedSecrets; }
+    public void setResolvedSecrets(Map<String, String> resolvedSecrets) { this.resolvedSecrets = resolvedSecrets; }
 }

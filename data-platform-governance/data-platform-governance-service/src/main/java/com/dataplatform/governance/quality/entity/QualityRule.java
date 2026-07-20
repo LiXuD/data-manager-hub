@@ -4,7 +4,12 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
+/**
+ * 观测治理域数据质量的 Quality Rule。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("quality_rule")
 public class QualityRule {
 
@@ -15,7 +20,7 @@ public class QualityRule {
     private String ruleType;
     private String dataType;
     private String checkExpression;
-    private String threshold;
+    private BigDecimal threshold;
     private Integer severity;
     private Boolean isActive;
 
@@ -32,8 +37,8 @@ public class QualityRule {
     public void setDataType(String dataType) { this.dataType = dataType; }
     public String getCheckExpression() { return checkExpression; }
     public void setCheckExpression(String checkExpression) { this.checkExpression = checkExpression; }
-    public String getThreshold() { return threshold; }
-    public void setThreshold(String threshold) { this.threshold = threshold; }
+    public BigDecimal getThreshold() { return threshold; }
+    public void setThreshold(BigDecimal threshold) { this.threshold = threshold; }
     public Integer getSeverity() { return severity; }
     public void setSeverity(Integer severity) { this.severity = severity; }
     public Boolean getIsActive() { return isActive; }

@@ -106,7 +106,7 @@ public class MonitorBusinessFlowTest extends BaseTest {
     @Order(5)
     @DisplayName("链路2-1: 查询告警规则详情 → 验证创建数据一致")
     void testAlertRuleDetail() {
-        Assumptions.assumeTrue(testRuleId != null, "需要测试规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRuleId != null, "需要测试规则ID");
 
         Response response = getAuthRequest()
             .when()
@@ -138,7 +138,7 @@ public class MonitorBusinessFlowTest extends BaseTest {
     @Order(7)
     @DisplayName("链路3-1: 更新告警规则 threshold")
     void testUpdateAlertRule() {
-        Assumptions.assumeTrue(testRuleId != null, "需要测试规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRuleId != null, "需要测试规则ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("ruleName", "更新后的业务链路告警规则");
@@ -171,7 +171,7 @@ public class MonitorBusinessFlowTest extends BaseTest {
     @Order(9)
     @DisplayName("链路4-1: 切换规则状态 inactive → active")
     void testAlertRuleStatusToggle() {
-        Assumptions.assumeTrue(testRuleId != null, "需要测试规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRuleId != null, "需要测试规则ID");
 
         // 先查询当前规则
         Response current = getAuthRequest()
@@ -247,7 +247,7 @@ public class MonitorBusinessFlowTest extends BaseTest {
     @Order(13)
     @DisplayName("链路6-1: 删除告警规则 → 验证已删除")
     void testDeleteAlertRule() {
-        Assumptions.assumeTrue(testRuleId != null, "需要测试规则ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRuleId != null, "需要测试规则ID");
 
         Response response = getAuthRequest()
             .when()
@@ -260,12 +260,7 @@ public class MonitorBusinessFlowTest extends BaseTest {
             .when()
             .get("/alert/rule/" + testRuleId);
 
-        int status = check.getStatusCode();
-        if (status == 404 || status == 400) {
-            log.info("告警规则已确认删除 ({}返回)", status);
-        } else {
-            log.warn("告警规则删除后仍可查询 (status={})", status);
-        }
+        check.then().statusCode(anyOf(is(404), is(400)));
 
         testRuleId = null;
     }

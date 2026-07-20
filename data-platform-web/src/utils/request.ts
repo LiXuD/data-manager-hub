@@ -30,8 +30,24 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
-    if (res.code === 200) {
+
+    if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
       return res
+    }
+
+    if (res && typeof res === 'object' && !('code' in res)) {
+      return res
+    }
+
+    if (res?.code === 200) {
+      return res
+    }
+
+    if (res?.code === 401 && localStorage.getItem('token')) {
+      useUserStore().logout()
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     }
 
     const msg = res.message || res.msg || '请求失败'
@@ -48,12 +64,13 @@ instance.interceptors.response.use(
         case 400:
           msg = data?.message || data?.msg || '请求参数错误'
           break
-        case 401:
+        case 401: {
           msg = '登录已过期，请重新登录'
           const userStore = useUserStore()
           userStore.logout()
           window.location.href = '/login'
           break
+        }
         case 403:
           msg = '没有权限访问'
           break
@@ -62,6 +79,9 @@ instance.interceptors.response.use(
           break
         case 408:
           msg = '请求超时'
+          break
+        case 409:
+          msg = data?.message || data?.msg || '数据已被其他用户修改，请刷新后重试'
           break
         case 500:
           msg = '服务器内部错误'

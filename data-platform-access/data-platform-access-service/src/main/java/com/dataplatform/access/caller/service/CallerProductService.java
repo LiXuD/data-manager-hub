@@ -9,6 +9,10 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 访问域调用方的 Caller Product Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class CallerProductService extends ServiceImpl<CallerProductMapper, CallerProduct> {
 

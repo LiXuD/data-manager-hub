@@ -8,6 +8,7 @@ import com.dataplatform.identity.iam.entity.User;
 import com.dataplatform.identity.iam.service.UserCallerService;
 import com.dataplatform.identity.iam.service.UserRoleService;
 import com.dataplatform.identity.iam.service.UserService;
+import com.dataplatform.identity.security.service.PasswordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 身份租户域用户权限的 User Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/user")
 public class UserController {
@@ -25,6 +30,8 @@ public class UserController {
     private UserCallerService userCallerService;
     @Autowired
     private UserRoleService userRoleService;
+    @Autowired
+    private PasswordService passwordService;
 
     @GetMapping("/list")
     public PageResult<User> list(
@@ -71,6 +78,7 @@ public class UserController {
 
         user.setId(null);
         user.setStatus(CommonStatus.ACTIVE);
+        user.setPassword(passwordService.encode(password));
         userService.save(user);
         return ResponseEntity.ok(Result.success(user));
     }
@@ -82,6 +90,15 @@ public class UserController {
         if (existing == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Result.error(404, "用户不存在"));
+        }
+        if (user.getPassword() != null) {
+            String password = user.getPassword();
+            if (password.length() < 8 || !password.matches(".*[A-Za-z].*")
+                    || !password.matches(".*\\d.*")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Result.error(400, "密码至少8位，且包含数字和字母"));
+            }
+            user.setPassword(passwordService.encode(password));
         }
         user.setId(id);
         userService.updateById(user);
@@ -150,7 +167,7 @@ public class UserController {
 
         User user = new User();
         user.setId(id);
-        user.setPassword(password);
+        user.setPassword(passwordService.encode(password));
         userService.updateById(user);
         return ResponseEntity.ok(Result.success(null));
     }

@@ -71,14 +71,14 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(3)
     @DisplayName("链路1-3: 创建重复 roleCode → 验证冲突")
     void testCreateRoleDuplicateCode() {
-        Assumptions.assumeTrue(testRoleId != null, "需要测试角色ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRoleId != null, "需要测试角色ID");
 
         Response detail = getAuthRequest()
             .when()
             .get("/role/" + testRoleId);
 
         String existingCode = detail.jsonPath().getString("data.roleCode");
-        Assumptions.assumeTrue(existingCode != null, "需要已有角色代码");
+        org.junit.jupiter.api.Assertions.assertTrue(existingCode != null, "需要已有角色代码");
 
         Map<String, Object> data = new HashMap<>();
         data.put("roleCode", existingCode);
@@ -115,7 +115,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(5)
     @DisplayName("链路2-1: 查询角色详情 → 验证创建数据一致")
     void testRoleDetail() {
-        Assumptions.assumeTrue(testRoleId != null, "需要测试角色ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRoleId != null, "需要测试角色ID");
 
         Response response = getAuthRequest()
             .when()
@@ -148,7 +148,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(7)
     @DisplayName("链路3-1: 更新角色信息")
     void testUpdateRole() {
-        Assumptions.assumeTrue(testRoleId != null, "需要测试角色ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRoleId != null, "需要测试角色ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("roleName", "更新后的业务链路测试角色");
@@ -179,7 +179,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(8)
     @DisplayName("链路4-1: 切换角色状态 inactive → active")
     void testRoleStatusToggle() {
-        Assumptions.assumeTrue(testRoleId != null, "需要测试角色ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRoleId != null, "需要测试角色ID");
 
         // 切换为 inactive
         Response inactiveResp = getAuthRequest()
@@ -206,7 +206,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(9)
     @DisplayName("链路5-1: 查询角色权限列表 → 验证接口可用")
     void testRolePermissions() {
-        Assumptions.assumeTrue(testRoleId != null, "需要测试角色ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRoleId != null, "需要测试角色ID");
 
         Response response = getAuthRequest()
             .when()
@@ -273,14 +273,14 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(22)
     @DisplayName("链路6-3: 创建重复用户名 → 验证冲突")
     void testCreateUserDuplicateUsername() {
-        Assumptions.assumeTrue(testUserId != null, "需要测试用户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testUserId != null, "需要测试用户ID");
 
         Response detail = getAuthRequest()
             .when()
             .get("/user/" + testUserId);
 
         String existingUsername = detail.jsonPath().getString("data.username");
-        Assumptions.assumeTrue(existingUsername != null, "需要已有用户名");
+        org.junit.jupiter.api.Assertions.assertTrue(existingUsername != null, "需要已有用户名");
 
         Map<String, Object> data = new HashMap<>();
         data.put("username", existingUsername);
@@ -353,7 +353,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(26)
     @DisplayName("链路7-1: 查询用户详情 → 验证创建数据一致")
     void testUserDetail() {
-        Assumptions.assumeTrue(testUserId != null, "需要测试用户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testUserId != null, "需要测试用户ID");
 
         Response response = getAuthRequest()
             .when()
@@ -386,7 +386,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(28)
     @DisplayName("链路8-1: 更新用户信息")
     void testUpdateUser() {
-        Assumptions.assumeTrue(testUserId != null, "需要测试用户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testUserId != null, "需要测试用户ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("nickname", "更新后的业务链路测试用户");
@@ -417,7 +417,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(29)
     @DisplayName("链路9-1: 切换用户状态 inactive → active")
     void testUserStatusToggle() {
-        Assumptions.assumeTrue(testUserId != null, "需要测试用户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testUserId != null, "需要测试用户ID");
 
         // 切换为 inactive
         Response inactiveResp = getAuthRequest()
@@ -444,7 +444,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(30)
     @DisplayName("链路10-1: 重置用户密码 → 验证成功")
     void testResetPassword() {
-        Assumptions.assumeTrue(testUserId != null, "需要测试用户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testUserId != null, "需要测试用户ID");
 
         Response response = getAuthRequest()
             .body(Map.of("password", "NewPass999"))
@@ -459,7 +459,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(31)
     @DisplayName("链路10-2: 重置密码太短 → 验证400")
     void testResetPasswordTooShort() {
-        Assumptions.assumeTrue(testUserId != null, "需要测试用户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testUserId != null, "需要测试用户ID");
 
         Response response = getAuthRequest()
             .body(Map.of("password", "ab1"))
@@ -476,7 +476,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(40)
     @DisplayName("链路11-1: 查询用户角色 → 验证接口可用")
     void testUserRoles() {
-        Assumptions.assumeTrue(testUserId != null, "需要测试用户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testUserId != null, "需要测试用户ID");
 
         Response response = getAuthRequest()
             .when()
@@ -490,8 +490,8 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(41)
     @DisplayName("链路11-2: 分配角色给用户 → 验证成功")
     void testAssignRolesToUser() {
-        Assumptions.assumeTrue(testUserId != null, "需要测试用户ID");
-        Assumptions.assumeTrue(testRoleId != null, "需要测试角色ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testUserId != null, "需要测试用户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRoleId != null, "需要测试角色ID");
 
         List<Long> roleIds = List.of(testRoleId);
 
@@ -517,7 +517,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(50)
     @DisplayName("链路12-1: 删除用户 → 验证已删除")
     void testDeleteUser() {
-        Assumptions.assumeTrue(testUserId != null, "需要测试用户ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testUserId != null, "需要测试用户ID");
 
         Response response = getAuthRequest()
             .when()
@@ -530,12 +530,7 @@ public class IAMBusinessFlowTest extends BaseTest {
             .when()
             .get("/user/" + testUserId);
 
-        int status = check.getStatusCode();
-        if (status == 404 || status == 400) {
-            log.info("用户已确认删除 ({}返回)", status);
-        } else {
-            log.warn("用户删除后仍可查询 (status={})", status);
-        }
+        check.then().statusCode(anyOf(is(404), is(400)));
 
         testUserId = null;
     }
@@ -544,7 +539,7 @@ public class IAMBusinessFlowTest extends BaseTest {
     @Order(51)
     @DisplayName("链路12-2: 删除角色 → 验证已删除")
     void testDeleteRole() {
-        Assumptions.assumeTrue(testRoleId != null, "需要测试角色ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testRoleId != null, "需要测试角色ID");
 
         Response response = getAuthRequest()
             .when()
@@ -557,12 +552,7 @@ public class IAMBusinessFlowTest extends BaseTest {
             .when()
             .get("/role/" + testRoleId);
 
-        int status = check.getStatusCode();
-        if (status == 404 || status == 400) {
-            log.info("角色已确认删除 ({}返回)", status);
-        } else {
-            log.warn("角色删除后仍可查询 (status={})", status);
-        }
+        check.then().statusCode(anyOf(is(404), is(400)));
 
         testRoleId = null;
     }

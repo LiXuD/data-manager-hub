@@ -5,12 +5,18 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.time.LocalDateTime;
 
+/**
+ * 观测治理域操作日志的 Operation Log。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("operation_log")
 public class OperationLog {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long userId;
     private String username;
+    private String operationType;
+    private String operationModule;
     private String module;
     private String operation;
     private String method;
@@ -28,6 +34,10 @@ public class OperationLog {
     public void setUserId(Long userId) { this.userId = userId; }
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+    public String getOperationType() { return operationType; }
+    public void setOperationType(String operationType) { this.operationType = operationType; }
+    public String getOperationModule() { return operationModule; }
+    public void setOperationModule(String operationModule) { this.operationModule = operationModule; }
     public String getModule() { return module; }
     public void setModule(String module) { this.module = module; }
     public String getOperation() { return operation; }

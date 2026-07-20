@@ -4,14 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.dataplatform.access.call.api.dto.CallStatsDTO;
+import com.dataplatform.access.call.api.dto.DailyCallStatsDTO;
+import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
+import com.dataplatform.api.Result;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
 import com.dataplatform.masterdata.interface_.mapper.ApiInterfaceMapper;
-import com.dataplatform.masterdata.interface_.mapper.InterfaceStatsMapper;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -23,6 +28,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 主数据域接口定义的 Api Interface Service Impl。
+ * <p>业务服务实现，承载本域核心流程编排和事务边界。</p>
+ */
 @Service
 public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, ApiInterface> implements ApiInterfaceService {
 
@@ -35,10 +44,13 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
-    private InterfaceStatsMapper interfaceStatsMapper;
+    private CallStatsInternalFeignClient callStatsClient;
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private VendorConfigService vendorConfigService;
 
     @Override
     public PageResult<ApiInterfaceVO> list(Long vendorId, Long dataTypeId, String status, int page, int pageSize) {
@@ -110,9 +122,7 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
 
     @Override
     public boolean hasApiConfig(Long interfaceId) {
-        // 检查是否已配置API（需要查询vendor_config表）
-        // 这里返回false，实际实现需要注入VendorConfigService
-        return false;
+        return interfaceId != null && vendorConfigService.getByInterfaceId(interfaceId) != null;
     }
 
     @Override
@@ -148,8 +158,26 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
         }
 
         try {
-            objectMapper.readTree(schema);
-            return true;
+            JsonNode root = objectMapper.readTree(schema);
+            if (!root.isObject()) {
+                return false;
+            }
+            JsonNode type = root.get("type");
+            if (type != null && !type.isTextual()) {
+                return false;
+            }
+            JsonNode properties = root.get("properties");
+            if (properties != null && !properties.isObject()) {
+                return false;
+            }
+            JsonNode required = root.get("required");
+            if (required != null && (!required.isArray()
+                    || !java.util.stream.StreamSupport.stream(required.spliterator(), false)
+                    .allMatch(JsonNode::isTextual))) {
+                return false;
+            }
+            return type != null || properties != null || root.has("$schema") || root.has("allOf")
+                    || root.has("anyOf") || root.has("oneOf");
         } catch (Exception e) {
             return false;
         }
@@ -169,19 +197,18 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
             endTime = LocalDateTime.now();
         }
 
-        Map<String, Object> stats = interfaceStatsMapper.getStatsByInterfaceId(
-            id, startTime, endTime, DEFAULT_SLA_THRESHOLD);
+        Result<CallStatsDTO> response = callStatsClient.getInterfaceStats(
+                apiInterface.getInterfaceCode(), startTime.toString(), endTime.toString(), DEFAULT_SLA_THRESHOLD);
+        CallStatsDTO stats = requireData(response, "接口调用统计");
 
         Map<String, Object> result = new HashMap<>();
         result.put("interfaceId", id);
         result.put("interfaceCode", apiInterface.getInterfaceCode());
         result.put("interfaceName", apiInterface.getInterfaceName());
-        result.put("totalCalls", stats.get("total_calls"));
-        result.put("successCalls", stats.get("success_calls"));
-        result.put("avgLatency", stats.get("avg_latency") != null
-            ? ((Number) stats.get("avg_latency")).doubleValue()
-            : 0);
-        result.put("slowCalls", stats.get("slow_calls"));
+        result.put("totalCalls", stats.getTotalCalls());
+        result.put("successCalls", stats.getSuccessCalls());
+        result.put("avgLatency", stats.getAvgLatency());
+        result.put("slowCalls", stats.getSlowCalls());
         result.put("startTime", startTime);
         result.put("endTime", endTime);
         return result;
@@ -189,7 +216,8 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
 
     @Override
     public List<Map<String, Object>> getDailyCallStats(Long id, LocalDateTime startTime, LocalDateTime endTime) {
-        if (this.getById(id) == null) {
+        ApiInterface apiInterface = this.getById(id);
+        if (apiInterface == null) {
             return List.of();
         }
 
@@ -200,6 +228,26 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
             endTime = LocalDateTime.now();
         }
 
-        return interfaceStatsMapper.getDailyStatsByInterfaceId(id, startTime, endTime);
+        Result<List<DailyCallStatsDTO>> response = callStatsClient.getDailyInterfaceStats(
+                apiInterface.getInterfaceCode(), startTime.toString(), endTime.toString());
+        return requireData(response, "接口每日调用统计").stream()
+                .map(this::toDailyStatsMap)
+                .toList();
+    }
+
+    private Map<String, Object> toDailyStatsMap(DailyCallStatsDTO stats) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("date", stats.getDate());
+        result.put("total_calls", stats.getTotalCalls());
+        result.put("success_calls", stats.getSuccessCalls());
+        result.put("avg_latency", stats.getAvgLatency());
+        return result;
+    }
+
+    private <T> T requireData(Result<T> response, String operation) {
+        if (response == null || !Integer.valueOf(200).equals(response.getCode()) || response.getData() == null) {
+            throw new IllegalStateException(operation + "服务调用失败");
+        }
+        return response.getData();
     }
 }

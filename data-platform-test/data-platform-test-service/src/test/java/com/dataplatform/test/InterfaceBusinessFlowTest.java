@@ -48,7 +48,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
 
         verifySuccess(response);
         String id = response.jsonPath().getString("data[0].id");
-        Assumptions.assumeTrue(id != null, "需要已有数据类型数据");
+        org.junit.jupiter.api.Assertions.assertTrue(id != null, "需要已有数据类型数据");
         dataTypeId = Long.parseLong(id);
 
         log.info("获取数据类型ID成功: {}", dataTypeId);
@@ -102,14 +102,14 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(3)
     @DisplayName("链路1-3: 创建重复 interfaceCode → 验证400")
     void testCreateInterfaceDuplicateCode() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Response detail = getAuthRequest()
             .when()
             .get("/interface/" + testInterfaceId);
 
         String existingCode = detail.jsonPath().getString("data.interfaceCode");
-        Assumptions.assumeTrue(existingCode != null, "需要已有接口代码");
+        org.junit.jupiter.api.Assertions.assertTrue(existingCode != null, "需要已有接口代码");
 
         Map<String, Object> data = new HashMap<>();
         data.put("interfaceCode", existingCode);
@@ -146,7 +146,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(5)
     @DisplayName("链路2-1: 查询接口详情 → 验证创建数据一致")
     void testInterfaceDetail() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Response response = getAuthRequest()
             .when()
@@ -177,7 +177,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(7)
     @DisplayName("链路2-3: 按数据类型查询接口列表")
     void testInterfaceByDataType() {
-        Assumptions.assumeTrue(dataTypeId != null, "需要数据类型ID");
+        org.junit.jupiter.api.Assertions.assertTrue(dataTypeId != null, "需要数据类型ID");
 
         Response response = getAuthRequest()
             .when()
@@ -193,7 +193,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(8)
     @DisplayName("链路3-1: 更新接口信息")
     void testUpdateInterface() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("interfaceName", "更新后的业务链路测试接口");
@@ -224,7 +224,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(9)
     @DisplayName("链路4-1: 切换接口状态 inactive → active")
     void testInterfaceStatusToggle() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         // 切换为 inactive
         Response inactiveResp = getAuthRequest()
@@ -251,7 +251,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(10)
     @DisplayName("链路5-1: 查询接口参数列表 → 验证接口可用")
     void testParamList() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Response response = getAuthRequest()
             .when()
@@ -265,7 +265,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(11)
     @DisplayName("链路5-2: 创建接口参数 → 提取ID")
     void testCreateParam() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("paramName", uniqueId("testParam"));
@@ -289,8 +289,8 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(12)
     @DisplayName("链路5-3: 更新接口参数")
     void testUpdateParam() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
-        Assumptions.assumeTrue(testParamId != null, "需要测试参数ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testParamId != null, "需要测试参数ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("paramName", "updatedParam");
@@ -310,7 +310,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(13)
     @DisplayName("链路5-4: 删除接口参数 → 验证已删除")
     void testDeleteParam() {
-        Assumptions.assumeTrue(testParamId != null, "需要测试参数ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testParamId != null, "需要测试参数ID");
 
         Response response = getAuthRequest()
             .when()
@@ -328,7 +328,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(14)
     @DisplayName("链路6-1: 获取接口Schema → 验证接口可用")
     void testGetSchema() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Response response = getAuthRequest()
             .when()
@@ -342,7 +342,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(15)
     @DisplayName("链路6-2: 设置接口Schema → 验证生效")
     void testSetSchema() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         String requestSchema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}";
         String responseSchema = "{\"type\":\"object\",\"properties\":{\"code\":{\"type\":\"integer\"}}}";
@@ -386,7 +386,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(17)
     @DisplayName("链路6-4: 设置无效Schema → 验证400")
     void testSetInvalidSchema() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Map<String, Object> data = new HashMap<>();
         data.put("requestSchema", "not-valid-json");
@@ -406,7 +406,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(18)
     @DisplayName("链路7-1: 查询接口调用统计 → 验证接口可用")
     void testInterfaceStats() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Response response = getAuthRequest()
             .when()
@@ -420,7 +420,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(19)
     @DisplayName("链路7-2: 查询接口日统计 → 验证接口可用")
     void testInterfaceStatsDaily() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Response response = getAuthRequest()
             .when()
@@ -436,7 +436,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
     @Order(20)
     @DisplayName("链路8-1: 删除接口 → 验证已删除")
     void testDeleteInterface() {
-        Assumptions.assumeTrue(testInterfaceId != null, "需要测试接口ID");
+        org.junit.jupiter.api.Assertions.assertTrue(testInterfaceId != null, "需要测试接口ID");
 
         Response response = getAuthRequest()
             .when()
@@ -449,12 +449,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
             .when()
             .get("/interface/" + testInterfaceId);
 
-        int status = check.getStatusCode();
-        if (status == 404 || status == 400) {
-            log.info("接口已确认删除 ({}返回)", status);
-        } else {
-            log.warn("接口删除后仍可查询 (status={})", status);
-        }
+        check.then().statusCode(anyOf(is(404), is(400)));
 
         testInterfaceId = null;
     }
@@ -498,7 +493,7 @@ public class InterfaceBusinessFlowTest extends BaseTest {
             .get("/interface/list");
 
         String interfaceId = listResp.jsonPath().getString("data[0].id");
-        Assumptions.assumeTrue(interfaceId != null, "需要已有接口数据");
+        org.junit.jupiter.api.Assertions.assertTrue(interfaceId != null, "需要已有接口数据");
 
         Response response = getAuthRequest()
             .body(Map.of("status", "invalid_status"))

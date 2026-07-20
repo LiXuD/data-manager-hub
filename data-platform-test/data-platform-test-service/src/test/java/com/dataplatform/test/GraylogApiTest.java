@@ -56,11 +56,9 @@ public class GraylogApiTest extends BaseTest {
             .when()
             .get("/graylog/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then()
-                .statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -131,7 +129,7 @@ public class GraylogApiTest extends BaseTest {
     @Order(7)
     public void testUpdateGraylog_Success() {
         if (testGraylogId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test graylog to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test graylog to update");
             return;
         }
 
@@ -172,7 +170,7 @@ public class GraylogApiTest extends BaseTest {
     @Order(9)
     public void testDeleteGraylog_Success() {
         if (testGraylogId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test graylog to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test graylog to delete");
             return;
         }
 
@@ -208,11 +206,9 @@ public class GraylogApiTest extends BaseTest {
             .when()
             .get("/graylog/active/test-service");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then()
-                .statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -226,11 +222,9 @@ public class GraylogApiTest extends BaseTest {
             .when()
             .get("/graylog/active/non-existent-service-999999999");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then()
-                .statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -245,7 +239,8 @@ public class GraylogApiTest extends BaseTest {
             .when()
             .patch("/graylog/1/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }

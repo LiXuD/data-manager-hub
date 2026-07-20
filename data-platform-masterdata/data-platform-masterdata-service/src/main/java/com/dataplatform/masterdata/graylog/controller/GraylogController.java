@@ -7,7 +7,6 @@ import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.masterdata.graylog.api.dto.GrayRuleCreateReqDTO;
 import com.dataplatform.masterdata.graylog.api.dto.GrayRuleDTO;
 import com.dataplatform.masterdata.graylog.api.dto.GrayRuleUpdateReqDTO;
-import com.dataplatform.masterdata.graylog.api.feign.GraylogFeignClient;
 import com.dataplatform.masterdata.graylog.entity.GrayRule;
 import com.dataplatform.masterdata.graylog.service.GraylogService;
 import org.springframework.beans.BeanUtils;
@@ -15,9 +14,13 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+/**
+ * 主数据域灰度规则的 Graylog Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/graylog")
-public class GraylogController implements GraylogFeignClient {
+public class GraylogController {
 
     private final GraylogService graylogService;
 
@@ -25,7 +28,6 @@ public class GraylogController implements GraylogFeignClient {
         this.graylogService = graylogService;
     }
 
-    @Override
     @GetMapping("/list")
     public PageResult<GrayRuleDTO> list(
             @RequestParam(required = false) String keyword,
@@ -41,7 +43,6 @@ public class GraylogController implements GraylogFeignClient {
                 result.getPageSize());
     }
 
-    @Override
     @GetMapping("/{id}")
     public Result<GrayRuleDTO> get(@PathVariable("id") Long id) {
         GrayRule rule = graylogService.getById(id);
@@ -51,7 +52,6 @@ public class GraylogController implements GraylogFeignClient {
         return Result.success(toDTO(rule));
     }
 
-    @Override
     @OperationLog(module = "灰度规则管理", operation = "新增灰度规则")
     @PostMapping
     public Result<GrayRuleDTO> create(@RequestBody GrayRuleCreateReqDTO dto) {
@@ -67,7 +67,6 @@ public class GraylogController implements GraylogFeignClient {
         return Result.success(toDTO(rule));
     }
 
-    @Override
     @OperationLog(module = "灰度规则管理", operation = "更新灰度规则")
     @PutMapping("/{id}")
     public Result<GrayRuleDTO> update(@PathVariable("id") Long id, @RequestBody GrayRuleUpdateReqDTO dto) {
@@ -81,7 +80,6 @@ public class GraylogController implements GraylogFeignClient {
         return Result.success(toDTO(graylogService.getById(id)));
     }
 
-    @Override
     @OperationLog(module = "灰度规则管理", operation = "删除灰度规则")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
@@ -93,7 +91,6 @@ public class GraylogController implements GraylogFeignClient {
         return Result.success(null);
     }
 
-    @Override
     @GetMapping("/active/{serviceName}")
     public Result<GrayRuleDTO> getActiveRule(@PathVariable("serviceName") String serviceName) {
         GrayRule rule = graylogService.getActiveRule(serviceName);
@@ -103,7 +100,6 @@ public class GraylogController implements GraylogFeignClient {
         return Result.success(toDTO(rule));
     }
 
-    @Override
     @OperationLog(module = "灰度规则管理", operation = "更新灰度规则状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {

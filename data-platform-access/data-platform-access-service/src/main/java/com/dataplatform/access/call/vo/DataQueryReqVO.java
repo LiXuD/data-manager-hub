@@ -4,6 +4,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 
+/**
+ * 访问域数据调用的 Data Query Req VO。
+ * <p>Web 层请求或响应视图对象，用于隔离页面接口与数据库实体。</p>
+ */
 public class DataQueryReqVO {
     
     /**

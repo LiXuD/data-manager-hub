@@ -17,6 +17,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 访问域调用方的 Caller Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/caller")
 public class CallerController {
@@ -127,6 +131,9 @@ public class CallerController {
     @PatchMapping("/api-key/{id}/status")
     public ResponseEntity<Result<Void>> updateApiKeyStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String status = body.get("status");
+        if ("inactive".equals(status)) {
+            status = ApiKeyStatus.REVOKED.getCode();
+        }
         ApiKeyStatus statusEnum = ApiKeyStatus.fromCode(status);
         if (statusEnum == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -140,6 +147,18 @@ public class CallerController {
         }
         apiKey.setStatus(statusEnum);
         apiKeyService.updateById(apiKey);
+        return ResponseEntity.ok(Result.success(null));
+    }
+
+    @OperationLog(module = "API Key管理", operation = "删除API Key")
+    @DeleteMapping("/api-key/{id}")
+    public ResponseEntity<Result<Void>> deleteApiKey(@PathVariable Long id) {
+        ApiKey apiKey = apiKeyService.getById(id);
+        if (apiKey == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Result.error(404, "API Key不存在"));
+        }
+        apiKeyService.removeById(id);
         return ResponseEntity.ok(Result.success(null));
     }
 

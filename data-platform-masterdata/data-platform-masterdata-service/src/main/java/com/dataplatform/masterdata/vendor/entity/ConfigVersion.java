@@ -3,6 +3,10 @@ package com.dataplatform.masterdata.vendor.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import java.time.LocalDateTime;
 
+/**
+ * 主数据域厂商的 Config Version。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("config_version")
 public class ConfigVersion {
 

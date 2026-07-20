@@ -3,8 +3,13 @@ package com.dataplatform.masterdata.vendor.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import com.dataplatform.common.handler.JsonbTypeHandler;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.common.handler.CommonStatusTypeHandler;
 import java.time.LocalDateTime;
 
+/**
+ * 主数据域厂商的 Vendor Config。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName(value = "vendor_config", autoResultMap = true)
 public class VendorConfig {
 
@@ -33,10 +38,12 @@ public class VendorConfig {
     private Long fallbackVendorId;
     private String authType;
     private String authConfig;
+    private Integer securityVersion;
 
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String paramMapping;
 
+    @TableField(typeHandler = CommonStatusTypeHandler.class)
     private CommonStatus status;
 
     @TableField(fill = FieldFill.INSERT)
@@ -88,6 +95,8 @@ public class VendorConfig {
     public void setAuthType(String authType) { this.authType = authType; }
     public String getAuthConfig() { return authConfig; }
     public void setAuthConfig(String authConfig) { this.authConfig = authConfig; }
+    public Integer getSecurityVersion() { return securityVersion; }
+    public void setSecurityVersion(Integer securityVersion) { this.securityVersion = securityVersion; }
     public String getParamMapping() { return paramMapping; }
     public void setParamMapping(String paramMapping) { this.paramMapping = paramMapping; }
     public CommonStatus getStatus() { return status; }

@@ -28,7 +28,8 @@ public class SecurityApiTest extends BaseTest {
             .when()
             .post("/security/encryption/encrypt");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -60,7 +61,8 @@ public class SecurityApiTest extends BaseTest {
             .when()
             .post("/security/encryption/decrypt");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -90,7 +92,8 @@ public class SecurityApiTest extends BaseTest {
             .when()
             .post("/security/encryption/rotate/user");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }

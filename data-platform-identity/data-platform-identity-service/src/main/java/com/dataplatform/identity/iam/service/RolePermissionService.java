@@ -14,6 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * 身份租户域用户权限的 Role Permission Service。
+ * <p>业务服务接口，定义本域内部可复用的业务能力。</p>
+ */
 @Service
 public class RolePermissionService extends ServiceImpl<RolePermissionMapper, RolePermission> {
 

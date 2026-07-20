@@ -6,6 +6,7 @@ import com.dataplatform.access.call.service.GrayVendorResolver;
 import com.dataplatform.access.call.service.OpenApiQueryService;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
+import com.dataplatform.access.call.service.InterfaceContractValidator;
 import com.dataplatform.access.call.vo.OpenApiBatchQueryReqVO;
 import com.dataplatform.access.call.vo.OpenApiBatchQueryRespVO;
 import com.dataplatform.access.call.vo.OpenApiQueryReqVO;
@@ -22,11 +23,13 @@ import com.dataplatform.api.Result;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
+import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
+import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
-import com.dataplatform.masterdata.vendor.api.feign.VendorConfigFeignClient;
-import com.dataplatform.masterdata.vendor.api.feign.VendorFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,12 +37,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 访问域数据调用的 Open Api Query Controller。
+ * <p>HTTP 接口控制器，负责接收请求、组织参数并委托本域业务服务处理。</p>
+ */
 @RestController
 @RequestMapping("/openapi/v1")
 public class OpenApiQueryController {
@@ -57,8 +65,8 @@ public class OpenApiQueryController {
     private final CallerService callerService;
     private final CallSceneService callSceneService;
     private final ApiInterfaceFeignClient apiInterfaceFeignClient;
-    private final VendorConfigFeignClient vendorConfigFeignClient;
-    private final VendorFeignClient vendorFeignClient;
+    private final VendorConfigInternalFeignClient vendorConfigFeignClient;
+    private final VendorInternalFeignClient vendorFeignClient;
     private final GrayVendorResolver grayVendorResolver;
 
     public OpenApiQueryController(OpenApiQueryService openApiQueryService,
@@ -70,8 +78,8 @@ public class OpenApiQueryController {
                                   CallerService callerService,
                                   CallSceneService callSceneService,
                                   ApiInterfaceFeignClient apiInterfaceFeignClient,
-                                  VendorConfigFeignClient vendorConfigFeignClient,
-                                  VendorFeignClient vendorFeignClient,
+                                  VendorConfigInternalFeignClient vendorConfigFeignClient,
+                                  VendorInternalFeignClient vendorFeignClient,
                                   GrayVendorResolver grayVendorResolver) {
         this.openApiQueryService = openApiQueryService;
         this.rateLimitService = rateLimitService;
@@ -88,7 +96,7 @@ public class OpenApiQueryController {
     }
 
     @PostMapping("/query")
-    public Result<OpenApiQueryRespVO> query(
+    public ResponseEntity<Result<OpenApiQueryRespVO>> query(
             @RequestHeader(value = "X-Api-Key", required = false) String apiKeyHeader,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestHeader(value = "X-Trace-Id", required = false) String traceId,
@@ -97,61 +105,72 @@ public class OpenApiQueryController {
 
         String apiCode = normalize(request != null ? request.getApiCode() : null);
         if (apiCode == null) {
-            return Result.error(400, "apiCode不能为空");
+            return error(400, "apiCode不能为空");
         }
         String productCode = normalize(request != null ? request.getProductCode() : null);
         if (productCode == null) {
-            return Result.error(400, "productCode不能为空");
+            return error(400, "productCode不能为空");
         }
         String sceneCode = normalize(request != null ? request.getSceneCode() : null);
         if (sceneCode == null) {
-            return Result.error(400, "sceneCode不能为空");
+            return error(400, "sceneCode不能为空");
         }
         if (!validateCacheRequest(request.getUseCache(), request.getCacheDays())) {
-            return Result.error(400, "useCache=true时cacheDays必须大于0");
+            return error(400, "useCache=true时cacheDays必须大于0");
         }
 
         ApiKey apiKeyEntity = validateApiKey(extractApiKey(apiKeyHeader, authorization));
         if (apiKeyEntity == null) {
-            return Result.error(401, "无效的API Key");
+            return error(401, "无效的API Key");
         }
         CallerInfo caller = callerService.getById(apiKeyEntity.getCallerId());
         if (caller == null) {
-            return Result.error(403, "调用方不存在");
+            return error(403, "调用方不存在");
         }
         CallerProduct product = callerProductService.getActiveProduct(apiKeyEntity.getCallerId(), productCode);
         if (product == null) {
-            return Result.error(403, "调用方未配置该产品");
+            return error(403, "调用方未配置该产品");
         }
         if (!apiKeyProductService.hasProductPermission(apiKeyEntity.getId(), product.getId())) {
-            return Result.error(403, "API Key没有访问该产品的权限");
+            return error(403, "API Key没有访问该产品的权限");
         }
         CallScene scene = callSceneService.getActiveScene(sceneCode);
         if (scene == null) {
-            return Result.error(403, "调用场景不存在或未启用");
+            return error(403, "调用场景不存在或未启用");
         }
 
         GrayVendorResolver.GrayRequestContext grayCtx = GrayVendorResolver.fromRequest(httpRequest,
                 apiKeyEntity.getCallerId(), caller.getCallerCode());
         ApiRoute route = resolveApiRoute(apiCode, grayCtx);
         if (route == null) {
-            return Result.error(404, "接口配置不存在");
+            return error(404, "接口配置不存在");
         }
         if (!validateInterfacePermission(apiKeyEntity.getId(), route.interfaceId())) {
-            return Result.error(403, "API Key没有访问该接口的权限");
+            return error(403, "API Key没有访问该接口的权限");
         }
+        Map<String, Object> requestParams = request.getParams() != null
+                ? new HashMap<>(request.getParams()) : new HashMap<>();
+        String paramError = validateParams(route.contract(), requestParams);
+        if (paramError != null) {
+            return error(400, paramError);
+        }
+        request.setParams(requestParams);
         if (!checkRateLimit(apiKeyEntity)) {
-            return Result.error(429, "请求过于频繁，请稍后再试");
+            return error(429, "请求过于频繁，请稍后再试");
+        }
+        if (!apiKeyService.validateAndConsumeQuota(apiKeyEntity.getApiKey(), 1)) {
+            return error(429, "API Key配额不足");
         }
 
         OpenApiCallContext context = buildContext(request, apiKeyEntity, caller, product, scene, route,
-                request.getParams() != null ? request.getParams() : Collections.emptyMap());
+                requestParams);
+        context.setInterfaceContract(route.contract());
         context.setTraceId(traceId);
-        return Result.success(openApiQueryService.query(context));
+        return ResponseEntity.ok(Result.success(openApiQueryService.query(context)));
     }
 
     @PostMapping("/batch-query")
-    public Result<OpenApiBatchQueryRespVO> batchQuery(
+    public ResponseEntity<Result<OpenApiBatchQueryRespVO>> batchQuery(
             @RequestHeader(value = "X-Api-Key", required = false) String apiKeyHeader,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestHeader(value = "X-Trace-Id", required = false) String traceId,
@@ -160,57 +179,80 @@ public class OpenApiQueryController {
 
         String apiCode = normalize(request != null ? request.getApiCode() : null);
         if (apiCode == null) {
-            return Result.error(400, "apiCode不能为空");
+            return error(400, "apiCode不能为空");
         }
         String productCode = normalize(request != null ? request.getProductCode() : null);
         if (productCode == null) {
-            return Result.error(400, "productCode不能为空");
+            return error(400, "productCode不能为空");
         }
         String sceneCode = normalize(request != null ? request.getSceneCode() : null);
         if (sceneCode == null) {
-            return Result.error(400, "sceneCode不能为空");
+            return error(400, "sceneCode不能为空");
         }
         if (!validateCacheRequest(request.getUseCache(), request.getCacheDays())) {
-            return Result.error(400, "useCache=true时cacheDays必须大于0");
+            return error(400, "useCache=true时cacheDays必须大于0");
         }
         if (request.getItems() == null || request.getItems().isEmpty()) {
-            return Result.error(400, "items不能为空");
+            return error(400, "items不能为空");
+        }
+        for (int index = 0; index < request.getItems().size(); index++) {
+            if (request.getItems().get(index) == null) {
+                return error(400, "items[" + index + "]不能为空");
+            }
         }
 
         ApiKey apiKeyEntity = validateApiKey(extractApiKey(apiKeyHeader, authorization));
         if (apiKeyEntity == null) {
-            return Result.error(401, "无效的API Key");
+            return error(401, "无效的API Key");
         }
         CallerInfo caller = callerService.getById(apiKeyEntity.getCallerId());
         if (caller == null) {
-            return Result.error(403, "调用方不存在");
+            return error(403, "调用方不存在");
         }
         CallerProduct product = callerProductService.getActiveProduct(apiKeyEntity.getCallerId(), productCode);
         if (product == null) {
-            return Result.error(403, "调用方未配置该产品");
+            return error(403, "调用方未配置该产品");
         }
         if (!apiKeyProductService.hasProductPermission(apiKeyEntity.getId(), product.getId())) {
-            return Result.error(403, "API Key没有访问该产品的权限");
+            return error(403, "API Key没有访问该产品的权限");
         }
         CallScene scene = callSceneService.getActiveScene(sceneCode);
         if (scene == null) {
-            return Result.error(403, "调用场景不存在或未启用");
+            return error(403, "调用场景不存在或未启用");
         }
 
         GrayVendorResolver.GrayRequestContext batchGrayCtx = GrayVendorResolver.fromRequest(httpRequest,
                 apiKeyEntity.getCallerId(), caller.getCallerCode());
         ApiRoute route = resolveApiRoute(apiCode, batchGrayCtx);
         if (route == null) {
-            return Result.error(404, "接口配置不存在");
+            return error(404, "接口配置不存在");
         }
         if (!validateInterfacePermission(apiKeyEntity.getId(), route.interfaceId())) {
-            return Result.error(403, "API Key没有访问该接口的权限");
+            return error(403, "API Key没有访问该接口的权限");
+        }
+        for (int index = 0; index < request.getItems().size(); index++) {
+            OpenApiBatchQueryReqVO.QueryItem item = request.getItems().get(index);
+            Map<String, Object> itemParams = item.getParams() != null
+                    ? new HashMap<>(item.getParams()) : new HashMap<>();
+            String paramError = validateParams(route.contract(), itemParams);
+            if (paramError != null) {
+                return error(400, paramError);
+            }
+            item.setParams(itemParams);
         }
         if (!checkRateLimit(apiKeyEntity)) {
-            return Result.error(429, "请求过于频繁，请稍后再试");
+            return error(429, "请求过于频繁，请稍后再试");
+        }
+        if (!apiKeyService.validateAndConsumeQuota(apiKeyEntity.getApiKey(), request.getItems().size())) {
+            return error(429, "API Key配额不足");
         }
 
-        return Result.success(buildBatchResp(request, apiKeyEntity, caller, product, scene, route, traceId));
+        return ResponseEntity.ok(Result.success(
+                buildBatchResp(request, apiKeyEntity, caller, product, scene, route, traceId)));
+    }
+
+    private <T> ResponseEntity<Result<T>> error(int code, String message) {
+        return ResponseEntity.status(code).body(Result.error(code, message));
     }
 
     private boolean validateCacheRequest(Boolean useCache, Integer cacheDays) {
@@ -249,7 +291,29 @@ public class OpenApiQueryController {
         return apiKeyInterfaceService.hasInterfacePermission(apiKeyId, interfaceId);
     }
 
+    private String validateParams(InterfaceContractDTO contract, Map<String, Object> params) {
+        List<InterfaceParamDTO> definitions = contract != null
+                ? contract.getRequestFields() : Collections.emptyList();
+        return InterfaceContractValidator.validate(definitions, params, true).firstError();
+    }
+
+    /** 保留给旧测试和兼容调用；正式调用统一使用 InterfaceContractValidator。 */
+    private boolean matchesParamType(Object value, String type) {
+        if (type == null || "string".equalsIgnoreCase(type)) return value instanceof String;
+        if ("integer".equalsIgnoreCase(type)) {
+            return value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long;
+        }
+        if ("number".equalsIgnoreCase(type)) return value instanceof Number;
+        if ("boolean".equalsIgnoreCase(type)) return value instanceof Boolean;
+        if ("object".equalsIgnoreCase(type)) return value instanceof Map;
+        if ("array".equalsIgnoreCase(type)) return value instanceof List;
+        return false;
+    }
+
     private boolean checkRateLimit(ApiKey apiKeyEntity) {
+        if (Boolean.FALSE.equals(apiKeyEntity.getRateLimitEnabled())) {
+            return true;
+        }
         Integer rateLimit = apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : DEFAULT_RATE_LIMIT;
         return rateLimitService.checkRateLimit(apiKeyEntity.getApiKey(), rateLimit);
     }
@@ -283,7 +347,22 @@ public class OpenApiQueryController {
         if (vendor == null || normalize(vendor.getVendorCode()) == null || normalize(config.getDataTypeCode()) == null) {
             return null;
         }
-        return new ApiRoute(apiInterface.getId(), config.getVendorId(), vendor.getVendorCode(), config.getDataTypeCode(), config);
+        InterfaceContractDTO contract = loadContract(apiInterface.getId());
+        return new ApiRoute(apiInterface.getId(), config.getVendorId(), vendor.getVendorCode(),
+                config.getDataTypeCode(), config, contract);
+    }
+
+    private InterfaceContractDTO loadContract(Long interfaceId) {
+        Result<InterfaceContractDTO> contractResult = apiInterfaceFeignClient.getContract(interfaceId);
+        if (contractResult != null && contractResult.getData() != null) {
+            return contractResult.getData();
+        }
+        Result<List<InterfaceParamDTO>> legacyResult = apiInterfaceFeignClient.listParams(interfaceId);
+        InterfaceContractDTO fallback = new InterfaceContractDTO();
+        fallback.setInterfaceId(interfaceId);
+        fallback.setRequestFields(legacyResult != null && legacyResult.getData() != null
+                ? legacyResult.getData() : Collections.emptyList());
+        return fallback;
     }
 
     private VendorInfoDTO getVendor(Long vendorId) {
@@ -305,6 +384,7 @@ public class OpenApiQueryController {
             OpenApiCallContext context = buildContext(request, apiKey, caller, product, scene, route,
                     item.getParams() != null ? item.getParams() : Collections.emptyMap());
             context.setTraceId(traceId);
+            context.setInterfaceContract(route.contract());
             OpenApiQueryRespVO itemResp = openApiQueryService.query(context);
             if (Boolean.TRUE.equals(itemResp.getSuccess())) {
                 success++;
@@ -361,6 +441,7 @@ public class OpenApiQueryController {
         context.setCacheDays(request.getCacheDays());
         context.setCacheScope(product.getCacheScope());
         context.setParams(params);
+        context.setInterfaceContract(route.contract());
         return context;
     }
 
@@ -385,6 +466,7 @@ public class OpenApiQueryController {
         return value.trim();
     }
 
-    private record ApiRoute(Long interfaceId, Long vendorId, String vendorCode, String dataTypeCode, VendorConfigDTO config) {
+    private record ApiRoute(Long interfaceId, Long vendorId, String vendorCode, String dataTypeCode,
+                            VendorConfigDTO config, InterfaceContractDTO contract) {
     }
 }

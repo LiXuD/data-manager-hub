@@ -5,6 +5,7 @@ import com.dataplatform.common.adapter.VendorAdapterConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -15,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * HTTP厂商适配器测试
  */
 @DisplayName("HTTP厂商适配器测试")
+@Tag("integration")
 class HttpVendorAdapterTest {
 
     private HttpVendorAdapter adapter;

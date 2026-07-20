@@ -6,19 +6,28 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.common.handler.CommonStatusTypeHandler;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 
-@TableName("user_info")
+/**
+ * 身份租户域用户权限的 User。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
+@TableName(value = "user_info", autoResultMap = true)
 public class User {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String username;
     private String nickname;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
     private String email;
     private String phone;
+    @TableField(typeHandler = CommonStatusTypeHandler.class)
     private CommonStatus status;
     private Long tenantId;
+    private LocalDateTime lastLoginTime;
     private Long createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -45,6 +54,8 @@ public class User {
     public void setStatus(CommonStatus status) { this.status = status; }
     public Long getTenantId() { return tenantId; }
     public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
+    public LocalDateTime getLastLoginTime() { return lastLoginTime; }
+    public void setLastLoginTime(LocalDateTime lastLoginTime) { this.lastLoginTime = lastLoginTime; }
     public Long getCreatedBy() { return createdBy; }
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }

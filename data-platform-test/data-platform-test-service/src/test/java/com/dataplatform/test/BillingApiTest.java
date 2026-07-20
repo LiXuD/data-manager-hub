@@ -56,11 +56,9 @@ public class BillingApiTest extends BaseTest {
             .when()
             .get("/billing/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then()
-                .statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -103,7 +101,8 @@ public class BillingApiTest extends BaseTest {
             .when()
             .get("/billing/stats");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -119,7 +118,8 @@ public class BillingApiTest extends BaseTest {
             .when()
             .get("/billing/export");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             response.then()
                 .contentType(anyOf(containsString("csv"), containsString("excel"), containsString("octet")));
         }
@@ -131,14 +131,12 @@ public class BillingApiTest extends BaseTest {
     @Test
     @Order(8)
     public void testExportBilling_NoPermission() {
-        Response response = getAuthRequest()
+        Response response = given()
+            .contentType("application/json")
             .when()
             .get("/billing/export");
 
-        if (response.getStatusCode() == 403) {
-            response.then()
-                .statusCode(403);
-        }
+        response.then().statusCode(anyOf(is(401), is(403)));
     }
 
     /**
@@ -240,7 +238,7 @@ public class BillingApiTest extends BaseTest {
     @Order(14)
     public void testUpdateBillingRule_Success() {
         if (testBillingRuleId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test billing rule to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test billing rule to update");
             return;
         }
 
@@ -280,7 +278,7 @@ public class BillingApiTest extends BaseTest {
     @Order(16)
     public void testDeleteBillingRule_Success() {
         if (testBillingRuleId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test billing rule to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test billing rule to delete");
             return;
         }
 

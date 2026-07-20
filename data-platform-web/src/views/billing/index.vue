@@ -10,16 +10,16 @@
 
     <el-row :gutter="16" class="stats-row">
       <el-col :span="6">
-        <StatCard label="本月总消费" :value="statsData.totalCost" prefix="¥" />
+        <StatCard label="累计总消费" :value="statsData.totalCost" prefix="¥" />
       </el-col>
       <el-col :span="6">
-        <StatCard label="本月调用次数" :value="statsData.totalCalls" variant="success" />
+        <StatCard label="累计调用次数" :value="statsData.totalCalls" variant="success" />
       </el-col>
       <el-col :span="6">
         <StatCard label="平均单价" :value="statsData.avgCost.toFixed(2)" prefix="¥" variant="warning" />
       </el-col>
       <el-col :span="6">
-        <StatCard label="逾期账单" :value="statsData.overdueCount" suffix="笔" variant="danger" />
+        <StatCard label="计费天数" :value="statsData.billingDays" suffix="天" variant="info" />
       </el-col>
     </el-row>
 
@@ -31,40 +31,42 @@
           <!-- 搜索区域 -->
           <div class="search-bar">
             <div class="search-inputs">
-              <el-input v-model="searchForm.tenantName" placeholder="搜索租户" clearable class="search-input" @keyup.enter="handleSearch" />
-              <el-input v-model="searchForm.vendorName" placeholder="搜索厂商" clearable class="search-input" @keyup.enter="handleSearch" />
+              <el-input-number v-model="searchForm.tenantId" placeholder="租户ID" :min="1" controls-position="right" class="search-input" />
+              <el-select v-model="searchForm.vendorId" placeholder="厂商" clearable class="search-select">
+                <el-option v-for="vendor in cacheStore.vendorOptions" :key="vendor.id" :label="vendor.vendorName" :value="Number(vendor.id)" />
+              </el-select>
               <el-date-picker
                 v-model="searchForm.dateRange"
                 type="daterange"
                 range-separator="至"
                 start-placeholder="开始日期"
                 end-placeholder="结束日期"
+                value-format="YYYY-MM-DD"
                 class="date-picker"
               />
             </div>
             <div class="search-btn-group">
               <el-button type="primary" @click="handleSearch">搜索</el-button>
               <el-button @click="handleReset">重置</el-button>
-              <el-button type="success" @click="handleExport">导出</el-button>
+              <el-button type="success" :loading="exporting" @click="handleExport">导出</el-button>
             </div>
           </div>
 
           <!-- 账单表格 -->
           <el-table :data="tableData" v-loading="loading" stripe>
             <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="tenantName" label="租户" width="120" />
-            <el-table-column prop="vendorName" label="厂商" width="120" />
+            <el-table-column prop="tenantId" label="租户ID" width="100" />
+            <el-table-column prop="vendorId" label="厂商" width="140">
+              <template #default="{ row }">{{ vendorName(row.vendorId) }}</template>
+            </el-table-column>
             <el-table-column prop="dataType" label="数据类型" width="120" />
             <el-table-column prop="callCount" label="调用次数" width="100">
               <template #default="{ row }">
                 <span class="number-cell">{{ row.callCount?.toLocaleString() }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="unitPrice" label="单价" width="100">
-              <template #default="{ row }">
-                <span class="price-cell">¥{{ row.unitPrice?.toFixed(2) }}</span>
-              </template>
-            </el-table-column>
+            <el-table-column prop="successCount" label="成功次数" width="100" />
+            <el-table-column prop="failCount" label="失败次数" width="100" />
             <el-table-column prop="totalCost" label="总费用" width="120">
               <template #default="{ row }">
                 <span class="cost-cell">¥{{ row.totalCost?.toLocaleString() }}</span>
@@ -73,11 +75,6 @@
             <el-table-column prop="billingDate" label="账单日期" width="120">
               <template #default="{ row }">
                 <span class="time-cell">{{ row.billingDate }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="status" label="状态" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusTextLocalized(row.status) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="80" fixed="right">
@@ -147,9 +144,12 @@
 
         <!-- 报表分析 -->
         <el-tab-pane label="报表分析" name="report">
-          <el-empty description="报表分析功能开发中...">
-            <el-button type="primary">生成报表</el-button>
-          </el-empty>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="累计费用">¥{{ statsData.totalCost.toFixed(2) }}</el-descriptions-item>
+            <el-descriptions-item label="累计调用">{{ statsData.totalCalls.toLocaleString() }} 次</el-descriptions-item>
+            <el-descriptions-item label="平均单价">¥{{ statsData.avgCost.toFixed(4) }}</el-descriptions-item>
+            <el-descriptions-item label="计费天数">{{ statsData.billingDays }} 天</el-descriptions-item>
+          </el-descriptions>
         </el-tab-pane>
       </el-tabs>
     </el-card>
@@ -158,14 +158,16 @@
     <el-dialog v-model="dialogVisible" :title="ruleForm.id ? '编辑规则' : '新增规则'" width="500px" class="form-dialog">
       <el-form :model="ruleForm" label-width="100px">
         <el-form-item label="厂商" required>
-          <el-input v-model="ruleForm.vendorName" placeholder="请输入厂商名称" />
+          <el-select v-model="ruleForm.vendorId" style="width: 100%">
+            <el-option v-for="vendor in cacheStore.vendorOptions" :key="vendor.id" :label="vendor.vendorName" :value="Number(vendor.id)" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="规则名称" required>
+          <el-input v-model="ruleForm.ruleName" placeholder="请输入规则名称" />
         </el-form-item>
         <el-form-item label="数据类型" required>
           <el-select v-model="ruleForm.dataType" style="width: 100%">
-            <el-option label="工商信息" value="BUSINESS_INFO" />
-            <el-option label="企业征信" value="CREDIT_QUERY" />
-            <el-option label="诉讼信息" value="LITIGATION" />
-            <el-option label="新闻舆情" value="NEWS" />
+            <el-option v-for="item in cacheStore.dataTypeOptions" :key="item.id" :label="item.dataTypeName" :value="item.dataTypeCode" />
           </el-select>
         </el-form-item>
         <el-form-item label="单价(元)" required>
@@ -193,31 +195,47 @@
         <el-button type="primary" @click="handleSubmitRule">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="detailVisible" title="账单详情" width="620px">
+      <el-descriptions v-if="detail" :column="2" border>
+        <el-descriptions-item label="账单ID">{{ detail.id }}</el-descriptions-item>
+        <el-descriptions-item label="账单日期">{{ detail.billingDate }}</el-descriptions-item>
+        <el-descriptions-item label="租户ID">{{ detail.tenantId }}</el-descriptions-item>
+        <el-descriptions-item label="调用方ID">{{ detail.callerId }}</el-descriptions-item>
+        <el-descriptions-item label="厂商">{{ vendorName(detail.vendorId) }}</el-descriptions-item>
+        <el-descriptions-item label="数据类型">{{ detail.dataType }}</el-descriptions-item>
+        <el-descriptions-item label="调用次数">{{ detail.callCount }}</el-descriptions-item>
+        <el-descriptions-item label="总费用">¥{{ Number(detail.totalCost || 0).toFixed(2) }}</el-descriptions-item>
+      </el-descriptions>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBillingList, getBillingRuleList, getBillingStats } from '@/api/billing'
+import { createBillingRule, deleteBillingRule, exportBilling, getBillingById, getBillingList, getBillingRuleList, getBillingStats, updateBillingRule } from '@/api/billing'
 import { extractPageData } from '@/utils/pagination'
-import { getStatusType as getTagType, getStatusText } from '@/utils/status'
+import { useCacheStore } from '@/stores/cache'
 // StatCard is globally registered by unplugin-vue-components
 
 interface BillingRecord {
   id: number
-  tenantName: string
-  vendorName: string
+  tenantId: number
+  callerId: number
+  vendorId: number
   dataType: string
   callCount: number
-  unitPrice: number
+  successCount: number
+  failCount: number
   totalCost: number
   billingDate: string
-  status: string
 }
 
 interface BillingRule {
   id: number
+  ruleName: string
+  vendorId: number
   vendorName: string
   dataType: string
   unitPrice: number
@@ -228,6 +246,7 @@ interface BillingRule {
 }
 
 const loading = ref(false)
+const exporting = ref(false)
 const activeTab = ref('record')
 const tableData = ref<BillingRecord[]>([])
 const ruleData = ref<BillingRule[]>([])
@@ -235,13 +254,15 @@ const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 
 const searchForm = reactive({
-  tenantName: '',
-  vendorName: '',
+  tenantId: undefined as number | undefined,
+  vendorId: undefined as number | undefined,
   dateRange: [] as string[]
 })
 
 const ruleForm = reactive({
   id: null as number | null,
+  ruleName: '',
+  vendorId: undefined as number | undefined,
   vendorName: '',
   dataType: '',
   unitPrice: 0,
@@ -252,24 +273,31 @@ const ruleForm = reactive({
 })
 
 const dialogVisible = ref(false)
+const detailVisible = ref(false)
+const detail = ref<BillingRecord | null>(null)
+const cacheStore = useCacheStore()
 
 // 统计卡片数据
 const statsData = ref({
   totalCost: 0,
   totalCalls: 0,
   avgCost: 0,
-  overdueCount: 0
+  billingDays: 0
 })
 
 const fetchStats = async () => {
   try {
-    const res = await getBillingStats({})
+    const res = await getBillingStats({
+      tenantId: searchForm.tenantId,
+      startDate: searchForm.dateRange[0],
+      endDate: searchForm.dateRange[1]
+    })
     if (res.data) {
       statsData.value = {
-        totalCost: res.data.totalAmount || 0,
-        totalCalls: res.data.totalCalls || 0,
-        avgCost: res.data.avgPrice || 0,
-        overdueCount: res.data.overdueCount || 0
+        totalCost: Number(res.data.totalCost || 0),
+        totalCalls: Number(res.data.totalCallCount || 0),
+        avgCost: Number(res.data.totalCallCount || 0) ? Number(res.data.totalCost || 0) / Number(res.data.totalCallCount) : 0,
+        billingDays: Number(res.data.days || 0)
       }
     }
   } catch {
@@ -282,7 +310,11 @@ const fetchList = async () => {
   try {
     const res = await getBillingList({
       page: pagination.currentPage,
-      pageSize: pagination.pageSize
+      pageSize: pagination.pageSize,
+      tenantId: searchForm.tenantId,
+      vendorId: searchForm.vendorId,
+      startDate: searchForm.dateRange[0],
+      endDate: searchForm.dateRange[1]
     })
     const { list, total: totalCount } = extractPageData<BillingRecord>(res)
     tableData.value = list
@@ -297,7 +329,7 @@ const fetchList = async () => {
 const fetchRules = async () => {
   try {
     const res = await getBillingRuleList({ page: 1, pageSize: 100 })
-    ruleData.value = res.data?.list || []
+    ruleData.value = extractPageData<BillingRule>(res).list
   } catch {
     ruleData.value = []
   }
@@ -305,19 +337,19 @@ const fetchRules = async () => {
 
 const handleSearch = () => {
   pagination.currentPage = 1
-  fetchList()
+  Promise.all([fetchStats(), fetchList()])
 }
 
 const handleReset = () => {
-  searchForm.tenantName = ''
-  searchForm.vendorName = ''
+  searchForm.tenantId = undefined
+  searchForm.vendorId = undefined
   searchForm.dateRange = []
   pagination.currentPage = 1
-  fetchList()
+  Promise.all([fetchStats(), fetchList()])
 }
 
 const handleAddRule = () => {
-  Object.assign(ruleForm, { id: null, vendorName: '', dataType: '', unitPrice: 0, tierMin: 0, tierMax: 100000, discount: 1.0, status: 'active' })
+  Object.assign(ruleForm, { id: null, ruleName: '', vendorId: undefined, vendorName: '', dataType: '', unitPrice: 0, tierMin: 0, tierMax: 100000, discount: 1.0, status: 'active' })
   dialogVisible.value = true
 }
 
@@ -326,36 +358,61 @@ const handleEditRule = (row: BillingRule) => {
   dialogVisible.value = true
 }
 
-const handleDeleteRule = async (_row: BillingRule) => {
+const handleDeleteRule = async (row: BillingRule) => {
   try {
     await ElMessageBox.confirm(`确定要删除该计费规则吗？`, '提示', { type: 'warning' })
+    await deleteBillingRule(row.id)
     ElMessage.success('删除成功')
     fetchRules()
   } catch {}
 }
 
 const handleSubmitRule = async () => {
-  if (!ruleForm.vendorName || !ruleForm.dataType) {
+  if (!ruleForm.vendorId || !ruleForm.ruleName || !ruleForm.dataType) {
     ElMessage.warning('请填写完整信息')
     return
+  }
+  const vendor = cacheStore.vendorOptions.find(item => Number(item.id) === ruleForm.vendorId)
+  const payload = { ...ruleForm, vendorName: vendor?.vendorName || '', id: undefined }
+  if (ruleForm.id) {
+    await updateBillingRule(ruleForm.id, payload)
+  } else {
+    await createBillingRule(payload)
   }
   ElMessage.success('保存成功')
   dialogVisible.value = false
   fetchRules()
 }
 
-const handleExport = () => {
-  ElMessage.info('导出功能开发中...')
+const handleExport = async () => {
+  exporting.value = true
+  try {
+    const blob = await exportBilling({
+      vendorId: searchForm.vendorId,
+      startDate: searchForm.dateRange[0],
+      endDate: searchForm.dateRange[1]
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `billing-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  } finally {
+    exporting.value = false
+  }
 }
 
-const handleViewDetail = (row: BillingRecord) => {
-  ElMessage.info(`查看账单详情: ${row.id}`)
+const handleViewDetail = async (row: BillingRecord) => {
+  const response = await getBillingById(row.id)
+  detail.value = response.data as unknown as BillingRecord
+  detailVisible.value = true
 }
 
-const getStatusType = (status: string) => getTagType('billing', status)
-const getStatusTextLocalized = (status: string) => getStatusText('billing', status)
+const vendorName = (vendorId: number) => cacheStore.vendorOptions.find(item => Number(item.id) === vendorId)?.vendorName || String(vendorId)
 
 onMounted(async () => {
+  await cacheStore.loadAll()
   await Promise.all([fetchStats(), fetchList(), fetchRules()])
 })
 </script>

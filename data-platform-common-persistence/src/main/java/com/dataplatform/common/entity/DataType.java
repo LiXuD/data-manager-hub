@@ -4,6 +4,10 @@ import com.baomidou.mybatisplus.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 公共持久化层的 Data Type。
+ * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
+ */
 @TableName("data_type")
 public class DataType {
 

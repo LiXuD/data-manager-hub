@@ -3,8 +3,12 @@ package com.dataplatform.access.call.service;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.VendorProxyService;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
-import com.dataplatform.billing.api.feign.BillingFeignClient;
+import com.dataplatform.api.Result;
+import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
+import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
 import com.dataplatform.common.entity.CallRecord;
+import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
+import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -14,6 +18,8 @@ import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -27,7 +33,7 @@ class OpenApiQueryServiceTest {
     private CallRecordService callRecordService;
     private CallRecordEventPublisher callRecordEventPublisher;
     private VendorProxyService vendorProxyService;
-    private BillingFeignClient billingFeignClient;
+    private BillingInternalFeignClient billingFeignClient;
     private OpenApiQueryService service;
 
     @BeforeEach
@@ -35,7 +41,7 @@ class OpenApiQueryServiceTest {
         callRecordService = mock(CallRecordService.class);
         callRecordEventPublisher = mock(CallRecordEventPublisher.class);
         vendorProxyService = mock(VendorProxyService.class);
-        billingFeignClient = mock(BillingFeignClient.class);
+        billingFeignClient = mock(BillingInternalFeignClient.class);
         service = new OpenApiQueryService(callRecordService, callRecordEventPublisher,
                 vendorProxyService, billingFeignClient);
     }
@@ -47,6 +53,9 @@ class OpenApiQueryServiceTest {
         cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":99}}");
         when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(20L),
                 any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
+        BillingCalculateRespDTO billingResponse = new BillingCalculateRespDTO();
+        billingResponse.setCost(BigDecimal.ZERO);
+        when(billingFeignClient.calculateCost(any())).thenReturn(Result.success(billingResponse));
 
         OpenApiQueryRespVO response = service.query(buildContext(true, 3));
 
@@ -64,6 +73,65 @@ class OpenApiQueryServiceTest {
         assertEquals(BigDecimal.ZERO, savedRecord.getCost());
         assertEquals(100L, savedRecord.getCacheSourceRecordId());
         assertEquals("trace-1", savedRecord.getTraceId());
+    }
+
+    @Test
+    void shouldRecordResponseContractWarningWithoutFailingCall() {
+        CallRecord cachedRecord = new CallRecord();
+        cachedRecord.setId(101L);
+        cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":\"invalid\"}}");
+        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(20L),
+                any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
+        BillingCalculateRespDTO billingResponse = new BillingCalculateRespDTO();
+        billingResponse.setCost(BigDecimal.ZERO);
+        when(billingFeignClient.calculateCost(any())).thenReturn(Result.success(billingResponse));
+
+        InterfaceParamDTO score = new InterfaceParamDTO();
+        score.setParamName("score");
+        score.setParamType("integer");
+        score.setRequired(true);
+        InterfaceContractDTO contract = new InterfaceContractDTO();
+        contract.setResponseFields(java.util.List.of(score));
+        OpenApiCallContext context = buildContext(true, 3);
+        context.setInterfaceContract(contract);
+
+        OpenApiQueryRespVO response = service.query(context);
+
+        assertTrue(response.getSuccess());
+        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
+        verify(callRecordEventPublisher).publish(recordCaptor.capture());
+        assertFalse(recordCaptor.getValue().getResponseContractValid());
+        assertNotNull(recordCaptor.getValue().getResponseContractErrors());
+        assertTrue(recordCaptor.getValue().getResponseContractErrors().contains("score"));
+    }
+
+    @Test
+    void shouldRejectNonObjectResponseRootEvenWhenAllConfiguredFieldsAreOptional() {
+        CallRecord cachedRecord = new CallRecord();
+        cachedRecord.setId(102L);
+        cachedRecord.setResponseData("{\"success\":true,\"data\":\"unexpected-root\"}");
+        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(20L),
+                any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
+        BillingCalculateRespDTO billingResponse = new BillingCalculateRespDTO();
+        billingResponse.setCost(BigDecimal.ZERO);
+        when(billingFeignClient.calculateCost(any())).thenReturn(Result.success(billingResponse));
+
+        InterfaceParamDTO optionalScore = new InterfaceParamDTO();
+        optionalScore.setParamName("score");
+        optionalScore.setParamType("integer");
+        optionalScore.setRequired(false);
+        InterfaceContractDTO contract = new InterfaceContractDTO();
+        contract.setResponseFields(java.util.List.of(optionalScore));
+        OpenApiCallContext context = buildContext(true, 3);
+        context.setInterfaceContract(contract);
+
+        OpenApiQueryRespVO response = service.query(context);
+
+        assertTrue(response.getSuccess());
+        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
+        verify(callRecordEventPublisher).publish(recordCaptor.capture());
+        assertFalse(recordCaptor.getValue().getResponseContractValid());
+        assertTrue(recordCaptor.getValue().getResponseContractErrors().contains("data类型必须为object"));
     }
 
     private OpenApiCallContext buildContext(boolean useCache, Integer cacheDays) {

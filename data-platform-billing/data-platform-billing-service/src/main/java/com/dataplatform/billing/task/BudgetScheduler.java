@@ -7,6 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * 计费域计费计算的 Budget Scheduler。
+ * <p>定时任务组件，负责周期性触发后台检查或汇总流程。</p>
+ */
 @Component
 public class BudgetScheduler {
 
@@ -24,5 +28,6 @@ public class BudgetScheduler {
     @Scheduled(cron = "0 0 * * * ?")
     public void checkBudgetStatus() {
         log.debug("检查预算状态...");
+        budgetAlertService.checkAllActiveBudgets();
     }
 }

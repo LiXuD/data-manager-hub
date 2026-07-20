@@ -2,6 +2,10 @@ package com.dataplatform.common.log;
 
 import java.time.LocalDateTime;
 
+/**
+ * 公共契约层操作日志的 Operation Log Record。
+ * <p>日志治理组件，负责记录、转发或查询操作日志。</p>
+ */
 public class OperationLogRecord {
     private Long userId;
     private String username;

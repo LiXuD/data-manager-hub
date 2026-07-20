@@ -57,11 +57,9 @@ public class CallerApiTest extends BaseTest {
             .when()
             .get("/caller/1");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
-        } else {
-            response.then()
-                .statusCode(anyOf(is(404), is(400)));
         }
     }
 
@@ -149,7 +147,7 @@ public class CallerApiTest extends BaseTest {
     @Order(8)
     public void testUpdateCaller_Success() {
         if (testCallerId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test caller to update");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test caller to update");
             return;
         }
 
@@ -189,7 +187,7 @@ public class CallerApiTest extends BaseTest {
     @Order(10)
     public void testDeleteCaller_Success() {
         if (testCallerId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test caller to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test caller to delete");
             return;
         }
 
@@ -225,7 +223,8 @@ public class CallerApiTest extends BaseTest {
             .when()
             .get("/caller/1/api-key/list");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -251,7 +250,7 @@ public class CallerApiTest extends BaseTest {
     @Order(14)
     public void testCreateApiKey_Success() {
         if (testCallerId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test caller to create API key");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test caller to create API key");
             return;
         }
 
@@ -279,7 +278,7 @@ public class CallerApiTest extends BaseTest {
     @Order(15)
     public void testCreateApiKey_MissingRequired() {
         if (testCallerId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test caller");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test caller");
             return;
         }
 
@@ -323,7 +322,8 @@ public class CallerApiTest extends BaseTest {
             .when()
             .patch("/caller/api-key/1/status");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -365,7 +365,7 @@ public class CallerApiTest extends BaseTest {
     @Order(20)
     public void testDeleteApiKey_Success() {
         if (testApiKeyId == null) {
-            org.junit.jupiter.api.Assumptions.assumeTrue(false, "No test API key to delete");
+            org.junit.jupiter.api.Assertions.assertTrue(false, "No test API key to delete");
             return;
         }
 
@@ -403,7 +403,8 @@ public class CallerApiTest extends BaseTest {
             .when()
             .get("/caller/api-key/1/interfaces");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }
@@ -433,7 +434,8 @@ public class CallerApiTest extends BaseTest {
             .when()
             .post("/caller/api-key/1/interfaces");
 
-        if (response.getStatusCode() == 200) {
+        verifySuccess(response);
+        {
             verifySuccess(response);
         }
     }

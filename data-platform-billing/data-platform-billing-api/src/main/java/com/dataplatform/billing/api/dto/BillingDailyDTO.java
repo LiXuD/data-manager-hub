@@ -4,6 +4,10 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+/**
+ * 计费域计费计算的 Billing Daily DTO。
+ * <p>跨服务契约数据对象，用于 api 模块暴露远程接口时传递稳定字段。</p>
+ */
 public class BillingDailyDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 

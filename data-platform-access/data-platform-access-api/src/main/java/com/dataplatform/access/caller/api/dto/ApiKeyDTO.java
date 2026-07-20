@@ -3,6 +3,10 @@ package com.dataplatform.access.caller.api.dto;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
+/**
+ * 访问域调用方的 Api Key DTO。
+ * <p>跨服务契约数据对象，用于 api 模块暴露远程接口时传递稳定字段。</p>
+ */
 public class ApiKeyDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -10,6 +14,7 @@ public class ApiKeyDTO implements Serializable {
     private Long callerId;
     private String apiKey;
     private String apiSecret;
+    private Boolean rateLimitEnabled;
     private Integer rateLimit;
     private String description;
     private String status;
@@ -46,6 +51,14 @@ public class ApiKeyDTO implements Serializable {
 
     public void setApiSecret(String apiSecret) {
         this.apiSecret = apiSecret;
+    }
+
+    public Boolean getRateLimitEnabled() {
+        return rateLimitEnabled;
+    }
+
+    public void setRateLimitEnabled(Boolean rateLimitEnabled) {
+        this.rateLimitEnabled = rateLimitEnabled;
     }
 
     public Integer getRateLimit() {

@@ -6,28 +6,22 @@ export function extractPageData<T>(response: unknown): { list: T[]; total: numbe
 
   const res = response as Record<string, unknown>
 
-  // Handle PageResult format { list: T[], total: number }
-  if ('list' in res && Array.isArray(res.list)) {
-    return { list: res.list as T[], total: (res.total as number) || 0 }
-  }
-
-  // Handle { records: T[], total: number } format
-  if ('records' in res && Array.isArray(res.records)) {
-    return { list: res.records as T[], total: (res.total as number) || 0 }
-  }
-
-  // Handle { data: T[] } format
   const data = res.data
-  if (data && typeof data === 'object') {
-    // { data: { records: T[], total: number } }
-    const dataObj = data as Record<string, unknown>
-    if ('records' in dataObj && Array.isArray(dataObj.records)) {
-      return { list: dataObj.records as T[], total: (dataObj.total as number) || 0 }
-    }
-    // { data: T[] }
-    if (Array.isArray(data)) {
-      return { list: data as T[], total: (res.total as number) || 0 }
-    }
+  const page = data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : res
+  const total = Number(page.total ?? res.total ?? (Array.isArray(data) ? data.length : 0))
+
+  if (Array.isArray(page.list)) {
+    return { list: page.list as T[], total }
+  }
+
+  if (Array.isArray(page.records)) {
+    return { list: page.records as T[], total }
+  }
+
+  if (Array.isArray(data)) {
+    return { list: data as T[], total }
   }
 
   return { list: [], total: 0 }
