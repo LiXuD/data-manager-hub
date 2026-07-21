@@ -1,12 +1,14 @@
 package com.dataplatform.billing.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 计费域计费计算的 Billing Rule。
@@ -26,11 +28,21 @@ public class BillingRule {
     @JsonProperty("vendorName")
     private String vendorName;
 
+    @JsonProperty("interfaceId")
+    private Long interfaceId;
+
+    @JsonProperty("interfaceCode")
+    private String interfaceCode;
+
+    @JsonProperty("interfaceName")
+    private String interfaceName;
+
+    /** 接口数据类型快照，仅用于统计展示，不参与定价匹配。 */
     @JsonProperty("dataType")
     private String dataType;
 
     @JsonProperty("billingType")
-    private String billingType = "STANDARD";
+    private String billingType;
 
     @JsonProperty("unitPrice")
     private BigDecimal unitPrice;
@@ -49,6 +61,11 @@ public class BillingRule {
 
     @JsonProperty("discount")
     private BigDecimal discount;
+
+    /** 阶梯区间配置；持久化在 billing_rule_tier 子表。 */
+    @TableField(exist = false)
+    @JsonProperty("tiers")
+    private List<BillingRuleTier> tiers;
 
     // SLA相关字段
     @JsonProperty("slaThreshold")
@@ -71,6 +88,12 @@ public class BillingRule {
     public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
     public String getVendorName() { return vendorName; }
     public void setVendorName(String vendorName) { this.vendorName = vendorName; }
+    public Long getInterfaceId() { return interfaceId; }
+    public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
+    public String getInterfaceCode() { return interfaceCode; }
+    public void setInterfaceCode(String interfaceCode) { this.interfaceCode = interfaceCode; }
+    public String getInterfaceName() { return interfaceName; }
+    public void setInterfaceName(String interfaceName) { this.interfaceName = interfaceName; }
     public String getDataType() { return dataType; }
     public void setDataType(String dataType) { this.dataType = dataType; }
     public String getBillingType() { return billingType; }
@@ -83,6 +106,8 @@ public class BillingRule {
     public void setTierMax(Integer tierMax) { this.tierMax = tierMax; }
     public BigDecimal getDiscount() { return discount; }
     public void setDiscount(BigDecimal discount) { this.discount = discount; }
+    public List<BillingRuleTier> getTiers() { return tiers; }
+    public void setTiers(List<BillingRuleTier> tiers) { this.tiers = tiers; }
     public Integer getSlaThreshold() { return slaThreshold; }
     public void setSlaThreshold(Integer slaThreshold) { this.slaThreshold = slaThreshold; }
     public BigDecimal getCompensationRate() { return compensationRate; }

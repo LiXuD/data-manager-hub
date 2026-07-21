@@ -16,10 +16,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 @InternalFeignContract
 public interface BillingInternalFeignClient {
 
-    @GetMapping("/rules/by-vendor-and-data-type")
-    Result<BillingRuleDTO> getRuleByVendorAndDataType(
+    @GetMapping("/rules/by-vendor-and-interface")
+    Result<BillingRuleDTO> getRuleByVendorAndInterface(
             @RequestParam("vendorCode") String vendorCode,
-            @RequestParam("dataType") String dataType);
+            @RequestParam("interfaceCode") String interfaceCode);
 
     @PostMapping("/calculate")
     Result<BillingCalculateRespDTO> calculateCost(@RequestBody BillingCalculateReqDTO dto);
