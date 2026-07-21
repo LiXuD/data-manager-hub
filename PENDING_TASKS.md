@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-07-14
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 调用链路整改和服务间最小权限认证；本轮跨域调用整改已完成代码、测试和运行态复验。
+**最后更新**: 2026-07-20
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 调用链路整改和服务间最小权限认证；新增 UAPI「程序员历史上的今天」真实外部数据源及端到端验收用例。
 
 ---
 
@@ -48,6 +48,9 @@
 | 清理公共 Feign 与重复适配控制器 | 已完成 | 仅保留 `/internal/**` Feign；管理 HTTP Controller 不再实现 Feign 契约 |
 | 架构规则自动守护 | 已完成 | `arch-scan.sh` 检查公共 Feign、隐式扫描、scope、跨域读表和跨域 Kafka |
 | 本轮整改运行态复验 | 已完成 | 六服务健康检查均为 `UP`；认证负向用例返回 401/403；OpenAPI、统计、计费幂等聚合和治理日志链路均通过 |
+| UAPI 程序员历史外部数据源接入 | 已完成 | `V017__seed_uapi_programmer_history_provider.sql`；真实 GET 调用、响应契约、调用记录与零元计费由 `UapiProgrammerHistoryFlowTest` 验证 |
+| 计费规则改为厂商 + 接口唯一配置 | 已完成 | `V018__bind_billing_rules_to_vendor_interface.sql`；计费匹配不再使用数据类型，页面按厂商联动选择接口 |
+| 厂商接口规则支持多档阶梯计费 | 已完成 | `V019__add_billing_rule_tiers.sql`、`V020__add_monthly_billing_tier_usage.sql`；按自然月累计调用量并按区间累进计价，请求重试不重复推进阶梯 |
 
 ## 发布前仍需执行的环境验证
 
