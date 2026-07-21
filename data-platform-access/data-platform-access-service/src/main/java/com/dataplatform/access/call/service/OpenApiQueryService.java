@@ -5,6 +5,10 @@ import com.dataplatform.api.Result;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
 import com.dataplatform.billing.api.dto.BillingCalculateReqDTO;
 import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
+import com.dataplatform.billing.api.dto.BillingChargeReqDTO;
+import com.dataplatform.billing.api.dto.BillingChargeRespDTO;
+import com.dataplatform.billing.api.dto.BillingAdditionalPlanDTO;
+import com.dataplatform.billing.api.dto.BillingMeteringPolicyDTO;
 import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.access.call.service.VendorProxyService;
@@ -39,16 +43,19 @@ public class OpenApiQueryService {
     private final CallRecordEventPublisher callRecordEventPublisher;
     private final VendorProxyService vendorProxyService;
     private final BillingInternalFeignClient billingFeignClient;
+    private final BillingFactExtractor billingFactExtractor;
     private final ObjectMapper objectMapper;
 
     public OpenApiQueryService(CallRecordService callRecordService,
                                CallRecordEventPublisher callRecordEventPublisher,
                                VendorProxyService vendorProxyService,
-                               BillingInternalFeignClient billingFeignClient) {
+                               BillingInternalFeignClient billingFeignClient,
+                               BillingFactExtractor billingFactExtractor) {
         this.callRecordService = callRecordService;
         this.callRecordEventPublisher = callRecordEventPublisher;
         this.vendorProxyService = vendorProxyService;
         this.billingFeignClient = billingFeignClient;
+        this.billingFactExtractor = billingFactExtractor;
         this.objectMapper = new ObjectMapper();
         this.objectMapper.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
     }
@@ -59,6 +66,7 @@ public class OpenApiQueryService {
         String platformRequestId = generateRequestId();
         String requestHash = buildRequestHash(context.getParams());
         boolean useCache = Boolean.TRUE.equals(context.getUseCache());
+        BillingMeteringPolicyDTO meteringPolicy = resolveMeteringPolicy(context, requestTime);
 
         if (useCache) {
             CallRecord cachedRecord = callRecordService.findLatestReusableCache(
@@ -71,7 +79,8 @@ public class OpenApiQueryService {
                 LocalDateTime responseTime = LocalDateTime.now();
                 long duration = System.currentTimeMillis() - startTime;
                 Map<String, Object> cachedResult = readResponseData(cachedRecord.getResponseData());
-                BigDecimal cost = calculateCost(context, platformRequestId, duration, requestTime, true, false);
+                BigDecimal cost = charge(context, meteringPolicy, platformRequestId, duration,
+                        requestTime, true, true, cachedResult);
                 CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
                         true, duration, cost, true, cachedRecord.getId(), requestTime, responseTime);
                 callRecordEventPublisher.publish(record);
@@ -89,7 +98,8 @@ public class OpenApiQueryService {
         LocalDateTime responseTime = LocalDateTime.now();
         long duration = System.currentTimeMillis() - startTime;
         boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
-        BigDecimal cost = calculateCost(context, platformRequestId, duration, requestTime, success, success);
+        BigDecimal cost = charge(context, meteringPolicy, platformRequestId, duration,
+                requestTime, success, false, vendorResult);
         vendorResult.put("requestId", platformRequestId);
         vendorResult.put("cached", false);
         vendorResult.put("latency", duration);
@@ -101,27 +111,75 @@ public class OpenApiQueryService {
                 null, requestTime, responseTime, duration, cost);
     }
 
-    private BigDecimal calculateCost(OpenApiCallContext context, String requestId, long latencyMs,
-                                     LocalDateTime callTime, boolean success, boolean billable) {
-        BillingCalculateReqDTO req = new BillingCalculateReqDTO();
-        req.setVendorCode(context.getVendorCode());
-        req.setInterfaceCode(context.getApiCode());
-        req.setDataType(context.getDataTypeCode());
-        req.setCallCount(1);
-        req.setLatency(latencyMs);
-        req.setRequestId(requestId);
-        req.setTenantId(context.getTenantId());
-        req.setCallerId(context.getCallerId());
-        req.setVendorId(context.getVendorId());
-        req.setSuccess(success);
-        req.setBillable(billable);
-        req.setCallTime(callTime);
-        Result<BillingCalculateRespDTO> costResult = billingFeignClient.calculateCost(req);
-        BillingCalculateRespDTO resp = costResult != null ? costResult.getData() : null;
-        if (resp == null || resp.getCost() == null) {
-            throw new IllegalStateException("Billing service returned an empty cost");
+    private BillingMeteringPolicyDTO resolveMeteringPolicy(OpenApiCallContext context,
+                                                           LocalDateTime callTime) {
+        Result<BillingMeteringPolicyDTO> result = billingFeignClient.getMeteringPolicy(
+                context.getVendorCode(), context.getApiCode(), callTime);
+        BillingMeteringPolicyDTO policy = result != null ? result.getData() : null;
+        if (policy == null || policy.getPlanId() == null) {
+            throw new IllegalStateException("Billing service returned an empty metering policy");
         }
-        return resp.getCost();
+        return policy;
+    }
+
+    private BigDecimal charge(OpenApiCallContext context, BillingMeteringPolicyDTO policy,
+                              String requestId, long latencyMs, LocalDateTime callTime,
+                              boolean success, boolean cached, Map<String, Object> result) {
+        BillingChargeReqDTO request = new BillingChargeReqDTO();
+        request.setRequestId(requestId);
+        request.setPlanId(policy.getPlanId());
+        request.setPlanVersion(policy.getPlanVersion());
+        request.setPolicyHash(policy.getPolicyHash());
+        request.setVendorCode(context.getVendorCode());
+        request.setInterfaceCode(context.getApiCode());
+        request.setDataType(context.getDataTypeCode());
+        request.setTenantId(context.getTenantId());
+        request.setCallerId(context.getCallerId());
+        request.setVendorId(context.getVendorId());
+        request.setCallTime(callTime);
+        request.setSuccess(success);
+        request.setCached(cached);
+        request.setResponseContractValid(isResponseContractValid(context, result));
+        request.setLatencyMs(latencyMs);
+        request.setHttpStatus(success ? 200 : 502);
+        request.setMeteringFacts(billingFactExtractor.extract(
+                policy, result, context.getParams()));
+        request.setAdditionalPlans(buildAdditionalPlans(policy, result, context.getParams()));
+        Result<BillingChargeRespDTO> chargeResult = billingFeignClient.charge(request);
+        BillingChargeRespDTO response = chargeResult != null ? chargeResult.getData() : null;
+        if (response == null || response.getFinalAmount() == null) {
+            throw new IllegalStateException("Billing service returned an empty charge result");
+        }
+        return response.getFinalAmount();
+    }
+
+    private java.util.List<BillingAdditionalPlanDTO> buildAdditionalPlans(
+            BillingMeteringPolicyDTO policy, Map<String, Object> result,
+            Map<String, Object> params) {
+        if (policy.getAdditionalPlans() == null) return java.util.List.of();
+        return policy.getAdditionalPlans().stream().map(source -> {
+            BillingAdditionalPlanDTO target = new BillingAdditionalPlanDTO();
+            target.setPlanId(source.getPlanId());
+            target.setPlanCode(source.getPlanCode());
+            target.setPlanVersion(source.getPlanVersion());
+            target.setTemplateCode(source.getTemplateCode());
+            target.setAccountingPurpose(source.getAccountingPurpose());
+            target.setPolicyHash(source.getPolicyHash());
+            target.setMeteringFacts(billingFactExtractor.extract(source, result, params));
+            return target;
+        }).toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean isResponseContractValid(OpenApiCallContext context, Map<String, Object> result) {
+        InterfaceContractDTO contract = context.getInterfaceContract();
+        if (contract == null || contract.getResponseFields() == null || contract.getResponseFields().isEmpty()) {
+            return true;
+        }
+        Object rawData = result.get("data");
+        return rawData instanceof Map<?, ?> map
+                && InterfaceContractValidator.validate(
+                    contract.getResponseFields(), (Map<String, Object>) map, false).valid();
     }
 
     @SuppressWarnings("unchecked")

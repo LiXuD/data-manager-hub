@@ -572,4 +572,6 @@ ON CONFLICT (role_code) DO NOTHING;
 -- 执行完成
 -- =====================================================
 
+\ir migrations/V021__create_billing_plan_and_event_ledger.sql
+
 SELECT '数据库创建完成!' AS message;

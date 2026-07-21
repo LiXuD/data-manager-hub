@@ -3,6 +3,9 @@ package com.dataplatform.billing.controller;
 import com.dataplatform.api.Result;
 import com.dataplatform.billing.api.dto.BillingCalculateReqDTO;
 import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
+import com.dataplatform.billing.api.dto.BillingChargeReqDTO;
+import com.dataplatform.billing.api.dto.BillingChargeRespDTO;
+import com.dataplatform.billing.api.dto.BillingMeteringPolicyDTO;
 import com.dataplatform.billing.api.dto.BillingRuleDTO;
 import com.dataplatform.billing.api.dto.BillingTierDTO;
 import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
@@ -10,6 +13,8 @@ import com.dataplatform.common.security.InternalScope;
 import com.dataplatform.billing.entity.BillingRule;
 import com.dataplatform.billing.service.BillingService;
 import com.dataplatform.billing.service.BillingUsageRecorder;
+import com.dataplatform.billing.service.BillingChargeService;
+import com.dataplatform.billing.service.BillingPlanService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,11 +32,17 @@ public class BillingInternalController implements BillingInternalFeignClient {
 
     private final BillingService billingService;
     private final BillingUsageRecorder billingUsageRecorder;
+    private final BillingPlanService billingPlanService;
+    private final BillingChargeService billingChargeService;
 
     public BillingInternalController(BillingService billingService,
-                                     BillingUsageRecorder billingUsageRecorder) {
+                                     BillingUsageRecorder billingUsageRecorder,
+                                     BillingPlanService billingPlanService,
+                                     BillingChargeService billingChargeService) {
         this.billingService = billingService;
         this.billingUsageRecorder = billingUsageRecorder;
+        this.billingPlanService = billingPlanService;
+        this.billingChargeService = billingChargeService;
     }
 
     @Override
@@ -71,6 +82,21 @@ public class BillingInternalController implements BillingInternalFeignClient {
         }
         billingUsageRecorder.record(dto, cost);
         return Result.success(response);
+    }
+
+    @Override
+    @GetMapping("/metering-policy")
+    public Result<BillingMeteringPolicyDTO> getMeteringPolicy(
+            @RequestParam("vendorCode") String vendorCode,
+            @RequestParam("interfaceCode") String interfaceCode,
+            @RequestParam("callTime") java.time.LocalDateTime callTime) {
+        return Result.success(billingPlanService.resolvePolicy(vendorCode, interfaceCode, callTime));
+    }
+
+    @Override
+    @PostMapping("/charge")
+    public Result<BillingChargeRespDTO> charge(@RequestBody BillingChargeReqDTO dto) {
+        return Result.success(billingChargeService.charge(dto));
     }
 
     private BillingRuleDTO toDTO(BillingRule entity) {
