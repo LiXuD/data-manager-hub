@@ -5,23 +5,32 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.billing.entity.BillingDaily;
 import com.dataplatform.billing.entity.BillingRule;
+import com.dataplatform.billing.entity.BillingRuleTier;
 import com.dataplatform.billing.mapper.BillingDailyMapper;
 import com.dataplatform.billing.mapper.BillingRuleMapper;
+import com.dataplatform.billing.mapper.BillingRuleTierMapper;
+import com.dataplatform.billing.mapper.BillingTierUsageMapper;
 import com.dataplatform.billing.service.BillingService;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.billing.BillingCalculatorFactory;
 import com.dataplatform.common.entity.unified.BillingRuleDO;
+import com.dataplatform.common.entity.unified.BillingTierDO;
+import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
+import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
 import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,45 +51,47 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
     private BillingRuleMapper billingRuleMapper;
 
     @Autowired
+    private BillingRuleTierMapper billingRuleTierMapper;
+
+    @Autowired
+    private BillingTierUsageMapper billingTierUsageMapper;
+
+    @Autowired
     private StringRedisTemplate redisTemplate;
 
     @Autowired
     private VendorInternalFeignClient vendorInternalFeignClient;
 
     @Autowired
+    private ApiInterfaceFeignClient apiInterfaceFeignClient;
+
+    @Autowired
     private BillingCalculatorFactory billingCalculatorFactory;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * 计算费用 - 支持阶梯计费
-     */
     @Override
-    public BigDecimal calculateCost(String dataType, int callCount) {
-        return calculateCost(dataType, callCount, 0);
-    }
-
-    /**
-     * 计算费用(带响应时间) - 支持SLA补偿
-     *
-     * SLA补偿公式:
-     * - 响应时间超过SLA阈值后，每超100ms，费用减免compensationRate
-     * - 例如: SLA=2000ms, 响应时间=2300ms, 补偿率=0.1
-     * - 超时300ms，减免系数 = 1 - 0.1 × (300/100) = 1 - 0.3 = 0.7
-     * - 实际费用 = 原价 × 0.7
-     */
-    @Override
-    public BigDecimal calculateCost(String dataType, int callCount, long latency) {
-        return calculateWithRule(findApplicableRule(null, dataType, callCount), callCount, latency);
-    }
-
-    @Override
-    public BigDecimal calculateCost(String vendorCode, String dataType, int callCount, long latency) {
+    public BigDecimal calculateCost(String vendorCode, String interfaceCode, int callCount, long latency) {
         Long vendorId = resolveVendorId(vendorCode);
-        return calculateWithRule(findApplicableRule(vendorId, dataType, callCount), callCount, latency);
+        return calculateWithRule(findApplicableRule(vendorId, interfaceCode), callCount, latency);
+    }
+
+    @Override
+    @Transactional
+    public BigDecimal calculateCost(String vendorCode, String interfaceCode, int callCount, long latency,
+                                    String requestId, LocalDate billingDate) {
+        Long vendorId = resolveVendorId(vendorCode);
+        BillingRule rule = findApplicableRule(vendorId, interfaceCode);
+        long usageBefore = reserveTierUsage(rule, callCount, requestId, billingDate);
+        return calculateWithRule(rule, usageBefore, callCount, latency);
     }
 
     private BigDecimal calculateWithRule(BillingRule rule, int callCount, long latency) {
+        return calculateWithRule(rule, 0L, callCount, latency);
+    }
+
+    private BigDecimal calculateWithRule(BillingRule rule, long usageBefore,
+                                         int callCount, long latency) {
         if (callCount < 0) {
             throw new IllegalArgumentException("调用次数不能为负数");
         }
@@ -90,33 +101,65 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
         Integer latencyMs = latency > 0
                 ? (int) Math.min(latency, Integer.MAX_VALUE)
                 : null;
-        return billingCalculatorFactory
-                .getCalculator(rule.getBillingType() == null ? "STANDARD" : rule.getBillingType())
-                .calculate(toCalculatorRule(rule), callCount, latencyMs);
+        var calculator = billingCalculatorFactory
+                .getCalculator(rule.getBillingType() == null ? "STANDARD" : rule.getBillingType());
+        BillingRuleDO calculatorRule = toCalculatorRule(rule);
+        if (!"TIERED".equals(rule.getBillingType()) || usageBefore == 0L) {
+            return calculator.calculate(calculatorRule, callCount, latencyMs);
+        }
+        long usageAfter = Math.addExact(usageBefore, callCount);
+        BigDecimal cumulativeAfter = calculator.calculate(calculatorRule, usageAfter, latencyMs);
+        BigDecimal cumulativeBefore = calculator.calculate(calculatorRule, usageBefore, latencyMs);
+        return cumulativeAfter.subtract(cumulativeBefore);
+    }
+
+    private long reserveTierUsage(BillingRule rule, int callCount,
+                                  String requestId, LocalDate billingDate) {
+        if (callCount < 0) {
+            throw new IllegalArgumentException("调用次数不能为负数");
+        }
+        if (rule == null || !"TIERED".equals(rule.getBillingType()) || callCount == 0) {
+            return 0L;
+        }
+        if (requestId == null || requestId.isBlank() || requestId.length() > 64) {
+            throw new IllegalArgumentException("阶梯计费请求必须提供不超过64位的requestId");
+        }
+        if (rule.getId() == null) {
+            throw new IllegalStateException("阶梯计费规则缺少ID");
+        }
+        LocalDate period = (billingDate != null ? billingDate : LocalDate.now()).withDayOfMonth(1);
+        String lockKey = "billing:tier:" + rule.getId() + ":" + period;
+        billingTierUsageMapper.lockUsage(lockKey);
+
+        Long reservedUsage = billingTierUsageMapper.selectUsageBeforeByRequestId(requestId);
+        if (reservedUsage != null) {
+            return reservedUsage;
+        }
+        Long currentUsage = billingTierUsageMapper.selectCurrentUsage(rule.getId(), period);
+        long usageBefore = currentUsage != null ? currentUsage : 0L;
+        billingTierUsageMapper.incrementUsage(rule.getId(), period, callCount);
+        billingTierUsageMapper.insertUsageEvent(
+                requestId, rule.getId(), period, usageBefore, callCount);
+        return usageBefore;
     }
 
     /**
      * 获取计费规则
      */
-    private BillingRule findApplicableRule(Long vendorId, String dataType, int callCount) {
-        BillingRule vendorRule = vendorId == null ? null
-                : selectApplicableRule(vendorId, dataType, callCount);
-        return vendorRule != null ? vendorRule : selectApplicableRule(null, dataType, callCount);
+    private BillingRule findApplicableRule(Long vendorId, String interfaceCode) {
+        if (vendorId == null || interfaceCode == null || interfaceCode.isBlank()) {
+            return null;
+        }
+        return selectApplicableRule(vendorId, interfaceCode);
     }
 
-    private BillingRule selectApplicableRule(Long vendorId, String dataType, int callCount) {
+    private BillingRule selectApplicableRule(Long vendorId, String interfaceCode) {
         LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BillingRule::getDataType, dataType)
+        wrapper.eq(BillingRule::getVendorId, vendorId)
+                .eq(BillingRule::getInterfaceCode, interfaceCode)
                 .eq(BillingRule::getStatus, "active")
-                .le(BillingRule::getTierMin, callCount)
-                .and(query -> query.isNull(BillingRule::getTierMax)
-                        .or().ge(BillingRule::getTierMax, callCount));
-        wrapper.eq(vendorId != null, BillingRule::getVendorId, vendorId)
-                .isNull(vendorId == null, BillingRule::getVendorId);
-        wrapper.orderByDesc(BillingRule::getTierMin)
-                .orderByDesc(BillingRule::getCreatedAt)
                 .last("LIMIT 1");
-        return billingRuleMapper.selectOne(wrapper);
+        return attachTiers(billingRuleMapper.selectOne(wrapper));
     }
 
     private BillingRuleDO toCalculatorRule(BillingRule rule) {
@@ -130,17 +173,20 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
         calculatorRule.setTierMin(rule.getTierMin());
         calculatorRule.setTierMax(rule.getTierMax());
         calculatorRule.setDiscount(rule.getDiscount());
+        if (rule.getTiers() != null) {
+            List<BillingTierDO> tiers = rule.getTiers().stream().map(tier -> {
+                BillingTierDO calculatorTier = new BillingTierDO();
+                calculatorTier.setTierMin(tier.getTierMin());
+                calculatorTier.setTierMax(tier.getTierMax());
+                calculatorTier.setDiscount(tier.getDiscount());
+                return calculatorTier;
+            }).toList();
+            calculatorRule.setTiers(tiers);
+        }
         calculatorRule.setSlaThreshold(rule.getSlaThreshold());
         calculatorRule.setCompensationRate(rule.getCompensationRate());
         calculatorRule.setStatus(rule.getStatus());
         return calculatorRule;
-    }
-
-    /**
-     * 计算单次调用的费用
-     */
-    public BigDecimal calculateSingleCost(String dataType) {
-        return calculateCost(dataType, 1);
     }
 
     @Override
@@ -198,27 +244,60 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
     public List<BillingRule> listRules() {
         LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
         wrapper.orderByDesc(BillingRule::getCreatedAt);
-        return billingRuleMapper.selectList(wrapper);
+        List<BillingRule> rules = billingRuleMapper.selectList(wrapper);
+        rules.forEach(this::attachTiers);
+        return rules;
     }
 
     @Override
     public BillingRule getRuleById(Long id) {
-        return billingRuleMapper.selectById(id);
+        return attachTiers(billingRuleMapper.selectById(id));
     }
 
     @Override
+    @Transactional
     public void saveRule(BillingRule rule) {
+        enrichAndValidateAssociation(rule);
+        applyRuleDefaults(rule);
+        validateAndNormalizeTiers(rule);
         billingRuleMapper.insert(rule);
+        replaceTiers(rule);
+        evictRuleCache(rule);
     }
 
     @Override
+    @Transactional
     public void updateRule(BillingRule rule) {
+        BillingRule existing = getRuleById(rule.getId());
+        if (existing == null) {
+            throw new IllegalArgumentException("计费规则不存在");
+        }
+        if (rule.getVendorId() == null) {
+            rule.setVendorId(existing.getVendorId());
+        }
+        if (rule.getInterfaceId() == null) {
+            rule.setInterfaceId(existing.getInterfaceId());
+        }
+        if (rule.getBillingType() == null) {
+            rule.setBillingType(existing.getBillingType());
+        }
+        if (rule.getTiers() == null) {
+            rule.setTiers(existing.getTiers());
+        }
+        enrichAndValidateAssociation(rule);
+        applyRuleDefaults(rule);
+        validateAndNormalizeTiers(rule);
         billingRuleMapper.updateById(rule);
+        replaceTiers(rule);
+        evictRuleCache(existing);
+        evictRuleCache(rule);
     }
 
     @Override
     public void deleteRule(Long id) {
+        BillingRule existing = getRuleById(id);
         billingRuleMapper.deleteById(id);
+        evictRuleCache(existing);
     }
 
     @Override
@@ -249,13 +328,13 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
     }
 
     @Override
-    public BillingRule getRuleByVendorAndDataType(String vendorCode, String dataType) {
-        if (dataType == null || dataType.isEmpty()) {
+    public BillingRule getRuleByVendorAndInterface(String vendorCode, String interfaceCode) {
+        if (interfaceCode == null || interfaceCode.isBlank()) {
             return null;
         }
 
         Long vendorId = resolveVendorId(vendorCode);
-        String cacheKey = RULE_CACHE_PREFIX + (vendorId == null ? "global" : vendorId) + ":" + dataType;
+        String cacheKey = ruleCacheKey(vendorId, interfaceCode);
         String cachedRule = null;
         try {
             cachedRule = redisTemplate.opsForValue().get(cacheKey);
@@ -270,10 +349,7 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
             }
         }
 
-        BillingRule rule = selectLatestRule(vendorId, dataType);
-        if (rule == null && vendorId != null) {
-            rule = selectLatestRule(null, dataType);
-        }
+        BillingRule rule = selectLatestRule(vendorId, interfaceCode);
 
         if (rule != null) {
             try {
@@ -287,15 +363,148 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
         return rule;
     }
 
-    private BillingRule selectLatestRule(Long vendorId, String dataType) {
+    private BillingRule selectLatestRule(Long vendorId, String interfaceCode) {
         LambdaQueryWrapper<BillingRule> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BillingRule::getDataType, dataType)
+        wrapper.eq(BillingRule::getVendorId, vendorId)
+                .eq(BillingRule::getInterfaceCode, interfaceCode)
                 .eq(BillingRule::getStatus, "active")
-                .eq(vendorId != null, BillingRule::getVendorId, vendorId)
-                .isNull(vendorId == null, BillingRule::getVendorId)
                 .orderByDesc(BillingRule::getCreatedAt)
                 .last("LIMIT 1");
-        return billingRuleMapper.selectOne(wrapper);
+        return attachTiers(billingRuleMapper.selectOne(wrapper));
+    }
+
+    private void enrichAndValidateAssociation(BillingRule rule) {
+        if (rule.getVendorId() == null || rule.getInterfaceId() == null) {
+            throw new IllegalArgumentException("vendorId和interfaceId不能为空");
+        }
+
+        Result<ApiInterfaceDTO> interfaceResult = apiInterfaceFeignClient.getById(rule.getInterfaceId());
+        ApiInterfaceDTO apiInterface = interfaceResult != null ? interfaceResult.getData() : null;
+        if (apiInterface == null) {
+            throw new IllegalArgumentException("接口不存在或主数据服务不可用: " + rule.getInterfaceId());
+        }
+        if (!rule.getVendorId().equals(apiInterface.getVendorId())) {
+            throw new IllegalArgumentException("所选接口不属于指定厂商");
+        }
+
+        Result<VendorInfoDTO> vendorResult = vendorInternalFeignClient.getById(rule.getVendorId());
+        VendorInfoDTO vendor = vendorResult != null ? vendorResult.getData() : null;
+        if (vendor == null) {
+            throw new IllegalArgumentException("厂商不存在或主数据服务不可用: " + rule.getVendorId());
+        }
+
+        LambdaQueryWrapper<BillingRule> duplicate = new LambdaQueryWrapper<>();
+        duplicate.eq(BillingRule::getVendorId, rule.getVendorId())
+                .eq(BillingRule::getInterfaceId, rule.getInterfaceId())
+                .ne(rule.getId() != null, BillingRule::getId, rule.getId());
+        if (billingRuleMapper.selectCount(duplicate) > 0) {
+            throw new IllegalArgumentException("该厂商与接口已存在计费规则");
+        }
+
+        rule.setVendorName(vendor.getVendorName());
+        rule.setInterfaceCode(apiInterface.getInterfaceCode());
+        rule.setInterfaceName(apiInterface.getInterfaceName());
+    }
+
+    private void applyRuleDefaults(BillingRule rule) {
+        if (rule.getBillingType() == null || rule.getBillingType().isBlank()) {
+            rule.setBillingType("STANDARD");
+        } else {
+            rule.setBillingType(rule.getBillingType().toUpperCase());
+        }
+        if (rule.getTierMin() == null) {
+            rule.setTierMin(0);
+        }
+        if (rule.getDiscount() == null) {
+            rule.setDiscount(BigDecimal.ONE);
+        }
+        if (rule.getStatus() == null || rule.getStatus().isBlank()) {
+            rule.setStatus("active");
+        }
+    }
+
+    private void validateAndNormalizeTiers(BillingRule rule) {
+        if (!"TIERED".equals(rule.getBillingType())) {
+            rule.setTiers(new ArrayList<>());
+            return;
+        }
+        if (rule.getTiers() == null || rule.getTiers().isEmpty()) {
+            throw new IllegalArgumentException("阶梯计费至少需要配置一个阶梯");
+        }
+
+        List<BillingRuleTier> tiers = new ArrayList<>(rule.getTiers());
+        tiers.sort(Comparator.comparing(BillingRuleTier::getTierMin,
+                Comparator.nullsLast(Long::compareTo)));
+        long expectedMin = 0L;
+        for (int index = 0; index < tiers.size(); index++) {
+            BillingRuleTier tier = tiers.get(index);
+            if (tier.getTierMin() == null || tier.getTierMin() != expectedMin) {
+                throw new IllegalArgumentException("阶梯区间必须从0开始且连续无间隔");
+            }
+            if (tier.getDiscount() == null
+                    || tier.getDiscount().compareTo(BigDecimal.ZERO) <= 0
+                    || tier.getDiscount().compareTo(BigDecimal.ONE) > 0) {
+                throw new IllegalArgumentException("阶梯折扣必须大于0且不超过1");
+            }
+            boolean lastTier = index == tiers.size() - 1;
+            if (lastTier) {
+                if (tier.getTierMax() != null) {
+                    throw new IllegalArgumentException("最后一个阶梯必须设置为无上限");
+                }
+            } else {
+                if (tier.getTierMax() == null || tier.getTierMax() <= tier.getTierMin()) {
+                    throw new IllegalArgumentException("非末级阶梯必须配置有效的最大调用量");
+                }
+                expectedMin = tier.getTierMax();
+            }
+            tier.setId(null);
+            tier.setRuleId(rule.getId());
+            tier.setSortOrder(index);
+        }
+        rule.setTiers(tiers);
+        rule.setTierMin(0);
+        rule.setTierMax(null);
+        rule.setDiscount(tiers.get(0).getDiscount());
+    }
+
+    private void replaceTiers(BillingRule rule) {
+        LambdaQueryWrapper<BillingRuleTier> deleteWrapper = new LambdaQueryWrapper<>();
+        deleteWrapper.eq(BillingRuleTier::getRuleId, rule.getId());
+        billingRuleTierMapper.delete(deleteWrapper);
+        if (rule.getTiers() == null) {
+            return;
+        }
+        for (BillingRuleTier tier : rule.getTiers()) {
+            tier.setId(null);
+            tier.setRuleId(rule.getId());
+            billingRuleTierMapper.insert(tier);
+        }
+    }
+
+    private BillingRule attachTiers(BillingRule rule) {
+        if (rule == null || rule.getId() == null) {
+            return rule;
+        }
+        LambdaQueryWrapper<BillingRuleTier> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(BillingRuleTier::getRuleId, rule.getId())
+                .orderByAsc(BillingRuleTier::getSortOrder, BillingRuleTier::getTierMin);
+        rule.setTiers(billingRuleTierMapper.selectList(wrapper));
+        return rule;
+    }
+
+    private void evictRuleCache(BillingRule rule) {
+        if (rule == null || rule.getVendorId() == null || rule.getInterfaceCode() == null) {
+            return;
+        }
+        try {
+            redisTemplate.delete(ruleCacheKey(rule.getVendorId(), rule.getInterfaceCode()));
+        } catch (Exception ignored) {
+            // Redis unavailable: database remains authoritative.
+        }
+    }
+
+    private String ruleCacheKey(Long vendorId, String interfaceCode) {
+        return RULE_CACHE_PREFIX + vendorId + ":" + interfaceCode;
     }
 
     private Long resolveVendorId(String vendorCode) {

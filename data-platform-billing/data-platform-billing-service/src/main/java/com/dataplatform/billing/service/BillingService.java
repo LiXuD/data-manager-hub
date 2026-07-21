@@ -17,23 +17,15 @@ import java.util.Map;
 public interface BillingService extends IService<BillingDaily> {
 
     /**
-     * 计算费用 - 支持阶梯计费
+     * 按厂商和接口计算费用；数据类型不参与规则匹配。
      */
-    BigDecimal calculateCost(String dataType, int callCount);
+    BigDecimal calculateCost(String vendorCode, String interfaceCode, int callCount, long latency);
 
     /**
-     * 计算费用(带响应时间) - 支持SLA补偿
-     * @param dataType 数据类型
-     * @param callCount 调用次数
-     * @param latency 响应时间(毫秒)
-     * @return 实际费用
+     * 按自然月累计用量计算本次增量费用；requestId 用于保证用量占用幂等。
      */
-    BigDecimal calculateCost(String dataType, int callCount, long latency);
-
-    /**
-     * 按厂商和数据类型计算费用。
-     */
-    BigDecimal calculateCost(String vendorCode, String dataType, int callCount, long latency);
+    BigDecimal calculateCost(String vendorCode, String interfaceCode, int callCount, long latency,
+                             String requestId, LocalDate billingDate);
 
     /**
      * 分页查询账单
@@ -56,7 +48,7 @@ public interface BillingService extends IService<BillingDaily> {
     byte[] export();
 
     /**
-     * 根据厂商编码和数据类型获取计费规则
+     * 根据厂商编码和接口编码获取唯一计费规则。
      */
-    BillingRule getRuleByVendorAndDataType(String vendorCode, String dataType);
+    BillingRule getRuleByVendorAndInterface(String vendorCode, String interfaceCode);
 }

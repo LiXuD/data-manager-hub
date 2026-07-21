@@ -18,7 +18,7 @@ export const exportBilling = (params: { startDate?: string; endDate?: string; ve
 }
 
 // 计费规则
-export const getBillingRuleList = (params: PageParams & { vendorId?: number; dataTypeId?: number }) => {
+export const getBillingRuleList = (params: PageParams & { vendorId?: number; interfaceId?: number }) => {
   return request.get('/billing/rule/list', { params })
 }
 

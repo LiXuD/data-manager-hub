@@ -105,6 +105,7 @@ public class OpenApiQueryService {
                                      LocalDateTime callTime, boolean success, boolean billable) {
         BillingCalculateReqDTO req = new BillingCalculateReqDTO();
         req.setVendorCode(context.getVendorCode());
+        req.setInterfaceCode(context.getApiCode());
         req.setDataType(context.getDataTypeCode());
         req.setCallCount(1);
         req.setLatency(latencyMs);

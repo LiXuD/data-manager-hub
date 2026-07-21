@@ -92,7 +92,8 @@ public class DataQueryServiceImpl implements DataQueryService {
             Map<String, Object> vendorResult = vendorProxyService.callVendor(vendorCode, effectiveDataType, params, config);
 
             long latency = System.currentTimeMillis() - startTime;
-            BigDecimal cost = calculateCost(requestId, callerId, vendorCode, effectiveDataType, latency);
+            BigDecimal cost = calculateCost(
+                    requestId, callerId, vendorCode, interfaceCode, effectiveDataType, latency);
 
             boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
 
@@ -176,9 +177,10 @@ public class DataQueryServiceImpl implements DataQueryService {
     }
 
     private BigDecimal calculateCost(String requestId, Long callerId, String vendorCode,
-                                     String dataType, long latencyMs) {
+                                     String interfaceCode, String dataType, long latencyMs) {
         BillingCalculateReqDTO req = new BillingCalculateReqDTO();
         req.setVendorCode(vendorCode);
+        req.setInterfaceCode(interfaceCode);
         req.setDataType(dataType);
         req.setCallCount(1);
         req.setLatency(latencyMs);

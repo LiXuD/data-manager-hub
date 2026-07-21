@@ -110,9 +110,18 @@ public class BillingController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Result.error(400, "unitPrice无效"));
         }
+        if (rule.getVendorId() == null || rule.getInterfaceId() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "vendorId和interfaceId不能为空"));
+        }
         rule.setId(null);
         rule.setStatus(StatusConstants.ACTIVE);
-        billingService.saveRule(rule);
+        try {
+            billingService.saveRule(rule);
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, exception.getMessage()));
+        }
         return ResponseEntity.ok(Result.success(rule));
     }
 
@@ -125,7 +134,12 @@ public class BillingController {
                     .body(Result.error(404, "计费规则不存在"));
         }
         rule.setId(id);
-        billingService.updateRule(rule);
+        try {
+            billingService.updateRule(rule);
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, exception.getMessage()));
+        }
         return ResponseEntity.ok(Result.success(billingService.getRuleById(id)));
     }
 

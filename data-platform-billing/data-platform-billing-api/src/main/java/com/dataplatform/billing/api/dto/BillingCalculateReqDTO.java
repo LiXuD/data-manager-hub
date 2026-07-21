@@ -11,6 +11,7 @@ public class BillingCalculateReqDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private String vendorCode;
+    private String interfaceCode;
     private String dataType;
     private Integer callCount;
     private Long latency;
@@ -24,6 +25,8 @@ public class BillingCalculateReqDTO implements Serializable {
 
     public String getVendorCode() { return vendorCode; }
     public void setVendorCode(String vendorCode) { this.vendorCode = vendorCode; }
+    public String getInterfaceCode() { return interfaceCode; }
+    public void setInterfaceCode(String interfaceCode) { this.interfaceCode = interfaceCode; }
     public String getDataType() { return dataType; }
     public void setDataType(String dataType) { this.dataType = dataType; }
     public Integer getCallCount() { return callCount; }

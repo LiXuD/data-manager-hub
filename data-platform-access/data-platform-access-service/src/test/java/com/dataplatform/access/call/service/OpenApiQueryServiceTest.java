@@ -4,6 +4,7 @@ import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallConte
 import com.dataplatform.access.call.service.VendorProxyService;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
 import com.dataplatform.api.Result;
+import com.dataplatform.billing.api.dto.BillingCalculateReqDTO;
 import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
 import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
 import com.dataplatform.common.entity.CallRecord;
@@ -73,6 +74,13 @@ class OpenApiQueryServiceTest {
         assertEquals(BigDecimal.ZERO, savedRecord.getCost());
         assertEquals(100L, savedRecord.getCacheSourceRecordId());
         assertEquals("trace-1", savedRecord.getTraceId());
+
+        ArgumentCaptor<BillingCalculateReqDTO> billingCaptor =
+                ArgumentCaptor.forClass(BillingCalculateReqDTO.class);
+        verify(billingFeignClient).calculateCost(billingCaptor.capture());
+        assertEquals("vendor-a", billingCaptor.getValue().getVendorCode());
+        assertEquals("PERSONAL_QUERY", billingCaptor.getValue().getInterfaceCode());
+        assertEquals("personal", billingCaptor.getValue().getDataType());
     }
 
     @Test

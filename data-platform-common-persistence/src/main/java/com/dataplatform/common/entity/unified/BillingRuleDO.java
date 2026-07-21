@@ -3,6 +3,7 @@ package com.dataplatform.common.entity.unified;
 import com.baomidou.mybatisplus.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 统一计费规则实体
@@ -31,6 +32,10 @@ public class BillingRuleDO {
 
     /** 折扣率 */
     private BigDecimal discount;
+
+    /** 阶梯计费区间，按 tierMin 升序排列。 */
+    @TableField(exist = false)
+    private List<BillingTierDO> tiers;
 
     /** SLA阈值(毫秒) */
     private Integer slaThreshold;
@@ -74,6 +79,8 @@ public class BillingRuleDO {
     public void setTierMax(Integer tierMax) { this.tierMax = tierMax; }
     public BigDecimal getDiscount() { return discount; }
     public void setDiscount(BigDecimal discount) { this.discount = discount; }
+    public List<BillingTierDO> getTiers() { return tiers; }
+    public void setTiers(List<BillingTierDO> tiers) { this.tiers = tiers; }
     public Integer getSlaThreshold() { return slaThreshold; }
     public void setSlaThreshold(Integer slaThreshold) { this.slaThreshold = slaThreshold; }
     public BigDecimal getCompensationRate() { return compensationRate; }

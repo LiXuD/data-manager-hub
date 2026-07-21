@@ -705,17 +705,31 @@ export interface UserDTO {
 }
 
 // 计费规则 (API DTO)
+export interface BillingTierDTO {
+  id?: number
+  tierMin: number
+  tierMax?: number | null
+  discount: number
+  sortOrder?: number
+}
+
 export interface BillingRuleDTO {
   id: number
+  ruleName: string
   vendorId: number
   vendorName: string
-  dataTypeId: number
-  dataTypeName: string
-  pricePerCall: number
-  minPrice: number
-  maxPrice: number
-  discountThreshold: number
-  discountRate: number
+  interfaceId: number
+  interfaceCode: string
+  interfaceName: string
+  dataType?: string
+  billingType: 'STANDARD' | 'TIERED' | 'DYNAMIC'
+  unitPrice: number
+  tierMin: number
+  tierMax?: number | null
+  discount: number
+  tiers: BillingTierDTO[]
+  slaThreshold?: number
+  compensationRate?: number
   status: string
   createdAt: string
   updatedAt: string

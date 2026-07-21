@@ -2,11 +2,13 @@ package com.dataplatform.test;
 
 import com.dataplatform.common.billing.*;
 import com.dataplatform.common.entity.unified.BillingRuleDO;
+import com.dataplatform.common.entity.unified.BillingTierDO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -82,6 +84,7 @@ class BillingCalculatorTest {
     @DisplayName("阶梯计费 - 第一阶梯(0-10万次)")
     void testTieredCalculator_Tier1() {
         BillingCalculator calculator = new TieredBillingCalculator();
+        rule.setTiers(exampleTiers());
 
         BigDecimal result = calculator.calculate(rule, 50_000, 100);
 
@@ -89,42 +92,43 @@ class BillingCalculatorTest {
     }
 
     @Test
-    @DisplayName("阶梯计费 - 使用配置的9折")
+    @DisplayName("阶梯计费 - 跨入第二阶梯时累进计价")
     void testTieredCalculator_Tier2() {
         BillingCalculator calculator = new TieredBillingCalculator();
+        rule.setTiers(exampleTiers());
 
-        rule.setDiscount(new BigDecimal("0.90"));
-        BigDecimal result = calculator.calculate(rule, 200_000, 100);
+        BigDecimal result = calculator.calculate(rule, 150_000, 100);
 
-        assertEquals(new BigDecimal("1800.0000"), result);
+        assertEquals(new BigDecimal("1450.0000"), result);
     }
 
     @Test
-    @DisplayName("阶梯计费 - 使用配置的8折")
+    @DisplayName("阶梯计费 - 跨入第三阶梯时累进计价")
     void testTieredCalculator_Tier3() {
         BillingCalculator calculator = new TieredBillingCalculator();
+        rule.setTiers(exampleTiers());
 
-        rule.setDiscount(new BigDecimal("0.80"));
-        BigDecimal result = calculator.calculate(rule, 1_000_000, 100);
+        BigDecimal result = calculator.calculate(rule, 350_000, 100);
 
-        assertEquals(new BigDecimal("8000.0000"), result);
+        assertEquals(new BigDecimal("3100.0000"), result);
     }
 
     @Test
-    @DisplayName("阶梯计费 - 使用规则折扣")
+    @DisplayName("阶梯计费 - 50万以上使用7折且保持累进")
     void testTieredCalculator_RuleDiscount() {
-        rule.setDiscount(new BigDecimal("0.70"));
+        rule.setTiers(exampleTiers());
         BillingCalculator calculator = new TieredBillingCalculator();
 
-        BigDecimal result = calculator.calculate(rule, 100_000, 100);
+        BigDecimal result = calculator.calculate(rule, 600_000, 100);
 
-        assertEquals(new BigDecimal("700.0000"), result);
+        assertEquals(new BigDecimal("5000.0000"), result);
     }
 
     @Test
     @DisplayName("阶梯计费 - 单次调用")
     void testTieredCalculator_SingleCall() {
         BillingCalculator calculator = new TieredBillingCalculator();
+        rule.setTiers(exampleTiers());
 
         BigDecimal result = calculator.calculateSingle(rule, 150);
 
@@ -140,6 +144,23 @@ class BillingCalculatorTest {
         BigDecimal result = calculator.calculateSingle(rule, 150);
 
         assertEquals(new BigDecimal("0.0090"), result);
+    }
+
+    private List<BillingTierDO> exampleTiers() {
+        return List.of(
+                tier(0, 100_000L, "1.00"),
+                tier(100_000L, 200_000L, "0.90"),
+                tier(200_000L, 500_000L, "0.80"),
+                tier(500_000L, null, "0.70")
+        );
+    }
+
+    private BillingTierDO tier(long min, Long max, String discount) {
+        BillingTierDO tier = new BillingTierDO();
+        tier.setTierMin(min);
+        tier.setTierMax(max);
+        tier.setDiscount(new BigDecimal(discount));
+        return tier;
     }
 
     // ========== DynamicBillingCalculator Tests ==========
