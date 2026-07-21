@@ -14,6 +14,8 @@ import com.dataplatform.billing.api.dto.BillingCalculateReqDTO;
 import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
 import com.dataplatform.billing.service.BillingService;
 import com.dataplatform.billing.service.BillingUsageRecorder;
+import com.dataplatform.billing.service.BillingChargeService;
+import com.dataplatform.billing.service.BillingPlanService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -23,8 +25,10 @@ class BillingInternalControllerTest {
 
     private final BillingService billingService = mock(BillingService.class);
     private final BillingUsageRecorder recorder = mock(BillingUsageRecorder.class);
+    private final BillingPlanService planService = mock(BillingPlanService.class);
+    private final BillingChargeService chargeService = mock(BillingChargeService.class);
     private final BillingInternalController controller =
-            new BillingInternalController(billingService, recorder);
+            new BillingInternalController(billingService, recorder, planService, chargeService);
 
     @Test
     void calculatesAndRecordsBillableSuccess() {

@@ -659,6 +659,9 @@ CREATE INDEX idx_quality_score_rule ON quality_score(rule_id);
 
 -- =====================================================
 -- 更新记录
+-- 2026-07-21: 引入模板化、版本化计费方案与事件账本
 -- 2026-04-24: 添加缺失字段 (nickname, updated_by, resolved_by等)
 -- 2026-04-24: 添加 data_lineage, quality_rule, quality_score 表
 -- =====================================================
+
+\ir migrations/V021__create_billing_plan_and_event_ledger.sql

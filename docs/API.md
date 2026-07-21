@@ -895,6 +895,35 @@ Authorization: Bearer {token}
 
 ## 计费管理 (/billing)
 
+### 模板化计费方案（推荐）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/billing/template/list` | 查询启用的计费模板 |
+| GET | `/billing/plan/list` | 查询全部方案及版本 |
+| GET | `/billing/plan/{id}` | 查询方案详情 |
+| POST | `/billing/plan` | 创建草稿 |
+| PUT | `/billing/plan/{id}` | 更新草稿/待复核版本 |
+| POST | `/billing/plan/{id}/next-version` | 基于历史版本创建新草稿 |
+| POST | `/billing/plan/{id}/validate` | 按当前接口契约校验 |
+| POST | `/billing/plan/{id}/simulate` | 使用计量事实和账期已有用量模拟 |
+| POST | `/billing/plan/{id}/publish` | 发布版本 |
+| DELETE | `/billing/plan/{id}` | 删除未发布草稿 |
+| POST | `/billing/plan/review-contracts` | 检查响应契约漂移 |
+| POST | `/billing/plan/accrue` | 补提套餐/包周期固定费用 |
+| GET | `/billing/event/list` | 分页查询事件账本 |
+| GET | `/billing/event/stats` | 查询净金额、净数量和待复核数 |
+| POST | `/billing/event/{id}/reverse` | 追加全额冲正事件 |
+
+Access 域内部调用：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/internal/billing/metering-policy` | 按厂商、接口、调用时间固定生效方案与最小字段选择器 |
+| POST | `/internal/billing/charge` | 提交最小计量事实并幂等入账 |
+
+详细配置、定价和生命周期语义见 `docs/2026-07-21-billing-plan-implementation.md`。
+
 ### 计费规则 CRUD
 
 #### 获取计费规则列表

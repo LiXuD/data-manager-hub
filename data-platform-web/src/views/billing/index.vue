@@ -26,6 +26,9 @@
     <!-- Tab 切换 -->
     <el-card class="table-card">
       <el-tabs v-model="activeTab">
+        <el-tab-pane label="计费方案" name="plan">
+          <BillingPlanWorkspace />
+        </el-tab-pane>
         <!-- 账单记录 -->
         <el-tab-pane label="账单记录" name="record">
           <!-- 搜索区域 -->
@@ -98,7 +101,7 @@
         </el-tab-pane>
 
         <!-- 计费规则 -->
-        <el-tab-pane label="计费规则" name="rule">
+        <el-tab-pane label="旧计费规则" name="rule">
           <div class="tool-bar">
             <el-button type="primary" @click="handleAddRule">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -267,6 +270,7 @@ import { extractPageData } from '@/utils/pagination'
 import { useCacheStore } from '@/stores/cache'
 import { getInterfaceOptions } from '@/api/interface'
 import type { ApiInterface } from '@/types'
+import BillingPlanWorkspace from './BillingPlanWorkspace.vue'
 // StatCard is globally registered by unplugin-vue-components
 
 interface BillingRecord {
@@ -309,7 +313,7 @@ interface BillingTier {
 
 const loading = ref(false)
 const exporting = ref(false)
-const activeTab = ref('record')
+const activeTab = ref('plan')
 const tableData = ref<BillingRecord[]>([])
 const ruleData = ref<BillingRule[]>([])
 const interfaceOptions = ref<ApiInterface[]>([])

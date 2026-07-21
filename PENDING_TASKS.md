@@ -51,6 +51,7 @@
 | UAPI 程序员历史外部数据源接入 | 已完成 | `V017__seed_uapi_programmer_history_provider.sql`；真实 GET 调用、响应契约、调用记录与零元计费由 `UapiProgrammerHistoryFlowTest` 验证 |
 | 计费规则改为厂商 + 接口唯一配置 | 已完成 | `V018__bind_billing_rules_to_vendor_interface.sql`；计费匹配不再使用数据类型，页面按厂商联动选择接口 |
 | 厂商接口规则支持多档阶梯计费 | 已完成 | `V019__add_billing_rule_tiers.sql`、`V020__add_monthly_billing_tier_usage.sql`；按自然月累计调用量并按区间累进计价，请求重试不重复推进阶梯 |
+| 模板化与版本化计费方案 | 已完成 | `V021__create_billing_plan_and_event_ledger.sql`；六类模板、响应字段计量、事件账本、套餐/周期费、SLA、契约复核、模拟发布和冲正 |
 
 ## 发布前仍需执行的环境验证
 

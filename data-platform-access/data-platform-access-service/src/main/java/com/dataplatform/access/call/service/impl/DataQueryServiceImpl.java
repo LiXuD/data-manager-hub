@@ -2,15 +2,20 @@ package com.dataplatform.access.call.service.impl;
 
 import cn.hutool.crypto.digest.DigestUtil;
 import com.dataplatform.api.Result;
-import com.dataplatform.billing.api.dto.BillingCalculateReqDTO;
-import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
+import com.dataplatform.billing.api.dto.BillingChargeReqDTO;
+import com.dataplatform.billing.api.dto.BillingChargeRespDTO;
+import com.dataplatform.billing.api.dto.BillingMeteringPolicyDTO;
+import com.dataplatform.billing.api.dto.BillingAdditionalPlanDTO;
 import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.access.call.service.CallRecordService;
 import com.dataplatform.access.call.service.DataQueryService;
 import com.dataplatform.access.call.service.VendorProxyService;
+import com.dataplatform.access.call.service.BillingFactExtractor;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
+import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
+import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +51,12 @@ public class DataQueryServiceImpl implements DataQueryService {
     private BillingInternalFeignClient billingFeignClient;
 
     @Autowired
+    private BillingFactExtractor billingFactExtractor;
+
+    @Autowired
+    private ApiInterfaceFeignClient interfaceFeignClient;
+
+    @Autowired
     private StringRedisTemplate redisTemplate;
 
     @Value("${data.query.cache.ttl:3600}")
@@ -59,6 +70,7 @@ public class DataQueryServiceImpl implements DataQueryService {
                                           Long callerId, String apiKey) {
         long startTime = System.currentTimeMillis();
         String requestId = generateRequestId();
+        LocalDateTime callTime = LocalDateTime.now();
 
         VendorConfigDTO config = null;
         if (interfaceCode != null && !interfaceCode.isEmpty()) {
@@ -73,6 +85,8 @@ public class DataQueryServiceImpl implements DataQueryService {
         String effectiveDataType = (config != null && config.getDataTypeCode() != null)
             ? config.getDataTypeCode()
             : dataType;
+        String effectiveInterfaceCode = resolveInterfaceCode(interfaceCode, config);
+        BillingMeteringPolicyDTO policy = resolvePolicy(vendorCode, effectiveInterfaceCode, callTime);
 
         try {
             String cacheKey = buildCacheKey(vendorCode, effectiveDataType, params);
@@ -82,20 +96,23 @@ public class DataQueryServiceImpl implements DataQueryService {
                 Map<String, Object> result = objectMapper.readValue(cachedResult, Map.class);
                 result.put("cached", true);
                 result.put("latency", System.currentTimeMillis() - startTime);
+                BigDecimal cost = charge(requestId, callerId, vendorCode, effectiveInterfaceCode,
+                        effectiveDataType, System.currentTimeMillis() - startTime, callTime,
+                        true, true, result, params, policy);
 
                 recordCall(requestId, callerId, vendorCode, effectiveDataType, params,
                           result, true, System.currentTimeMillis() - startTime,
-                          BigDecimal.ZERO, true);
+                          cost, true);
                 return result;
             }
 
             Map<String, Object> vendorResult = vendorProxyService.callVendor(vendorCode, effectiveDataType, params, config);
 
             long latency = System.currentTimeMillis() - startTime;
-            BigDecimal cost = calculateCost(
-                    requestId, callerId, vendorCode, interfaceCode, effectiveDataType, latency);
-
             boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
+            BigDecimal cost = charge(requestId, callerId, vendorCode, effectiveInterfaceCode,
+                    effectiveDataType, latency, callTime, success, false,
+                    vendorResult, params, policy);
 
             recordCall(requestId, callerId, vendorCode, effectiveDataType, params,
                       vendorResult, success, latency, cost, false);
@@ -176,25 +193,76 @@ public class DataQueryServiceImpl implements DataQueryService {
         return result;
     }
 
-    private BigDecimal calculateCost(String requestId, Long callerId, String vendorCode,
-                                     String interfaceCode, String dataType, long latencyMs) {
-        BillingCalculateReqDTO req = new BillingCalculateReqDTO();
-        req.setVendorCode(vendorCode);
-        req.setInterfaceCode(interfaceCode);
-        req.setDataType(dataType);
-        req.setCallCount(1);
-        req.setLatency(latencyMs);
-        req.setRequestId(requestId);
-        req.setCallerId(callerId);
-        req.setSuccess(true);
-        req.setBillable(true);
-        req.setCallTime(LocalDateTime.now());
-        Result<BillingCalculateRespDTO> costResult = billingFeignClient.calculateCost(req);
-        BillingCalculateRespDTO resp = costResult != null ? costResult.getData() : null;
-        if (resp != null && resp.getCost() != null) {
-            return resp.getCost();
+    private BillingMeteringPolicyDTO resolvePolicy(String vendorCode, String interfaceCode,
+                                                   LocalDateTime callTime) {
+        Result<BillingMeteringPolicyDTO> result = billingFeignClient.getMeteringPolicy(
+                vendorCode, interfaceCode, callTime);
+        BillingMeteringPolicyDTO policy = result != null ? result.getData() : null;
+        if (policy == null || policy.getPlanId() == null) {
+            throw new IllegalStateException("Billing service returned an empty metering policy");
         }
-        throw new IllegalStateException("Billing service returned an empty cost");
+        return policy;
+    }
+
+    private String resolveInterfaceCode(String requestedCode, VendorConfigDTO config) {
+        if (requestedCode != null && !requestedCode.isBlank()) return requestedCode;
+        if (config == null || config.getInterfaceId() == null) {
+            throw new IllegalArgumentException("无法确定计费接口，请传入interfaceCode或配置interfaceId");
+        }
+        Result<ApiInterfaceDTO> result = interfaceFeignClient.getById(config.getInterfaceId());
+        ApiInterfaceDTO apiInterface = result != null ? result.getData() : null;
+        if (apiInterface == null || apiInterface.getInterfaceCode() == null
+                || apiInterface.getInterfaceCode().isBlank()) {
+            throw new IllegalArgumentException("无法根据厂商配置解析计费接口");
+        }
+        return apiInterface.getInterfaceCode();
+    }
+
+    private BigDecimal charge(String requestId, Long callerId, String vendorCode,
+                              String interfaceCode, String dataType, long latencyMs,
+                              LocalDateTime callTime, boolean success, boolean cached,
+                              Map<String, Object> response, Map<String, Object> params,
+                              BillingMeteringPolicyDTO policy) {
+        BillingChargeReqDTO request = new BillingChargeReqDTO();
+        request.setRequestId(requestId);
+        request.setPlanId(policy.getPlanId());
+        request.setPlanVersion(policy.getPlanVersion());
+        request.setPolicyHash(policy.getPolicyHash());
+        request.setVendorCode(vendorCode);
+        request.setInterfaceCode(interfaceCode);
+        request.setDataType(dataType);
+        request.setCallerId(callerId);
+        request.setCallTime(callTime);
+        request.setSuccess(success);
+        request.setCached(cached);
+        request.setResponseContractValid(true);
+        request.setLatencyMs(latencyMs);
+        request.setHttpStatus(success ? 200 : 502);
+        request.setMeteringFacts(billingFactExtractor.extract(policy, response, params));
+        request.setAdditionalPlans(buildAdditionalPlans(policy, response, params));
+        Result<BillingChargeRespDTO> result = billingFeignClient.charge(request);
+        BillingChargeRespDTO charge = result != null ? result.getData() : null;
+        if (charge == null || charge.getFinalAmount() == null) {
+            throw new IllegalStateException("Billing service returned an empty charge result");
+        }
+        return charge.getFinalAmount();
+    }
+
+    private List<BillingAdditionalPlanDTO> buildAdditionalPlans(BillingMeteringPolicyDTO policy,
+                                                                 Map<String, Object> response,
+                                                                 Map<String, Object> params) {
+        if (policy.getAdditionalPlans() == null) return List.of();
+        return policy.getAdditionalPlans().stream().map(source -> {
+            BillingAdditionalPlanDTO target = new BillingAdditionalPlanDTO();
+            target.setPlanId(source.getPlanId());
+            target.setPlanCode(source.getPlanCode());
+            target.setPlanVersion(source.getPlanVersion());
+            target.setTemplateCode(source.getTemplateCode());
+            target.setAccountingPurpose(source.getAccountingPurpose());
+            target.setPolicyHash(source.getPolicyHash());
+            target.setMeteringFacts(billingFactExtractor.extract(source, response, params));
+            return target;
+        }).toList();
     }
 
     private String generateRequestId() {

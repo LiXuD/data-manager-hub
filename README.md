@@ -85,7 +85,7 @@ data-platform/
 |------|--------|
 | masterdata | `vendor_info`、`data_type`、`vendor_config`、`vendor_config_extended`、`api_interface`、`interface_param`、`gray_rule` |
 | access | `caller_info`、`caller_product`、`api_key`、`api_key_product`、`call_scene`、`call_record` |
-| billing | `billing_rule`、`billing_daily`、`billing_daily_event`（幂等请求账本） |
+| billing | `billing_template`、`billing_plan`、`billing_plan_tier`、`billing_event`（不可变账本）、`billing_usage_balance`，以及兼容的 `billing_rule` / `billing_daily` |
 | identity | `tenant_info`、`user_info`、`role_info`、`user_role` |
 | governance | `alert_rule`、`alert_record`、`circuit_breaker`、`operation_log`、`data_lineage`、`quality_rule`、`quality_score` |
 
