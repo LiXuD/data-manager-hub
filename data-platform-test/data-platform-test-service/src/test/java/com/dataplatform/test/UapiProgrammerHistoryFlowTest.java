@@ -84,13 +84,6 @@ class UapiProgrammerHistoryFlowTest extends BaseTest {
         assertEquals("https://uapis.cn/api/v1/history/programmer/today",
                 configRows.getFirst().get("apiUrl"));
 
-        Map<String, Object> billingRule = findByField(
-                getAuthRequest().get("/billing/rule/list"),
-                "interfaceCode", API_CODE);
-        assertEquals(vendorId, longValue(billingRule.get("vendorId")));
-        assertEquals(interfaceId, longValue(billingRule.get("interfaceId")));
-        assertEquals(0, decimalValue(billingRule.get("unitPrice")).compareTo(BigDecimal.ZERO));
-
         Response health = getAuthRequest().post("/vendor/config/" + configId + "/test");
         verifySuccess(health);
         health.then()

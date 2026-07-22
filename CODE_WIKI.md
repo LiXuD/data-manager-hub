@@ -250,16 +250,6 @@ VendorAdapterFactory (工厂类)
 | `ApiKeyAuthHandler` | API_KEY | API Key认证 (Header/Query) |
 | `AuthHandlerFactory` | 工厂 | 根据认证类型获取对应处理器 |
 
-##### 计费计算器体系 (`billing/`)
-
-| 类名 | 计费类型 | 说明 |
-|------|----------|------|
-| `BillingCalculator` | 接口 | 计费计算器接口 |
-| `StandardBillingCalculator` | STANDARD | 标准计费 (单价 × 调用次数) |
-| `TieredBillingCalculator` | TIERED | 阶梯计费 (不同量级不同单价) |
-| `DynamicBillingCalculator` | DYNAMIC | 动态计费 (基于响应时间等动态因素) |
-| `BillingCalculatorFactory` | 工厂 | 根据 `BillingType` 枚举返回对应计算器 |
-
 ##### 熔断器 (`circuitbreaker/`)
 
 | 类名 | 说明 |
@@ -566,14 +556,11 @@ com.dataplatform.billing/
 │   └── BillingInternalController.java  # /internal/v1/billing
 ├── service/
 │   ├── BillingService.java        # 计费核心服务
-│   ├── BillingUsageRecorder.java  # 幂等更新日聚合
 │   ├── BudgetAlertService.java     # 预算告警
 │   └── ReconciliationService.java  # 对账服务
 ├── mapper/
-│   ├── BillingRuleMapper.java
 │   └── BillingDailyMapper.java
 ├── entity/
-│   ├── BillingRule.java
 │   ├── BillingDaily.java
 │   ├── BillingReconciliation.java
 │   └── TenantBudget.java
@@ -585,7 +572,6 @@ com.dataplatform.billing/
 
 | 路径 | 说明 |
 |------|------|
-| `/billing/rule` | 计费规则 CRUD |
 | `/billing/daily` | 日账单查询 |
 | `/billing/budget` | 预算管理 |
 | `/billing/summary` | 账单汇总 |
@@ -790,7 +776,6 @@ com.dataplatform.governance/
 | 测试类 | 说明 |
 |--------|------|
 | `SignatureBuilderTest` | 签名构建器测试 |
-| `BillingCalculatorTest` | 计费计算器测试 |
 | `HttpVendorAdapterTest` | HTTP厂商适配器测试 |
 | `RequestMappingProcessorTest` | 请求映射处理测试 |
 | `ResponseMappingProcessorTest` | 响应映射处理测试 |
@@ -1047,8 +1032,8 @@ data-platform-web/src/
 
 | 模式 | 应用位置 | 说明 |
 |------|----------|------|
-| **策略模式** | `VendorAdapter` / `AuthHandler` / `BillingCalculator` / `SecurityStepHandler` | 不同厂商、认证、计费和安全步骤实现可互换 |
-| **工厂模式** | `VendorAdapterFactory` / `AuthHandlerFactory` / `BillingCalculatorFactory` | 根据类型创建对应策略实例 |
+| **策略模式** | `VendorAdapter` / `AuthHandler` / `SecurityStepHandler` | 不同厂商、认证和安全步骤实现可互换 |
+| **工厂模式** | `VendorAdapterFactory` / `AuthHandlerFactory` | 根据类型创建对应策略实例 |
 | **模板方法模式** | `AbstractVendorAdapter` | 定义通用的请求/响应转换流程 |
 | **AOP模式** | `OperationLogAspect` | 通过注解声明式记录操作日志 |
 | **代理模式** | `VendorProxyService` | 代理调用方请求到厂商API |

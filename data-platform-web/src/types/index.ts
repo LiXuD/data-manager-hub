@@ -117,22 +117,6 @@ export interface ApiKeyListResponse {
 }
 
 // 计费相关类型
-export interface BillingRule {
-  id: string
-  vendorId: string
-  vendorName: string
-  dataTypeId: string
-  dataTypeName: string
-  pricePerCall: number
-  minPrice: number
-  maxPrice: number
-  discountThreshold: number
-  discountRate: number
-  status: 'enabled' | 'disabled'
-  createdAt: string
-  updatedAt: string
-}
-
 export interface BillingRecord {
   id: string
   tenantId: string
@@ -699,37 +683,6 @@ export interface UserDTO {
   email?: string
   tenantId?: number
   tenantName?: string
-  status: string
-  createdAt: string
-  updatedAt: string
-}
-
-// 计费规则 (API DTO)
-export interface BillingTierDTO {
-  id?: number
-  tierMin: number
-  tierMax?: number | null
-  discount: number
-  sortOrder?: number
-}
-
-export interface BillingRuleDTO {
-  id: number
-  ruleName: string
-  vendorId: number
-  vendorName: string
-  interfaceId: number
-  interfaceCode: string
-  interfaceName: string
-  dataType?: string
-  billingType: 'STANDARD' | 'TIERED' | 'DYNAMIC'
-  unitPrice: number
-  tierMin: number
-  tierMax?: number | null
-  discount: number
-  tiers: BillingTierDTO[]
-  slaThreshold?: number
-  compensationRate?: number
   status: string
   createdAt: string
   updatedAt: string
