@@ -5,7 +5,6 @@ import com.dataplatform.common.result.Result;
 import com.dataplatform.common.result.PageResult;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.dataplatform.billing.entity.BillingDaily;
-import com.dataplatform.billing.entity.BillingRule;
 import com.dataplatform.billing.entity.BillingReconciliation;
 import com.dataplatform.billing.service.BillingService;
 import com.dataplatform.billing.service.ReconciliationService;
@@ -91,68 +90,6 @@ public class BillingController {
         return ResponseEntity.ok()
                 .headers(headers)
                 .body(data);
-    }
-
-    @GetMapping("/rule/list")
-    public Result<List<BillingRule>> listRules() {
-        return Result.success(billingService.listRules());
-    }
-
-    @OperationLog(module = "计费规则管理", operation = "新增计费规则")
-    @PostMapping("/rule")
-    public ResponseEntity<Result<BillingRule>> createRule(@RequestBody BillingRule rule) {
-        // 验证必填参数
-        if (rule.getRuleName() == null || rule.getRuleName().isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Result.error(400, "ruleName不能为空"));
-        }
-        if (rule.getUnitPrice() == null || rule.getUnitPrice().doubleValue() < 0) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Result.error(400, "unitPrice无效"));
-        }
-        if (rule.getVendorId() == null || rule.getInterfaceId() == null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Result.error(400, "vendorId和interfaceId不能为空"));
-        }
-        rule.setId(null);
-        rule.setStatus(StatusConstants.ACTIVE);
-        try {
-            billingService.saveRule(rule);
-        } catch (IllegalArgumentException exception) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Result.error(400, exception.getMessage()));
-        }
-        return ResponseEntity.ok(Result.success(rule));
-    }
-
-    @OperationLog(module = "计费规则管理", operation = "更新计费规则")
-    @PutMapping("/rule/{id}")
-    public ResponseEntity<Result<BillingRule>> updateRule(@PathVariable Long id, @RequestBody BillingRule rule) {
-        BillingRule existing = billingService.getRuleById(id);
-        if (existing == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Result.error(404, "计费规则不存在"));
-        }
-        rule.setId(id);
-        try {
-            billingService.updateRule(rule);
-        } catch (IllegalArgumentException exception) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Result.error(400, exception.getMessage()));
-        }
-        return ResponseEntity.ok(Result.success(billingService.getRuleById(id)));
-    }
-
-    @OperationLog(module = "计费规则管理", operation = "删除计费规则")
-    @DeleteMapping("/rule/{id}")
-    public ResponseEntity<Result<Void>> deleteRule(@PathVariable Long id) {
-        BillingRule existing = billingService.getRuleById(id);
-        if (existing == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Result.error(404, "计费规则不存在"));
-        }
-        billingService.deleteRule(id);
-        return ResponseEntity.ok(Result.success(null));
     }
 
     @OperationLog(module = "自动对账", operation = "导入厂商账单")
