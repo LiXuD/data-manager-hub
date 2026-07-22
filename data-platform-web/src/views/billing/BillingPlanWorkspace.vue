@@ -6,9 +6,9 @@
         <p>模板负责计算方式，方案绑定厂商、接口、响应字段和生效版本。</p>
       </div>
       <div class="toolbar-actions">
-        <el-button :loading="reviewing" @click="handleReviewContracts">检查契约变更</el-button>
-        <el-button :loading="accruing" @click="handleAccrue">补提周期费用</el-button>
-        <el-button type="primary" @click="openCreate">新增计费方案</el-button>
+        <el-button v-if="canManage" :loading="reviewing" @click="handleReviewContracts">检查契约变更</el-button>
+        <el-button v-if="canManage" :loading="accruing" @click="handleAccrue">补提周期费用</el-button>
+        <el-button v-if="canManage" type="primary" @click="openCreate">新增计费方案</el-button>
       </div>
     </div>
 
@@ -44,11 +44,11 @@
       </el-table-column>
       <el-table-column label="操作" width="250" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="editable(row)" type="primary" link @click="openEdit(row)">编辑</el-button>
-          <el-button v-if="editable(row) || row.status === 'NEEDS_REVIEW'" type="success" link @click="handlePublish(row)">{{ row.status === 'NEEDS_REVIEW' ? '复核发布' : '发布' }}</el-button>
-          <el-button v-if="!editable(row)" type="primary" link @click="handleNextVersion(row)">新版本</el-button>
+          <el-button v-if="canManage && editable(row)" type="primary" link @click="openEdit(row)">编辑</el-button>
+          <el-button v-if="canManage && (editable(row) || row.status === 'NEEDS_REVIEW')" type="success" link @click="handlePublish(row)">{{ row.status === 'NEEDS_REVIEW' ? '复核发布' : '发布' }}</el-button>
+          <el-button v-if="canManage && !editable(row)" type="primary" link @click="handleNextVersion(row)">新版本</el-button>
           <el-button link @click="openSimulation(row)">模拟</el-button>
-          <el-button v-if="editable(row)" type="danger" link @click="handleDelete(row)">删除</el-button>
+          <el-button v-if="canManage && editable(row)" type="danger" link @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -92,7 +92,7 @@
       </el-table-column>
       <el-table-column label="操作" width="80" fixed="right">
         <template #default="{ row }">
-          <el-button v-if="row.eventType !== 'REVERSAL'" type="danger" link @click="handleReverse(row)">冲正</el-button>
+          <el-button v-if="canReverse && row.eventType !== 'REVERSAL'" type="danger" link @click="handleReverse(row)">冲正</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -229,8 +229,8 @@
         <el-button @click="wizardVisible = false">取消</el-button>
         <el-button v-if="step > 0" @click="step--">上一步</el-button>
         <el-button v-if="step < 4" type="primary" @click="nextStep">下一步</el-button>
-        <el-button v-else :loading="saving" @click="saveDraft(false)">保存草稿</el-button>
-        <el-button v-if="step === 4" type="success" :loading="publishing" @click="saveAndPublish">校验并发布</el-button>
+        <el-button v-else-if="canManage" :loading="saving" @click="saveDraft(false)">保存草稿</el-button>
+        <el-button v-if="canManage && step === 4" type="success" :loading="publishing" @click="saveAndPublish">校验并发布</el-button>
       </template>
     </el-dialog>
 
@@ -260,6 +260,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getInterfaceContract, getInterfaceOptions } from '@/api/interface'
 import { useCacheStore } from '@/stores/cache'
+import { useUserStore } from '@/stores/user'
 import { extractPageData } from '@/utils/pagination'
 import type { ApiInterface, InterfaceParam } from '@/types'
 import {
@@ -273,6 +274,9 @@ import {
 interface FieldOption { id?: number; path: string; label: string; type: string }
 
 const cacheStore = useCacheStore()
+const userStore = useUserStore()
+const canManage = computed(() => userStore.hasPermission('billing:manage'))
+const canReverse = computed(() => userStore.hasPermission('billing:reverse'))
 const loading = ref(false)
 const eventLoading = ref(false)
 const reviewing = ref(false)

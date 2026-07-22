@@ -85,24 +85,6 @@ WHERE vc.vendor_id = vi.id
   AND dt.data_type_code = 'programmer_history'
   AND ai.interface_code = 'PROGRAMMER_HISTORY_TODAY';
 
--- UAPI 该接口免费，平台仍保留一条 0 元规则以闭合计费链路。
-INSERT INTO billing_rule (
-    rule_name, vendor_id, vendor_name, data_type, billing_type,
-    unit_price, tier_min, discount, status, sla_threshold, compensation_rate
-)
-SELECT
-    'UAPI 程序员历史免费规则', vi.id, vi.vendor_name,
-    'programmer_history', 'STANDARD', 0, 0, 1.00, 'active', 10000, 0
-FROM vendor_info vi
-WHERE vi.vendor_code = 'uapi'
-  AND NOT EXISTS (
-      SELECT 1
-      FROM billing_rule br
-      WHERE br.vendor_id = vi.id
-        AND br.data_type = 'programmer_history'
-        AND br.status = 'active'
-  );
-
 -- 响应契约根字段。
 INSERT INTO interface_param (
     interface_id, direction, param_name, description, param_type,

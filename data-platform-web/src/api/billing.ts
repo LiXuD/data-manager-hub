@@ -13,7 +13,7 @@ export const getBillingStats = (params: { tenantId?: number; startDate?: string;
   return request.get<{ data: { totalCost: number; totalCallCount: number; days: number } }>('/billing/stats', { params })
 }
 
-export const exportBilling = (params: { startDate?: string; endDate?: string; vendorId?: number }) => {
+export const exportBilling = (params: { tenantId?: number; startDate?: string; endDate?: string; vendorId?: number }) => {
   return request.get<Blob>('/billing/export', { params, responseType: 'blob' })
 }
 

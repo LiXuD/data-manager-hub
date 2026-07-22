@@ -27,5 +27,5 @@ public interface BillingService extends IService<BillingDaily> {
     /**
      * 导出账单 CSV
      */
-    byte[] export();
+    byte[] export(Long tenantId, Long vendorId, LocalDate startDate, LocalDate endDate);
 }

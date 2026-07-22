@@ -55,9 +55,9 @@ export DB_PORT=15432
 ### 3. 初始化数据库
 
 ```bash
-psql -h localhost -U postgres -d dataplatform -f sql/init.sql
+psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d dataplatform -f sql/init.sql
 for migration in sql/migrations/*.sql; do
-  psql -h localhost -U postgres -d dataplatform -f "$migration"
+  psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d dataplatform -f "$migration"
 done
 ```
 

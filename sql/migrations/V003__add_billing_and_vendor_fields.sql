@@ -1,6 +1,6 @@
 -- =====================================================
 -- 迁移脚本: V003__add_billing_and_vendor_fields
--- 描述: 添加计费规则SLA字段、厂商备用字段、对账表、厂商密钥
+-- 描述: 添加厂商备用字段、对账表、厂商密钥
 -- 创建时间: 2026-04-26
 -- =====================================================
 
@@ -12,28 +12,7 @@ COMMENT ON COLUMN vendor_info.secret_key IS '厂商API密钥';
 ALTER TABLE vendor_config ADD COLUMN IF NOT EXISTS fallback_vendor_id BIGINT DEFAULT NULL;
 COMMENT ON COLUMN vendor_config.fallback_vendor_id IS '备用厂商ID';
 
--- 2. billing_rule 表添加 SLA 相关字段
-ALTER TABLE billing_rule ADD COLUMN IF NOT EXISTS sla_threshold INTEGER DEFAULT 2000;
-ALTER TABLE billing_rule ADD COLUMN IF NOT EXISTS compensation_rate DECIMAL(5,2) DEFAULT 0.10;
-
-COMMENT ON COLUMN billing_rule.sla_threshold IS 'SLA阈值(毫秒), 超过此时间触发补偿';
-COMMENT ON COLUMN billing_rule.compensation_rate IS '补偿系数, 每超100ms减少的费用比例';
-
--- 添加约束
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'chk_compensation_rate'
-          AND conrelid = 'billing_rule'::regclass
-    ) THEN
-        ALTER TABLE billing_rule
-            ADD CONSTRAINT chk_compensation_rate CHECK (compensation_rate >= 0 AND compensation_rate <= 1);
-    END IF;
-END $$;
-
--- 3. 创建对账记录表
+-- 2. 创建对账记录表
 CREATE TABLE IF NOT EXISTS billing_reconciliation (
     id BIGSERIAL PRIMARY KEY,
     reconciliation_date DATE NOT NULL,

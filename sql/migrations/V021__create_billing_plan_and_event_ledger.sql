@@ -130,39 +130,3 @@ CREATE INDEX IF NOT EXISTS idx_billing_event_tenant
     ON billing_event(tenant_id, caller_id, call_time);
 CREATE UNIQUE INDEX IF NOT EXISTS uk_billing_event_single_reversal
     ON billing_event(original_event_id) WHERE event_type = 'REVERSAL';
-
--- 现有规则平滑迁移为按次/阶梯方案，旧链路保留用于兼容。
-INSERT INTO billing_plan(
-    plan_code, version, plan_name, vendor_id, vendor_code, vendor_name,
-    interface_id, interface_code, interface_name, template_code,
-    pricing_config, metering_config, adjustment_config, status, effective_from,
-    created_at, updated_at
-)
-SELECT
-    'LEGACY-' || br.id, 1, br.rule_name, br.vendor_id,
-    COALESCE(v.vendor_code, 'vendor-' || br.vendor_id), br.vendor_name,
-    br.interface_id, br.interface_code, br.interface_name,
-    CASE WHEN br.billing_type = 'TIERED' THEN 'TIERED' ELSE 'PER_CALL' END,
-    json_build_object('unitPrice', br.unit_price, 'tierMode', 'GRADUATED')::text,
-    '{"logic":"AND","conditions":[],"quantity":{"type":"FIXED","fixedValue":1,"unit":"CALL"},"missingFieldPolicy":"PENDING_REVIEW","cacheBillingPolicy":"FREE","aggregationScope":"VENDOR_INTERFACE"}',
-    json_build_object(
-        'noChargeOnFailure', true,
-        'requireValidContract', false,
-        'slaEnabled', br.billing_type = 'DYNAMIC',
-        'slaThresholdMs', br.sla_threshold,
-        'compensationRatePer100Ms', br.compensation_rate
-    )::text,
-    CASE WHEN br.status = 'active' THEN 'ACTIVE' ELSE 'DISABLED' END,
-    COALESCE(br.created_at, CURRENT_TIMESTAMP),
-    COALESCE(br.created_at, CURRENT_TIMESTAMP), COALESCE(br.updated_at, CURRENT_TIMESTAMP)
-FROM billing_rule br
-LEFT JOIN vendor_info v ON v.id = br.vendor_id
-WHERE br.vendor_id IS NOT NULL AND br.interface_id IS NOT NULL
-ON CONFLICT (plan_code, version) DO NOTHING;
-
-INSERT INTO billing_plan_tier(plan_id, tier_min, tier_max, unit_price, discount, sort_order)
-SELECT bp.id, brt.tier_min, brt.tier_max, br.unit_price, brt.discount, brt.sort_order
-FROM billing_plan bp
-JOIN billing_rule br ON bp.plan_code = 'LEGACY-' || br.id
-JOIN billing_rule_tier brt ON brt.rule_id = br.id
-ON CONFLICT (plan_id, tier_min) DO NOTHING;

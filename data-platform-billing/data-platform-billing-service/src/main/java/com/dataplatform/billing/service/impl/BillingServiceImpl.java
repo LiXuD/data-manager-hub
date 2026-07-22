@@ -74,14 +74,29 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
     }
 
     @Override
-    public byte[] export() {
+    public byte[] export(Long tenantId, Long vendorId, LocalDate startDate, LocalDate endDate) {
+        LambdaQueryWrapper<BillingDaily> wrapper = new LambdaQueryWrapper<>();
+        if (tenantId != null) {
+            wrapper.eq(BillingDaily::getTenantId, tenantId);
+        }
+        if (vendorId != null) {
+            wrapper.eq(BillingDaily::getVendorId, vendorId);
+        }
+        if (startDate != null) {
+            wrapper.ge(BillingDaily::getBillingDate, startDate);
+        }
+        if (endDate != null) {
+            wrapper.le(BillingDaily::getBillingDate, endDate);
+        }
+        wrapper.orderByDesc(BillingDaily::getBillingDate);
+
         StringBuilder csv = new StringBuilder("id,tenant_id,caller_id,vendor_id,data_type,billing_date,call_count,success_count,fail_count,total_cost\n");
-        for (BillingDaily billing : list(new LambdaQueryWrapper<BillingDaily>().orderByDesc(BillingDaily::getBillingDate))) {
+        for (BillingDaily billing : list(wrapper)) {
             csv.append(billing.getId()).append(',')
                     .append(billing.getTenantId()).append(',')
                     .append(billing.getCallerId()).append(',')
                     .append(billing.getVendorId()).append(',')
-                    .append(billing.getDataType() == null ? "" : billing.getDataType()).append(',')
+                    .append(csvCell(billing.getDataType())).append(',')
                     .append(billing.getBillingDate()).append(',')
                     .append(billing.getCallCount()).append(',')
                     .append(billing.getSuccessCount()).append(',')
@@ -90,5 +105,20 @@ public class BillingServiceImpl extends ServiceImpl<BillingDailyMapper, BillingD
                     .append('\n');
         }
         return ("\uFEFF" + csv).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private String csvCell(String value) {
+        if (value == null) {
+            return "";
+        }
+        String safe = value;
+        if (!safe.isEmpty() && "=+-@".indexOf(safe.charAt(0)) >= 0) {
+            safe = "'" + safe;
+        }
+        if (safe.indexOf(',') >= 0 || safe.indexOf('"') >= 0
+                || safe.indexOf('\n') >= 0 || safe.indexOf('\r') >= 0) {
+            return "\"" + safe.replace("\"", "\"\"") + "\"";
+        }
+        return safe;
     }
 }
