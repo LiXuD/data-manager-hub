@@ -56,7 +56,8 @@ public class RateLimitService {
                     Collections.singletonList(windowKey),
                     String.valueOf(WINDOW_SIZE_SECONDS * 1000L),
                     String.valueOf(now),
-                    SlidingWindowRateLimitAlgorithm.uniqueMember(now));
+                    SlidingWindowRateLimitAlgorithm.uniqueMember(now),
+                    String.valueOf(limit));
             return count != null && count <= limit;
         } catch (Exception e) {
             log.error("限流状态读取失败，拒绝本次请求: {}", e.getMessage());

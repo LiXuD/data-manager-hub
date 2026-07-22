@@ -85,7 +85,7 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
 
                     return redisTemplate.execute(rateLimitScript,
                                     Collections.singletonList(windowKey),
-                                    windowSec * 1000L, now, member)
+                                    windowSec * 1000L, now, member, (long) maxReqs)
                             .next()
                             .flatMap(count -> {
                                 if (count > maxReqs) {
