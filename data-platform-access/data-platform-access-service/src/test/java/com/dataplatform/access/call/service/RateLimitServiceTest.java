@@ -17,6 +17,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.mockito.ArgumentCaptor;
+
 class RateLimitServiceTest {
 
     private StringRedisTemplate redisTemplate;
@@ -38,6 +40,21 @@ class RateLimitServiceTest {
                 any(RedisScript.class),
                 org.mockito.ArgumentMatchers.eq(List.of("rate_limit:window:api-key")),
                 any(Object[].class));
+    }
+
+    @Test
+    void shouldPassConfiguredLimitToAtomicAcquireScript() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+                .thenReturn(1L);
+        ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+
+        assertTrue(service.checkRateLimit("api-key", 37));
+
+        verify(redisTemplate).execute(any(RedisScript.class), anyList(), arguments.capture());
+        Object[] values = arguments.getValue();
+        assertEquals(4, values.length);
+        assertEquals("60000", values[0]);
+        assertEquals("37", values[3]);
     }
 
     @Test

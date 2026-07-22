@@ -1,6 +1,6 @@
 # 上线就绪审查与修复记录
 
-> **当前参考状态（2026-07-14）**：审查结论和既有验证证据仍有效；跨域调用已进一步收敛为带最小权限的 Internal Feign 契约，并已完成本轮运行态复验。
+> **历史记录**：本文记录 2026-06-16 当时的上线就绪整改。2026-07-22 起计费已切换为版本化方案与事件账本，本文涉及 `BillingRule`、V011 和旧计费链路的内容仅用于历史追溯，不代表当前实现。
 
 ## 结论
 
@@ -25,7 +25,7 @@
 | 服务间认证 | Feign 只传播 Trace，内部接口依赖匿名白名单 | Identity 签发短期 RSA Service JWT；目标服务校验 audience/scope；内部契约统一为 `/internal/v1/**` |
 | 用户认证 | Bearer Token 只检查长度，Sa-Token 会话仅存进程内存 | 使用 Sa-Token 真实校验并通过 Redis DAO 共享会话，Identity 登录 Token 可跨域访问管理接口 |
 | 调用记录 | `CallRecord` 与表结构不一致且 JSONB 使用字符串绑定，Kafka 消费无法落库 | 移除冗余字段并为 JSONB 字段配置类型处理器，完成真实 Kafka 落库验证 |
-| 计费规则 | `BillingRule.ruleName` 与数据库缺失列不一致，OpenAPI 静默使用降级价格 | 新增 V011 迁移并完成 Billing 内部计算验证，演示链路费用为 `0.30` |
+| 计费规则（历史） | 当时 `BillingRule.ruleName` 与数据库缺失列不一致，OpenAPI 静默使用降级价格 | 当时通过 V011 修复；该体系现已整体退役，当前只使用 `billing_plan` 与 `billing_event` |
 | 操作日志 | 治理域实体未填充表中必填的 `operation_type`、`operation_module` | 在 `LogService` 统一规范化必填字段，内部日志接口完成真实落库验证 |
 | 跨域数据所有权 | Masterdata/Billing 直接读取 Access 的 `call_record` | 统计 SQL 收归 Access，通过 `CallStatsInternalFeignClient` 暴露只读内部契约 |
 | 跨域事件 | Access 通过 Kafka 驱动 Billing 聚合，绕过服务认证 | `call-record` 主题收归 Access 域内；Billing 计算与聚合改为认证 Feign 同步调用 |

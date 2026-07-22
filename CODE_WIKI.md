@@ -159,7 +159,6 @@ data-manager-hub/
 |------|------|
 | `Result<T>` | 统一返回结果，包含 `code`、`message`、`data`、`requestId`、`timestamp` |
 | `PageResult<T>` | 分页返回结果，包含 `records`、`total`、`page`、`pageSize` |
-| `BusinessException` | 业务异常类 |
 | `ErrorCode` | 错误码定义类 |
 
 **枚举类** (`common/enums/`):
@@ -169,7 +168,6 @@ data-manager-hub/
 | `CommonStatus` | 通用状态 (ACTIVE/INACTIVE/SUSPENDED) |
 | `ApiKeyStatus` | API Key状态 |
 | `BillingStatus` | 计费状态 |
-| `BillingType` | 计费类型 (STANDARD/TIERED/DYNAMIC) |
 | `CallStatus` | 调用状态 |
 | `AlertStatus` | 告警状态 |
 | `EnableStatus` | 启用状态 |
@@ -976,28 +974,32 @@ data-platform-web/src/
 | 14 | api_key_product | API Key 产品授权 | access |
 | 15 | call_scene | 调用场景字典 | access |
 | 16 | call_record | 调用记录、缓存来源和响应契约校验结果 (按月分区) | access |
-| 17 | billing_rule | 计费规则 | billing |
-| 18 | billing_daily | 日账单 | billing |
-| 19 | billing_daily_event | 计费聚合幂等请求账本 | billing |
-| 20 | billing_reconciliation | 计费对账结果 | billing |
-| 21 | tenant_info | 租户 | identity |
-| 22 | user_info | 用户 | identity |
-| 23 | role_info | 角色 | identity |
-| 24 | permission | 权限定义 | identity |
-| 25 | user_role | 用户角色关联 | identity |
-| 26 | role_permission | 角色权限关联 | identity |
-| 27 | user_caller | 用户与调用方关联 | identity |
-| 28 | encryption_key | 持久化加密密钥元数据 | identity |
-| 29 | alert_rule | 告警规则 | governance |
-| 30 | alert_record | 告警记录 | governance |
-| 31 | circuit_breaker | 熔断记录 | governance |
-| 32 | operation_log | 操作日志 | governance |
-| 33 | data_lineage | 数据血缘 | governance |
-| 34 | quality_rule | 数据质量规则 | governance |
-| 35 | quality_score | 数据质量评分 | governance |
-| 36 | service_health_check | 服务健康检查记录 | governance |
+| 17 | billing_template | 计费算法模板 | billing |
+| 18 | billing_plan | 厂商接口版本化计费方案 | billing |
+| 19 | billing_plan_tier | 方案阶梯价格 | billing |
+| 20 | billing_usage_balance | 账期累计用量 | billing |
+| 21 | billing_event | 不可变计费事件账本 | billing |
+| 22 | billing_daily | 日账单查询投影 | billing |
+| 23 | billing_daily_event | 日账单投影幂等记录 | billing |
+| 24 | billing_reconciliation | 计费对账结果 | billing |
+| 25 | tenant_info | 租户 | identity |
+| 26 | user_info | 用户 | identity |
+| 27 | role_info | 角色 | identity |
+| 28 | permission | 权限定义 | identity |
+| 29 | user_role | 用户角色关联 | identity |
+| 30 | role_permission | 角色权限关联 | identity |
+| 31 | user_caller | 用户与调用方关联 | identity |
+| 32 | encryption_key | 持久化加密密钥元数据 | identity |
+| 33 | alert_rule | 告警规则 | governance |
+| 34 | alert_record | 告警记录 | governance |
+| 35 | circuit_breaker | 熔断记录 | governance |
+| 36 | operation_log | 操作日志 | governance |
+| 37 | data_lineage | 数据血缘 | governance |
+| 38 | quality_rule | 数据质量规则 | governance |
+| 39 | quality_score | 数据质量评分 | governance |
+| 40 | service_health_check | 服务健康检查记录 | governance |
 
-近期结构变更由 `V013__add_vendor_security_pipeline.sql`、`V014__add_interface_contract_fields.sql` 和 `V016__add_api_key_rate_limit_policy.sql` 提供；升级已有环境时必须按版本顺序执行，不能只覆盖 `init.sql`。
+近期结构变更由 `V013__add_vendor_security_pipeline.sql`、`V014__add_interface_contract_fields.sql`、`V016__add_api_key_rate_limit_policy.sql` 和 `V021__create_billing_plan_and_event_ledger.sql` 提供；必须先执行 `init.sql`，再按版本顺序执行全部现存迁移，并为 `psql` 启用 `ON_ERROR_STOP`。
 
 ---
 

@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-07-20
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 调用链路整改和服务间最小权限认证；新增 UAPI「程序员历史上的今天」真实外部数据源及端到端验收用例。
+**最后更新**: 2026-07-22
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 调用链路整改和服务间最小权限认证；计费已收敛为版本化方案、事件账本和查询投影，不保留旧规则兼容层。
 
 ---
 
@@ -38,10 +38,10 @@
 | 内部契约与管理契约分离，统一 `/internal/v1/**` | 已完成 | 各域 `*InternalFeignClient` 与 Internal Controller |
 | Gateway 禁止内部路由并清理可信请求头 | 已完成 | `InternalBoundaryFilter` |
 | 真实服务启动后的端到端调用验证 | 已完成 | OpenAPI 200；Masterdata/Billing Feign 认证通过；`call_record` 和 `billing_daily` 落库 |
-| 计费规则实体与数据库结构对齐 | 已完成 | `V011__add_billing_rule_name.sql`；端到端费用由 Billing 返回 `0.30`，不再走 Access 降级值 |
+| 新版计费方案与数据库结构对齐 | 已完成 | `V021__create_billing_plan_and_event_ledger.sql`；调用只使用固定方案版本和策略哈希，不走旧规则或 Access 降级价格 |
 | 治理域内部操作日志字段对齐 | 已完成 | `operation_type`、`operation_module` 统一补全；Service JWT 调用写入 `operation_log` 验证通过 |
 | 跨域统计移出共享数据库直读 | 已完成 | `CallStatsInternalFeignClient`、`CallStatsInternalController`；Masterdata/Billing 不再包含 `call_record` Mapper |
-| 计费聚合改为认证 Feign 且失败关闭 | 已完成 | `BillingUsageRecorder`；Access 不再吞掉 Billing 异常或使用 `0.10` 假价格 |
+| 计费入账改为认证 Feign 且失败关闭 | 已完成 | `BillingChargeService`；Access 不再吞掉 Billing 异常或使用假价格 |
 | Service Token 按 audience 授予最小 scope | 已完成 | `clients.*.grants.<audience>`；敏感厂商密钥使用 `masterdata:vendor-secret:read` |
 | 内部认证默认开启并增加超时、有限重试与缓存测试 | 已完成 | 五域 dev profile、`ServiceTokenProvider`、认证单元测试 |
 | 操作日志自动装配与上下文容错 | 已完成 | `OperationLogAutoConfiguration`、`LogApiAutoConfiguration`、`OperationLogAspect` |
@@ -49,9 +49,9 @@
 | 架构规则自动守护 | 已完成 | `arch-scan.sh` 检查公共 Feign、隐式扫描、scope、跨域读表和跨域 Kafka |
 | 本轮整改运行态复验 | 已完成 | 六服务健康检查均为 `UP`；认证负向用例返回 401/403；OpenAPI、统计、计费幂等聚合和治理日志链路均通过 |
 | UAPI 程序员历史外部数据源接入 | 已完成 | `V017__seed_uapi_programmer_history_provider.sql`；真实 GET 调用、响应契约、调用记录与零元计费由 `UapiProgrammerHistoryFlowTest` 验证 |
-| 计费规则改为厂商 + 接口唯一配置 | 已完成 | `V018__bind_billing_rules_to_vendor_interface.sql`；计费匹配不再使用数据类型，页面按厂商联动选择接口 |
-| 厂商接口规则支持多档阶梯计费 | 已完成 | `V019__add_billing_rule_tiers.sql`、`V020__add_monthly_billing_tier_usage.sql`；按自然月累计调用量并按区间累进计价，请求重试不重复推进阶梯 |
-| 模板化与版本化计费方案 | 已完成 | `V021__create_billing_plan_and_event_ledger.sql`；六类模板、响应字段计量、事件账本、套餐/周期费、SLA、契约复核、模拟发布和冲正 |
+| 计费方案按厂商 + 接口唯一绑定 | 已完成 | `billing_plan` 的厂商、接口和会计方向约束；计费匹配不再使用数据类型，页面按厂商联动选择接口 |
+| 厂商接口方案支持多档阶梯计费 | 已完成 | `billing_plan_tier`、`billing_usage_balance`；按账期累计调用量并按区间累进计价，请求重试不重复推进阶梯 |
+| 模板化与版本化计费方案 | 已完成 | `V021__create_billing_plan_and_event_ledger.sql`；六类模板、响应字段计量、事件账本、套餐/周期费、SLA、契约复核、模拟发布和冲正；旧规则表和迁移已删除 |
 
 ## 发布前仍需执行的环境验证
 

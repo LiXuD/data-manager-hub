@@ -231,6 +231,7 @@ const handleExport = async () => {
   exporting.value = true
   try {
     const blob = await exportBilling({
+      tenantId: searchForm.tenantId,
       vendorId: searchForm.vendorId,
       startDate: searchForm.dateRange[0],
       endDate: searchForm.dateRange[1]

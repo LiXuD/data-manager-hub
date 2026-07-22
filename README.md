@@ -85,7 +85,7 @@ data-platform/
 |------|--------|
 | masterdata | `vendor_info`、`data_type`、`vendor_config`、`vendor_config_extended`、`api_interface`、`interface_param`、`gray_rule` |
 | access | `caller_info`、`caller_product`、`api_key`、`api_key_product`、`call_scene`、`call_record` |
-| billing | `billing_template`、`billing_plan`、`billing_plan_tier`、`billing_event`（不可变账本）、`billing_usage_balance`，以及兼容的 `billing_rule` / `billing_daily` |
+| billing | `billing_template`、`billing_plan`、`billing_plan_tier`、`billing_event`（不可变账本）、`billing_usage_balance`、`billing_daily`（查询投影）、`billing_daily_event`、`billing_reconciliation` |
 | identity | `tenant_info`、`user_info`、`role_info`、`user_role` |
 | governance | `alert_rule`、`alert_record`、`circuit_breaker`、`operation_log`、`data_lineage`、`quality_rule`、`quality_score` |
 
@@ -206,10 +206,16 @@ docker compose up -d
 
 ```bash
 # 初始化基础表，并按顺序应用迁移脚本（用于全新数据库）
-psql -h localhost -U postgres -d dataplatform -f sql/init.sql
+psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d dataplatform -f sql/init.sql
 for migration in sql/migrations/*.sql; do
-  psql -h localhost -U postgres -d dataplatform -f "$migration"
+  psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d dataplatform -f "$migration"
 done
+```
+
+可在一次性数据库中验证完整初始化链路（脚本只允许删除名称匹配 `dataplatform_*_regression` 的数据库）：
+
+```bash
+PGPASSWORD=postgres DB_PORT=15432 bash verify-db-bootstrap.sh
 ```
 
 ### 3. 编译后端
