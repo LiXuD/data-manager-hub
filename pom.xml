@@ -49,6 +49,8 @@
         <nimbus-jose-jwt.version>9.47</nimbus-jose-jwt.version>
         <byte-buddy.version>1.17.2</byte-buddy.version>
         <maven.enforcer.version>3.5.0</maven.enforcer.version>
+        <liquibase.version>4.29.2</liquibase.version>
+        <postgresql.driver.version>42.7.4</postgresql.driver.version>
         <profiles.active>dev</profiles.active>
     </properties>
 
@@ -269,6 +271,25 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.liquibase</groupId>
+                <artifactId>liquibase-maven-plugin</artifactId>
+                <version>${liquibase.version}</version>
+                <configuration>
+                    <changeLogFile>sql/changelog/db.changelog-master.xml</changeLogFile>
+                    <url>jdbc:postgresql://${env.DB_HOST}:${env.DB_PORT}/${env.DB_NAME}</url>
+                    <username>${env.DB_USERNAME}</username>
+                    <password>${env.DB_PASSWORD}</password>
+                    <driver>org.postgresql.Driver</driver>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.postgresql</groupId>
+                        <artifactId>postgresql</artifactId>
+                        <version>${postgresql.driver.version}</version>
+                    </dependency>
+                </dependencies>
             </plugin>
         </plugins>
     </build>

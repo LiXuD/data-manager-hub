@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      The SQL files below describe the repository's schema as of 2026-07-22.
+      They intentionally form one baseline changeset because init.sql already
+      contains parts of the historical incremental schema. New changes must be
+      added as separate changesets with an explicit rollback block.
+    -->
+    <changeSet id="baseline-2026-07-22" author="data-platform" runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+
+        <!-- PostgreSQL dollar-quoted functions/DO blocks require whole-file execution. -->
+        <sqlFile path="../init.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V001__add_data_type_code.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V002__create_api_interface.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V003__add_billing_and_vendor_fields.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V005__add_auth_config.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V006__add_vendor_id_to_interface.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V007__add_permission_tables.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V007__create_interface_param.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V008__create_current_call_record_partitions.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V009__seed_openapi_demo_flow.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V010__add_api_key_name.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V012__replace_placeholder_business_logic.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V013__add_vendor_security_pipeline.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V014__add_interface_contract_fields.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V015__add_interface_array_item_type.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V016__add_api_key_rate_limit_policy.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V017__seed_uapi_programmer_history_provider.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V021__create_billing_plan_and_event_ledger.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V022__add_billing_operation_permissions.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        <sqlFile path="../migrations/V024__seed_uapi_billing_plan.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+
+        <rollback>
+            <sqlFile path="../rollbacks/U000__drop_baseline.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

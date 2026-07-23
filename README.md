@@ -186,6 +186,7 @@ data-platform/
 - Node.js 18+
 - Maven 3.9+
 - Docker (用于基础设施)
+- PostgreSQL 客户端（`psql`、`pg_dump`，用于迁移基线与备份恢复）
 
 ### 1. 启动本地基础设施
 
@@ -205,14 +206,39 @@ docker compose up -d
 ### 2. 初始化数据库
 
 ```bash
-# 初始化基础表，并按顺序应用迁移脚本（用于全新数据库）
-psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d dataplatform -f sql/init.sql
-for migration in sql/migrations/*.sql; do
-  psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d dataplatform -f "$migration"
-done
+# 先预演待执行 SQL，再由 Liquibase 应用迁移
+./migrate-db.sh dry-run
+./migrate-db.sh update
 ```
 
-可在一次性数据库中验证完整初始化链路（脚本只允许删除名称匹配 `dataplatform_*_regression` 的数据库）：
+Liquibase 使用数据库中的 `DATABASECHANGELOG`/`DATABASECHANGELOGLOCK` 记录版本、执行顺序和校验和。同一变更不会重复执行，迁移失败会返回非零状态；`start-services.sh` 也会在启动任何 Java 服务前自动执行 `update`，失败时终止启动。仅在明确需要跳过时设置 `MIGRATE_DB=false`。
+
+常用数据库迁移命令：
+
+```bash
+./migrate-db.sh status                  # 查看已执行/待执行变更
+./migrate-db.sh validate                # 校验变更日志与历史校验和
+./migrate-db.sh dry-run                 # 预演升级 SQL
+./migrate-db.sh backup                  # 生成 .runtime/db-backups/*.sql
+./migrate-db.sh rollback-dry-run 1      # 预演最近一个变更的回滚 SQL
+
+# 破坏性操作必须用目标数据库名显式确认
+MIGRATION_CONFIRM_ROLLBACK=dataplatform ./migrate-db.sh rollback-count 1
+MIGRATION_CONFIRM_RESTORE=dataplatform ./migrate-db.sh restore path/to/backup.sql
+```
+
+当前历史 SQL 被固化为 `baseline-2026-07-22` 单一基线，因为 `init.sql` 已包含部分历史增量结构。后续数据库变更必须作为独立 Liquibase changeset 添加，并提供显式 `<rollback>`。初始基线的回滚会把应用表恢复为空库，仅适用于一次性环境；有业务数据的环境应先执行 `backup`，需要恢复时使用 `restore`。
+
+已有数据库如果过去通过手工 SQL 初始化，不要直接运行 `update`。`baseline` 会先自动备份，再在单个事务中幂等补齐历史迁移；只有结构校验通过后才登记基线：
+
+```bash
+MIGRATION_CONFIRM_BASELINE=dataplatform ./migrate-db.sh baseline
+./migrate-db.sh status
+```
+
+通过 `baseline` 接管的旧库不会允许回滚删除初始基线；需要恢复时使用命令输出的迁移前备份执行 `restore`。
+
+可在一次性数据库中验证 dry-run、首次迁移、重复执行、回滚和重新应用的完整链路（脚本只允许删除名称匹配 `dataplatform_*_regression` 的数据库）：
 
 ```bash
 PGPASSWORD=postgres DB_PORT=15432 bash verify-db-bootstrap.sh

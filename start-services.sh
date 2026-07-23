@@ -98,6 +98,18 @@ for port in "${service_ports[@]}"; do
 done
 sleep 2
 
+# 在任何服务启动前统一应用数据库迁移。Liquibase 会加锁并校验已执行变更的校验和；
+# 迁移失败时保持服务停止，避免新代码运行在旧数据库结构上。
+if [ "${MIGRATE_DB:-true}" = "true" ]; then
+    echo "校验并应用数据库迁移..."
+    if ! bash "$SCRIPT_DIR/migrate-db.sh" update; then
+        echo "数据库迁移失败，终止启动"
+        exit 1
+    fi
+else
+    echo "警告: MIGRATE_DB=false，已显式跳过数据库迁移"
+fi
+
 # 身份服务先启动以签发机器凭证，Gateway 最后启动。
 start_order=(8086 8081 8084 8085 8082 8888)
 
