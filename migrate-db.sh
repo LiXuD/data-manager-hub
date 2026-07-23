@@ -15,6 +15,7 @@ export PGPASSWORD="$DB_PASSWORD"
 MAVEN_BIN="${MAVEN_BIN:-mvn}"
 BACKUP_DIR="${DB_BACKUP_DIR:-$SCRIPT_DIR/.runtime/db-backups}"
 LEGACY_MIGRATIONS=(
+    sql/rollbacks/U025__restore_obsolete_compatibility_fields.sql
     sql/migrations/V001__add_data_type_code.sql
     sql/migrations/V002__create_api_interface.sql
     sql/migrations/V003__add_billing_and_vendor_fields.sql
@@ -34,6 +35,7 @@ LEGACY_MIGRATIONS=(
     sql/migrations/V021__create_billing_plan_and_event_ledger.sql
     sql/migrations/V022__add_billing_operation_permissions.sql
     sql/migrations/V024__seed_uapi_billing_plan.sql
+    sql/migrations/V025__remove_obsolete_compatibility_fields.sql
 )
 
 usage() {

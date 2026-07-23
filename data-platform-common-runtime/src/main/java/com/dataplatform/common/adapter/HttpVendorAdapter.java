@@ -2,7 +2,6 @@ package com.dataplatform.common.adapter;
 
 import com.dataplatform.common.auth.AuthHandler;
 import com.dataplatform.common.auth.AuthHandlerFactory;
-import com.dataplatform.common.security.SignatureBuilder;
 import com.dataplatform.common.security.pipeline.SecurityDirection;
 import com.dataplatform.common.security.pipeline.SecurityExecutionContext;
 import com.dataplatform.common.security.pipeline.SecurityPipelineExecutor;
@@ -76,9 +75,6 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
                 config.getResolvedSecrets());
         if (hasEnabledSecuritySteps(config, SecurityDirection.REQUEST)) {
             securityPipelineExecutor.execute(SecurityDirection.REQUEST, config.getSecuritySteps(), requestContext);
-        } else {
-            requestContext.getParams().clear();
-            requestContext.getParams().putAll(addSignature(config, vendorParams));
         }
         if (log.isInfoEnabled()) {
             log.info("[VENDOR-REQ] {} {} | vendor={} | params={}", method, url, vendorCode,
@@ -189,17 +185,6 @@ public class HttpVendorAdapter extends AbstractVendorAdapter {
         }
         handler.applyAuth(builder, authConfig, Collections.singletonMap("vendorCode", vendorCode));
         log.debug("应用认证: type={}", authType);
-    }
-
-    private Map<String, Object> addSignature(VendorAdapterConfig config, Map<String, Object> params) {
-        if (StringUtils.hasText(config.getSignType()) && StringUtils.hasText(config.getSecretKey())) {
-            Map<String, Object> signedParams = new HashMap<>(params);
-            String sign = SignatureBuilder.sign(params, config.getSecretKey(), config.getSignType());
-            signedParams.put("sign", sign);
-            log.debug("生成签名: type={}", config.getSignType());
-            return signedParams;
-        }
-        return params;
     }
 
     private VendorCallResult handleResponse(Response response, VendorAdapterConfig config, long latency)

@@ -8,9 +8,5 @@ public interface InterfaceContractService {
 
     InterfaceContractDTO saveContract(Long interfaceId, InterfaceContractDTO contract);
 
-    InterfaceContractDTO importLegacySchemas(Long interfaceId);
-
-    InterfaceContractDTO saveLegacySchemas(Long interfaceId, String requestSchema, String responseSchema);
-
     InterfaceContractDTO refreshSnapshots(Long interfaceId);
 }

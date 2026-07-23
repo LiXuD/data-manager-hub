@@ -63,9 +63,4 @@ public class AlertRecord {
     public void setAlertType(String alertType) { this.alertType = alertType; }
     public String getAlertTitle() { return alertTitle; }
     public void setAlertTitle(String alertTitle) { this.alertTitle = alertTitle; }
-
-    // Alias methods for service compatibility
-    public LocalDateTime getTriggerTime() { return alertTime; }
-    public void setTriggerTime(LocalDateTime triggerTime) { this.alertTime = triggerTime; }
-    public void setResolvedTime(LocalDateTime resolvedTime) { this.resolvedAt = resolvedTime; }
 }

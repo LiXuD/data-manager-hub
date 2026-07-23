@@ -52,7 +52,7 @@ class InterfaceContractValidatorTest {
     }
 
     @Test
-    void rejectsInvalidLegacyConstraintAndBooleanDefaultInsteadOfBypassingValidation() {
+    void rejectsInvalidConstraintConfigAndBooleanDefault() {
         InterfaceParamDTO enabled = field("enabled", "boolean", false);
         enabled.setDefaultValue("not-boolean");
         InterfaceParamDTO verified = field("verified", "boolean", true);

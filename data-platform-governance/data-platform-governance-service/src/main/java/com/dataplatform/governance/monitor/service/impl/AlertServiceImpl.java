@@ -121,7 +121,7 @@ public class AlertServiceImpl extends ServiceImpl<AlertRuleMapper, AlertRule>
         AlertRecord record = new AlertRecord();
         record.setId(id);
         record.setStatus("resolved");
-        record.setResolvedTime(LocalDateTime.now());
+        record.setResolvedAt(LocalDateTime.now());
         record.setResolvedBy(UserContext.getCurrentUserId());
         record.setResolution(resolution);
         alertRecordMapper.updateById(record);

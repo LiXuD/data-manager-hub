@@ -38,12 +38,6 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
 
     @Override
     @Transactional
-    public ApiKey createApiKey(Long callerId) {
-        return createApiKey(callerId, null);
-    }
-
-    @Override
-    @Transactional
     public ApiKey createApiKey(Long callerId, String keyName) {
         ApiKey apiKey = new ApiKey();
         apiKey.setCallerId(callerId);

@@ -207,30 +207,6 @@ public class VendorConfigController {
         return Result.success(null);
     }
 
-    @GetMapping("/byCode")
-    public Result<VendorConfigDTO> getByVendorCodeAndDataTypeCode(
-            @RequestParam("vendorCode") String vendorCode,
-            @RequestParam("dataTypeCode") String dataTypeCode) {
-        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
-        return Result.success(toDTO(vendorConfigService.getByVendorCodeAndDataTypeCode(vendorCode, dataTypeCode)));
-    }
-
-    @GetMapping("/byVendorIdAndDataTypeCode")
-    public Result<VendorConfigDTO> getByVendorIdAndDataTypeCode(
-            @RequestParam("vendorId") Long vendorId,
-            @RequestParam("dataTypeCode") String dataTypeCode) {
-        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
-        return Result.success(toDTO(vendorConfigService.getByVendorIdAndDataTypeCode(vendorId, dataTypeCode)));
-    }
-
-    @GetMapping("/byInterfaceCode")
-    public Result<VendorConfigDTO> getByVendorCodeAndInterfaceCode(
-            @RequestParam("vendorCode") String vendorCode,
-            @RequestParam("interfaceCode") String interfaceCode) {
-        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
-        return Result.success(toDTO(vendorConfigService.getByVendorCodeAndInterfaceCode(vendorCode, interfaceCode)));
-    }
-
     private boolean canView() {
         return UserContext.hasPermission("vendor:view");
     }

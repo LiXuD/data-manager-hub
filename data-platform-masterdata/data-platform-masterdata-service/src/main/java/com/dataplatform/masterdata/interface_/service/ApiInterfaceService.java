@@ -26,19 +26,9 @@ public interface ApiInterfaceService extends IService<ApiInterface> {
     boolean hasApiConfig(Long interfaceId);
 
     /**
-     * 获取接口文档（请求/响应 Schema）
-     */
-    Map<String, Object> getInterfaceSchema(Long id);
-
-    /**
-     * 更新接口文档
+     * 更新由结构化契约生成的 Schema 快照。
      */
     boolean updateSchema(Long id, String requestSchema, String responseSchema);
-
-    /**
-     * 验证 JSON Schema 格式
-     */
-    boolean validateSchema(String schema);
 
     /**
      * 获取接口调用统计

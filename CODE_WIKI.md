@@ -89,20 +89,20 @@
 | 层级 | 技术 | 版本 | 用途 |
 |------|------|------|------|
 | 语言 | Java | 21 | 后端开发 |
-| 框架 | Spring Boot | 3.4.0 | 应用框架 |
-| 微服务 | Spring Cloud | 2024.0.0 | 服务治理 |
-| 服务发现 | Nacos | 2023.0.1.0 | 注册中心 + 配置中心 |
+| 框架 | Spring Boot | 3.4.13 | 应用框架 |
+| 微服务 | Spring Cloud | 2024.0.3 | 服务治理 |
+| 服务发现 | Nacos | 2023.0.3.4 | 注册中心 + 配置中心 |
 | 网关 | Spring Cloud Gateway | - | API路由、鉴权 |
-| ORM | MyBatis-Plus | 3.5.7 | 数据库访问 |
+| ORM | MyBatis-Plus | 3.5.8 | 数据库访问 |
 | 认证 | Sa-Token | 1.37.0 | 会话管理与认证 |
-| 缓存 | Redis (Redisson) | 3.27.0 | 分布式缓存 |
+| 缓存 | Redis (Redisson) | 3.27.2 | 分布式缓存 |
 | 熔断 | Resilience4j | 2.2.0 | 熔断与重试 |
 | HTTP客户端 | OkHttp | - | 厂商API调用 |
-| 工具库 | Hutool | 5.8.28 | 通用工具 |
-| 前端框架 | Vue3 + TypeScript | 3.5.0 | SPA前端 |
-| UI组件库 | Element Plus | 2.8.0 | UI组件 |
-| 状态管理 | Pinia | 2.2.0 | 前端状态 |
-| 构建工具 | Vite | 6.0.0 | 前端构建 |
+| 工具库 | Hutool | 5.8.47 | 通用工具 |
+| 前端框架 | Vue3 + TypeScript | 3.5.40 / 5.9.3 | SPA前端 |
+| UI组件库 | Element Plus | 2.13.7 | UI组件 |
+| 状态管理 | Pinia | 2.3.1 | 前端状态 |
+| 构建工具 | Vite | 6.4.3 | 前端构建 |
 | 代码检查 | ESLint Flat Config | 9.x | Vue 3、TypeScript 与项目代码规范检查 |
 
 ### 2.3 模块结构
@@ -219,14 +219,13 @@ VendorAdapterFactory (工厂类)
 - `apiUrl` — API地址
 - `method` — 请求方法 (GET/POST)
 - `authType` — 认证类型
-- `signType` / `secretKey` — 签名类型与密钥
 - `requestTemplate` — 请求映射模板
 - `responseMapping` — 响应映射模板
 - `securitySteps` / `resolvedSecrets` — 按顺序执行的请求、响应安全步骤及运行时解析后的密钥
 
 ##### 厂商安全流水线 (`security/pipeline/`)
 
-`HttpVendorAdapter` 在请求参数映射后执行 `REQUEST` 流水线，在厂商响应解析后执行 `RESPONSE` 流水线；未配置新流水线时保留旧 `signType` 签名逻辑作为兼容回退。
+`HttpVendorAdapter` 在请求参数映射后执行 `REQUEST` 流水线，在厂商响应解析后执行 `RESPONSE` 流水线。流水线配置缺失或加载失败时直接拒绝调用，不再执行简单签名回退。
 
 | 类名 | 说明 |
 |------|------|
@@ -275,7 +274,6 @@ VendorAdapterFactory (工厂类)
 |------|------|
 | `DataMaskingUtil` | 数据脱敏 (手机号、身份证、邮箱等) |
 | `VariableSubstitutionUtil` | 变量替换，支持 `${variableName}` 格式 |
-| `SignatureBuilder` | 签名构建器，支持 HMAC-SHA256 和 MD5 签名算法 |
 
 #### 3.1.3 data-platform-common-web (Web层)
 
@@ -317,22 +315,22 @@ VendorAdapterFactory (工厂类)
 
 | 路由ID | 路径匹配 | 目标服务 | 去除前缀 |
 |--------|----------|----------|----------|
-| openapi-access-service | `/openapi/**` | data-platform-access | - |
-| vendor-service | `/api/v1/vendor/**`, `/api/v1/config/**`, `/api/v1/datatype/**`, `/api/v1/data/**` | data-platform-masterdata | `/api/v1` |
-| caller-service | `/api/v1/caller/**` | data-platform-access | `/api/v1` |
-| openapi-docs-access-service | `/api/v1/openapi-docs/**` | data-platform-access | `/api/v1` |
-| billing-service | `/api/v1/billing/**` | data-platform-billing | `/api/v1` |
-| call-service | `/api/v1/call-record/**` | data-platform-access | `/api/v1` |
-| call-scene-service | `/api/v1/call-scene/**` | data-platform-access | `/api/v1` |
-| monitor-service | `/api/v1/alert/**` | data-platform-governance | `/api/v1` |
-| tenant-service | `/api/v1/tenant/**` | data-platform-identity | `/api/v1` |
-| iam-service | `/api/v1/user/**`, `/api/v1/auth/**`, `/api/v1/role/**`, `/api/v1/permission/**` | data-platform-identity | `/api/v1` |
-| log-service | `/api/v1/log/**` | data-platform-governance | `/api/v1` |
-| graylog-service | `/api/v1/graylog/**` | data-platform-masterdata | `/api/v1` |
-| security-service | `/api/v1/security/**` | data-platform-identity | `/api/v1` |
-| trace-service | `/api/v1/trace/**` | data-platform-governance | `/api/v1` |
-| quality-service | `/api/v1/quality/**` | data-platform-governance | `/api/v1` |
-| interface-service | `/api/v1/interface/**` | data-platform-masterdata | `/api/v1` |
+| access-openapi-route | `/openapi/**` | data-platform-access | - |
+| masterdata-vendor-route | `/api/v1/vendor/**`, `/api/v1/config/**`, `/api/v1/datatype/**`, `/api/v1/data/**` | data-platform-masterdata | `/api/v1` |
+| access-caller-route | `/api/v1/caller/**` | data-platform-access | `/api/v1` |
+| access-openapi-docs-route | `/api/v1/openapi-docs/**` | data-platform-access | `/api/v1` |
+| billing-management-route | `/api/v1/billing/**` | data-platform-billing | `/api/v1` |
+| access-call-record-route | `/api/v1/call-record/**` | data-platform-access | `/api/v1` |
+| access-call-scene-route | `/api/v1/call-scene/**` | data-platform-access | `/api/v1` |
+| governance-alert-route | `/api/v1/alert/**` | data-platform-governance | `/api/v1` |
+| identity-tenant-route | `/api/v1/tenant/**` | data-platform-identity | `/api/v1` |
+| identity-iam-route | `/api/v1/user/**`, `/api/v1/auth/**`, `/api/v1/role/**`, `/api/v1/permission/**` | data-platform-identity | `/api/v1` |
+| governance-log-route | `/api/v1/log/**` | data-platform-governance | `/api/v1` |
+| masterdata-gray-route | `/api/v1/graylog/**` | data-platform-masterdata | `/api/v1` |
+| identity-security-route | `/api/v1/security/**` | data-platform-identity | `/api/v1` |
+| governance-trace-route | `/api/v1/trace/**` | data-platform-governance | `/api/v1` |
+| governance-quality-route | `/api/v1/quality/**` | data-platform-governance | `/api/v1` |
+| masterdata-interface-route | `/api/v1/interface/**` | data-platform-masterdata | `/api/v1` |
 
 **过滤器** (`filter/`):
 
@@ -452,15 +450,13 @@ com.dataplatform.masterdata/
 | `/vendor/config/{configId}/security-preview`、`/security-test` | 脱敏预览流水线结果、执行厂商连通性测试 |
 | `/vendor/config/{configId}/security-versions` | 查询版本历史，并通过 `/{versionId}/rollback` 回滚 |
 | `/interface` | 接口定义 CRUD |
-| `/interface/{id}/contract` | 查询或事务性替换完整请求/响应字段树，并自动刷新 Schema 快照 |
-| `/interface/{id}/contract/import-schema` | 将兼容 JSON Schema 导入结构化字段；无法无损转换时明确报错 |
-| `/interface/{id}/schema`、`/params` | 兼容旧调用的适配接口，统一委托契约服务处理 |
+| `/interface/{id}/contract` | 查询或事务性替换完整请求/响应字段树，并自动刷新派生 Schema |
 | `/graylog` | 灰度规则 CRUD |
 | `/internal/v1/masterdata/interfaces/{id}/contract` | 向 Access 暴露稳定的 `InterfaceContractDTO` Feign 契约 |
 | `/internal/v1/masterdata/vendor-security/{configId}` | 向 Access 提供运行时安全步骤；跨域不直连 Masterdata 数据库 |
 | `/internal/v1/masterdata/**` | 受 Service JWT 和 `masterdata:read` 保护；厂商密钥另需 `masterdata:vendor-secret:read` |
 
-`interface_param` 是接口契约的唯一结构化数据源：使用 `direction` 区分 `REQUEST`/`RESPONSE`，通过 `parentId` 组织 object/array 子树，并保存类型、必填、默认值、示例、约束和同级排序。`api_interface.request_schema`、`response_schema` 仅作为由字段树自动生成的兼容快照。
+`interface_param` 是接口契约的唯一结构化数据源：使用 `direction` 区分 `REQUEST`/`RESPONSE`，通过 `parentId` 组织 object/array 子树，并保存类型、必填、默认值、示例、约束和同级排序。`api_interface.request_schema`、`response_schema` 仅作为由字段树自动生成的派生 Schema，不接受独立写入。
 
 ---
 
@@ -493,7 +489,6 @@ com.dataplatform.access/
 │       └── ApiKey.java
 ├── call/                          # 调用/数据查询
 │   ├── OpenApiQueryController.java # /openapi/v1/query、batch-query
-│   ├── DataQueryController.java  # /data，兼容入口
 │   ├── CallRecordController.java # /call-record
 │   ├── CallStatsInternalController.java # /internal/v1/access/call-stats
 │   ├── CallStatsQueryService.java # Access 领域统计查询
@@ -521,7 +516,6 @@ com.dataplatform.access/
 | `/caller/apikey` | API Key 管理，以及接口和产品授权 |
 | `PUT /caller/apikey/{id}/rate-limit` | 开关并配置该 Key 每分钟最大请求数，同时刷新 Gateway Redis 配置 |
 | `/openapi/v1/query`、`/batch-query` | 外部系统单笔/批量调用；执行认证、授权、请求契约、限流、配额和厂商代理 |
-| `/data` | 兼容数据查询入口 `/data/query` |
 | `/openapi-docs/interfaces/{id}` | 管理端按 `interface:view` 权限查看文档和下载 JSON/YAML |
 | `/openapi/v1/docs/interfaces/**` | 调用方用 API Key 查看已授权接口的文档和 OpenAPI，不消耗业务限流或配额 |
 | `/call-record` | 调用记录查询 |
@@ -728,7 +722,7 @@ com.dataplatform.governance/
 
 | 类名 | 说明 |
 |------|------|
-| `SDKGeneratorService` | SDK代码生成服务（向后兼容旧 API） |
+| `SDKGenerator` | 基于 API 规格生成 Java/Python/Go 多文件 SDK |
 | `ApiSpec` | API 端点模型，`fromDefaults()` 硬编码 14 个端点 |
 | `SDKCli` | 纯 Java CLI 入口（`--lang`、`--base-url`、`--output`） |
 
@@ -773,7 +767,6 @@ com.dataplatform.governance/
 
 | 测试类 | 说明 |
 |--------|------|
-| `SignatureBuilderTest` | 签名构建器测试 |
 | `HttpVendorAdapterTest` | HTTP厂商适配器测试 |
 | `RequestMappingProcessorTest` | 请求映射处理测试 |
 | `ResponseMappingProcessorTest` | 响应映射处理测试 |
@@ -794,7 +787,7 @@ com.dataplatform.governance/
 > **端口**: 3000
 > **职责**: 基于Vue3的SPA前端应用。
 
-数据测试页会依据所选接口的请求字段自动生成输入项，应用默认值并校验必填项及参数类型；当前通过兼容的 `/interface/{id}/params` API 读取，底层与统一契约服务共用数据源。
+数据测试页会依据 `/interface/{id}/contract` 返回的请求字段树自动生成输入项，应用默认值并校验必填项及参数类型。
 
 接口管理的“配置”分为内部调用契约和厂商接入配置：前者以树形表格维护请求/响应字段、子字段、约束、示例和排序，后者维护厂商参数映射及可排序安全流水线。保存契约后，管理端文档页和调用方文档页会立即使用最新字段树与 Schema 快照生成示例和 OpenAPI 3.1。
 
@@ -804,13 +797,13 @@ com.dataplatform.governance/
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Vue | 3.5.0 | 前端框架 |
-| TypeScript | 5.6.0 | 类型安全 |
-| Element Plus | 2.8.0 | UI组件库 |
-| Vue Router | 4.5.0 | 路由管理 |
-| Pinia | 2.2.0 | 状态管理 |
-| Axios | 1.7.0 | HTTP客户端 |
-| Vite | 6.0.0 | 构建工具 |
+| Vue | 3.5.40 | 前端框架 |
+| TypeScript | 5.9.3 | 类型安全 |
+| Element Plus | 2.13.7 | UI组件库 |
+| Vue Router | 4.6.4 | 路由管理 |
+| Pinia | 2.3.1 | 状态管理 |
+| Axios | 1.18.1 | HTTP客户端 |
+| Vite | 6.4.3 | 构建工具 |
 | ESLint | 9.x | Flat Config代码检查，覆盖Vue 3、TypeScript、浏览器和Node配置文件 |
 
 #### 目录结构
@@ -952,7 +945,7 @@ data-platform-web/src/
 - **数据库**: PostgreSQL 16
 - **地址**: 由 `DB_HOST`、`DB_PORT` 和 `DB_NAME` 环境变量配置
 - **逻辑归属**: 表按业务域划分；当前本地部署使用同一个 PostgreSQL 数据库
-- **建库方式**: 先执行 `sql/init.sql`，再按顺序执行 `sql/migrations/` 下的迁移脚本
+- **建库方式**: 通过 `./migrate-db.sh update` 执行 Liquibase 根变更日志；禁止手工拼接 SQL 建库
 
 ### 5.2 数据表总览
 
@@ -999,7 +992,7 @@ data-platform-web/src/
 | 39 | quality_score | 数据质量评分 | governance |
 | 40 | service_health_check | 服务健康检查记录 | governance |
 
-近期结构变更由 `V013__add_vendor_security_pipeline.sql`、`V014__add_interface_contract_fields.sql`、`V016__add_api_key_rate_limit_policy.sql` 和 `V021__create_billing_plan_and_event_ledger.sql` 提供；必须先执行 `init.sql`，再按版本顺序执行全部现存迁移，并为 `psql` 启用 `ON_ERROR_STOP`。
+`sql/init.sql` 与 V001–V024 只作为 `baseline-2026-07-22` 的历史输入；V025 是独立清理 changeset，负责无损迁移后删除废弃契约/安全字段。全新库使用 `./migrate-db.sh update`，旧库先备份并按 `./migrate-db.sh baseline` 的确认流程接管，禁止直接手工执行历史 SQL。
 
 ---
 
@@ -1089,7 +1082,7 @@ OpenApiQueryService
 
 ```
 InterfaceContractService（字段树唯一数据源）
-    ├── 自动生成request_schema / response_schema兼容快照
+    ├── 自动生成 request_schema / response_schema 派生 Schema
     └── ApiInterfaceFeignClient.getContract()
             │
             ▼

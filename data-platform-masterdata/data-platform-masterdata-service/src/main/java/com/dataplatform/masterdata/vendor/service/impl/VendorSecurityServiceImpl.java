@@ -166,39 +166,39 @@ public class VendorSecurityServiceImpl implements VendorSecurityService {
     public List<VendorSecurityCapabilityDTO> capabilities() {
         List<VendorSecurityCapabilityDTO> result = new ArrayList<>();
         result.add(capability("FIELD_SELECT", "字段选择", List.of("REQUEST", "RESPONSE"), List.of(),
-                Map.of("fields", List.of(), "replaceParams", false), false));
+                Map.of("fields", List.of(), "replaceParams", false)));
         result.add(capability("GENERATE", "生成时间戳/随机数", List.of("REQUEST"),
                 List.of("TIMESTAMP_SECONDS", "TIMESTAMP_MILLIS", "UUID", "NONCE", "CONSTANT"),
-                Map.of("generator", "TIMESTAMP_MILLIS", "location", "PARAM"), false));
+                Map.of("generator", "TIMESTAMP_MILLIS", "location", "PARAM")));
         result.add(capability("CANONICALIZE", "字段规范化", List.of("REQUEST", "RESPONSE"),
                 List.of("KEY_ASC", "KEY_DESC", "EXPLICIT", "NONE"),
                 Map.of("inputFrom", "PARAMS", "fieldOrder", "KEY_ASC", "pairSeparator", "&",
-                        "keyValueSeparator", "=", "nullPolicy", "IGNORE"), false));
+                        "keyValueSeparator", "=", "nullPolicy", "IGNORE")));
         result.add(capability("DIGEST", "摘要", List.of("REQUEST", "RESPONSE"),
                 List.of("SHA256", "SHA512", "SM3", "SHA1", "MD5"),
-                Map.of("algorithm", "SHA256", "outputEncoding", "HEX_LOWER"), false));
+                Map.of("algorithm", "SHA256", "outputEncoding", "HEX_LOWER")));
         result.add(capability("HMAC", "消息认证码", List.of("REQUEST", "RESPONSE"),
                 List.of("HMAC_SHA256", "HMAC_SHA512", "HMAC_SHA1"),
-                Map.of("algorithm", "HMAC_SHA256", "outputEncoding", "HEX_LOWER"), false));
+                Map.of("algorithm", "HMAC_SHA256", "outputEncoding", "HEX_LOWER")));
         result.add(capability("SIGN", "非对称签名", List.of("REQUEST"), List.of("RSA_SHA256"),
-                Map.of("algorithm", "RSA_SHA256", "outputEncoding", "BASE64"), false));
+                Map.of("algorithm", "RSA_SHA256", "outputEncoding", "BASE64")));
         result.add(capability("VERIFY", "响应验签", List.of("RESPONSE"),
                 List.of("RSA_SHA256", "HMAC_SHA256", "HMAC_SHA512", "HMAC_SHA1"),
-                Map.of("algorithm", "RSA_SHA256", "signatureEncoding", "BASE64", "failOnInvalid", true), false));
+                Map.of("algorithm", "RSA_SHA256", "signatureEncoding", "BASE64", "failOnInvalid", true)));
         result.add(capability("ENCRYPT", "加密", List.of("REQUEST"),
                 List.of("AES_GCM", "AES_CBC", "RSA_OAEP", "SM4_CBC"),
-                Map.of("algorithm", "AES_GCM", "outputEncoding", "BASE64", "prependIv", true), false));
+                Map.of("algorithm", "AES_GCM", "outputEncoding", "BASE64", "prependIv", true)));
         result.add(capability("DECRYPT", "响应解密", List.of("RESPONSE"),
                 List.of("AES_GCM", "AES_CBC", "RSA_OAEP", "SM4_CBC"),
-                Map.of("algorithm", "AES_GCM", "inputEncoding", "BASE64", "prependIv", true), false));
+                Map.of("algorithm", "AES_GCM", "inputEncoding", "BASE64", "prependIv", true)));
         result.add(capability("ENCODE", "编码", List.of("REQUEST", "RESPONSE"),
-                List.of("BASE64", "BASE64_URL", "HEX_LOWER", "HEX_UPPER"), Map.of("encoding", "BASE64"), false));
+                List.of("BASE64", "BASE64_URL", "HEX_LOWER", "HEX_UPPER"), Map.of("encoding", "BASE64")));
         result.add(capability("DECODE", "解码", List.of("RESPONSE"),
-                List.of("BASE64", "BASE64_URL", "HEX_LOWER", "HEX_UPPER"), Map.of("encoding", "BASE64"), false));
+                List.of("BASE64", "BASE64_URL", "HEX_LOWER", "HEX_UPPER"), Map.of("encoding", "BASE64")));
         result.add(capability("INJECT", "写入请求/响应", List.of("REQUEST", "RESPONSE"),
-                List.of("PARAM", "HEADER", "QUERY", "BODY"), Map.of("location", "PARAM"), false));
+                List.of("PARAM", "HEADER", "QUERY", "BODY"), Map.of("location", "PARAM")));
         result.add(capability("REMOVE_FIELD", "移除临时字段", List.of("REQUEST", "RESPONSE"),
-                List.of("PARAM", "HEADER", "QUERY"), Map.of("location", "PARAM"), false));
+                List.of("PARAM", "HEADER", "QUERY"), Map.of("location", "PARAM")));
         return result;
     }
 
@@ -412,15 +412,13 @@ public class VendorSecurityServiceImpl implements VendorSecurityService {
     }
 
     private VendorSecurityCapabilityDTO capability(String type, String name, List<String> directions,
-                                                    List<String> algorithms, Map<String, Object> defaults,
-                                                    boolean legacy) {
+                                                    List<String> algorithms, Map<String, Object> defaults) {
         VendorSecurityCapabilityDTO dto = new VendorSecurityCapabilityDTO();
         dto.setStepType(type);
         dto.setName(name);
         dto.setDirections(directions);
         dto.setAlgorithms(algorithms);
         dto.setDefaults(defaults);
-        dto.setLegacy(legacy);
         return dto;
     }
 

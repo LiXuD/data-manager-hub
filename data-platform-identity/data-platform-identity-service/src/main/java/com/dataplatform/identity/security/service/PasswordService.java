@@ -1,7 +1,5 @@
 package com.dataplatform.identity.security.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -17,11 +15,7 @@ public class PasswordService {
         if (rawPassword == null || storedPassword == null) {
             return false;
         }
-        if (isEncoded(storedPassword)) {
-            return encoder.matches(rawPassword, storedPassword);
-        }
-        return MessageDigest.isEqual(rawPassword.getBytes(StandardCharsets.UTF_8),
-                storedPassword.getBytes(StandardCharsets.UTF_8));
+        return isEncoded(storedPassword) && encoder.matches(rawPassword, storedPassword);
     }
 
     public boolean isEncoded(String password) {

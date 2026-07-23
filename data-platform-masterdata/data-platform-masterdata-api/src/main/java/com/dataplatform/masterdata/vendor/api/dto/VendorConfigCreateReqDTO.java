@@ -31,10 +31,6 @@ public class VendorConfigCreateReqDTO implements Serializable {
 
     private Integer circuitTimeout;
 
-    private String signType;
-
-    private String encryptType;
-
     private String headerConfig;
 
     private String requestTemplate;
@@ -115,22 +111,6 @@ public class VendorConfigCreateReqDTO implements Serializable {
 
     public void setCircuitTimeout(Integer circuitTimeout) {
         this.circuitTimeout = circuitTimeout;
-    }
-
-    public String getSignType() {
-        return signType;
-    }
-
-    public void setSignType(String signType) {
-        this.signType = signType;
-    }
-
-    public String getEncryptType() {
-        return encryptType;
-    }
-
-    public void setEncryptType(String encryptType) {
-        this.encryptType = encryptType;
     }
 
     public String getHeaderConfig() {

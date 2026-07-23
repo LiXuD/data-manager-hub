@@ -92,48 +92,6 @@ public class SDKGenerator {
         return all;
     }
 
-    // ======================== Backward-compatible shortcuts ========================
-
-    /** 旧接口 — 内部构造默认 ApiSpec 后返回单字符串。 */
-    public String generateJavaSDK(String baseUrl) {
-        requireBaseUrl(baseUrl);
-        try {
-            Map<String, String> files = generateJavaClient(ApiSpec.fromDefaults(baseUrl));
-            return files.values().stream().reduce("", String::concat);
-        } catch (IOException e) {
-            throw new RuntimeException("Template rendering failed", e);
-        }
-    }
-
-    public String generatePythonSDK(String baseUrl) {
-        requireBaseUrl(baseUrl);
-        try {
-            Map<String, String> files = generatePythonClient(ApiSpec.fromDefaults(baseUrl));
-            return files.values().stream().reduce("", String::concat);
-        } catch (IOException e) {
-            throw new RuntimeException("Template rendering failed", e);
-        }
-    }
-
-    public String generateGoSDK(String baseUrl) {
-        requireBaseUrl(baseUrl);
-        try {
-            Map<String, String> files = generateGoClient(ApiSpec.fromDefaults(baseUrl));
-            return files.values().stream().reduce("", String::concat);
-        } catch (IOException e) {
-            throw new RuntimeException("Template rendering failed", e);
-        }
-    }
-
-    public Map<String, String> generateAllSDKs(String baseUrl) {
-        requireBaseUrl(baseUrl);
-        Map<String, String> sdks = new HashMap<>();
-        sdks.put("java", generateJavaSDK(baseUrl));
-        sdks.put("python", generatePythonSDK(baseUrl));
-        sdks.put("go", generateGoSDK(baseUrl));
-        return sdks;
-    }
-
     // ======================== Internals ========================
 
     private String render(String templateName, Map<String, Object> model) throws IOException {

@@ -34,7 +34,7 @@ export const getApiKeyList = (callerId: number) => {
 }
 
 export const createApiKey = (callerId: number) => {
-  return request.post<{ data: ApiKeyDTO }>(`/caller/apikey/${callerId}/api-key`, { name: 'default' })
+  return request.post<{ data: ApiKeyDTO }>('/caller/apikey', { callerId, name: 'default' })
 }
 
 export interface ApiKeyRateLimitPolicy {
@@ -46,12 +46,12 @@ export const updateApiKeyRateLimit = (id: number, data: ApiKeyRateLimitPolicy) =
   return request.put<{ data: ApiKeyDTO }>(`/caller/apikey/${id}/rate-limit`, data)
 }
 
-export const updateApiKeyStatus = (id: number, status: 'active' | 'inactive' | 'expired') => {
-  return request.patch<void>(`/caller/api-key/${id}/status`, { status })
+export const updateApiKeyStatus = (id: number, status: 'active' | 'revoked' | 'expired') => {
+  return request.put<void>(`/caller/apikey/${id}/status`, { status })
 }
 
 export const deleteApiKey = (id: number) => {
-  return request.delete<void>(`/caller/api-key/${id}`)
+  return request.delete<void>(`/caller/apikey/${id}`)
 }
 
 export const getApiKeyInterfaces = (apiKeyId: number) => {

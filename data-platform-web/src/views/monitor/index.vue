@@ -148,7 +148,7 @@
             </el-table-column>
             <el-table-column prop="severity" label="告警级别" width="100">
               <template #default="{ row }">
-                <el-tag :type="getLevelType(row.severity || row.level || 'warning')" size="small">{{ getLevelTextLocalized(row.severity || row.level || 'warning') }}</el-tag>
+                <el-tag :type="getLevelType(row.severity || 'warning')" size="small">{{ getLevelTextLocalized(row.severity || 'warning') }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
@@ -275,8 +275,7 @@ const loading = ref(false)
 const router = useRouter()
 const activeTab = ref('health')
 const tableData = ref<ServiceHealth[]>([])
-type AlertRuleView = AlertRule & { severity?: string }
-const alertData = ref<AlertRuleView[]>([])
+const alertData = ref<AlertRule[]>([])
 const alertRecords = ref<AlertRecord[]>([])
 const ruleDialogVisible = ref(false)
 const ruleSubmitting = ref(false)
@@ -335,7 +334,7 @@ const fetchHealth = async () => {
 const fetchAlerts = async () => {
   try {
     const res = await getAlertRuleList({ page: 1, pageSize: 100 })
-    alertData.value = extractPageData<AlertRuleView>(res).list
+    alertData.value = extractPageData<AlertRule>(res).list
   } catch {
     alertData.value = []
   }
@@ -352,7 +351,7 @@ const handleAddRule = () => {
   Object.assign(ruleForm, { id: null, ruleName: '', ruleType: 'THRESHOLD', targetType: '', conditionType: 'gt', thresholdValue: 0, timeWindowMinutes: 5, notifyChannels: '', severity: 'warning', status: 'active' })
   ruleDialogVisible.value = true
 }
-const handleEditRule = (row: AlertRuleView) => {
+const handleEditRule = (row: AlertRule) => {
   Object.assign(ruleForm, { ...row })
   ruleDialogVisible.value = true
 }

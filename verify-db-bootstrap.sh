@@ -6,6 +6,8 @@ DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 DB_USERNAME="${DB_USERNAME:-postgres}"
 VERIFY_DB_NAME="${VERIFY_DB_NAME:-dataplatform_bootstrap_regression}"
+DB_PASSWORD="${DB_PASSWORD:-${PGPASSWORD:-postgres}}"
+export PGPASSWORD="$DB_PASSWORD"
 DRY_RUN_FILE="$(mktemp)"
 BACKUP_FILE="$(mktemp).sql"
 BASELINE_BACKUP_DIR="$(mktemp -d)"
@@ -32,8 +34,7 @@ cleanup
 
 export DB_HOST DB_PORT DB_USERNAME
 export DB_NAME="$VERIFY_DB_NAME"
-export DB_PASSWORD="${DB_PASSWORD:-${PGPASSWORD:-postgres}}"
-export PGPASSWORD="$DB_PASSWORD"
+export DB_PASSWORD
 
 bash ./migrate-db.sh dry-run >"$DRY_RUN_FILE"
 grep -q "CREATE TABLE" "$DRY_RUN_FILE"
@@ -50,17 +51,47 @@ if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('migratio
 fi
 bash ./migrate-db.sh update
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "1" ]]; then
-  echo "Liquibase 基线没有且仅有一条执行记录" >&2
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "2" ]]; then
+  echo "Liquibase 基线与清理变更没有各自且仅有一条执行记录" >&2
   exit 1
 fi
 
 bash ./migrate-db.sh rollback-dry-run 1 >"$DRY_RUN_FILE"
-grep -q "DROP TABLE" "$DRY_RUN_FILE"
+grep -q "sign_type" "$DRY_RUN_FILE"
 MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 1
 
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
+    SELECT count(*) = 3
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND (
+        (table_name = 'vendor_config' AND column_name IN ('sign_type', 'encrypt_type'))
+        OR (table_name = 'interface_param' AND column_name = 'validation_rule')
+      )")" != "t" ]]; then
+  echo "V025 回滚后兼容列没有完整恢复" >&2
+  exit 1
+fi
+
+bash ./migrate-db.sh update
+
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
+    SELECT count(*) = 0
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND (
+        (table_name = 'vendor_config' AND column_name IN ('sign_type', 'encrypt_type'))
+        OR (table_name = 'interface_param' AND column_name = 'validation_rule')
+      )")" != "t" ]]; then
+  echo "V025 重放后仍存在已废弃兼容列" >&2
+  exit 1
+fi
+
+bash ./migrate-db.sh rollback-dry-run 2 >"$DRY_RUN_FILE"
+grep -q "DROP TABLE" "$DRY_RUN_FILE"
+MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 2
+
 if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('tenant_info') IS NULL")" != "t" ]]; then
-  echo "Liquibase 基线回滚后仍存在业务表" >&2
+  echo "Liquibase 全量回滚后仍存在业务表" >&2
   exit 1
 fi
 
@@ -106,9 +137,9 @@ SQL
 DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$VERIFY_DB_NAME" \
   bash ./migrate-db.sh baseline
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "1" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "2" ]]; then
   echo "现有数据库基线登记失败" >&2
   exit 1
 fi
 
-echo "数据库迁移回归通过（dry-run/update/idempotency/rollback/reapply/backup/restore/baseline）: $VERIFY_DB_NAME"
+echo "数据库迁移回归通过（dry-run/update/idempotency/V025 rollback/reapply/full rollback/backup/restore/baseline）: $VERIFY_DB_NAME"

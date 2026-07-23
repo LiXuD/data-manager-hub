@@ -232,7 +232,6 @@ public class VendorProxyService {
         adapterConfig.setRetryCount(config.getRetryCount());
         adapterConfig.setRequestTemplate(config.getRequestTemplate());
         adapterConfig.setResponseMapping(config.getResponseMapping());
-        adapterConfig.setSignType(config.getSignType());
         adapterConfig.setAuthType(config.getAuthType());
 
         Result<String> secretKeyResult = vendorConfigFeignClient.getSecretKey(vendorCode);
@@ -271,10 +270,7 @@ public class VendorProxyService {
                     adapterConfig.setResolvedSecrets(secrets);
                 }
             } catch (Exception e) {
-                if (config.getSignType() == null || config.getSignType().isBlank()) {
-                    throw new IllegalStateException("加载厂商安全流水线失败，已阻止未加密或未签名调用", e);
-                }
-                log.warn("加载厂商安全流水线失败，回退到旧签名配置: vendor={}, error={}", vendorCode, e.getMessage());
+                throw new IllegalStateException("加载厂商安全流水线失败，已阻止厂商调用: vendor=" + vendorCode, e);
             }
         }
 

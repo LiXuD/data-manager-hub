@@ -13,7 +13,6 @@ public class VendorSecurityCapabilityDTO implements Serializable {
     private List<String> directions = new ArrayList<>();
     private List<String> algorithms = new ArrayList<>();
     private Map<String, Object> defaults = new LinkedHashMap<>();
-    private Boolean legacy;
 
     public String getStepType() { return stepType; }
     public void setStepType(String stepType) { this.stepType = stepType; }
@@ -25,6 +24,4 @@ public class VendorSecurityCapabilityDTO implements Serializable {
     public void setAlgorithms(List<String> algorithms) { this.algorithms = algorithms; }
     public Map<String, Object> getDefaults() { return defaults; }
     public void setDefaults(Map<String, Object> defaults) { this.defaults = defaults; }
-    public Boolean getLegacy() { return legacy; }
-    public void setLegacy(Boolean legacy) { this.legacy = legacy; }
 }

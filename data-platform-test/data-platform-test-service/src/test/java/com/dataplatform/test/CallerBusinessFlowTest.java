@@ -195,17 +195,18 @@ public class CallerBusinessFlowTest extends BaseTest {
         org.junit.jupiter.api.Assertions.assertTrue(testCallerId != null, "需要测试调用方ID");
 
         Map<String, Object> data = new HashMap<>();
+        data.put("callerId", testCallerId);
         data.put("name", uniqueId("测试API密钥"));
 
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .post("/caller/" + testCallerId + "/api-key");
+            .post("/caller/apikey");
 
         verifySuccess(response);
         testApiKeyId = extractId(response);
         Assertions.assertNotNull(testApiKeyId, "API Key创建成功后应返回ID");
-        registerDeleteById("/caller/api-key/{id}", testApiKeyId);
+        registerDeleteById("/caller/apikey/{id}", testApiKeyId);
 
         log.info("API Key创建成功, ID: {}", testApiKeyId);
     }
@@ -217,11 +218,12 @@ public class CallerBusinessFlowTest extends BaseTest {
         org.junit.jupiter.api.Assertions.assertTrue(testCallerId != null, "需要测试调用方ID");
 
         Map<String, Object> data = new HashMap<>();
+        data.put("callerId", testCallerId);
 
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .post("/caller/" + testCallerId + "/api-key");
+            .post("/caller/apikey");
 
         response.then().statusCode(400);
         log.info("缺少API Key name返回400验证通过");
@@ -239,7 +241,7 @@ public class CallerBusinessFlowTest extends BaseTest {
         Response expiredResp = getAuthRequest()
             .body(Map.of("status", "expired"))
             .when()
-            .patch("/caller/api-key/" + testApiKeyId + "/status");
+            .put("/caller/apikey/" + testApiKeyId + "/status");
 
         expiredResp.then().statusCode(anyOf(is(200), is(204)));
 
@@ -247,7 +249,7 @@ public class CallerBusinessFlowTest extends BaseTest {
         Response revokedResp = getAuthRequest()
             .body(Map.of("status", "revoked"))
             .when()
-            .patch("/caller/api-key/" + testApiKeyId + "/status");
+            .put("/caller/apikey/" + testApiKeyId + "/status");
 
         revokedResp.then().statusCode(anyOf(is(200), is(204)));
 
@@ -255,7 +257,7 @@ public class CallerBusinessFlowTest extends BaseTest {
         Response activeResp = getAuthRequest()
             .body(Map.of("status", "active"))
             .when()
-            .patch("/caller/api-key/" + testApiKeyId + "/status");
+            .put("/caller/apikey/" + testApiKeyId + "/status");
 
         activeResp.then().statusCode(anyOf(is(200), is(204)));
 
@@ -322,16 +324,16 @@ public class CallerBusinessFlowTest extends BaseTest {
     @DisplayName("边界-3: 给不存在的调用方创建API Key → 验证404")
     void testCreateApiKeyCallerNotFound() {
         Map<String, Object> data = new HashMap<>();
+        data.put("callerId", NON_EXISTENT_ID);
         data.put("name", "测试密钥");
 
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .post("/caller/" + NON_EXISTENT_ID + "/api-key");
+            .post("/caller/apikey");
 
-        // 可能返回 404 或 500（外键约束）
-        response.then().statusCode(anyOf(is(404), is(500)));
-        log.info("不存在的调用方创建API Key返回404/500验证通过");
+        response.then().statusCode(404);
+        log.info("不存在的调用方创建API Key返回404验证通过");
     }
 
     @Test
@@ -348,7 +350,7 @@ public class CallerBusinessFlowTest extends BaseTest {
     }
 
     @Test
-    @Order(64)
+    @Order(16)
     @DisplayName("边界-5: 修改API Key状态为无效值 → 验证400")
     void testApiKeyStatusInvalid() {
         // 需要一个存在的 API Key 来测试
@@ -357,7 +359,7 @@ public class CallerBusinessFlowTest extends BaseTest {
         Response response = getAuthRequest()
             .body(Map.of("status", "invalid_status"))
             .when()
-            .patch("/caller/api-key/" + testApiKeyId + "/status");
+            .put("/caller/apikey/" + testApiKeyId + "/status");
 
         response.then().statusCode(400);
         log.info("无效API Key状态值返回400验证通过");

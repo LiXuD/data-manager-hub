@@ -89,7 +89,6 @@ public final class InterfaceContractValidator {
     private static void validateConstraints(String path, Object value, InterfaceParamDTO field,
                                             List<String> errors) {
         Map<String, JsonNode> constraints = parseConstraints(field.getConstraintConfig(), path, errors);
-        applyLegacyRule(constraints, field.getValidationRule());
         JsonNode enumValues = constraints.get("enum");
         if (enumValues != null && enumValues.isArray()) {
             JsonNode actual = OBJECT_MAPPER.valueToTree(value);
@@ -226,27 +225,6 @@ public final class InterfaceContractValidator {
             errors.add(path + "的约束配置不是有效JSON");
         }
         return result;
-    }
-
-    private static void applyLegacyRule(Map<String, JsonNode> constraints, String rule) {
-        if (!StringUtils.hasText(rule)) {
-            return;
-        }
-        if (rule.startsWith("regex:")) {
-            constraints.putIfAbsent("pattern", OBJECT_MAPPER.valueToTree(rule.substring(6)));
-        } else if (rule.startsWith("range:")) {
-            String[] range = rule.substring(6).split("-", 2);
-            if (range.length == 2) {
-                try {
-                    constraints.putIfAbsent("minimum", OBJECT_MAPPER.valueToTree(Double.parseDouble(range[0])));
-                    constraints.putIfAbsent("maximum", OBJECT_MAPPER.valueToTree(Double.parseDouble(range[1])));
-                } catch (NumberFormatException ignored) {
-                    // 历史非法规则由契约配置页修复，不在调用链抛出系统异常。
-                }
-            }
-        } else if ("not_empty".equals(rule)) {
-            constraints.putIfAbsent("minLength", OBJECT_MAPPER.valueToTree(1));
-        }
     }
 
     private static Object parseConfiguredValue(String raw, String type) {

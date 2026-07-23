@@ -21,6 +21,7 @@ import com.dataplatform.api.Result;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
+import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
@@ -36,7 +37,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -126,7 +126,11 @@ class OpenApiQueryControllerTest {
         apiInterface.setInterfaceCode("PERSONAL_QUERY");
         when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY")).thenReturn(Result.success(apiInterface));
         when(apiKeyInterfaceService.hasInterfacePermission(10L, 30L)).thenReturn(true);
-        when(apiInterfaceFeignClient.listParams(30L)).thenReturn(Result.success(List.of()));
+        InterfaceContractDTO contract = new InterfaceContractDTO();
+        contract.setInterfaceId(30L);
+        contract.setRequestFields(List.of());
+        contract.setResponseFields(List.of());
+        when(apiInterfaceFeignClient.getContract(30L)).thenReturn(Result.success(contract));
         when(apiKeyService.validateAndConsumeQuota("test-key", 1)).thenReturn(true);
 
         VendorConfigDTO config = new VendorConfigDTO();
@@ -200,13 +204,6 @@ class OpenApiQueryControllerTest {
         assertEquals(400, response.getStatusCode().value());
         assertNotNull(result);
         assertEquals(400, result.getCode());
-    }
-
-    @Test
-    void shouldRejectUnknownParameterType() {
-        Boolean matches = ReflectionTestUtils.invokeMethod(controller, "matchesParamType", "value", "unknown");
-
-        assertFalse(Boolean.TRUE.equals(matches));
     }
 
     @Test

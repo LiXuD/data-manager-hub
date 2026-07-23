@@ -21,9 +21,9 @@
 | 技术 | 版本 |
 |------|------|
 | Java | 21 |
-| Spring Boot | 3.4 |
-| Spring Cloud | 2024.0.0 |
-| MyBatis-Plus | 3.5 |
+| Spring Boot | 3.4.13 |
+| Spring Cloud | 2024.0.3 |
+| MyBatis-Plus | 3.5.8 |
 | PostgreSQL | 16 |
 | Redis | 7.4 |
 | Nacos | 2.3 (本地配置模式) |
@@ -33,10 +33,10 @@
 | 技术 | 版本 |
 |------|------|
 | Vue | 3.5 |
-| TypeScript | 5.x |
-| Element Plus | 2.x |
-| Vite | 5.x |
-| Pinia | 2.x |
+| TypeScript | 5.9 |
+| Element Plus | 2.13 |
+| Vite | 6.4 |
+| Pinia | 2.3 |
 
 ---
 
@@ -79,7 +79,7 @@ data-platform/
 
 ## 🗄️ 数据库模型
 
-核心表由 `sql/init.sql` 与 `sql/migrations/` 共同定义；`call_record` 按月分区。
+核心表由 Liquibase 根变更日志 `sql/changelog/db.changelog-master.xml` 管理；`sql/init.sql` 与历史迁移固化为基线，后续变更使用独立 changeset。`call_record` 按月分区。
 
 | 领域 | 核心表 |
 |------|--------|
@@ -93,88 +93,20 @@ data-platform/
 
 ## 📡 核心 API
 
-### 厂商管理 (/api/v1/vendor)
+管理端统一使用 `/api/v1/**`，外部调用统一使用 `/openapi/v1/**`。当前关键入口：
 
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/vendor/list` | 厂商列表(分页) |
-| GET | `/vendor/{id}` | 厂商详情 |
-| POST | `/vendor` | 创建厂商 |
-| PUT | `/vendor/{id}` | 更新厂商 |
-| DELETE | `/vendor/{id}` | 删除厂商 |
-| GET | `/vendor/{id}/config` | 厂商配置详情 |
-| PUT | `/vendor/{id}/config` | 更新厂商配置 |
+| 范围 | 入口 |
+|---|---|
+| 厂商、数据类型与配置 | `/api/v1/vendor/**`、`/api/v1/datatype/**`、`/api/v1/config/**` |
+| 接口契约 | `GET/PUT /api/v1/interface/{id}/contract` |
+| 调用方与 API Key | `/api/v1/caller/**`、`/api/v1/caller/apikey/**` |
+| 调用记录 | `/api/v1/call-record/**` |
+| 版本化计费 | `/api/v1/billing/plan/**`、`/api/v1/billing/event/**` |
+| 身份与租户 | `/api/v1/auth/**`、`/api/v1/user/**`、`/api/v1/role/**`、`/api/v1/tenant/**` |
+| 治理 | `/api/v1/alert/**`、`/api/v1/log/**`、`/api/v1/quality/**`、`/api/v1/trace/**` |
+| 外部单条/批量调用 | `POST /openapi/v1/query`、`POST /openapi/v1/batch-query` |
 
-### 调用方管理 (/api/v1/caller)
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/caller/list` | 调用方列表 |
-| GET | `/caller/{id}` | 调用方详情 |
-| POST | `/caller` | 创建调用方 |
-| PUT | `/caller/{id}` | 更新调用方 |
-| DELETE | `/caller/{id}` | 删除调用方 |
-| POST | `/caller/{id}/key` | 生成 API Key |
-| DELETE | `/caller/{id}/key/{keyId}` | 禁用 API Key |
-
-### 调用记录 (/api/v1/call)
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/call/record` | 调用记录查询 |
-| POST | `/call/query` | 数据查询请求 |
-| GET | `/call/statistics` | 调用统计 |
-
-### 接口管理 (/api/v1/interface)
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/interface/list` | 接口列表(分页) |
-| GET | `/interface/{id}` | 接口详情 |
-| POST | `/interface` | 创建接口 |
-| PUT | `/interface/{id}` | 更新接口 |
-| DELETE | `/interface/{id}` | 删除接口 |
-| PATCH | `/interface/{id}/status` | 更新接口状态 |
-| GET | `/interface/{id}/schema` | 获取接口Schema |
-| PUT | `/interface/{id}/schema` | 更新接口Schema |
-| POST | `/interface/schema/validate` | 验证Schema格式 |
-| GET | `/interface/{id}/stats` | 接口调用统计 |
-| GET | `/interface/{id}/stats/daily` | 接口日统计 |
-| GET | `/interface/by-data-type/{dataTypeId}` | 按数据类型获取接口 |
-| GET | `/interface/{id}/params` | 获取接口参数定义 |
-| POST | `/interface/{id}/params` | 新增接口参数定义 |
-| PUT | `/interface/{id}/params/batch` | 批量保存接口参数定义 |
-| PUT | `/interface/params/{paramId}` | 更新接口参数定义 |
-| DELETE | `/interface/params/{paramId}` | 删除接口参数定义 |
-
-### 计费管理 (/api/v1/billing)
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/billing/daily` | 日账单查询 |
-| GET | `/billing/summary` | 账单汇总 |
-| GET | `/billing/detail` | 账单明细 |
-
-### 监控告警 (/api/v1/monitor)
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/monitor/alert-rule` | 告警规则列表 |
-| POST | `/monitor/alert-rule` | 创建告警规则 |
-| PUT | `/monitor/alert-rule/{id}` | 更新告警规则 |
-| DELETE | `/monitor/alert-rule/{id}` | 删除告警规则 |
-| GET | `/monitor/alert-record` | 告警记录 |
-| GET | `/monitor/circuit-breaker` | 熔断记录 |
-
-### 租户管理 (/api/v1/tenant)
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | `/tenant/list` | 租户列表 |
-| GET | `/tenant/{id}` | 租户详情 |
-| POST | `/tenant` | 创建租户 |
-| PUT | `/tenant/{id}` | 更新租户 |
-| DELETE | `/tenant/{id}` | 删除租户 |
+完整方法、路径和错误语义见 [HTTP API 文档](docs/API.md)。旧 `/interface/**/schema`、`/params`、访问域 `/data/**` 和重复 API Key 路由已删除。
 
 ---
 
@@ -183,7 +115,7 @@ data-platform/
 ### 前置要求
 
 - Java 21+
-- Node.js 18+
+- Node.js 18.18+
 - Maven 3.9+
 - Docker (用于基础设施)
 - PostgreSQL 客户端（`psql`、`pg_dump`，用于迁移基线与备份恢复）
@@ -316,8 +248,10 @@ PLATFORM_ENCRYPTION_MASTER_KEY=<base64-encoded-32-byte-key>
 ```
 data-platform/
 ├── sql/
-│   ├── init.sql                    # 基础 DDL 脚本
-│   └── migrations/                 # 增量迁移脚本
+│   ├── changelog/                  # Liquibase 根变更日志
+│   ├── init.sql                    # 历史基线输入，不单独执行
+│   ├── migrations/                 # 变更 SQL
+│   └── rollbacks/                  # 显式回滚 SQL
 ├── pom.xml                         # 父 POM
 ├── docker-compose.yml              # 基础设施
 ├── data-platform-common-contract/   # 通用契约
@@ -367,6 +301,7 @@ data-platform/
 | 上线就绪修复与本地运行态验证 | ✅ 100% | 2026-06-17 |
 | 数据测试页自动填充接口参数 | ✅ 100% | 2026-07-10 |
 | 跨域调用最小权限与领域数据边界整改 | ✅ 100% | 2026-07-14 |
+| 深度清理、契约收敛与知识库刷新 | ✅ 100% | 2026-07-23 |
 
 ---
 
@@ -375,6 +310,7 @@ data-platform/
 - [架构知识库](CODE_WIKI.md)
 - [API 文档](docs/API.md)
 - [部署文档](docs/DEPLOYMENT.md)
+- [2026-07-23 深度清理审查](docs/2026-07-23-deep-cleanup-review.md)
 - [当前任务清单](PENDING_TASKS.md)
 
 ---
@@ -384,19 +320,21 @@ data-platform/
 PR 合入 `dev` 前必须全部通过：
 
 ```bash
-# 1. Maven 依赖校验
-mvn -q validate
+# 1. 后端全量验证
+mvn verify
 
-# 2. 后端编译
-mvn -q -DskipTests compile
+# 2. 前端依赖、安全、规范与生产构建
+cd data-platform-web
+npm audit
+npm run lint
+npm run build
+cd ..
 
-# 3. 测试编译
-mvn -q -DskipTests test-compile
+# 3. 数据库变更校验与预演
+./migrate-db.sh validate
+./migrate-db.sh dry-run
 
-# 4. 前端构建
-cd data-platform-web && npm run build && cd ..
-
-# 5. 架构边界扫描
+# 4. 架构边界扫描
 bash arch-scan.sh
 ```
 

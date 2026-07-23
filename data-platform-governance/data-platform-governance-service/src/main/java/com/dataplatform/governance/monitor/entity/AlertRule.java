@@ -5,7 +5,6 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.AlertStatus;
-import com.fasterxml.jackson.annotation.JsonAlias;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -19,14 +18,11 @@ public class AlertRule {
     private Long id;
     private String ruleName;
     private String ruleType;
-    @JsonAlias("metric")
     @TableField("metric_name")
     private String targetType;
     private Long targetId;
-    @JsonAlias("condition")
     @TableField("condition")
     private String conditionType;
-    @JsonAlias("threshold")
     @TableField("threshold")
     private BigDecimal thresholdValue;
     @TableField("time_window")
@@ -34,7 +30,6 @@ public class AlertRule {
     @TableField("notification_channels")
     private String notifyChannels;
     private AlertStatus status;
-    @JsonAlias("level")
     @TableField("severity")
     private String severity;
     @TableField("tenant_id")

@@ -21,65 +21,6 @@ public class SdkApiTest {
 
     private final SDKGenerator sdkGenerator = new SDKGenerator();
 
-    // ======================== Backward-compatible tests ========================
-
-    /**
-     * 测试生成 Java SDK - 正常场景
-     */
-    @Test
-    @Order(1)
-    public void testGenerateJavaSDK_Success() {
-        String code = sdkGenerator.generateJavaSDK("http://localhost:8888");
-
-        assertThat(code, containsString("DataPlatformClient"));
-        assertThat(code, containsString("X-API-Key"));
-    }
-
-    /**
-     * 测试生成 SDK - 缺少 baseUrl
-     */
-    @Test
-    @Order(2)
-    public void testGenerateSDK_MissingBaseUrl() {
-        assertThrows(IllegalArgumentException.class, () -> sdkGenerator.generateJavaSDK(" "));
-    }
-
-    /**
-     * 测试生成 Python SDK - 正常场景
-     */
-    @Test
-    @Order(3)
-    public void testGeneratePythonSDK_Success() {
-        String code = sdkGenerator.generatePythonSDK("http://localhost:8888");
-
-        assertThat(code, containsString("class DataPlatformClient"));
-        assertThat(code, containsString("X-API-Key"));
-    }
-
-    /**
-     * 测试生成 Go SDK - 正常场景
-     */
-    @Test
-    @Order(4)
-    public void testGenerateGoSDK_Success() {
-        String code = sdkGenerator.generateGoSDK("http://localhost:8888");
-
-        assertThat(code, containsString("type Client struct"));
-        assertThat(code, containsString("func NewClient"));
-    }
-
-    /**
-     * 测试生成所有 SDK - 正常场景
-     */
-    @Test
-    @Order(5)
-    public void testGenerateAllSDKs_Success() {
-        assertThat(sdkGenerator.generateAllSDKs("http://localhost:8888").keySet(),
-                containsInAnyOrder("java", "python", "go"));
-    }
-
-    // ======================== Spec-based generation tests ========================
-
     @Test
     @Order(10)
     public void testApiSpecFromDefaults_NonEmpty() {

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   getInterfaceContract,
-  importInterfaceSchema,
   saveInterfaceContract
 } from '@/api/interface'
 import type { ApiInterface, InterfaceContract, InterfaceParam } from '@/types'
@@ -321,7 +320,6 @@ const sanitize = (fields: LocalField[], direction: 'REQUEST' | 'RESPONSE'): Inte
   description: field.description?.trim() || undefined,
   defaultValue: field.defaultValue || undefined,
   exampleValue: field.exampleValue || undefined,
-  validationRule: field.validationRule || undefined,
   constraintConfig: field.constraintConfig || undefined,
   sort: index,
   children: sanitize(field.children, direction)
@@ -347,21 +345,6 @@ const save = async () => {
     console.error('保存接口契约失败:', error)
   } finally {
     saving.value = false
-  }
-}
-
-const importSchema = async () => {
-  try {
-    await ElMessageBox.confirm('导入会使用现有请求/响应 Schema 覆盖结构化字段，是否继续？', '导入现有 Schema', {
-      type: 'warning'
-    })
-    const data = await importInterfaceSchema(props.interfaceData!.id)
-    contract.value = data
-    requestFields.value = toLocal(data.requestFields)
-    responseFields.value = toLocal(data.responseFields)
-    ElMessage.success('Schema 已转换为结构化契约')
-  } catch (error) {
-    if (error !== 'cancel') console.error('导入Schema失败:', error)
   }
 }
 
@@ -419,7 +402,6 @@ const close = () => emit('update:modelValue', false)
           <el-radio-button value="response">响应参数</el-radio-button>
         </el-radio-group>
         <div>
-          <el-button @click="importSchema">导入现有 Schema</el-button>
           <el-button type="primary" @click="addRoot">新增根字段</el-button>
         </div>
       </div>

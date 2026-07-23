@@ -18,7 +18,6 @@ public class VendorAdapterConfig {
     private Map<String, String> headers;
     private String requestTemplate;
     private String responseMapping;
-    private String signType;
     private String secretKey;
 
     // 认证配置
@@ -46,8 +45,6 @@ public class VendorAdapterConfig {
     public void setRequestTemplate(String requestTemplate) { this.requestTemplate = requestTemplate; }
     public String getResponseMapping() { return responseMapping; }
     public void setResponseMapping(String responseMapping) { this.responseMapping = responseMapping; }
-    public String getSignType() { return signType; }
-    public void setSignType(String signType) { this.signType = signType; }
     public String getSecretKey() { return secretKey; }
     public void setSecretKey(String secretKey) { this.secretKey = secretKey; }
     public String getAuthType() { return authType; }

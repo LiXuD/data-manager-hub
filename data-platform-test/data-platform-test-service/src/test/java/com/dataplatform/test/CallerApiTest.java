@@ -4,6 +4,7 @@ import io.restassured.response.Response;
 import org.junit.jupiter.api.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static io.restassured.RestAssured.*;
@@ -220,8 +221,9 @@ public class CallerApiTest extends BaseTest {
     @Order(12)
     public void testGetApiKeyList_Success() {
         Response response = getAuthRequest()
+            .queryParam("callerId", 1)
             .when()
-            .get("/caller/1/api-key/list");
+            .get("/caller/apikey/list");
 
         verifySuccess(response);
         {
@@ -236,11 +238,11 @@ public class CallerApiTest extends BaseTest {
     @Order(13)
     public void testGetApiKeyList_NotFound() {
         Response response = getAuthRequest()
+            .queryParam("callerId", 999999999)
             .when()
-            .get("/caller/999999999/api-key/list");
+            .get("/caller/apikey/list");
 
-        response.then()
-            .statusCode(anyOf(is(404), is(400)));
+        verifySuccess(response);
     }
 
     /**
@@ -255,13 +257,13 @@ public class CallerApiTest extends BaseTest {
         }
 
         Map<String, Object> data = new HashMap<>();
-        data.put("keyName", "测试Key_" + System.currentTimeMillis());
-        data.put("expireDays", 365);
+        data.put("callerId", testCallerId);
+        data.put("name", "测试Key_" + System.currentTimeMillis());
 
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .post("/caller/" + testCallerId + "/api-key");
+            .post("/caller/apikey");
 
         verifySuccess(response);
 
@@ -283,11 +285,12 @@ public class CallerApiTest extends BaseTest {
         }
 
         Map<String, Object> data = new HashMap<>();
+        data.put("callerId", testCallerId);
 
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .post("/caller/" + testCallerId + "/api-key");
+            .post("/caller/apikey");
 
         response.then()
             .statusCode(400);
@@ -300,12 +303,13 @@ public class CallerApiTest extends BaseTest {
     @Order(16)
     public void testCreateApiKey_CallerNotFound() {
         Map<String, Object> data = new HashMap<>();
-        data.put("keyName", "测试Key");
+        data.put("callerId", 999999999L);
+        data.put("name", "测试Key");
 
         Response response = getAuthRequest()
             .body(data)
             .when()
-            .post("/caller/999999999/api-key");
+            .post("/caller/apikey");
 
         response.then()
             .statusCode(anyOf(is(404), is(400)));
@@ -318,9 +322,9 @@ public class CallerApiTest extends BaseTest {
     @Order(17)
     public void testUpdateApiKeyStatus_Success() {
         Response response = getAuthRequest()
-            .body(Map.of("status", "1"))
+            .body(Map.of("status", "active"))
             .when()
-            .patch("/caller/api-key/1/status");
+            .put("/caller/apikey/1/status");
 
         verifySuccess(response);
         {
@@ -335,9 +339,9 @@ public class CallerApiTest extends BaseTest {
     @Order(18)
     public void testUpdateApiKeyStatus_NotFound() {
         Response response = getAuthRequest()
-            .body(Map.of("status", "1"))
+            .body(Map.of("status", "active"))
             .when()
-            .patch("/caller/api-key/999999999/status");
+            .put("/caller/apikey/999999999/status");
 
         response.then()
             .statusCode(anyOf(is(404), is(400)));
@@ -352,7 +356,7 @@ public class CallerApiTest extends BaseTest {
         Response response = getAuthRequest()
             .body(Map.of("status", "invalid"))
             .when()
-            .patch("/caller/api-key/1/status");
+            .put("/caller/apikey/1/status");
 
         response.then()
             .statusCode(400);
@@ -371,7 +375,7 @@ public class CallerApiTest extends BaseTest {
 
         Response response = getAuthRequest()
             .when()
-            .delete("/caller/api-key/" + testApiKeyId);
+            .delete("/caller/apikey/" + testApiKeyId);
 
         response.then()
             .statusCode(anyOf(is(200), is(204)));
@@ -385,7 +389,7 @@ public class CallerApiTest extends BaseTest {
     public void testDeleteApiKey_NotFound() {
         Response response = getAuthRequest()
             .when()
-            .delete("/caller/api-key/999999999");
+            .delete("/caller/apikey/999999999");
 
         response.then()
             .statusCode(anyOf(is(404), is(400)));
@@ -401,7 +405,7 @@ public class CallerApiTest extends BaseTest {
     public void testGetApiKeyInterfaces_Success() {
         Response response = getAuthRequest()
             .when()
-            .get("/caller/api-key/1/interfaces");
+            .get("/caller/apikey/1/interfaces");
 
         verifySuccess(response);
         {
@@ -417,7 +421,7 @@ public class CallerApiTest extends BaseTest {
     public void testGetApiKeyInterfaces_NotFound() {
         Response response = getAuthRequest()
             .when()
-            .get("/caller/api-key/999999999/interfaces");
+            .get("/caller/apikey/999999999/interfaces");
 
         response.then()
             .statusCode(anyOf(is(404), is(400)));
@@ -430,9 +434,9 @@ public class CallerApiTest extends BaseTest {
     @Order(24)
     public void testAssignApiKeyInterfaces_Success() {
         Response response = getAuthRequest()
-            .body(Map.of("interfaceIds", new Integer[]{1}))
+            .body(List.of(1))
             .when()
-            .post("/caller/api-key/1/interfaces");
+            .post("/caller/apikey/1/interfaces");
 
         verifySuccess(response);
         {
@@ -447,9 +451,9 @@ public class CallerApiTest extends BaseTest {
     @Order(25)
     public void testAssignApiKeyInterfaces_NotFound() {
         Response response = getAuthRequest()
-            .body(Map.of("interfaceIds", new Integer[]{1}))
+            .body(List.of(1))
             .when()
-            .post("/caller/api-key/999999999/interfaces");
+            .post("/caller/apikey/999999999/interfaces");
 
         response.then()
             .statusCode(anyOf(is(404), is(400)));
