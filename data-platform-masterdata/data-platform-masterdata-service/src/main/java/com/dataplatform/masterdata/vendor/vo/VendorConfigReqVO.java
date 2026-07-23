@@ -28,10 +28,6 @@ public class VendorConfigReqVO {
     
     private Integer circuitTimeout = 60000;
     
-    private String signType;
-    
-    private String encryptType;
-    
     private String headerConfig;
     
     private String requestTemplate;
@@ -49,10 +45,6 @@ public class VendorConfigReqVO {
     public void setDataType(String dataType) { this.dataType = dataType; }
     public String getApiUrl() { return apiUrl; }
     public void setApiUrl(String apiUrl) { this.apiUrl = apiUrl; }
-    public String getSignType() { return signType; }
-    public void setSignType(String signType) { this.signType = signType; }
-    public String getEncryptType() { return encryptType; }
-    public void setEncryptType(String encryptType) { this.encryptType = encryptType; }
     public String getHeaderConfig() { return headerConfig; }
     public void setHeaderConfig(String headerConfig) { this.headerConfig = headerConfig; }
     public String getRequestTemplate() { return requestTemplate; }

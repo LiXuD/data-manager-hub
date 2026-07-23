@@ -41,95 +41,95 @@ spring:
             allow-credentials: true
             max-age: 3600
       routes:
-        - id: openapi-access-service
+        - id: access-openapi-route
           uri: lb://data-platform-access
           predicates:
             - Path=/openapi/**
-        - id: vendor-service
+        - id: masterdata-vendor-route
           uri: lb://data-platform-masterdata
           predicates:
             - Path=/api/v1/vendor/**,/api/v1/config/**,/api/v1/datatype/**,/api/v1/data/**
           filters:
             - StripPrefix=2
-        - id: caller-service
+        - id: access-caller-route
           uri: lb://data-platform-access
           predicates:
             - Path=/api/v1/caller/**
           filters:
             - StripPrefix=2
-        - id: openapi-docs-access-service
+        - id: access-openapi-docs-route
           uri: lb://data-platform-access
           predicates:
             - Path=/api/v1/openapi-docs/**
           filters:
             - StripPrefix=2
-        - id: billing-service
+        - id: billing-management-route
           uri: lb://data-platform-billing
           predicates:
             - Path=/api/v1/billing/**
           filters:
             - StripPrefix=2
-        - id: call-service
+        - id: access-call-record-route
           uri: lb://data-platform-access
           predicates:
             - Path=/api/v1/call-record/**
           filters:
             - StripPrefix=2
-        - id: call-scene-service
+        - id: access-call-scene-route
           uri: lb://data-platform-access
           predicates:
             - Path=/api/v1/call-scene/**
           filters:
             - StripPrefix=2
-        - id: monitor-service
+        - id: governance-alert-route
           uri: lb://data-platform-governance
           predicates:
             - Path=/api/v1/alert/**
           filters:
             - StripPrefix=2
-        - id: tenant-service
+        - id: identity-tenant-route
           uri: lb://data-platform-identity
           predicates:
             - Path=/api/v1/tenant/**
           filters:
             - StripPrefix=2
-        - id: iam-service
+        - id: identity-iam-route
           uri: lb://data-platform-identity
           predicates:
             - Path=/api/v1/user/**,/api/v1/auth/**,/api/v1/role/**,/api/v1/permission/**
           filters:
             - StripPrefix=2
-        - id: log-service
+        - id: governance-log-route
           uri: lb://data-platform-governance
           predicates:
             - Path=/api/v1/log/**
           filters:
             - StripPrefix=2
-        - id: graylog-service
+        - id: masterdata-gray-route
           uri: lb://data-platform-masterdata
           predicates:
             - Path=/api/v1/graylog/**
           filters:
             - StripPrefix=2
-        - id: security-service
+        - id: identity-security-route
           uri: lb://data-platform-identity
           predicates:
             - Path=/api/v1/security/**
           filters:
             - StripPrefix=2
-        - id: trace-service
+        - id: governance-trace-route
           uri: lb://data-platform-governance
           predicates:
             - Path=/api/v1/trace/**
           filters:
             - StripPrefix=2
-        - id: quality-service
+        - id: governance-quality-route
           uri: lb://data-platform-governance
           predicates:
             - Path=/api/v1/quality/**
           filters:
             - StripPrefix=2
-        - id: interface-service
+        - id: masterdata-interface-route
           uri: lb://data-platform-masterdata
           predicates:
             - Path=/api/v1/interface/**

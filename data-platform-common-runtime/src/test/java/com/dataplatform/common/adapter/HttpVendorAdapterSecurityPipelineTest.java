@@ -74,35 +74,6 @@ class HttpVendorAdapterSecurityPipelineTest {
     }
 
     @Test
-    void shouldKeepLegacyRequestSignatureWhenOnlyResponsePipelineIsConfigured() throws Exception {
-        try (MockWebServer server = new MockWebServer()) {
-            server.enqueue(new MockResponse().setResponseCode(200)
-                    .setHeader("Content-Type", "application/json")
-                    .setBody("{\"ok\":true}"));
-            server.start();
-
-            SecurityStepConfig responseDigest = step(
-                    "response-digest", SecurityDirection.RESPONSE, SecurityStepType.DIGEST, 100,
-                    Map.of("inputFrom", "BODY", "algorithm", "SHA256", "outputEncoding", "HEX_LOWER"));
-            VendorAdapterConfig config = new VendorAdapterConfig();
-            config.setApiUrl(server.url("/legacy-sign").toString());
-            config.setMethod("POST");
-            config.setSignType("MD5");
-            config.setSecretKey("legacy-secret");
-            config.setSecuritySteps(List.of(responseDigest));
-
-            Map<String, Object> result = new HttpVendorAdapter("TEST").execute(config, Map.of("name", "Alice"));
-
-            assertEquals(true, result.get("success"));
-            RecordedRequest request = server.takeRequest();
-            JsonNode body = new ObjectMapper().readTree(request.getBody().readUtf8());
-            assertEquals("Alice", body.path("name").asText());
-            assertTrue(body.path("sign").isTextual());
-            assertTrue(!body.path("sign").asText().isBlank());
-        }
-    }
-
-    @Test
     void shouldFailClosedForUnknownAuthenticationType() {
         VendorAdapterConfig config = new VendorAdapterConfig();
         config.setApiUrl("https://example.invalid/vendor");

@@ -32,7 +32,6 @@ public class VendorAdapterConfigAssembler {
         adapterConfig.setMethod(config.getMethod());
         adapterConfig.setTimeout(config.getTimeout());
         adapterConfig.setRetryCount(config.getRetryCount());
-        adapterConfig.setSignType(config.getSignType());
         adapterConfig.setSecretKey(vendor.getSecretKey());
         adapterConfig.setRequestTemplate(config.getRequestTemplate());
         adapterConfig.setResponseMapping(config.getResponseMapping());

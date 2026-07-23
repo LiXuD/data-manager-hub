@@ -505,10 +505,10 @@ const loadInterfaceParams = async (interfaceId: number) => {
   jsonError.value = ''
 
   try {
-    const res = await getInterfaceParams(interfaceId)
+    const requestFields = await getInterfaceParams(interfaceId)
     if (currentSeq !== paramsLoadSeq) return
 
-    const params = [...(res.data || [])].sort((a, b) => {
+    const params = [...requestFields].sort((a, b) => {
       const sortA = a.sort ?? 0
       const sortB = b.sort ?? 0
       if (sortA !== sortB) return sortA - sortB

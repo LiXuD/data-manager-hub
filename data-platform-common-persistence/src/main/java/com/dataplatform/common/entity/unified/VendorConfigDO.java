@@ -24,8 +24,6 @@ public class VendorConfigDO {
     private Integer retryCount;
     private Integer circuitThreshold;
     private Integer circuitTimeout;
-    private String signType;
-    private String encryptType;
 
     /** 请求头配置 JSON */
     private String headerConfig;
@@ -74,10 +72,6 @@ public class VendorConfigDO {
     public void setCircuitThreshold(Integer circuitThreshold) { this.circuitThreshold = circuitThreshold; }
     public Integer getCircuitTimeout() { return circuitTimeout; }
     public void setCircuitTimeout(Integer circuitTimeout) { this.circuitTimeout = circuitTimeout; }
-    public String getSignType() { return signType; }
-    public void setSignType(String signType) { this.signType = signType; }
-    public String getEncryptType() { return encryptType; }
-    public void setEncryptType(String encryptType) { this.encryptType = encryptType; }
     public String getHeaderConfig() { return headerConfig; }
     public void setHeaderConfig(String headerConfig) { this.headerConfig = headerConfig; }
     public String getRequestTemplate() { return requestTemplate; }

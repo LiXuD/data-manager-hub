@@ -9,12 +9,6 @@ export * from './dataType'
 // 导入用于本地定义
 import { COMMON_STATUS } from './status'
 
-// 用户状态（兼容旧代码，推荐使用 COMMON_STATUS）
-export const USER_STATUS = {
-  ACTIVE: COMMON_STATUS.ACTIVE,
-  INACTIVE: COMMON_STATUS.INACTIVE
-} as const
-
 // 厂商类型
 export const VENDOR_TYPE = {
   DATA_PROVIDER: 'data_provider',
@@ -38,8 +32,8 @@ export const VENDOR_TYPE_TAGS: Record<string, string> = {
 
 // 通用状态标签
 export const STATUS_LABELS: Record<string, string> = {
-  [USER_STATUS.ACTIVE]: '启用',
-  [USER_STATUS.INACTIVE]: '禁用'
+  [COMMON_STATUS.ACTIVE]: '启用',
+  [COMMON_STATUS.INACTIVE]: '禁用'
 }
 
 // 主题模式

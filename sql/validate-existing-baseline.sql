@@ -31,6 +31,18 @@ BEGIN
         RAISE EXCEPTION '现有数据库不满足 Liquibase 基线：最新字段不完整';
     END IF;
 
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'interface_param'
+          AND column_name = 'validation_rule'
+    ) OR EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'vendor_config'
+          AND column_name IN ('sign_type', 'encrypt_type')
+    ) THEN
+        RAISE EXCEPTION '现有数据库不满足 Liquibase 基线：仍存在已废弃兼容字段';
+    END IF;
+
     IF (SELECT count(*) FROM permission
         WHERE permission_code IN (
             'billing:view', 'billing:manage', 'billing:reverse',

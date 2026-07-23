@@ -30,7 +30,6 @@ class HttpVendorAdapterTest {
         config.setApiUrl("https://httpbin.org/post");
         config.setMethod("POST");
         config.setSecretKey("test_secret_key");
-        config.setSignType("HMAC_SHA256");
     }
 
     @Test
@@ -158,7 +157,6 @@ class HttpVendorAdapterTest {
     @DisplayName("执行请求 - HTTP调用")
     void testExecute_HttpCall() {
         config.setApiUrl("https://httpbin.org/post");
-        config.setSignType(null);
         Map<String, Object> params = new HashMap<>();
         params.put("name", "张三");
 
@@ -169,25 +167,10 @@ class HttpVendorAdapterTest {
     }
 
     @Test
-    @DisplayName("执行请求 - 带签名")
-    void testExecute_WithSignature() {
-        config.setApiUrl("https://httpbin.org/post");
-        config.setSignType("HMAC_SHA256");
-        config.setSecretKey("test_secret");
-        Map<String, Object> params = new HashMap<>();
-        params.put("name", "张三");
-
-        Map<String, Object> result = adapter.execute(config, params);
-
-        assertNotNull(result);
-    }
-
-    @Test
     @DisplayName("执行请求 - GET方法")
     void testExecute_GetMethod() {
         config.setApiUrl("https://httpbin.org/get");
         config.setMethod("GET");
-        config.setSignType(null);
         Map<String, Object> params = new HashMap<>();
         params.put("query", "test");
 
@@ -200,7 +183,6 @@ class HttpVendorAdapterTest {
     @DisplayName("执行请求 - 自定义请求头")
     void testExecute_CustomHeaders() {
         config.setApiUrl("https://httpbin.org/post");
-        config.setSignType(null);
         Map<String, String> headers = new HashMap<>();
         headers.put("X-Custom-Header", "CustomValue");
         config.setHeaders(headers);
@@ -216,7 +198,6 @@ class HttpVendorAdapterTest {
     @DisplayName("执行请求 - 响应时间记录")
     void testExecute_LatencyRecorded() {
         config.setApiUrl("https://httpbin.org/post");
-        config.setSignType(null);
         Map<String, Object> params = new HashMap<>();
         params.put("name", "张三");
 

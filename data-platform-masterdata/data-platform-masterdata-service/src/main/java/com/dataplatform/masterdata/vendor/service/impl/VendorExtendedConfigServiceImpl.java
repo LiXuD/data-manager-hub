@@ -108,9 +108,11 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
                         ? decodeStoredValue(existing) : existing.getConfigValue();
                 updated.setConfigValue(targetEncrypted ? encrypt(plain) : plain);
             } else {
-                updated.setConfigValue(targetEncrypted && existing.getConfigValue() != null
-                        && !isCiphertext(existing.getConfigValue())
-                        ? encrypt(existing.getConfigValue()) : existing.getConfigValue());
+                if (targetEncrypted && existing.getConfigValue() != null
+                        && !isCiphertext(existing.getConfigValue())) {
+                    throw new IllegalStateException("敏感配置不是受支持的密文格式");
+                }
+                updated.setConfigValue(existing.getConfigValue());
             }
         } else {
             updated.setConfigValue(targetEncrypted ? encrypt(supplied) : supplied);
@@ -340,9 +342,7 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
     private String decodeStoredValue(VendorExtendedConfig config) {
         String storedValue = config.getConfigValue();
         if (!isCiphertext(storedValue)) {
-            log.warn("检测到历史明文敏感配置，将在下次写入时自动加密: configId={}, configKey={}",
-                    config.getId(), config.getConfigKey());
-            return storedValue;
+            throw new IllegalStateException("敏感配置不是受支持的密文格式");
         }
         return decrypt(storedValue);
     }

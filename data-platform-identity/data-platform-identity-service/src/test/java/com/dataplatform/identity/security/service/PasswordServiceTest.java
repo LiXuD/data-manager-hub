@@ -20,8 +20,8 @@ class PasswordServiceTest {
     }
 
     @Test
-    void acceptsLegacyPlaintextOnlyForMigration() {
-        assertTrue(passwordService.matches("legacy-password", "legacy-password"));
-        assertFalse(passwordService.isEncoded("legacy-password"));
+    void rejectsPlaintextPasswords() {
+        assertFalse(passwordService.matches("plaintext-password", "plaintext-password"));
+        assertFalse(passwordService.isEncoded("plaintext-password"));
     }
 }

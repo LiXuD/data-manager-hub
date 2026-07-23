@@ -9,6 +9,7 @@ import com.dataplatform.access.caller.service.ApiKeyProductService;
 import com.dataplatform.access.caller.service.ApiKeyInterfaceService;
 import com.dataplatform.access.caller.service.ApiKeyService;
 import com.dataplatform.access.caller.service.CallerProductService;
+import com.dataplatform.access.caller.service.CallerService;
 import com.dataplatform.access.caller.vo.ApiKeyRateLimitUpdateVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -36,6 +37,8 @@ public class ApiKeyController {
     private ApiKeyProductService apiKeyProductService;
     @Autowired
     private CallerProductService callerProductService;
+    @Autowired
+    private CallerService callerService;
 
     @GetMapping("/list")
     public Result<List<ApiKey>> list(@RequestParam(value = "callerId", required = false) Long callerId) {
@@ -48,33 +51,37 @@ public class ApiKeyController {
     }
 
     @OperationLog(module = "API Key管理", operation = "新增API Key")
-    @PostMapping("/{callerId}")
-    public ResponseEntity<Result<ApiKey>> create(@PathVariable Long callerId, @RequestBody Map<String, Object> params) {
-        String name = (String) params.get("name");
-        if (name == null || name.isEmpty()) {
+    @PostMapping
+    public ResponseEntity<Result<ApiKey>> create(@RequestBody Map<String, Object> params) {
+        if (params == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "请求体不能为空"));
+        }
+        Object rawCallerId = params.get("callerId");
+        Long callerId;
+        try {
+            callerId = rawCallerId instanceof Number number
+                    ? number.longValue() : Long.valueOf(String.valueOf(rawCallerId));
+        } catch (NumberFormatException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "callerId必须是有效数字"));
+        }
+        Object rawName = params.get("name");
+        if (!(rawName instanceof String name) || name.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Result.error(400, "name不能为空"));
         }
-
-        ApiKey apiKey = apiKeyService.createApiKey(callerId, name);
-        return ResponseEntity.ok(Result.success(apiKey));
-    }
-
-    @OperationLog(module = "API Key管理", operation = "新增API Key")
-    @PostMapping("/{callerId}/api-key")
-    public ResponseEntity<Result<ApiKey>> createApiKey(@PathVariable Long callerId, @RequestBody Map<String, Object> params) {
-        String name = (String) params.get("name");
-        if (name == null || name.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Result.error(400, "name不能为空"));
+        if (callerService.getById(callerId) == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "调用方不存在"));
         }
 
-        ApiKey apiKey = apiKeyService.createApiKey(callerId, name);
+        ApiKey apiKey = apiKeyService.createApiKey(callerId, name.trim());
         return ResponseEntity.ok(Result.success(apiKey));
     }
 
     @OperationLog(module = "API Key管理", operation = "更新API Key状态")
-    @PutMapping("/api-key/{id}/status")
+    @PutMapping("/{id}/status")
     public Result<ApiKey> updateStatus(@PathVariable Long id, @RequestBody Map<String, Object> params) {
         String status = (String) params.get("status");
         ApiKeyStatus statusEnum = ApiKeyStatus.fromCode(status);
@@ -167,7 +174,7 @@ public class ApiKeyController {
     }
 
     @OperationLog(module = "API Key管理", operation = "删除API Key")
-    @DeleteMapping("/api-key/{id}")
+    @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
         ApiKey apiKey = apiKeyService.getById(id);
         if (apiKey == null) {

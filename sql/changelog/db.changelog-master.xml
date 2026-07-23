@@ -42,4 +42,22 @@
             <sqlFile path="../rollbacks/U000__drop_baseline.sql" relativeToChangelogFile="true" splitStatements="false" stripComments="false"/>
         </rollback>
     </changeSet>
+
+    <changeSet id="cleanup-obsolete-compatibility-2026-07-23"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V025__remove_obsolete_compatibility_fields.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U025__restore_obsolete_compatibility_fields.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>

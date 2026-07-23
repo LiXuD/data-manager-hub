@@ -15,7 +15,6 @@ import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
 import com.dataplatform.masterdata.interface_.mapper.ApiInterfaceMapper;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -126,22 +125,6 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
     }
 
     @Override
-    public Map<String, Object> getInterfaceSchema(Long id) {
-        ApiInterface apiInterface = this.getById(id);
-        if (apiInterface == null) {
-            return null;
-        }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", id);
-        result.put("interfaceCode", apiInterface.getInterfaceCode());
-        result.put("interfaceName", apiInterface.getInterfaceName());
-        result.put("requestSchema", apiInterface.getRequestSchema());
-        result.put("responseSchema", apiInterface.getResponseSchema());
-        return result;
-    }
-
-    @Override
     public boolean updateSchema(Long id, String requestSchema, String responseSchema) {
         ApiInterface apiInterface = this.getById(id);
         if (apiInterface == null) {
@@ -149,38 +132,6 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
         }
 
         return baseMapper.updateSchemaById(id, requestSchema, responseSchema) > 0;
-    }
-
-    @Override
-    public boolean validateSchema(String schema) {
-        if (schema == null || schema.trim().isEmpty()) {
-            return true;
-        }
-
-        try {
-            JsonNode root = objectMapper.readTree(schema);
-            if (!root.isObject()) {
-                return false;
-            }
-            JsonNode type = root.get("type");
-            if (type != null && !type.isTextual()) {
-                return false;
-            }
-            JsonNode properties = root.get("properties");
-            if (properties != null && !properties.isObject()) {
-                return false;
-            }
-            JsonNode required = root.get("required");
-            if (required != null && (!required.isArray()
-                    || !java.util.stream.StreamSupport.stream(required.spliterator(), false)
-                    .allMatch(JsonNode::isTextual))) {
-                return false;
-            }
-            return type != null || properties != null || root.has("$schema") || root.has("allOf")
-                    || root.has("anyOf") || root.has("oneOf");
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     @Override

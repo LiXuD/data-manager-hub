@@ -297,19 +297,6 @@ public class OpenApiQueryController {
         return InterfaceContractValidator.validate(definitions, params, true).firstError();
     }
 
-    /** 保留给旧测试和兼容调用；正式调用统一使用 InterfaceContractValidator。 */
-    private boolean matchesParamType(Object value, String type) {
-        if (type == null || "string".equalsIgnoreCase(type)) return value instanceof String;
-        if ("integer".equalsIgnoreCase(type)) {
-            return value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long;
-        }
-        if ("number".equalsIgnoreCase(type)) return value instanceof Number;
-        if ("boolean".equalsIgnoreCase(type)) return value instanceof Boolean;
-        if ("object".equalsIgnoreCase(type)) return value instanceof Map;
-        if ("array".equalsIgnoreCase(type)) return value instanceof List;
-        return false;
-    }
-
     private boolean checkRateLimit(ApiKey apiKeyEntity) {
         if (Boolean.FALSE.equals(apiKeyEntity.getRateLimitEnabled())) {
             return true;
@@ -354,15 +341,10 @@ public class OpenApiQueryController {
 
     private InterfaceContractDTO loadContract(Long interfaceId) {
         Result<InterfaceContractDTO> contractResult = apiInterfaceFeignClient.getContract(interfaceId);
-        if (contractResult != null && contractResult.getData() != null) {
-            return contractResult.getData();
+        if (contractResult == null || contractResult.getData() == null) {
+            throw new IllegalStateException("接口契约加载失败: interfaceId=" + interfaceId);
         }
-        Result<List<InterfaceParamDTO>> legacyResult = apiInterfaceFeignClient.listParams(interfaceId);
-        InterfaceContractDTO fallback = new InterfaceContractDTO();
-        fallback.setInterfaceId(interfaceId);
-        fallback.setRequestFields(legacyResult != null && legacyResult.getData() != null
-                ? legacyResult.getData() : Collections.emptyList());
-        return fallback;
+        return contractResult.getData();
     }
 
     private VendorInfoDTO getVendor(Long vendorId) {

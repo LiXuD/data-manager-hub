@@ -1,20 +1,16 @@
 package com.dataplatform.access.caller.controller;
 
-import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
-import com.dataplatform.access.caller.entity.ApiKey;
 import com.dataplatform.access.caller.entity.CallerInfo;
-import com.dataplatform.access.caller.service.ApiKeyService;
 import com.dataplatform.access.caller.service.CallerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -27,9 +23,6 @@ public class CallerController {
 
     @Autowired
     private CallerService callerService;
-
-    @Autowired
-    private ApiKeyService apiKeyService;
 
     @GetMapping("/list")
     public PageResult<CallerInfo> list(
@@ -96,69 +89,6 @@ public class CallerController {
                 .body(Result.error(404, "调用方不存在"));
         }
         callerService.removeById(id);
-        return ResponseEntity.ok(Result.success(null));
-    }
-
-    // ==================== API Key 管理 ====================
-
-    @OperationLog(module = "API Key管理", operation = "新增API Key")
-    @PostMapping("/{callerId}/api-key")
-    public ResponseEntity<Result<Map<String, Object>>> createApiKey(@PathVariable Long callerId, @RequestBody Map<String, Object> params) {
-        CallerInfo caller = callerService.getById(callerId);
-        if (caller == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Result.error(404, "调用方不存在"));
-        }
-
-        String name = (String) params.getOrDefault("name", params.get("keyName"));
-        if (name == null || name.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Result.error(400, "name不能为空"));
-        }
-
-        ApiKey apiKey = apiKeyService.createApiKey(callerId, name);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", apiKey.getId());
-        result.put("callerId", callerId);
-        result.put("keyName", name);
-        result.put("status", ApiKeyStatus.ACTIVE.getCode());
-
-        return ResponseEntity.ok(Result.success(result));
-    }
-
-    @OperationLog(module = "API Key管理", operation = "更新API Key状态")
-    @PatchMapping("/api-key/{id}/status")
-    public ResponseEntity<Result<Void>> updateApiKeyStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String status = body.get("status");
-        if ("inactive".equals(status)) {
-            status = ApiKeyStatus.REVOKED.getCode();
-        }
-        ApiKeyStatus statusEnum = ApiKeyStatus.fromCode(status);
-        if (statusEnum == null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Result.error(400, "status必须是有效的API Key状态"));
-        }
-
-        ApiKey apiKey = apiKeyService.getById(id);
-        if (apiKey == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Result.error(404, "API Key不存在"));
-        }
-        apiKey.setStatus(statusEnum);
-        apiKeyService.updateById(apiKey);
-        return ResponseEntity.ok(Result.success(null));
-    }
-
-    @OperationLog(module = "API Key管理", operation = "删除API Key")
-    @DeleteMapping("/api-key/{id}")
-    public ResponseEntity<Result<Void>> deleteApiKey(@PathVariable Long id) {
-        ApiKey apiKey = apiKeyService.getById(id);
-        if (apiKey == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Result.error(404, "API Key不存在"));
-        }
-        apiKeyService.removeById(id);
         return ResponseEntity.ok(Result.success(null));
     }
 

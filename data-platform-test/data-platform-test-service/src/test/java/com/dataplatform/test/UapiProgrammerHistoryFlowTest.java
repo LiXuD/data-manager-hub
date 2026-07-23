@@ -110,8 +110,10 @@ class UapiProgrammerHistoryFlowTest extends BaseTest {
         assertNotNull(longValue(scene.get("id")), "缺少端到端测试场景: " + SCENE_CODE);
 
         Response keyResponse = getAuthRequest()
-                .body(Map.of("name", "UAPI 程序员历史端到端测试"))
-                .post("/caller/apikey/" + callerId);
+                .body(Map.of(
+                        "callerId", callerId,
+                        "name", "UAPI 程序员历史端到端测试"))
+                .post("/caller/apikey");
         verifySuccess(keyResponse);
         apiKeyId = keyResponse.jsonPath().getLong("data.id");
         String apiKey = keyResponse.jsonPath().getString("data.apiKey");
@@ -165,7 +167,7 @@ class UapiProgrammerHistoryFlowTest extends BaseTest {
         }
         getAuthRequest().body(List.of()).post("/caller/apikey/" + apiKeyId + "/interfaces");
         getAuthRequest().body(List.of()).post("/caller/apikey/" + apiKeyId + "/products");
-        getAuthRequest().delete("/caller/apikey/api-key/" + apiKeyId);
+        getAuthRequest().delete("/caller/apikey/" + apiKeyId);
         apiKeyId = null;
     }
 

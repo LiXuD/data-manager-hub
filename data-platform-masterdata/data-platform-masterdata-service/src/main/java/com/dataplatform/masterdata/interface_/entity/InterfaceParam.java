@@ -32,8 +32,6 @@ public class InterfaceParam {
 
     private String defaultValue;
 
-    private String validationRule;
-
     private String exampleValue;
 
     @TableField(typeHandler = JsonbTypeHandler.class)
@@ -76,9 +74,6 @@ public class InterfaceParam {
 
     public String getDefaultValue() { return defaultValue; }
     public void setDefaultValue(String defaultValue) { this.defaultValue = defaultValue; }
-
-    public String getValidationRule() { return validationRule; }
-    public void setValidationRule(String validationRule) { this.validationRule = validationRule; }
 
     public String getExampleValue() { return exampleValue; }
     public void setExampleValue(String exampleValue) { this.exampleValue = exampleValue; }

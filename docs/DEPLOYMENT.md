@@ -55,11 +55,11 @@ export DB_PORT=15432
 ### 3. 初始化数据库
 
 ```bash
-psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d dataplatform -f sql/init.sql
-for migration in sql/migrations/*.sql; do
-  psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d dataplatform -f "$migration"
-done
+./migrate-db.sh dry-run
+./migrate-db.sh update
 ```
+
+Liquibase 使用 `DATABASECHANGELOG` 和 `DATABASECHANGELOGLOCK` 管理顺序、校验和与并发锁。旧的手工初始化数据库必须先执行 `./migrate-db.sh backup`，再用 `MIGRATION_CONFIRM_BASELINE=<数据库名> ./migrate-db.sh baseline` 接管，不能直接重复执行历史 SQL。`start-services.sh` 默认也会在任何 Java 服务启动前执行 `update`。
 
 ### 4. 构建项目
 
@@ -166,9 +166,9 @@ java -cp data-platform-sdk.jar com.dataplatform.sdk.generator.SDKCli --lang go -
 
 | 语言 | 模板 | 说明 |
 |------|------|------|
-| Java | `client-java.ftl` + `model-java.ftl` | Maven 项目结构 |
-| Python | `client-python.ftl` + `model-python.ftl` | pip 可安装 |
-| Go | `client-go.ftl` + `model-go.ftl` | go module |
+| Java | `java-client.ftl` + `java-model.ftl` | Java 客户端与模型 |
+| Python | `python-client.ftl` + `python-model.ftl` | Python 客户端与模型 |
+| Go | `go-client.ftl` + `go-model.ftl` | Go 客户端与模型 |
 
 ---
 

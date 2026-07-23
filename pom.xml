@@ -12,20 +12,20 @@
     <description>银行数据管理平台</description>
 
     <modules>
-        <!-- New shared modules -->
+        <!-- Shared modules -->
         <module>data-platform-common-contract</module>
         <module>data-platform-common-web</module>
         <module>data-platform-common-persistence</module>
         <module>data-platform-common-runtime</module>
 
-        <!-- New five-domain skeleton -->
+        <!-- Five business domains -->
         <module>data-platform-masterdata</module>
         <module>data-platform-access</module>
         <module>data-platform-billing</module>
         <module>data-platform-identity</module>
         <module>data-platform-governance</module>
 
-        <!-- Legacy modules retained during controlled migration -->
+        <!-- Gateway, SDK, and integration-test support -->
         <module>data-platform-test</module>
         <module>data-platform-gateway</module>
         <module>data-platform-sdk</module>
@@ -33,24 +33,22 @@
 
     <properties>
         <java.version>21</java.version>
-        <maven.compiler.source>21</maven.compiler.source>
-        <compiler.args>-parameters</compiler.args>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.4.0</spring-boot.version>
-        <spring-cloud.version>2024.0.0</spring-cloud.version>
-        <mybatis-plus.version>3.5.7</mybatis-plus.version>
-        <nacos.version>2023.0.1.0</nacos.version>
+        <spring-boot.version>3.4.13</spring-boot.version>
+        <spring-cloud.version>2024.0.3</spring-cloud.version>
+        <mybatis-plus.version>3.5.8</mybatis-plus.version>
+        <nacos.version>2023.0.3.4</nacos.version>
         <sa-token.version>1.37.0</sa-token.version>
-        <redisson.version>3.27.0</redisson.version>
-        <hutool.version>5.8.28</hutool.version>
-        <lombok.version>1.18.36</lombok.version>
+        <redisson.version>3.27.2</redisson.version>
+        <hutool.version>5.8.47</hutool.version>
+        <lombok.version>1.18.46</lombok.version>
         <resilience4j.version>2.2.0</resilience4j.version>
         <nimbus-jose-jwt.version>9.47</nimbus-jose-jwt.version>
-        <byte-buddy.version>1.17.2</byte-buddy.version>
+        <byte-buddy.version>1.17.8</byte-buddy.version>
         <maven.enforcer.version>3.5.0</maven.enforcer.version>
         <liquibase.version>4.29.2</liquibase.version>
-        <postgresql.driver.version>42.7.4</postgresql.driver.version>
+        <postgresql.driver.version>42.7.13</postgresql.driver.version>
         <profiles.active>dev</profiles.active>
     </properties>
 
@@ -83,7 +81,7 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- Override Byte Buddy for Java 25 compatibility -->
+            <!-- Override the Boot BOM so builds also work when Maven runs on JDK 25. -->
             <dependency>
                 <groupId>net.bytebuddy</groupId>
                 <artifactId>byte-buddy</artifactId>
@@ -250,8 +248,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.13.0</version>
                     <configuration>
-                        <source>21</source>
-                        <target>21</target>
+                        <release>${java.version}</release>
                         <encoding>UTF-8</encoding>
                         <parameters>true</parameters>
                     </configuration>

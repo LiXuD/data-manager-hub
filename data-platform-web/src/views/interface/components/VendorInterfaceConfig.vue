@@ -356,8 +356,6 @@ const handleSubmit = async () => {
       retryCount: form.value.retryCount,
       circuitThreshold: form.value.circuitThreshold,
       circuitTimeout: form.value.circuitTimeout,
-      signType: undefined,
-      encryptType: undefined,
       headerConfig: hasHeaderConfig ? JSON.stringify(headerConfig) : undefined,
       requestTemplate: hasRequestTemplate ? JSON.stringify(requestTemplate) : undefined,
       responseMapping: hasResponseMapping ? JSON.stringify(validResponseMapping) : undefined,

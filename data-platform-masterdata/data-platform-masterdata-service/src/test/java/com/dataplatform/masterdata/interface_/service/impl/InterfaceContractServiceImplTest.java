@@ -76,38 +76,6 @@ class InterfaceContractServiceImplTest {
     }
 
     @Test
-    void rejectsSchemaCompositionThatCannotBeImportedLosslessly() {
-        assertThrows(IllegalArgumentException.class, () -> service.saveLegacySchemas(
-                1L,
-                "{\"type\":\"object\",\"oneOf\":[{\"type\":\"object\"}]}",
-                "{\"type\":\"object\"}"));
-    }
-
-    @Test
-    void importsPrimitiveArrayAndRejectsUnknownKeywordsInsteadOfSilentlyDroppingThem() throws Exception {
-        InterfaceContractDTO imported = service.saveLegacySchemas(
-                1L,
-                "{\"type\":\"object\",\"properties\":{\"tags\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}",
-                "{\"type\":\"object\"}");
-        assertEquals("string", imported.getRequestFields().get(0).getArrayItemType());
-        assertEquals("string", new ObjectMapper().readTree(imported.getRequestSchema())
-                .path("properties").path("tags").path("items").path("type").asText());
-        assertThrows(IllegalArgumentException.class, () -> service.saveLegacySchemas(
-                1L,
-                "{\"type\":\"object\",\"properties\":{\"kind\":{\"type\":\"string\",\"const\":\"A\"}}}",
-                "{\"type\":\"object\"}"));
-    }
-
-    @Test
-    void importsStringDefaultsWithoutAddingJsonQuotes() {
-        InterfaceContractDTO imported = service.saveLegacySchemas(1L,
-                "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\",\"default\":\"Asia/Shanghai\"}}}",
-                "{\"type\":\"object\"}");
-
-        assertEquals("Asia/Shanghai", imported.getRequestFields().get(0).getDefaultValue());
-    }
-
-    @Test
     void rejectsDefaultsAndExamplesThatViolateConfiguredConstraints() {
         InterfaceParamDTO city = field("city", "string", false);
         city.setDefaultValue("UTC");
@@ -155,19 +123,6 @@ class InterfaceContractServiceImplTest {
 
         assertTrue(new ObjectMapper().readTree(saved.getRequestSchema())
                 .path("properties").path("flagText").path("default").isTextual());
-    }
-
-    @Test
-    void preservesOmittedSideWhenLegacySchemaEndpointUpdatesOnlyResponse() {
-        apiInterface.setRequestSchema("{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}");
-        apiInterface.setResponseSchema("{\"type\":\"object\"}");
-
-        InterfaceContractDTO saved = service.saveLegacySchemas(
-                1L, null,
-                "{\"type\":\"object\",\"properties\":{\"score\":{\"type\":\"integer\"}}}");
-
-        assertEquals("name", saved.getRequestFields().get(0).getParamName());
-        assertEquals("score", saved.getResponseFields().get(0).getParamName());
     }
 
     @Test

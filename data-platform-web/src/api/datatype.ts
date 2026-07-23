@@ -1,9 +1,6 @@
 import { request } from '@/utils/request'
 import type { PageParams, DataType } from '@/types'
 
-// 重新导出类型，保持向后兼容
-export type { DataType }
-
 export const getDataTypeList = (params: PageParams & { keyword?: string; vendorId?: number; status?: string }) => {
   return request.get('/datatype/list', { params })
 }

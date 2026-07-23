@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-07-22
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 调用链路整改和服务间最小权限认证；计费已收敛为版本化方案、事件账本和查询投影，不保留旧规则兼容层。
+**最后更新**: 2026-07-23
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证和过期兼容层清理；计费使用版本化方案、事件账本和查询投影。
 
 ---
 
@@ -11,7 +11,9 @@
 - 每张领域表只有所属域可直接读写；跨域统计通过 Access 内部统计契约查询，Billing 不再直接读取 `call_record`。
 - `call-record` Kafka 仅用于 Access 域内异步落库；计费计算与日聚合由 Access 同步调用 Billing 完成，不存在跨域 Kafka 消费。
 - Gateway、五域服务和前端均可按现有部署文档启动；SDK 是普通 Jar，不作为独立服务部署。
-- 最新增量：数据测试页面会读取接口参数定义，自动生成输入项、应用默认值并校验必填项与参数类型。
+- 数据测试页面通过 `/interface/{id}/contract` 读取请求字段树，自动生成输入项、应用默认值并校验必填项、类型与约束。
+- 接口契约只保留 `/contract` 读写；旧 Schema/params/import 端点、访问域旧 `/data/**` 链路和重复 API Key 路由已删除。
+- 厂商安全只执行版本化安全流水线；简单 `signType`/`encryptType`、签名构建器和失败回退已删除。
 
 ## 已完成里程碑
 
@@ -22,6 +24,7 @@
 | P1/P2（网关、对账、Nacos、Kafka、Prometheus） | 已完成 | 2026-05-20 |
 | V2.0（SkyWalking、SDK 多语言生成、灰度厂商路由） | 已完成 | 2026-05-27 |
 | 上线就绪修复与本地运行态验证 | 已完成 | 2026-06-17 |
+| 深度更新、过期代码清理与知识库刷新 | 已完成 | 2026-07-23 |
 
 ## 当前整改进度
 
@@ -52,6 +55,8 @@
 | 计费方案按厂商 + 接口唯一绑定 | 已完成 | `billing_plan` 的厂商、接口和会计方向约束；计费匹配不再使用数据类型，页面按厂商联动选择接口 |
 | 厂商接口方案支持多档阶梯计费 | 已完成 | `billing_plan_tier`、`billing_usage_balance`；按账期累计调用量并按区间累进计价，请求重试不重复推进阶梯 |
 | 模板化与版本化计费方案 | 已完成 | `V021__create_billing_plan_and_event_ledger.sql`；六类模板、响应字段计量、事件账本、套餐/周期费、SLA、契约复核、模拟发布和冲正；旧规则表和迁移已删除 |
+| 过期契约与安全兼容层清理 | 已完成 | `V025__remove_obsolete_compatibility_fields.sql`；结构化契约、安全流水线、BCrypt 与密文格式均在迁移和运行时失败关闭 |
+| API 与知识库收敛 | 已完成 | 单一 `/contract`、单一 `/caller/apikey` 资源；README、API、部署、架构 Wiki 同步；过期进度和历史验收快照删除 |
 
 ## 发布前仍需执行的环境验证
 
@@ -60,7 +65,7 @@
 - 通过环境变量或密钥系统提供 `NACOS_SERVER_ADDR`、数据库和 Redis 的连接及凭据；`docker-compose.yml` 仅用于本地开发和测试。
 - 在真实集成环境显式开启外部 API 测试：`mvn test -Dintegration.tests=true` 或 `INTEGRATION_TESTS=true`。
 - SkyWalking 生产环境使用持久化后端，不使用本地 compose 中的 H2 存储。
-- 合入 `dev` 前执行 `mvn -q validate`、后端编译与测试、前端构建和 `bash arch-scan.sh`。
+- 合入 `dev` 前执行 `mvn verify`、`npm audit`、`npm run lint`、`npm run build`、隔离数据库迁移回归和 `bash arch-scan.sh`。
 
 ## 文档职责
 
@@ -70,6 +75,5 @@
 | `CODE_WIKI.md` | 当前架构、模块职责和关键实现说明 |
 | `docs/API.md` | 对外 HTTP API 契约 |
 | `docs/DEPLOYMENT.md` | 本地与生产部署要求 |
-| `docs/2026-06-16-production-readiness-review.md` | 最近一次上线就绪审查的验证证据与环境约束 |
-
-历史实施计划、已验收报告和过期性能样本已从工作区文档中移除，需要追溯时请查阅 Git 历史。
+| `docs/2026-07-23-deep-cleanup-review.md` | 本轮清理范围、架构决策和回归证据 |
+历史实施计划、已验收报告和过期性能样本不保留在当前知识库，需要追溯时请查阅 Git 历史。

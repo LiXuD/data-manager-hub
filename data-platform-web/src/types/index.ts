@@ -9,16 +9,11 @@ export interface AlertRule {
   thresholdValue: number
   timeWindowMinutes: number
   notifyChannels: string
+  severity: string
   status: 'active' | 'inactive'
   createdBy?: number
   createdAt: string
   updatedAt: string
-  // 兼容字段
-  metric?: string
-  threshold?: number
-  condition?: string
-  level?: string
-  operator?: string
 }
 
 // 告警记录
@@ -171,7 +166,6 @@ export interface InterfaceParam {
   arrayItemType?: 'string' | 'integer' | 'number' | 'boolean' | 'object'
   required?: boolean
   defaultValue?: string
-  validationRule?: string
   exampleValue?: string
   constraintConfig?: string
   sort?: number
@@ -457,9 +451,6 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
 // 认证类型
 export type AuthType = 'NONE' | 'BASIC' | 'BEARER' | 'API_KEY'
 
-// 签名类型
-export type SignType = 'NONE' | 'HMAC_SHA256' | 'MD5'
-
 // Content-Type 类型
 export type ContentType = 'application/json' | 'application/x-www-form-urlencoded' | 'text/plain' | 'raw'
 
@@ -498,13 +489,6 @@ export interface ResponseMappingItem {
   sourceType?: 'field' | 'jsonPath'
   defaultValue?: any
   transformType?: 'none' | 'toString' | 'toNumber'
-}
-
-// 签名配置
-export interface SignConfig {
-  type: SignType
-  secretKey?: string
-  signFields?: string[]
 }
 
 export type SecurityDirection = 'REQUEST' | 'RESPONSE'
@@ -546,7 +530,6 @@ export interface VendorSecurityCapability {
   directions: SecurityDirection[]
   algorithms: string[]
   defaults: Record<string, any>
-  legacy: boolean
 }
 
 export interface VendorSecurityPreview {
@@ -606,8 +589,6 @@ export interface VendorInterfaceConfig {
   retryCount: number
   circuitThreshold: number
   circuitTimeout: number
-  signType?: string
-  encryptType?: string
   headerConfig?: string
   requestTemplate?: string
   responseMapping?: string
