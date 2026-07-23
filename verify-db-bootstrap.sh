@@ -6,6 +6,9 @@ DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 DB_USERNAME="${DB_USERNAME:-postgres}"
 VERIFY_DB_NAME="${VERIFY_DB_NAME:-dataplatform_bootstrap_regression}"
+DRY_RUN_FILE="$(mktemp)"
+BACKUP_FILE="$(mktemp).sql"
+BASELINE_BACKUP_DIR="$(mktemp -d)"
 
 if [[ ! "$VERIFY_DB_NAME" =~ ^dataplatform_[a-z0-9_]*_regression$ ]]; then
   echo "VERIFY_DB_NAME 必须匹配 dataplatform_*_regression，避免误删业务数据库" >&2
@@ -19,16 +22,49 @@ cleanup() {
     set +e
     "${PSQL[@]}" -d postgres -c "DROP DATABASE IF EXISTS \"$VERIFY_DB_NAME\" WITH (FORCE)" >/dev/null
   )
+  rm -f "$DRY_RUN_FILE" "$BACKUP_FILE"
+  rm -rf "$BASELINE_BACKUP_DIR"
 }
 trap cleanup EXIT
 
 cleanup
 "${PSQL[@]}" -d postgres -c "CREATE DATABASE \"$VERIFY_DB_NAME\"" >/dev/null
-"${PSQL[@]}" -d "$VERIFY_DB_NAME" -f sql/init.sql >/dev/null
 
-for migration in sql/migrations/*.sql; do
-  "${PSQL[@]}" -d "$VERIFY_DB_NAME" -f "$migration" >/dev/null
-done
+export DB_HOST DB_PORT DB_USERNAME
+export DB_NAME="$VERIFY_DB_NAME"
+export DB_PASSWORD="${DB_PASSWORD:-${PGPASSWORD:-postgres}}"
+export PGPASSWORD="$DB_PASSWORD"
+
+bash ./migrate-db.sh dry-run >"$DRY_RUN_FILE"
+grep -q "CREATE TABLE" "$DRY_RUN_FILE"
+
+bash ./migrate-db.sh update
+
+bash ./migrate-db.sh backup "$BACKUP_FILE"
+"${PSQL[@]}" -d "$VERIFY_DB_NAME" -c 'CREATE TABLE migration_restore_probe(id INTEGER)' >/dev/null
+MIGRATION_CONFIRM_RESTORE="$VERIFY_DB_NAME" bash ./migrate-db.sh restore "$BACKUP_FILE"
+
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('migration_restore_probe') IS NULL")" != "t" ]]; then
+  echo "备份恢复后仍存在备份之后创建的探针表" >&2
+  exit 1
+fi
+bash ./migrate-db.sh update
+
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "1" ]]; then
+  echo "Liquibase 基线没有且仅有一条执行记录" >&2
+  exit 1
+fi
+
+bash ./migrate-db.sh rollback-dry-run 1 >"$DRY_RUN_FILE"
+grep -q "DROP TABLE" "$DRY_RUN_FILE"
+MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 1
+
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('tenant_info') IS NULL")" != "t" ]]; then
+  echo "Liquibase 基线回滚后仍存在业务表" >&2
+  exit 1
+fi
+
+bash ./migrate-db.sh update
 
 "${PSQL[@]}" -d "$VERIFY_DB_NAME" <<'SQL'
 DO $$
@@ -65,4 +101,14 @@ BEGIN
 END $$;
 SQL
 
-echo "数据库全新初始化回归通过: $VERIFY_DB_NAME"
+"${PSQL[@]}" -d "$VERIFY_DB_NAME" \
+  -c 'DROP TABLE databasechangeloglock, databasechangelog' >/dev/null
+DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$VERIFY_DB_NAME" \
+  bash ./migrate-db.sh baseline
+
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "1" ]]; then
+  echo "现有数据库基线登记失败" >&2
+  exit 1
+fi
+
+echo "数据库迁移回归通过（dry-run/update/idempotency/rollback/reapply/backup/restore/baseline）: $VERIFY_DB_NAME"

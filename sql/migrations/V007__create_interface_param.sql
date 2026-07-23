@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS interface_param (
     CONSTRAINT uk_interface_param UNIQUE(interface_id, param_name)
 );
 
-CREATE INDEX idx_interface_param_interface ON interface_param(interface_id);
+CREATE INDEX IF NOT EXISTS idx_interface_param_interface ON interface_param(interface_id);
 
 COMMENT ON TABLE interface_param IS '接口参数定义表';
 COMMENT ON COLUMN interface_param.id IS '主键ID';

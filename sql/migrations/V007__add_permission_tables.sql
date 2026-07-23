@@ -107,7 +107,8 @@ VALUES
 ('config:edit', '配置中心-编辑', 'button', '/config/edit', 6, 1, '编辑配置', 'active'),
 ('graylog:view', '灰度发布-查看', 'page', '/graylog', 0, 7, '查看灰度发布', 'active'),
 ('audit:view', '操作日志-查看', 'page', '/audit', 0, 8, '查看操作日志', 'active'),
-('dashboard:view', '数据概览-查看', 'page', '/dashboard', 0, 9, '查看数据概览', 'active');
+('dashboard:view', '数据概览-查看', 'page', '/dashboard', 0, 9, '查看数据概览', 'active')
+ON CONFLICT (permission_code) DO NOTHING;
 
 -- 初始化管理员角色（如果不存在）
 INSERT INTO role_info (role_code, role_name, description, status, created_at, updated_at, deleted)
