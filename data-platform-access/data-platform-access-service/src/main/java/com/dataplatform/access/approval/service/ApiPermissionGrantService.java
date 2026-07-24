@@ -135,7 +135,9 @@ public class ApiPermissionGrantService {
                             GrantSource.EMERGENCY_ADMIN,
                             null,
                             request.expireAt(),
-                            actorUserId);
+                            actorUserId,
+                            false,
+                            null);
                     appendDetachedAction(
                             "EMERGENCY_GRANT",
                             actorUserId,
@@ -300,6 +302,8 @@ public class ApiPermissionGrantService {
                 apiInterface != null ? apiInterface.getInterfaceName() : null,
                 grant.getGrantSource(),
                 projectedStatus,
+                grant.getCacheEnabled(),
+                grant.getApprovedCacheDays(),
                 grant.getEffectiveAt(),
                 grant.getExpireAt(),
                 grant.getRevokedAt(),

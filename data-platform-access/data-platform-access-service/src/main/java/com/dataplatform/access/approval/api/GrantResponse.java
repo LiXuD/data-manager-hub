@@ -14,6 +14,8 @@ public record GrantResponse(
         String interfaceName,
         String source,
         String status,
+        Boolean cacheEnabled,
+        Integer approvedCacheDays,
         LocalDateTime effectiveAt,
         LocalDateTime expireAt,
         LocalDateTime revokedAt,

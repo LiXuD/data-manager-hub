@@ -43,6 +43,10 @@ export interface ApiPermissionItem {
   interfaceNameSnapshot: string
   interfaceStatusSnapshot: string
   itemStatus: string
+  requestedCacheEnabled: boolean
+  requestedCacheDays?: number
+  approvedCacheEnabled: boolean
+  approvedCacheDays?: number
   grantId?: number
 }
 
@@ -74,6 +78,8 @@ export interface ApplicationDraft {
   expectedDailyCalls: number
   requestedExpireAt: string
   ticketNo?: string
+  cacheEnabled: boolean
+  requestedCacheDays?: number
 }
 
 export interface CallerOption {
@@ -147,6 +153,8 @@ export interface Grant {
   interfaceName?: string
   source: string
   status: string
+  cacheEnabled: boolean
+  approvedCacheDays?: number
   effectiveAt: string
   expireAt?: string
   revokedAt?: string
@@ -224,6 +232,8 @@ export const completeTask = (taskId: string, data: {
   approvedExpireAt?: string
   comment?: string
   formData?: Record<string, unknown>
+  approvedCacheEnabled?: boolean
+  approvedCacheDays?: number
 }) => request.post<{ data: ApiPermissionApplication }>(
   `/api-permission/tasks/${taskId}/complete`,
   data

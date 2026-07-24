@@ -14,7 +14,8 @@ class ApiKeyInterfaceMappingTest {
     @Test
     void reusableGrantCanClearNullableLifecycleFields() throws Exception {
         for (String fieldName : List.of(
-                "applicationItemId", "expireAt", "revokedAt", "revokedBy", "revokeReason")) {
+                "applicationItemId", "approvedCacheDays", "expireAt",
+                "revokedAt", "revokedBy", "revokeReason")) {
             Field field = ApiKeyInterface.class.getDeclaredField(fieldName);
             TableField mapping = field.getAnnotation(TableField.class);
 

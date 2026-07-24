@@ -149,7 +149,7 @@
             <el-input-number
               v-model="cacheDays"
               :min="1"
-              :max="30"
+              :max="365"
               :disabled="!useCache"
               controls-position="right"
               class="cache-days"

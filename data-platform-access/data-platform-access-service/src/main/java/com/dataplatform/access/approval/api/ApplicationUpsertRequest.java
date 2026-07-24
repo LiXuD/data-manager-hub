@@ -12,5 +12,7 @@ public record ApplicationUpsertRequest(
         String businessScene,
         Long expectedDailyCalls,
         LocalDateTime requestedExpireAt,
-        String ticketNo) {
+        String ticketNo,
+        Boolean cacheEnabled,
+        Integer requestedCacheDays) {
 }

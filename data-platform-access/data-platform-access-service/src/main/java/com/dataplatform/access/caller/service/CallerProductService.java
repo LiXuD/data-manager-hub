@@ -43,7 +43,7 @@ public class CallerProductService extends ServiceImpl<CallerProductMapper, Calle
             product.setStatus(StatusConstants.ACTIVE);
         }
         if (product.getCacheScope() == null || product.getCacheScope().trim().isEmpty()) {
-            product.setCacheScope("GLOBAL");
+            product.setCacheScope("CALLER");
         }
         save(product);
         return product;

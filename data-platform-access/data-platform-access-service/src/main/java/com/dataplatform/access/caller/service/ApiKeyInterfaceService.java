@@ -28,7 +28,14 @@ public class ApiKeyInterfaceService extends ServiceImpl<ApiKeyInterfaceMapper, A
     }
 
     public boolean hasInterfacePermission(Long apiKeyId, Long interfaceId) {
-        return count(activeGrantQuery(apiKeyId, interfaceId)) > 0;
+        return findEffectiveGrant(apiKeyId, interfaceId) != null;
+    }
+
+    public ApiKeyInterface findEffectiveGrant(Long apiKeyId, Long interfaceId) {
+        if (apiKeyId == null || interfaceId == null) {
+            return null;
+        }
+        return getOne(activeGrantQuery(apiKeyId, interfaceId).last("LIMIT 1"), false);
     }
 
     @Transactional
@@ -47,6 +54,8 @@ public class ApiKeyInterfaceService extends ServiceImpl<ApiKeyInterfaceMapper, A
                         record.setInterfaceId(id);
                         record.setGrantSource(GrantSource.LEGACY_ADMIN.name());
                         record.setStatus(GrantStatus.ACTIVE.name());
+                        record.setCacheEnabled(false);
+                        record.setApprovedCacheDays(null);
                         record.setEffectiveAt(LocalDateTime.now());
                         record.setUpdatedAt(LocalDateTime.now());
                         record.setVersion(0);
@@ -64,7 +73,9 @@ public class ApiKeyInterfaceService extends ServiceImpl<ApiKeyInterfaceMapper, A
             GrantSource source,
             Long applicationItemId,
             LocalDateTime expireAt,
-            Long actorUserId) {
+            Long actorUserId,
+            boolean cacheEnabled,
+            Integer approvedCacheDays) {
         ApiKeyInterface grant = getOne(new LambdaQueryWrapper<ApiKeyInterface>()
                 .eq(ApiKeyInterface::getApiKeyId, apiKeyId)
                 .eq(ApiKeyInterface::getInterfaceId, interfaceId));
@@ -80,6 +91,8 @@ public class ApiKeyInterfaceService extends ServiceImpl<ApiKeyInterfaceMapper, A
         grant.setGrantSource(source.name());
         grant.setApplicationItemId(applicationItemId);
         grant.setStatus(GrantStatus.ACTIVE.name());
+        grant.setCacheEnabled(cacheEnabled);
+        grant.setApprovedCacheDays(cacheEnabled ? approvedCacheDays : null);
         grant.setEffectiveAt(now);
         grant.setExpireAt(expireAt);
         grant.setRevokedAt(null);

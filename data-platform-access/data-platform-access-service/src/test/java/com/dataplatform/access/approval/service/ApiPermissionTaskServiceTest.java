@@ -3,6 +3,7 @@ package com.dataplatform.access.approval.service;
 import com.dataplatform.access.approval.api.ApiPermissionException;
 import com.dataplatform.access.approval.api.CompleteTaskRequest;
 import com.dataplatform.access.approval.domain.ApiPermissionApplication;
+import com.dataplatform.access.approval.domain.ApiPermissionApplicationItem;
 import com.dataplatform.access.approval.domain.ApplicationStatus;
 import com.dataplatform.access.approval.engine.ApprovalEnginePort;
 import com.dataplatform.api.Result;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -109,7 +111,9 @@ class ApiPermissionTaskServiceTest {
                 "APPROVE",
                 LocalDateTime.now().plusDays(5),
                 "同意",
-                Map.of());
+                Map.of(),
+                false,
+                null);
 
         assertThatThrownBy(() -> taskService.complete(
                 "task-1", request, 22L, "approver", 7L))
@@ -133,7 +137,9 @@ class ApiPermissionTaskServiceTest {
                 "APPROVE",
                 LocalDateTime.now().plusDays(5),
                 "同意",
-                Map.of("unsafe", List.of("nested")));
+                Map.of("unsafe", List.of("nested")),
+                false,
+                null);
 
         assertThatThrownBy(() -> taskService.complete(
                 "task-1", request, 22L, "approver", 7L))
@@ -141,6 +147,52 @@ class ApiPermissionTaskServiceTest {
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo("INVALID_FORM_FIELD_VALUE"));
         verify(approvalEngine, never()).complete(any(), any(), any());
+    }
+
+    @Test
+    void shouldRejectApprovedCacheDaysAboveRequestedLimit() {
+        ApiPermissionApplication application = application(100L, 7L, 11L, 4);
+        ApiPermissionApplicationItem item = new ApiPermissionApplicationItem();
+        item.setRequestedCacheEnabled(true);
+        item.setRequestedCacheDays(2);
+        when(applicationService.listItems(100L)).thenReturn(List.of(item));
+        CompleteTaskRequest request = new CompleteTaskRequest(
+                4,
+                "APPROVE",
+                LocalDateTime.now().plusDays(5),
+                "同意接口权限",
+                Map.of(),
+                true,
+                10);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                taskService, "resolveApprovedCachePolicy", application, request))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("INVALID_CACHE_APPROVAL"));
+    }
+
+    @Test
+    void shouldRequireExplicitCacheDecisionWhenCacheWasRequested() {
+        ApiPermissionApplication application = application(100L, 7L, 11L, 4);
+        ApiPermissionApplicationItem item = new ApiPermissionApplicationItem();
+        item.setRequestedCacheEnabled(true);
+        item.setRequestedCacheDays(10);
+        when(applicationService.listItems(100L)).thenReturn(List.of(item));
+        CompleteTaskRequest request = new CompleteTaskRequest(
+                4,
+                "APPROVE",
+                LocalDateTime.now().plusDays(5),
+                "同意接口权限",
+                Map.of(),
+                null,
+                null);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                taskService, "resolveApprovedCachePolicy", application, request))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("CACHE_DECISION_REQUIRED"));
     }
 
     private ApiPermissionApplication application(

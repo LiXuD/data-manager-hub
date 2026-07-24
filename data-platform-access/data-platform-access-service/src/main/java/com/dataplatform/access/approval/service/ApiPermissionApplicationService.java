@@ -57,6 +57,7 @@ import java.util.stream.Collectors;
 public class ApiPermissionApplicationService {
 
     private static final int MAX_INTERFACES = 100;
+    private static final int MAX_CACHE_DAYS = 365;
     private static final long MAX_EXPECTED_DAILY_CALLS = 100_000_000L;
     private static final DateTimeFormatter APPLICATION_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
@@ -115,7 +116,7 @@ public class ApiPermissionApplicationService {
             application.setCreatedAt(now);
             application.setUpdatedAt(now);
             applicationMapper.insert(application);
-            replaceItems(application, resources.interfaces(), ApplicationStatus.DRAFT);
+            replaceItems(application, resources.interfaces(), ApplicationStatus.DRAFT, request);
             appendAction(application, "CREATE", "USER", userId, username,
                     null, ApplicationStatus.DRAFT.name(), null, null);
             return application;
@@ -134,7 +135,7 @@ public class ApiPermissionApplicationService {
             requireStatus(application, ApplicationStatus.DRAFT);
             applyRequest(application, request, resources, userId, username, tenantId);
             updateApplication(application);
-            replaceItems(application, resources.interfaces(), ApplicationStatus.DRAFT);
+            replaceItems(application, resources.interfaces(), ApplicationStatus.DRAFT, request);
             return application;
         });
     }
@@ -191,6 +192,10 @@ public class ApiPermissionApplicationService {
                 variables.put("riskLevel", riskLevel(locked));
                 variables.put("expectedDailyCalls", locked.getExpectedDailyCalls());
                 variables.put("requestedExpireAt", locked.getRequestedExpireAt().toString());
+                ApiPermissionApplicationItem firstItem = items.get(0);
+                variables.put("requestedCacheEnabled",
+                        Boolean.TRUE.equals(firstItem.getRequestedCacheEnabled()));
+                variables.put("requestedCacheDays", firstItem.getRequestedCacheDays());
                 String approverGroup = RoleCodeNormalizer.normalize(
                         processConfig.getApproverGroup());
                 if (approverGroup == null) {
@@ -444,6 +449,17 @@ public class ApiPermissionApplicationService {
         }
     }
 
+    public void applyApprovedCachePolicy(
+            Long applicationId,
+            boolean cacheEnabled,
+            Integer approvedCacheDays) {
+        for (ApiPermissionApplicationItem item : listItems(applicationId)) {
+            item.setApprovedCacheEnabled(cacheEnabled);
+            item.setApprovedCacheDays(cacheEnabled ? approvedCacheDays : null);
+            updateItem(item);
+        }
+    }
+
     public void appendAction(
             ApiPermissionApplication application,
             String action,
@@ -570,6 +586,19 @@ public class ApiPermissionApplicationService {
                 || request.requestedExpireAt().isAfter(LocalDateTime.now().plusDays(365)))) {
             throw badRequest("INVALID_EXPIRY", "申请有效期必须在未来 365 天内");
         }
+        boolean cacheEnabled = Boolean.TRUE.equals(request.cacheEnabled());
+        if (cacheEnabled && (request.requestedCacheDays() == null
+                || request.requestedCacheDays() < 1
+                || request.requestedCacheDays() > MAX_CACHE_DAYS)) {
+            throw badRequest(
+                    "INVALID_CACHE_POLICY",
+                    "申请使用缓存时，缓存时效必须在 1 到 365 天之间");
+        }
+        if (!cacheEnabled && request.requestedCacheDays() != null) {
+            throw badRequest(
+                    "INVALID_CACHE_POLICY",
+                    "未申请缓存时不能填写缓存时效");
+        }
     }
 
     private void validateNoPendingOrEffectiveGrant(
@@ -621,7 +650,8 @@ public class ApiPermissionApplicationService {
     private void replaceItems(
             ApiPermissionApplication application,
             List<ApiInterfaceDTO> interfaces,
-            ApplicationStatus status) {
+            ApplicationStatus status,
+            ApplicationUpsertRequest request) {
         itemMapper.delete(new LambdaQueryWrapper<ApiPermissionApplicationItem>()
                 .eq(ApiPermissionApplicationItem::getApplicationId, application.getId()));
         LocalDateTime now = LocalDateTime.now();
@@ -634,6 +664,10 @@ public class ApiPermissionApplicationService {
             item.setInterfaceNameSnapshot(apiInterface.getInterfaceName());
             item.setInterfaceStatusSnapshot(apiInterface.getStatus());
             item.setItemStatus(status.name());
+            item.setRequestedCacheEnabled(Boolean.TRUE.equals(request.cacheEnabled()));
+            item.setRequestedCacheDays(request.requestedCacheDays());
+            item.setApprovedCacheEnabled(false);
+            item.setApprovedCacheDays(null);
             item.setCreatedAt(now);
             item.setUpdatedAt(now);
             itemMapper.insert(item);
@@ -675,7 +709,13 @@ public class ApiPermissionApplicationService {
                 application.getBusinessScene(),
                 application.getExpectedDailyCalls(),
                 application.getRequestedExpireAt(),
-                application.getTicketNo());
+                application.getTicketNo(),
+                items.stream().findFirst()
+                        .map(ApiPermissionApplicationItem::getRequestedCacheEnabled)
+                        .orElse(false),
+                items.stream().findFirst()
+                        .map(ApiPermissionApplicationItem::getRequestedCacheDays)
+                        .orElse(null));
     }
 
     private ApiPermissionApplication requireOwnedApplication(Long id, Long userId) {

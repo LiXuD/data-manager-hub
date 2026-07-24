@@ -12,6 +12,7 @@ import com.dataplatform.access.call.vo.OpenApiBatchQueryRespVO;
 import com.dataplatform.access.call.vo.OpenApiQueryReqVO;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
 import com.dataplatform.access.caller.entity.ApiKey;
+import com.dataplatform.access.caller.entity.ApiKeyInterface;
 import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.entity.CallerProduct;
 import com.dataplatform.access.caller.service.ApiKeyProductService;
@@ -145,8 +146,15 @@ public class OpenApiQueryController {
         if (route == null) {
             return error(404, "接口配置不存在");
         }
-        if (!validateInterfacePermission(apiKeyEntity.getId(), route.interfaceId())) {
+        ApiKeyInterface interfaceGrant = apiKeyInterfaceService.findEffectiveGrant(
+                apiKeyEntity.getId(), route.interfaceId());
+        if (interfaceGrant == null) {
             return error(403, "API Key没有访问该接口的权限");
+        }
+        String cachePolicyError = validateApprovedCachePolicy(
+                request.getUseCache(), request.getCacheDays(), interfaceGrant);
+        if (cachePolicyError != null) {
+            return error(403, cachePolicyError);
         }
         Map<String, Object> requestParams = request.getParams() != null
                 ? new HashMap<>(request.getParams()) : new HashMap<>();
@@ -227,8 +235,15 @@ public class OpenApiQueryController {
         if (route == null) {
             return error(404, "接口配置不存在");
         }
-        if (!validateInterfacePermission(apiKeyEntity.getId(), route.interfaceId())) {
+        ApiKeyInterface interfaceGrant = apiKeyInterfaceService.findEffectiveGrant(
+                apiKeyEntity.getId(), route.interfaceId());
+        if (interfaceGrant == null) {
             return error(403, "API Key没有访问该接口的权限");
+        }
+        String cachePolicyError = validateApprovedCachePolicy(
+                request.getUseCache(), request.getCacheDays(), interfaceGrant);
+        if (cachePolicyError != null) {
+            return error(403, cachePolicyError);
         }
         for (int index = 0; index < request.getItems().size(); index++) {
             OpenApiBatchQueryReqVO.QueryItem item = request.getItems().get(index);
@@ -284,11 +299,22 @@ public class OpenApiQueryController {
         return apiKeyEntity;
     }
 
-    private boolean validateInterfacePermission(Long apiKeyId, Long interfaceId) {
-        if (interfaceId == null) {
-            return false;
+    private String validateApprovedCachePolicy(
+            Boolean useCache,
+            Integer cacheDays,
+            ApiKeyInterface grant) {
+        if (!Boolean.TRUE.equals(useCache)) {
+            return null;
         }
-        return apiKeyInterfaceService.hasInterfacePermission(apiKeyId, interfaceId);
+        if (!Boolean.TRUE.equals(grant.getCacheEnabled())
+                || grant.getApprovedCacheDays() == null) {
+            return "当前接口授权未批准使用缓存";
+        }
+        if (cacheDays > grant.getApprovedCacheDays()) {
+            return "请求缓存时效超过审批上限"
+                    + grant.getApprovedCacheDays() + "天";
+        }
+        return null;
     }
 
     private String validateParams(InterfaceContractDTO contract, Map<String, Object> params) {

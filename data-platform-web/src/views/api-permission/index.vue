@@ -199,6 +199,11 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="缓存策略" width="130">
+              <template #default="{ row }">
+                {{ row.cacheEnabled ? `最多 ${row.approvedCacheDays} 天` : '不允许缓存' }}
+              </template>
+            </el-table-column>
             <el-table-column prop="expireAt" label="有效截止" width="170">
               <template #default="{ row }">{{ row.expireAt ? formatDateTime(row.expireAt) : '长期' }}</template>
             </el-table-column>
@@ -303,6 +308,25 @@
           </el-select>
           <div class="field-hint">新增申请排除已授权/审批中接口，续期仅可选择当前有效授权。</div>
         </el-form-item>
+        <div class="form-grid">
+          <el-form-item label="申请结果缓存">
+            <el-switch
+              v-model="draft.cacheEnabled"
+              active-text="申请使用缓存"
+              inactive-text="不使用缓存"
+            />
+          </el-form-item>
+          <el-form-item v-if="draft.cacheEnabled" label="申请缓存时效（天）" required>
+            <el-input-number
+              v-model="draft.requestedCacheDays"
+              :min="1"
+              :max="365"
+              controls-position="right"
+              style="width: 100%"
+            />
+            <div class="field-hint">审批人只能降低该上限，不能提高。</div>
+          </el-form-item>
+        </div>
         <el-form-item label="业务用途" required>
           <el-input
             v-model="draft.businessPurpose"
@@ -363,6 +387,16 @@
         <el-table :data="detail.items" size="small" border>
           <el-table-column prop="interfaceCodeSnapshot" label="接口编码" min-width="150" />
           <el-table-column prop="interfaceNameSnapshot" label="接口名称" min-width="180" />
+          <el-table-column label="申请缓存" width="110">
+            <template #default="{ row }">
+              {{ row.requestedCacheEnabled ? `${row.requestedCacheDays} 天` : '不使用' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="批准缓存" width="110">
+            <template #default="{ row }">
+              {{ row.approvedCacheEnabled ? `${row.approvedCacheDays} 天` : '未批准' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="itemStatus" label="状态" width="110">
             <template #default="{ row }">{{ statusLabel(row.itemStatus) }}</template>
           </el-table-column>
@@ -418,6 +452,11 @@
         <el-table :data="taskDetail.application.items" size="small" border>
           <el-table-column prop="interfaceCodeSnapshot" label="接口编码" min-width="150" />
           <el-table-column prop="interfaceNameSnapshot" label="接口名称" min-width="180" />
+          <el-table-column label="申请缓存" width="110">
+            <template #default="{ row }">
+              {{ row.requestedCacheEnabled ? `${row.requestedCacheDays} 天` : '不使用' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="interfaceStatusSnapshot" label="接口状态" width="110" />
         </el-table>
         <el-form label-position="top" class="decision-form">
@@ -432,6 +471,29 @@
               style="width: 100%"
             />
           </el-form-item>
+          <template v-if="taskRequestedCacheEnabled">
+            <el-form-item label="批准结果缓存">
+              <el-switch
+                v-model="decision.approvedCacheEnabled"
+                active-text="批准"
+                inactive-text="不批准"
+              />
+            </el-form-item>
+            <el-form-item
+              v-if="decision.approvedCacheEnabled"
+              label="批准缓存时效（天）"
+              required
+            >
+              <el-input-number
+                v-model="decision.approvedCacheDays"
+                :min="1"
+                :max="taskRequestedCacheDays"
+                controls-position="right"
+                style="width: 100%"
+              />
+              <div class="field-hint">申请上限为 {{ taskRequestedCacheDays }} 天。</div>
+            </el-form-item>
+          </template>
           <el-form-item
             v-for="field in taskDetail.policy.formFields"
             :key="field.id"
@@ -680,11 +742,15 @@ const draft = reactive<ApplicationDraft>({
   businessScene: '',
   expectedDailyCalls: 1000,
   requestedExpireAt: '',
-  ticketNo: ''
+  ticketNo: '',
+  cacheEnabled: false,
+  requestedCacheDays: undefined
 })
 
 const decision = reactive({
   approvedExpireAt: '',
+  approvedCacheEnabled: false,
+  approvedCacheDays: undefined as number | undefined,
   comment: '',
   formData: {} as Record<string, any>
 })
@@ -710,6 +776,12 @@ const statusOptions = [
 ]
 
 const currentUserId = computed(() => String(userStore.userInfo?.id || ''))
+const taskRequestedCacheEnabled = computed(() =>
+  Boolean(taskDetail.value?.application.items[0]?.requestedCacheEnabled)
+)
+const taskRequestedCacheDays = computed(() =>
+  taskDetail.value?.application.items[0]?.requestedCacheDays || 1
+)
 
 const loadApplications = async () => {
   applicationLoading.value = true
@@ -763,7 +835,9 @@ const resetDraft = () => {
     businessScene: '',
     expectedDailyCalls: 1000,
     requestedExpireAt: '',
-    ticketNo: ''
+    ticketNo: '',
+    cacheEnabled: false,
+    requestedCacheDays: undefined
   })
   apiKeys.value = []
   interfaces.value = []
@@ -805,7 +879,9 @@ const openEdit = async (row: ApiPermissionApplication) => {
     businessScene: application.businessScene,
     expectedDailyCalls: application.expectedDailyCalls,
     requestedExpireAt: application.requestedExpireAt || '',
-    ticketNo: application.ticketNo || ''
+    ticketNo: application.ticketNo || '',
+    cacheEnabled: Boolean(detailResponse.data.items[0]?.requestedCacheEnabled),
+    requestedCacheDays: detailResponse.data.items[0]?.requestedCacheDays
   })
   const [apiKeyResponse, interfaceResponse] = await Promise.all([
     getCallerApiKeys(application.callerId),
@@ -844,6 +920,13 @@ const validateDraft = () => {
     ElMessage.warning('请选择期望有效截止时间')
     return false
   }
+  if (draft.cacheEnabled
+    && (!draft.requestedCacheDays
+      || draft.requestedCacheDays < 1
+      || draft.requestedCacheDays > 365)) {
+    ElMessage.warning('申请缓存时效必须在 1 到 365 天之间')
+    return false
+  }
   return true
 }
 
@@ -851,9 +934,13 @@ const saveDraft = async (submit: boolean) => {
   if (!validateDraft()) return
   saving.value = true
   try {
+    const payload: ApplicationDraft = {
+      ...draft,
+      requestedCacheDays: draft.cacheEnabled ? draft.requestedCacheDays : undefined
+    }
     const response = editingId.value
-      ? await updateApplication(editingId.value, { ...draft })
-      : await createApplication({ ...draft })
+      ? await updateApplication(editingId.value, payload)
+      : await createApplication(payload)
     if (submit && response.data?.id) {
       await submitApplication(response.data.id, crypto.randomUUID())
       ElMessage.success('申请已提交')
@@ -977,6 +1064,9 @@ const openTask = async (taskId: string) => {
   }
   taskDetail.value = response.data
   decision.approvedExpireAt = response.data.application.application.requestedExpireAt || ''
+  const requestedCache = response.data.application.items[0]
+  decision.approvedCacheEnabled = Boolean(requestedCache?.requestedCacheEnabled)
+  decision.approvedCacheDays = requestedCache?.requestedCacheDays
   decision.comment = ''
   decision.formData = Object.fromEntries(response.data.policy.formFields.map(field => [
     field.id,
@@ -1007,6 +1097,15 @@ const decide = async (decisionValue: string) => {
     ElMessage.warning('请选择批准有效截止时间')
     return
   }
+  if (decisionValue === 'APPROVE'
+    && taskRequestedCacheEnabled.value
+    && decision.approvedCacheEnabled
+    && (!decision.approvedCacheDays
+      || decision.approvedCacheDays < 1
+      || decision.approvedCacheDays > taskRequestedCacheDays.value)) {
+    ElMessage.warning(`批准缓存时效必须在 1 到 ${taskRequestedCacheDays.value} 天之间`)
+    return
+  }
   const missingField = taskDetail.value.policy.formFields.find(field => {
     const value = decision.formData[field.id]
     return field.required && (value === undefined || value === null || value === '')
@@ -1026,6 +1125,12 @@ const decide = async (decisionValue: string) => {
         ? decision.approvedExpireAt
         : undefined,
       comment: decision.comment.trim() || undefined,
+      approvedCacheEnabled: decisionValue === 'APPROVE'
+        ? decision.approvedCacheEnabled
+        : false,
+      approvedCacheDays: decisionValue === 'APPROVE' && decision.approvedCacheEnabled
+        ? decision.approvedCacheDays
+        : undefined,
       formData: Object.fromEntries(
         Object.entries(decision.formData).filter(([, value]) => value !== undefined && value !== '')
       )
