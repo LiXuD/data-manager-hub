@@ -121,6 +121,13 @@ guard_rollback() {
 
     require_command psql
     applied_count="$(query_scalar 'SELECT count(*) FROM databasechangelog')"
+    if [[ "$(query_scalar "
+        SELECT count(*)
+        FROM databasechangelog
+        WHERE id = 'api-permission-rbac-hardening-2026-07-24'
+          AND author = 'data-platform'")" != "0" ]]; then
+        fail "V027 包含角色大小写合并，禁止原地回滚；请保留规范化数据或使用迁移前备份 restore"
+    fi
     baseline_execution_type="$(query_scalar "SELECT exectype FROM databasechangelog WHERE id = 'baseline-2026-07-22' AND author = 'data-platform'")"
     if [[ "$baseline_execution_type" == "MARK_RAN" && "$requested_count" -ge "$applied_count" ]]; then
         fail "旧库接管基线不可用 Liquibase 删除；请使用迁移前备份执行 restore"

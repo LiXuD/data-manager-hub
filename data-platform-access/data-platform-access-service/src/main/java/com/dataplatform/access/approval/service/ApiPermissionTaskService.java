@@ -8,6 +8,7 @@ import com.dataplatform.access.approval.domain.ApiPermissionApplication;
 import com.dataplatform.access.approval.domain.ApplicationStatus;
 import com.dataplatform.access.approval.engine.ApprovalEnginePort;
 import com.dataplatform.api.Result;
+import com.dataplatform.common.security.RoleCodeNormalizer;
 import com.dataplatform.identity.api.feign.IdentityAccessInternalFeignClient;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -238,7 +239,7 @@ public class ApiPermissionTaskService {
                     "DEPENDENCY_UNAVAILABLE",
                     "身份服务返回异常");
         }
-        return Set.copyOf(result.getData());
+        return RoleCodeNormalizer.normalizeAll(result.getData());
     }
 
     private void validateCompleteRequest(

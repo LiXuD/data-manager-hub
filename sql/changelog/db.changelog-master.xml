@@ -80,4 +80,22 @@
                      stripComments="false"/>
         </rollback>
     </changeSet>
+
+    <changeSet id="api-permission-rbac-hardening-2026-07-24"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V027__harden_api_permission_rbac.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U027__refuse_unsafe_rbac_decanonicalization.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>

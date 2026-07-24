@@ -1,5 +1,6 @@
 package com.dataplatform.access.approval.engine;
 
+import com.dataplatform.common.security.RoleCodeNormalizer;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
@@ -20,7 +21,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -76,6 +79,7 @@ public class FlowableApprovalEngineAdapter implements ApprovalEnginePort {
 
     @Override
     public List<TaskSnapshot> findTasks(String userId, Set<String> candidateGroups) {
+        Set<String> normalizedGroups = RoleCodeNormalizer.normalizeAll(candidateGroups);
         Map<String, TaskSnapshot> tasks = new LinkedHashMap<>();
         taskService.createTaskQuery()
                 .active()
@@ -84,11 +88,11 @@ public class FlowableApprovalEngineAdapter implements ApprovalEnginePort {
                 .desc()
                 .list()
                 .forEach(task -> tasks.put(task.getId(), toSnapshot(task)));
-        if (candidateGroups != null && !candidateGroups.isEmpty()) {
+        if (!normalizedGroups.isEmpty()) {
             taskService.createTaskQuery()
                     .active()
                     .taskUnassigned()
-                    .taskCandidateGroupIn(new ArrayList<>(candidateGroups))
+                    .taskCandidateGroupIn(new ArrayList<>(queryGroupVariants(normalizedGroups)))
                     .orderByTaskCreateTime()
                     .desc()
                     .list()
@@ -157,18 +161,20 @@ public class FlowableApprovalEngineAdapter implements ApprovalEnginePort {
 
     @Override
     public boolean canClaim(String taskId, Set<String> candidateGroups) {
+        Set<String> normalizedGroups = RoleCodeNormalizer.normalizeAll(candidateGroups);
         Task task = taskService.createTaskQuery()
                 .taskId(taskId)
                 .active()
                 .taskUnassigned()
                 .singleResult();
-        if (task == null || candidateGroups == null || candidateGroups.isEmpty()) {
+        if (task == null || normalizedGroups.isEmpty()) {
             return false;
         }
         return taskService.getIdentityLinksForTask(taskId).stream()
                 .filter(link -> IdentityLinkType.CANDIDATE.equals(link.getType()))
                 .map(IdentityLink::getGroupId)
-                .anyMatch(candidateGroups::contains);
+                .map(RoleCodeNormalizer::normalize)
+                .anyMatch(normalizedGroups::contains);
     }
 
     @Override
@@ -264,5 +270,14 @@ public class FlowableApprovalEngineAdapter implements ApprovalEnginePort {
         return value == null
                 ? null
                 : LocalDateTime.ofInstant(value.toInstant(), ZoneId.systemDefault());
+    }
+
+    private Set<String> queryGroupVariants(Set<String> normalizedGroups) {
+        Set<String> variants = new LinkedHashSet<>();
+        normalizedGroups.forEach(group -> {
+            variants.add(group);
+            variants.add(group.toUpperCase(Locale.ROOT));
+        });
+        return variants;
     }
 }
