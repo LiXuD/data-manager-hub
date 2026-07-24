@@ -40,6 +40,7 @@ bash ./migrate-db.sh dry-run >"$DRY_RUN_FILE"
 grep -q "CREATE TABLE" "$DRY_RUN_FILE"
 grep -q "ACT_RU_EXECUTION" "$DRY_RUN_FILE"
 grep -q "api_permission_application" "$DRY_RUN_FILE"
+grep -q "system:admin" "$DRY_RUN_FILE"
 
 bash ./migrate-db.sh update
 
@@ -53,66 +54,27 @@ if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('migratio
 fi
 bash ./migrate-db.sh update
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "4" ]]; then
-  echo "Liquibase 基线、清理、Flowable 与接口权限审批变更记录不完整" >&2
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "5" ]]; then
+  echo "Liquibase 基线、清理、Flowable、接口权限审批与 RBAC 安全变更记录不完整" >&2
   exit 1
 fi
 
 bash ./migrate-db.sh rollback-dry-run 1 >"$DRY_RUN_FILE"
-grep -q "api_permission_application" "$DRY_RUN_FILE"
-MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 1
-
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
-    SELECT to_regclass('api_permission_application') IS NULL
-       AND to_regclass('workflow.act_ru_execution') IS NOT NULL")" != "t" ]]; then
-  echo "V026 回滚后审批业务表仍存在，或错误删除了 Flowable 表" >&2
+grep -q "禁止原地回滚角色合并" "$DRY_RUN_FILE"
+if MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" \
+    bash ./migrate-db.sh rollback-count 1 >/dev/null 2>&1; then
+  echo "V027 前向安全迁移不应允许原地回滚" >&2
   exit 1
 fi
 
-bash ./migrate-db.sh update
-
-bash ./migrate-db.sh rollback-dry-run 3 >"$DRY_RUN_FILE"
-grep -q "sign_type" "$DRY_RUN_FILE"
-MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 3
-
 if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
-    SELECT count(*) = 3
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND (
-        (table_name = 'vendor_config' AND column_name IN ('sign_type', 'encrypt_type'))
-        OR (table_name = 'interface_param' AND column_name = 'validation_rule')
-      )")" != "t" ]]; then
-  echo "V025 回滚后兼容列没有完整恢复" >&2
+    SELECT count(*) = 5
+       AND to_regclass('api_permission_application') IS NOT NULL
+       AND to_regclass('workflow.act_ru_execution') IS NOT NULL
+    FROM databasechangelog")" != "t" ]]; then
+  echo "拒绝 V027 回滚后数据库状态发生变化" >&2
   exit 1
 fi
-
-bash ./migrate-db.sh update
-
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
-    SELECT count(*) = 0
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND (
-        (table_name = 'vendor_config' AND column_name IN ('sign_type', 'encrypt_type'))
-        OR (table_name = 'interface_param' AND column_name = 'validation_rule')
-      )")" != "t" ]]; then
-  echo "V025 重放后仍存在已废弃兼容列" >&2
-  exit 1
-fi
-
-bash ./migrate-db.sh rollback-dry-run 4 >"$DRY_RUN_FILE"
-grep -q "DROP TABLE" "$DRY_RUN_FILE"
-MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 4
-
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
-    SELECT to_regclass('tenant_info') IS NULL
-       AND to_regclass('workflow.act_ru_execution') IS NULL")" != "t" ]]; then
-  echo "Liquibase 全量回滚后仍存在业务表" >&2
-  exit 1
-fi
-
-bash ./migrate-db.sh update
 
 "${PSQL[@]}" -d "$VERIFY_DB_NAME" <<'SQL'
 DO $$
@@ -146,6 +108,37 @@ BEGIN
       )) <> 5 THEN
     RAISE EXCEPTION '计费权限集合不完整';
   END IF;
+
+  IF EXISTS (SELECT 1 FROM role_info WHERE role_code <> LOWER(role_code)) THEN
+    RAISE EXCEPTION '仍存在非规范化角色编码';
+  END IF;
+
+  IF (SELECT count(*) FROM permission
+      WHERE permission_code = 'system:admin'
+        AND status = 'active'
+        AND deleted = FALSE) <> 1 THEN
+    RAISE EXCEPTION '平台安全管理权限不完整';
+  END IF;
+
+  IF (SELECT count(*)
+      FROM role_info role
+      JOIN role_permission relation ON relation.role_id = role.id
+      JOIN permission permission ON permission.id = relation.permission_id
+      WHERE role.role_code = 'tenant_admin'
+        AND permission.permission_code LIKE 'api-permission:%') <> 7 THEN
+    RAISE EXCEPTION '租户管理员审批权限矩阵不正确';
+  END IF;
+
+  IF EXISTS (
+      SELECT 1
+      FROM role_info role
+      JOIN role_permission relation ON relation.role_id = role.id
+      JOIN permission permission ON permission.id = relation.permission_id
+      WHERE role.role_code = 'tenant_admin'
+        AND permission.permission_code = 'api-permission:emergency-grant'
+  ) THEN
+    RAISE EXCEPTION '租户管理员不应拥有紧急授权';
+  END IF;
 END $$;
 SQL
 
@@ -154,9 +147,9 @@ SQL
 DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$VERIFY_DB_NAME" \
   bash ./migrate-db.sh baseline
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "4" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "5" ]]; then
   echo "现有数据库基线登记失败" >&2
   exit 1
 fi
 
-echo "数据库迁移回归通过（dry-run/update/idempotency/V026+Flowable/V025 rollback/reapply/full rollback/backup/restore/baseline）: $VERIFY_DB_NAME"
+echo "数据库迁移回归通过（dry-run/update/idempotency/V026+V027+Flowable/forward-recovery/backup/restore/baseline）: $VERIFY_DB_NAME"

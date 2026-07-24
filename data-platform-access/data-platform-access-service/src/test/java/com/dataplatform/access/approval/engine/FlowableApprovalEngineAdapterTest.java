@@ -100,6 +100,25 @@ class FlowableApprovalEngineAdapterTest {
     }
 
     @Test
+    void matchesLegacyCandidateGroupsWithoutRoleCodeCaseDrift() {
+        contextRunner.run(context -> {
+            assertThat(context).hasNotFailed();
+            context.getBean(RepositoryService.class).createDeployment()
+                    .addString("legacy-uppercase-group.bpmn20.xml", legacyUppercaseGroupProcess())
+                    .deploy();
+            FlowableApprovalEngineAdapter adapter = adapter(context);
+            ApprovalEnginePort.StartResult started = adapter.start(
+                    "legacyUppercaseGroup", "APP-LEGACY-GROUP", 7L, Map.of());
+
+            assertThat(adapter.findTasks("22", Set.of("admin")))
+                    .extracting(ApprovalEnginePort.TaskSnapshot::id)
+                    .containsExactly(started.currentTask().id());
+            assertThat(adapter.canClaim(started.currentTask().id(), Set.of("AdMiN")))
+                    .isTrue();
+        });
+    }
+
+    @Test
     void advancesSequentialApprovalOneNodeAtATime() {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
@@ -237,6 +256,23 @@ class FlowableApprovalEngineAdapterTest {
                     <sequenceFlow id="securityToJoin" sourceRef="securityReview" targetRef="join"/>
                     <parallelGateway id="join"/>
                     <sequenceFlow id="toEnd" sourceRef="join" targetRef="end"/>
+                    <endEvent id="end"/>
+                  </process>
+                </definitions>
+                """;
+    }
+
+    private String legacyUppercaseGroupProcess() {
+        return """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                             xmlns:flowable="http://flowable.org/bpmn"
+                             targetNamespace="http://dataplatform.com/access/test">
+                  <process id="legacyUppercaseGroup" isExecutable="true">
+                    <startEvent id="start"/>
+                    <sequenceFlow id="toReview" sourceRef="start" targetRef="review"/>
+                    <userTask id="review" name="历史管理员审批" flowable:candidateGroups="ADMIN"/>
+                    <sequenceFlow id="toEnd" sourceRef="review" targetRef="end"/>
                     <endEvent id="end"/>
                   </process>
                 </definitions>

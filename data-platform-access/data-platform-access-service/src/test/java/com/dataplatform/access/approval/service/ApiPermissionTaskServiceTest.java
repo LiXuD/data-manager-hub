@@ -59,7 +59,7 @@ class ApiPermissionTaskServiceTest {
                 .thenReturn(Optional.of(candidate), Optional.of(claimed));
         when(applicationService.findByProcessInstance("process-1")).thenReturn(application);
         when(identityClient.getRoleCodes(22L))
-                .thenReturn(Result.success(List.of("api_interface_approver")));
+                .thenReturn(Result.success(List.of("API_INTERFACE_APPROVER")));
         when(approvalEngine.canClaim(
                 "task-1", Set.of("api_interface_approver"))).thenReturn(true);
 

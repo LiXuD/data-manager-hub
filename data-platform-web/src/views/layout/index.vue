@@ -86,7 +86,13 @@ const allMenuItems = [
     path: '/api-permission',
     title: '接口权限审批',
     icon: 'document',
-    permission: 'api-permission:view'
+    permissions: [
+      'api-permission:view',
+      'api-permission:approve',
+      'api-permission:grant-view',
+      'api-permission:process-view',
+      'api-permission:emergency-grant'
+    ]
   },
   {
     path: '/billing',
@@ -123,7 +129,7 @@ const allMenuItems = [
 // 判断是否为管理员（拥有admin角色）
 const isAdmin = computed(() => {
   const roles = userStore.userInfo?.roles || []
-  return roles.includes('admin')
+  return roles.some(role => role.trim().toLowerCase() === 'admin')
 })
 
 // 过滤菜单 - 根据用户权限
@@ -145,12 +151,12 @@ function filterMenuItems(items: any[]): any[] {
           return { ...item, children: filteredChildren }
         }
         // 如果没有子菜单，检查是否有父权限
-        if (hasPermission(item.permission)) {
+        if (hasPermission(item.permission, item.permissions)) {
           return { ...item, children: [] }
         }
         return null
       }
-      if (hasPermission(item.permission)) {
+      if (hasPermission(item.permission, item.permissions)) {
         return item
       }
       return null
@@ -158,7 +164,10 @@ function filterMenuItems(items: any[]): any[] {
     .filter((item): item is any => item !== null)
 }
 
-function hasPermission(permission?: string): boolean {
+function hasPermission(permission?: string, permissions?: string[]): boolean {
+  if (permissions?.length) {
+    return permissions.some(candidate => userStore.hasPermission(candidate))
+  }
   if (!permission) return true
   return userStore.hasPermission(permission)
 }

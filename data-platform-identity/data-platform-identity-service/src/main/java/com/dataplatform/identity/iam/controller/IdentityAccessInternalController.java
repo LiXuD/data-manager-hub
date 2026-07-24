@@ -3,6 +3,7 @@ package com.dataplatform.identity.iam.controller;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.security.InternalScope;
+import com.dataplatform.common.security.RoleCodeNormalizer;
 import com.dataplatform.identity.api.dto.CallerAccessDTO;
 import com.dataplatform.identity.api.feign.IdentityAccessInternalFeignClient;
 import com.dataplatform.identity.iam.entity.Role;
@@ -75,6 +76,8 @@ public class IdentityAccessInternalController implements IdentityAccessInternalF
                 .filter(role -> Boolean.FALSE.equals(role.getDeleted()))
                 .filter(role -> CommonStatus.ACTIVE.equals(role.getStatus()))
                 .map(Role::getRoleCode)
+                .map(RoleCodeNormalizer::normalize)
+                .filter(java.util.Objects::nonNull)
                 .toList();
         return Result.success(roleCodes);
     }

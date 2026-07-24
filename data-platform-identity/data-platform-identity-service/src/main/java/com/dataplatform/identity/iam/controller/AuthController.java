@@ -2,8 +2,10 @@ package com.dataplatform.identity.iam.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
+import com.dataplatform.common.security.RoleCodeNormalizer;
 import com.dataplatform.common.util.UserContext;
 import com.dataplatform.identity.iam.entity.Permission;
 import com.dataplatform.identity.iam.entity.Role;
@@ -178,6 +180,7 @@ public class AuthController {
         update.setId(user.getId());
         update.setPassword(passwordService.encode(newPassword));
         userMapper.updateById(update);
+        StpUtil.logout(user.getId());
         return Result.success(null);
     }
 
@@ -195,7 +198,11 @@ public class AuthController {
 
         List<Role> roles = roleMapper.selectBatchIds(roleIds);
         return roles.stream()
+                .filter(role -> Boolean.FALSE.equals(role.getDeleted()))
+                .filter(role -> CommonStatus.ACTIVE.equals(role.getStatus()))
                 .map(Role::getRoleCode)
+                .map(RoleCodeNormalizer::normalize)
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
@@ -207,9 +214,17 @@ public class AuthController {
             return List.of();
         }
 
-        List<Long> roleIds = userRoles.stream()
+        List<Long> assignedRoleIds = userRoles.stream()
                 .map(UserRole::getRoleId)
                 .collect(Collectors.toList());
+        List<Long> roleIds = roleMapper.selectBatchIds(assignedRoleIds).stream()
+                .filter(role -> Boolean.FALSE.equals(role.getDeleted()))
+                .filter(role -> CommonStatus.ACTIVE.equals(role.getStatus()))
+                .map(Role::getId)
+                .toList();
+        if (roleIds.isEmpty()) {
+            return List.of();
+        }
 
         List<Long> permissionIds = roleIds.stream()
                 .flatMap(rid -> rolePermissionService.getPermissionIdsByRoleId(rid).stream())
@@ -221,6 +236,8 @@ public class AuthController {
 
         List<Permission> permissions = permissionMapper.selectBatchIds(permissionIds);
         return permissions.stream()
+                .filter(permission -> "active".equalsIgnoreCase(permission.getStatus()))
+                .filter(permission -> Boolean.FALSE.equals(permission.getDeleted()))
                 .map(Permission::getPermissionCode)
                 .collect(Collectors.toList());
     }

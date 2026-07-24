@@ -28,6 +28,7 @@ import com.dataplatform.api.Result;
 import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.result.PageResult;
+import com.dataplatform.common.security.RoleCodeNormalizer;
 import com.dataplatform.identity.api.dto.CallerAccessDTO;
 import com.dataplatform.identity.api.feign.IdentityAccessInternalFeignClient;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
@@ -190,7 +191,14 @@ public class ApiPermissionApplicationService {
                 variables.put("riskLevel", riskLevel(locked));
                 variables.put("expectedDailyCalls", locked.getExpectedDailyCalls());
                 variables.put("requestedExpireAt", locked.getRequestedExpireAt().toString());
-                variables.put("approverGroup", processConfig.getApproverGroup());
+                String approverGroup = RoleCodeNormalizer.normalize(
+                        processConfig.getApproverGroup());
+                if (approverGroup == null) {
+                    throw conflict(
+                            "APPROVAL_GROUP_NOT_CONFIGURED",
+                            "审批流程未配置有效候选角色");
+                }
+                variables.put("approverGroup", approverGroup);
 
                 ApprovalEnginePort.StartResult start = approvalEngine.start(
                         processConfig.getProcessDefinitionKey(),
