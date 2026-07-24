@@ -24,3 +24,32 @@
 5. 旧 `api_key_interface` 授权事实和非审批权限关系不得因整改迁移丢失。
 6. 所有拒绝路径必须返回真实 401/403/409，而不是只在前端隐藏入口。
 
+## 运行态回归证据
+
+验收日期：2026-07-24。测试使用从开发基线克隆的一次性 PostgreSQL 数据库、
+独立 Redis 15 号库，以及真实启动的 identity、masterdata、access、governance
+服务。数据库先通过仓库 `migrate-db.sh update` 执行 Liquibase，共确认 5 个
+changeset，测试结束后服务、数据库、Redis 数据和临时目录均已清理。
+
+| 验收项 | 运行态结果 |
+|---|---|
+| 角色与权限矩阵 | 管理员登录返回小写 `admin` 和 `system:admin`；普通用户仅有 `api-permission:view/apply`；数据库中角色和候选组非小写数量均为 0，审批角色权限数分别为 admin 8、user 2、tenant_admin 7、两类审批员 3、流程管理员 2、平台安全管理员 4 |
+| IAM 接口封闭 | 未登录访问返回 HTTP 401；普通用户访问用户、角色、权限管理接口均返回 HTTP 403；普通用户分配角色返回 403；管理员修改自己的角色返回 `SELF_ROLE_MUTATION_FORBIDDEN` |
+| 会话失效 | 普通用户旧 Token 在角色重新分配前有效；变更后 identity 校验返回业务码 401，access 服务返回 HTTP 401；重新登录后获得新会话 |
+| 旧直配入口 | 管理员调用 `/caller/apikey/{id}/interfaces` 仍返回 HTTP 409，并明确要求走审批申请 |
+| 审批提交 | 草稿由 `DRAFT` 进入 `IN_REVIEW/RUNNING`，Flowable 生成真实流程实例和用户任务；相同幂等键重放返回同一申请 |
+| 自审批攻击 | 临时赋予申请人候选组角色后，申请人可见任务但认领返回 HTTP 403，证明候选资格不能绕过自审批限制 |
+| 审批与授权 | 管理员认领并审批后，申请为 `EFFECTIVE/COMPLETED`，申请项为 `EFFECTIVE`，授权事实为 `APPROVAL/ACTIVE`，审批轨迹为 `CREATE,SUBMIT,APPROVE,GRANT`，Flowable 历史实例有结束时间且运行时任务数为 0 |
+| 重复授权 | 已有有效授权后再次提交 OPEN 申请返回 HTTP 409 和 `GRANT_ALREADY_ACTIVE` |
+| 治理审计 | governance 服务收到带内部 JWT 的日志请求并返回 200；`operation_log` 持久化申请人、接口权限审批模块、操作名称和 success 状态 |
+
+## 全项目回归门禁
+
+- `mvn verify`：25 个 Maven 模块全部成功，293 项测试零失败、零错误。
+- 前端 `vue-tsc --noEmit`、ESLint 和 Vite 生产构建全部通过。
+- `npm audit --audit-level=high`：0 个漏洞。
+- `bash arch-scan.sh`：五域边界扫描通过，无跨域 service 依赖、重型 API
+  依赖、全包扫描、跨域 import、旧模块、Feign 契约或数据所有权违规。
+- `verify-db-bootstrap.sh`：dry-run、首次升级、重复执行、V026/V027、
+  Flowable、前向恢复拒绝、备份恢复和基线校验通过。
+- GitNexus staged 变更检测：33 个文件、低风险、未发现意外执行流程影响。
