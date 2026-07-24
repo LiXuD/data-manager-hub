@@ -22,6 +22,10 @@ public class ApiPermissionApplicationItem {
     private String interfaceNameSnapshot;
     private String interfaceStatusSnapshot;
     private String itemStatus;
+    private Boolean requestedCacheEnabled;
+    private Integer requestedCacheDays;
+    private Boolean approvedCacheEnabled;
+    private Integer approvedCacheDays;
     private Long grantId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

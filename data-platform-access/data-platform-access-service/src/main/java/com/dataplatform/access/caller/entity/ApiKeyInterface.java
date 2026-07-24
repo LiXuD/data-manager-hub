@@ -22,6 +22,9 @@ public class ApiKeyInterface {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long applicationItemId;
     private String status;
+    private Boolean cacheEnabled;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Integer approvedCacheDays;
     private LocalDateTime effectiveAt;
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime expireAt;
@@ -58,6 +61,12 @@ public class ApiKeyInterface {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public Boolean getCacheEnabled() { return cacheEnabled; }
+    public void setCacheEnabled(Boolean cacheEnabled) { this.cacheEnabled = cacheEnabled; }
+
+    public Integer getApprovedCacheDays() { return approvedCacheDays; }
+    public void setApprovedCacheDays(Integer approvedCacheDays) { this.approvedCacheDays = approvedCacheDays; }
 
     public LocalDateTime getEffectiveAt() { return effectiveAt; }
     public void setEffectiveAt(LocalDateTime effectiveAt) { this.effectiveAt = effectiveAt; }

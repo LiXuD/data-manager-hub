@@ -63,6 +63,8 @@ Liquibase 使用 `DATABASECHANGELOG` 和 `DATABASECHANGELOGLOCK` 管理顺序、
 
 接口权限审批由 V026 创建业务表，并使用 Flowable 7.1.0 官方 PostgreSQL 脚本在独立 `workflow` schema 创建引擎表。生产环境保持 `flowable.database-schema-update=false`；应用通过表前缀访问 `workflow`，业务 MyBatis 仍固定使用 `public` schema。引擎表只能经 Liquibase 升级，禁止应用启动时自动建表或手工修改已登记 changeset。
 
+V028 将结果缓存策略纳入申请项和最终授权事实。由于旧服务端未限制缓存天数，存量接口授权兼容回填为“允许缓存、上限 365 天”；新授权默认不允许缓存，必须通过审批显式开通。新建产品缓存作用域默认由 `GLOBAL` 收紧为 `CALLER`。回滚脚本会在发现新缓存申请、审批或非兼容授权事实时拒绝执行，发布前应使用隔离数据库完成 update、rollback、re-update 演练。
+
 发布新审批节点时，将经过评审的 BPMN 作为 `data-platform-access-service/src/main/resources/processes/` 下的新版本资源发布。新申请使用最新版本，运行中实例继续原定义；禁止在线暴露 Flowable REST、引擎 Actuator 管理端点或 workflow schema。
 
 ### 4. 构建项目

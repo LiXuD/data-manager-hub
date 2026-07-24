@@ -62,7 +62,7 @@ public class OpenApiQueryService {
         LocalDateTime requestTime = LocalDateTime.now();
         long startTime = System.currentTimeMillis();
         String platformRequestId = generateRequestId();
-        String requestHash = buildRequestHash(context.getParams());
+        String requestHash = buildRequestHash(context);
         boolean useCache = Boolean.TRUE.equals(context.getUseCache());
         BillingMeteringPolicyDTO meteringPolicy = resolveMeteringPolicy(context, requestTime);
 
@@ -70,6 +70,7 @@ public class OpenApiQueryService {
             CallRecord cachedRecord = callRecordService.findLatestReusableCache(
                     context.getApiCode(),
                     requestHash,
+                    context.getTenantId(),
                     context.getCallerId(),
                     requestTime.minusDays(context.getCacheDays()),
                     context.getCacheScope());
@@ -298,12 +299,26 @@ public class OpenApiQueryService {
         }
     }
 
-    private String buildRequestHash(Map<String, Object> params) {
+    private String buildRequestHash(OpenApiCallContext context) {
         try {
-            String canonicalParams = objectMapper.writeValueAsString(params != null ? params : Collections.emptyMap());
+            Map<String, Object> cacheIdentity = new LinkedHashMap<>();
+            cacheIdentity.put(
+                    "apiVersion",
+                    normalize(context.getApiVersion()) != null
+                            ? context.getApiVersion().trim()
+                            : DEFAULT_API_VERSION);
+            cacheIdentity.put(
+                    "params",
+                    context.getParams() != null
+                            ? context.getParams()
+                            : Collections.emptyMap());
+            String canonicalParams = objectMapper.writeValueAsString(cacheIdentity);
             return DigestUtil.sha256Hex(canonicalParams);
         } catch (Exception e) {
-            return DigestUtil.sha256Hex(String.valueOf(params));
+            return DigestUtil.sha256Hex(
+                    String.valueOf(context.getApiVersion())
+                            + ":"
+                            + String.valueOf(context.getParams()));
         }
     }
 

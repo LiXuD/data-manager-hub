@@ -48,7 +48,9 @@ public class GrantApiPermissionDelegate implements JavaDelegate {
                     GrantSource.APPROVAL,
                     item.getId(),
                     application.getApprovedExpireAt(),
-                    approverUserId);
+                    approverUserId,
+                    Boolean.TRUE.equals(item.getApprovedCacheEnabled()),
+                    item.getApprovedCacheDays());
             item.setGrantId(grant.getId());
             item.setItemStatus(ApplicationStatus.EFFECTIVE.name());
             applicationService.updateItem(item);

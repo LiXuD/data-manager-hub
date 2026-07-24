@@ -563,6 +563,10 @@ flowchart LR
 | `approverGroup` | String | 默认候选组 |
 | `decision` | String | 当前节点 `APPROVE`/`REJECT` |
 | `approvedExpireAt` | ISO-8601 String | 最终授权期限 |
+| `requestedCacheEnabled` | Boolean | 是否申请结果缓存 |
+| `requestedCacheDays` | Integer | 申请缓存时效，1～365 天 |
+| `approvedCacheEnabled` | Boolean | 审批人是否批准缓存 |
+| `approvedCacheDays` | Integer | 批准缓存时效，不得超过申请值 |
 
 禁止放入流程变量：
 
@@ -648,6 +652,10 @@ flowchart LR
 | `interface_name_snapshot` | VARCHAR(200) | 必填 |
 | `interface_status_snapshot` | VARCHAR(20) | 提交时状态 |
 | `item_status` | VARCHAR(20) | 与申请状态同步 |
+| `requested_cache_enabled` | BOOLEAN | 是否申请结果缓存 |
+| `requested_cache_days` | INTEGER | 申请缓存时效，启用时为 1～365 |
+| `approved_cache_enabled` | BOOLEAN | 审批是否批准结果缓存 |
+| `approved_cache_days` | INTEGER | 批准时效，不得超过申请时效 |
 | `grant_id` | BIGINT | 生效后关联 `api_key_interface.id` |
 | `created_at` | TIMESTAMP | 创建时间 |
 | `updated_at` | TIMESTAMP | 更新时间 |
@@ -694,6 +702,8 @@ flowchart LR
 |---|---|---|
 | `grant_source` | VARCHAR(30) | `LEGACY_ADMIN`、`APPROVAL`、`EMERGENCY_ADMIN` |
 | `application_item_id` | BIGINT | 审批来源申请项，可为空 |
+| `cache_enabled` | BOOLEAN | 当前授权是否允许使用结果缓存 |
+| `approved_cache_days` | INTEGER | 获批缓存上限，启用时为 1～365 |
 | `status` | VARCHAR(20) | `ACTIVE`、`REVOKED`、`EXPIRED` |
 | `effective_at` | TIMESTAMP | 生效时间 |
 | `expire_at` | TIMESTAMP | 失效时间，可为空 |
@@ -715,6 +725,20 @@ AND status = 'ACTIVE'
 AND effective_at <= CURRENT_TIMESTAMP
 AND (expire_at IS NULL OR expire_at > CURRENT_TIMESTAMP)
 ```
+
+运行时在上述授权谓词成立后继续执行缓存策略谓词：
+
+```text
+use_cache = false
+OR (
+  cache_enabled = true
+  AND request.cache_days BETWEEN 1 AND approved_cache_days
+)
+```
+
+缓存有效期从原始厂商响应的 `call_record.created_at` 绝对计算，缓存命中生成的审计记录必须带
+`cache_hit = true` 且永远不能再次成为缓存来源。复用键至少包含租户、接口代码、接口版本和规范化请求参数；
+默认 `CALLER` 作用域还必须包含 Caller，显式 `GLOBAL` 也不得跨租户。授权撤销或到期后先于缓存查询失败关闭。
 
 不在 `api_key_interface.interface_id` 上建立指向 masterdata 表的数据库外键，
 避免跨域数据所有权耦合；接口存在性通过 masterdata 内部契约校验。
@@ -779,6 +803,8 @@ AND (expire_at IS NULL OR expire_at > CURRENT_TIMESTAMP)
   "businessPurpose": "贷前风控系统需要查询客户基础数据",
   "businessScene": "贷前审批",
   "expectedDailyCalls": 5000,
+  "cacheEnabled": true,
+  "requestedCacheDays": 2,
   "requestedExpireAt": "2027-07-23T23:59:59",
   "ticketNo": "RISK-2026-0188"
 }
@@ -808,6 +834,8 @@ Idempotency-Key: <UUID>
   "applicationVersion": 2,
   "decision": "APPROVE",
   "approvedExpireAt": "2027-01-31T23:59:59",
+  "approvedCacheEnabled": true,
+  "approvedCacheDays": 2,
   "comment": "同意，先授权六个月",
   "formData": {
     "riskConfirmed": true

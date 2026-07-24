@@ -12,6 +12,7 @@ import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,7 +66,7 @@ class OpenApiQueryServiceTest {
         CallRecord cachedRecord = new CallRecord();
         cachedRecord.setId(100L);
         cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":99}}");
-        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(20L),
+        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
                 any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
         OpenApiQueryRespVO response = service.query(buildContext(true, 3));
 
@@ -96,7 +98,7 @@ class OpenApiQueryServiceTest {
         CallRecord cachedRecord = new CallRecord();
         cachedRecord.setId(101L);
         cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":\"invalid\"}}");
-        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(20L),
+        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
                 any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
         InterfaceParamDTO score = new InterfaceParamDTO();
         score.setParamName("score");
@@ -122,7 +124,7 @@ class OpenApiQueryServiceTest {
         CallRecord cachedRecord = new CallRecord();
         cachedRecord.setId(102L);
         cachedRecord.setResponseData("{\"success\":true,\"data\":\"unexpected-root\"}");
-        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(20L),
+        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
                 any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
         InterfaceParamDTO optionalScore = new InterfaceParamDTO();
         optionalScore.setParamName("score");
@@ -140,6 +142,36 @@ class OpenApiQueryServiceTest {
         verify(callRecordEventPublisher).publish(recordCaptor.capture());
         assertFalse(recordCaptor.getValue().getResponseContractValid());
         assertTrue(recordCaptor.getValue().getResponseContractErrors().contains("data类型必须为object"));
+    }
+
+    @Test
+    void shouldUseIndependentCacheWindowsForDifferentCallers() {
+        CallRecord cachedRecord = new CallRecord();
+        cachedRecord.setId(103L);
+        cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":99}}");
+        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), any(),
+                any(LocalDateTime.class), eq("CALLER"))).thenReturn(cachedRecord);
+
+        OpenApiCallContext riskContext = buildContext(true, 2);
+        riskContext.setCallerId(20L);
+        riskContext.setCacheScope("CALLER");
+        service.query(riskContext);
+
+        OpenApiCallContext backOfficeContext = buildContext(true, 10);
+        backOfficeContext.setCallerId(21L);
+        backOfficeContext.setCacheScope("CALLER");
+        service.query(backOfficeContext);
+
+        ArgumentCaptor<Long> callerCaptor = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<LocalDateTime> sinceCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(callRecordService, times(2)).findLatestReusableCache(
+                eq("PERSONAL_QUERY"), anyString(), eq(1L), callerCaptor.capture(),
+                sinceCaptor.capture(), eq("CALLER"));
+        assertEquals(java.util.List.of(20L, 21L), callerCaptor.getAllValues());
+        long windowDifferenceHours = Duration.between(
+                sinceCaptor.getAllValues().get(1), sinceCaptor.getAllValues().get(0)).toHours();
+        assertTrue(windowDifferenceHours >= 191 && windowDifferenceHours <= 193);
+        verify(vendorProxyService, never()).callVendor(anyString(), anyString(), any(), any());
     }
 
     private OpenApiCallContext buildContext(boolean useCache, Integer cacheDays) {

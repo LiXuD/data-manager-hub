@@ -260,7 +260,7 @@ const productList = ref<CallerProduct[]>([])
 const productForm = reactive<CallerProduct>({
   productCode: '',
   productName: '',
-  cacheScope: 'GLOBAL',
+  cacheScope: 'CALLER',
   status: 'active'
 })
 const productAuthVisible = ref(false)
@@ -329,7 +329,7 @@ const handleDelete = async (row: Caller) => { await ElMessageBox.confirm(`确认
 const resetProductForm = () => {
   productForm.productCode = ''
   productForm.productName = ''
-  productForm.cacheScope = 'GLOBAL'
+  productForm.cacheScope = 'CALLER'
   productForm.status = 'active'
 }
 const loadProducts = async (callerId = currentCallerId.value) => {

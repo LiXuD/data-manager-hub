@@ -8,5 +8,7 @@ public record CompleteTaskRequest(
         String decision,
         LocalDateTime approvedExpireAt,
         String comment,
-        Map<String, Object> formData) {
+        Map<String, Object> formData,
+        Boolean approvedCacheEnabled,
+        Integer approvedCacheDays) {
 }

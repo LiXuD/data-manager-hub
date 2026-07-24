@@ -135,6 +135,8 @@ public class ApiPermissionTaskService {
             throw conflict("APPLICATION_VERSION_CONFLICT", "申请已被更新，请刷新后重试");
         }
         LocalDateTime approvedExpireAt = resolveApprovedExpireAt(application, request, policy);
+        ApprovedCachePolicy approvedCachePolicy =
+                resolveApprovedCachePolicy(application, request);
         if ("APPROVE".equals(request.decision())) {
             applicationService.validateProvisioningResources(application);
         }
@@ -153,6 +155,10 @@ public class ApiPermissionTaskService {
             locked.setDecidedAt(LocalDateTime.now());
             locked.setDecisionComment(normalize(request.comment()));
             applicationService.updateApplication(locked);
+            applicationService.applyApprovedCachePolicy(
+                    locked.getId(),
+                    approvedCachePolicy.enabled(),
+                    approvedCachePolicy.days());
             applicationService.appendAction(
                     locked,
                     request.decision(),
@@ -172,6 +178,8 @@ public class ApiPermissionTaskService {
             variables.put("approvedExpireAt", approvedExpireAt != null
                     ? approvedExpireAt.toString()
                     : null);
+            variables.put("approvedCacheEnabled", approvedCachePolicy.enabled());
+            variables.put("approvedCacheDays", approvedCachePolicy.days());
             variables.put("approvalFormData", safeFormData(request.formData()));
             try {
                 approvalEngine.complete(taskId, String.valueOf(userId), variables);
@@ -282,6 +290,43 @@ public class ApiPermissionTaskService {
                 });
     }
 
+    private ApprovedCachePolicy resolveApprovedCachePolicy(
+            ApiPermissionApplication application,
+            CompleteTaskRequest request) {
+        if (!"APPROVE".equals(request.decision())) {
+            return new ApprovedCachePolicy(false, null);
+        }
+        var items = applicationService.listItems(application.getId());
+        if (items.isEmpty()) {
+            throw conflict("APPLICATION_ITEMS_MISSING", "申请未包含接口明细");
+        }
+        boolean requestedEnabled =
+                Boolean.TRUE.equals(items.get(0).getRequestedCacheEnabled());
+        Integer requestedDays = items.get(0).getRequestedCacheDays();
+        if (requestedEnabled && request.approvedCacheEnabled() == null) {
+            throw badRequest("CACHE_DECISION_REQUIRED", "必须明确是否批准接口结果缓存");
+        }
+        boolean approvedEnabled = Boolean.TRUE.equals(request.approvedCacheEnabled());
+        if (!approvedEnabled) {
+            if (request.approvedCacheDays() != null) {
+                throw badRequest("INVALID_CACHE_APPROVAL", "不批准缓存时不能填写缓存时效");
+            }
+            return new ApprovedCachePolicy(false, null);
+        }
+        if (!requestedEnabled) {
+            throw badRequest("CACHE_NOT_REQUESTED", "申请人未申请接口结果缓存");
+        }
+        if (request.approvedCacheDays() == null
+                || request.approvedCacheDays() < 1
+                || requestedDays == null
+                || request.approvedCacheDays() > requestedDays) {
+            throw badRequest(
+                    "INVALID_CACHE_APPROVAL",
+                    "批准缓存时效必须在 1 天到申请时效上限之间");
+        }
+        return new ApprovedCachePolicy(true, request.approvedCacheDays());
+    }
+
     private Map<String, Object> safeFormData(Map<String, Object> formData) {
         if (formData == null || formData.isEmpty()) {
             return Map.of();
@@ -372,5 +417,8 @@ public class ApiPermissionTaskService {
 
     private ApiPermissionException conflict(String code, String message) {
         return new ApiPermissionException(HttpStatus.CONFLICT, code, message);
+    }
+
+    private record ApprovedCachePolicy(boolean enabled, Integer days) {
     }
 }

@@ -10,6 +10,7 @@ import com.dataplatform.access.call.vo.OpenApiQueryReqVO;
 import com.dataplatform.access.call.vo.OpenApiBatchQueryReqVO;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
 import com.dataplatform.access.caller.entity.ApiKey;
+import com.dataplatform.access.caller.entity.ApiKeyInterface;
 import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.entity.CallerProduct;
 import com.dataplatform.access.caller.service.ApiKeyInterfaceService;
@@ -125,7 +126,11 @@ class OpenApiQueryControllerTest {
         apiInterface.setId(30L);
         apiInterface.setInterfaceCode("PERSONAL_QUERY");
         when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY")).thenReturn(Result.success(apiInterface));
-        when(apiKeyInterfaceService.hasInterfacePermission(10L, 30L)).thenReturn(true);
+        ApiKeyInterface interfaceGrant = new ApiKeyInterface();
+        interfaceGrant.setApiKeyId(10L);
+        interfaceGrant.setInterfaceId(30L);
+        interfaceGrant.setCacheEnabled(false);
+        when(apiKeyInterfaceService.findEffectiveGrant(10L, 30L)).thenReturn(interfaceGrant);
         InterfaceContractDTO contract = new InterfaceContractDTO();
         contract.setInterfaceId(30L);
         contract.setRequestFields(List.of());
@@ -222,5 +227,40 @@ class OpenApiQueryControllerTest {
         assertEquals(400, response.getStatusCode().value());
         assertEquals(400, response.getBody().getCode());
         assertTrue(response.getBody().getMsg().contains("items[0]"));
+    }
+
+    @Test
+    void shouldRejectCacheWhenGrantDidNotApproveIt() {
+        ApiKeyInterface grant = new ApiKeyInterface();
+        grant.setCacheEnabled(false);
+
+        String error = ReflectionTestUtils.invokeMethod(
+                controller, "validateApprovedCachePolicy", true, 2, grant);
+
+        assertEquals("当前接口授权未批准使用缓存", error);
+    }
+
+    @Test
+    void shouldRejectCacheDaysAboveApprovedLimit() {
+        ApiKeyInterface grant = new ApiKeyInterface();
+        grant.setCacheEnabled(true);
+        grant.setApprovedCacheDays(2);
+
+        String error = ReflectionTestUtils.invokeMethod(
+                controller, "validateApprovedCachePolicy", true, 10, grant);
+
+        assertEquals("请求缓存时效超过审批上限2天", error);
+    }
+
+    @Test
+    void shouldAllowShorterCacheDaysForSameApprovedInterface() {
+        ApiKeyInterface grant = new ApiKeyInterface();
+        grant.setCacheEnabled(true);
+        grant.setApprovedCacheDays(10);
+
+        String error = ReflectionTestUtils.invokeMethod(
+                controller, "validateApprovedCachePolicy", true, 2, grant);
+
+        assertEquals(null, error);
     }
 }

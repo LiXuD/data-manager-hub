@@ -1,6 +1,7 @@
 package com.dataplatform.access.approval.service;
 
 import com.dataplatform.access.approval.api.ApiPermissionException;
+import com.dataplatform.access.approval.api.ApplicationUpsertRequest;
 import com.dataplatform.access.approval.domain.ApiPermissionApplication;
 import com.dataplatform.access.approval.engine.ApprovalEnginePort;
 import com.dataplatform.access.approval.mapper.ApiPermissionActionMapper;
@@ -18,6 +19,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -68,5 +73,50 @@ class ApiPermissionApplicationServiceTest {
                     assertThat(exception.getStatus().value()).isEqualTo(409);
                     assertThat(exception.getErrorCode()).isEqualTo("APPLICATION_VERSION_CONFLICT");
                 });
+    }
+
+    @Test
+    void shouldRequireRequestedCacheDaysWhenCacheIsEnabled() {
+        ApplicationUpsertRequest request = new ApplicationUpsertRequest(
+                "OPEN",
+                1L,
+                2L,
+                List.of(3L),
+                "用于风控系统贷前审批风险判断",
+                "贷前审批",
+                1000L,
+                LocalDateTime.now().plusDays(30),
+                null,
+                true,
+                null);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                service, "validateRequest", request, false))
+                .isInstanceOfSatisfying(ApiPermissionException.class, exception -> {
+                    assertThat(exception.getStatus().value()).isEqualTo(400);
+                    assertThat(exception.getErrorCode()).isEqualTo("INVALID_CACHE_POLICY");
+                });
+    }
+
+    @Test
+    void shouldRejectCacheDaysWhenCacheWasNotRequested() {
+        ApplicationUpsertRequest request = new ApplicationUpsertRequest(
+                "OPEN",
+                1L,
+                2L,
+                List.of(3L),
+                "用于后台服务批量查询业务数据",
+                "后台批处理",
+                1000L,
+                LocalDateTime.now().plusDays(30),
+                null,
+                false,
+                10);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                service, "validateRequest", request, false))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("INVALID_CACHE_POLICY"));
     }
 }
