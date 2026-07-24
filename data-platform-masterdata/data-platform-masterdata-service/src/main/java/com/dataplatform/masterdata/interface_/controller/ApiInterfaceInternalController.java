@@ -12,8 +12,14 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.List;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 /**
  * 主数据域接口定义的 Api Interface Internal Controller。
@@ -57,6 +63,34 @@ public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {
             return Result.error(404, "接口不存在");
         }
         return Result.success(interfaceContractService.getContract(id));
+    }
+
+    @PostMapping("/batch-get")
+    @Override
+    public Result<List<ApiInterfaceDTO>> batchGet(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Result.success(List.of());
+        }
+        return Result.success(apiInterfaceService.listByIds(ids).stream()
+                .map(this::toDTO)
+                .toList());
+    }
+
+    @Override
+    public Result<List<ApiInterfaceDTO>> getOptions(
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        LambdaQueryWrapper<ApiInterface> query = new LambdaQueryWrapper<ApiInterface>()
+                .eq(ApiInterface::getDeleted, false)
+                .eq(ApiInterface::getStatus, "active")
+                .and(keyword != null && !keyword.isBlank(),
+                        condition -> condition.like(ApiInterface::getInterfaceCode, keyword.trim())
+                                .or()
+                                .like(ApiInterface::getInterfaceName, keyword.trim()))
+                .orderByAsc(ApiInterface::getInterfaceCode)
+                .last("LIMIT 200");
+        return Result.success(apiInterfaceService.list(query).stream()
+                .map(this::toDTO)
+                .toList());
     }
 
     private ApiInterfaceDTO toDTO(ApiInterface entity) {

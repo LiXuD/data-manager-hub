@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.oauth2.jwt.JwtValidationException;
@@ -69,7 +70,7 @@ class InternalJwtServiceTest {
         String token = jwtService.issue("data-platform-access", "data-platform-masterdata",
                 Set.of("masterdata:read"));
         InternalAuthenticationInterceptor interceptor =
-                new InternalAuthenticationInterceptor(jwtService, new ObjectMapper());
+                new InternalAuthenticationInterceptor(jwtService, new ObjectMapper(), new DefaultListableBeanFactory());
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer " + token);
         MockHttpServletResponse response = new MockHttpServletResponse();

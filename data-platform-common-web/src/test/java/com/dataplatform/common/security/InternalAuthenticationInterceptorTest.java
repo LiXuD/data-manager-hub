@@ -2,6 +2,7 @@ package com.dataplatform.common.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -9,6 +10,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.method.HandlerMethod;
@@ -17,11 +21,13 @@ class InternalAuthenticationInterceptorTest {
 
     private InternalJwtService jwtService;
     private InternalAuthenticationInterceptor interceptor;
+    private BeanFactory beanFactory;
 
     @BeforeEach
     void setUp() {
         jwtService = mock(InternalJwtService.class);
-        interceptor = new InternalAuthenticationInterceptor(jwtService, new ObjectMapper());
+        beanFactory = mock(BeanFactory.class);
+        interceptor = new InternalAuthenticationInterceptor(jwtService, new ObjectMapper(), beanFactory);
     }
 
     @Test
@@ -60,6 +66,38 @@ class InternalAuthenticationInterceptorTest {
         assertEquals(403, response.getStatus());
     }
 
+    @Test
+    void resolvesScopeFromTargetClassBehindJdkProxy() throws Exception {
+        when(jwtService.verify("token")).thenReturn(
+                new InternalPrincipal("data-platform-access", "data-platform-identity",
+                        Set.of("identity:access:read")));
+        ProxyFactory proxyFactory = new ProxyFactory(new ClassScopedHandler());
+        proxyFactory.setInterfaces(TestContract.class);
+        Object proxy = proxyFactory.getProxy();
+        HandlerMethod handler = new HandlerMethod(proxy, TestContract.class.getMethod("read"));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer token");
+
+        assertTrue(interceptor.preHandle(request, new MockHttpServletResponse(), handler));
+    }
+
+    @Test
+    void resolvesScopeWhenHandlerStillReferencesBeanName() throws Exception {
+        when(jwtService.verify("token")).thenReturn(
+                new InternalPrincipal("data-platform-access", "data-platform-identity",
+                        Set.of("identity:access:read")));
+        DefaultListableBeanFactory namedBeanFactory = new DefaultListableBeanFactory();
+        namedBeanFactory.registerSingleton("identityAccessInternalController", new ClassScopedHandler());
+        InternalAuthenticationInterceptor namedBeanInterceptor =
+                new InternalAuthenticationInterceptor(jwtService, new ObjectMapper(), namedBeanFactory);
+        HandlerMethod handler = new HandlerMethod(
+                "identityAccessInternalController", namedBeanFactory, TestContract.class.getMethod("read"));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer token");
+
+        assertTrue(namedBeanInterceptor.preHandle(request, new MockHttpServletResponse(), handler));
+    }
+
     private HandlerMethod securedHandler() throws NoSuchMethodException {
         return new HandlerMethod(new TestHandler(), TestHandler.class.getDeclaredMethod("secured"));
     }
@@ -70,6 +108,17 @@ class InternalAuthenticationInterceptorTest {
         }
 
         public void unsecured() {
+        }
+    }
+
+    private interface TestContract {
+        void read();
+    }
+
+    @InternalScope("identity:access:read")
+    private static class ClassScopedHandler implements TestContract {
+        @Override
+        public void read() {
         }
     }
 }

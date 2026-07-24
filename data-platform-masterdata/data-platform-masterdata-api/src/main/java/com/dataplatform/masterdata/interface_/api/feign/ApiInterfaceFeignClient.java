@@ -7,6 +7,11 @@ import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.List;
 
 /**
  * 主数据域接口定义的 Api Interface Feign Client。
@@ -25,4 +30,11 @@ public interface ApiInterfaceFeignClient {
 
     @GetMapping("/{id}/contract")
     Result<InterfaceContractDTO> getContract(@PathVariable("id") Long id);
+
+    @PostMapping("/batch-get")
+    Result<List<ApiInterfaceDTO>> batchGet(@RequestBody List<Long> ids);
+
+    @GetMapping("/options")
+    Result<List<ApiInterfaceDTO>> getOptions(
+            @RequestParam(value = "keyword", required = false) String keyword);
 }

@@ -57,6 +57,12 @@ spring:
             - Path=/api/v1/caller/**
           filters:
             - StripPrefix=2
+        - id: access-api-permission-route
+          uri: lb://data-platform-access
+          predicates:
+            - Path=/api/v1/api-permission/**
+          filters:
+            - StripPrefix=2
         - id: access-openapi-docs-route
           uri: lb://data-platform-access
           predicates:

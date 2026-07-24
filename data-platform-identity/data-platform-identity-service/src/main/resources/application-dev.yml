@@ -68,6 +68,7 @@ platform:
         data-platform-access:
           secret: ${INTERNAL_AUTH_ACCESS_SECRET:dev-access-internal-secret}
           grants:
+            data-platform-identity: [identity:access:read]
             data-platform-masterdata: [masterdata:read, masterdata:vendor-secret:read, masterdata:vendor-security:read]
             data-platform-billing: [billing:calculate]
             data-platform-governance: [governance:log]

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!--
+      Flowable vendor schema. The sqlFile paths resolve from the Flowable 7.1.0
+      runtime jars so the engine DDL is never copied, shortened, or maintained
+      by this project.
+    -->
+    <changeSet id="flowable-process-schema-7.1.0" author="flowable" runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <not>
+                <tableExists schemaName="workflow" tableName="ACT_GE_PROPERTY"/>
+            </not>
+        </preConditions>
+
+        <sql splitStatements="true" stripComments="true">
+            CREATE SCHEMA IF NOT EXISTS workflow;
+            SET search_path TO workflow;
+        </sql>
+        <sqlFile path="org/flowable/common/db/create/flowable.postgres.create.common.sql"
+                 relativeToChangelogFile="false"
+                 splitStatements="true"
+                 stripComments="true"/>
+        <sqlFile path="org/flowable/db/create/flowable.postgres.create.engine.sql"
+                 relativeToChangelogFile="false"
+                 splitStatements="true"
+                 stripComments="true"/>
+        <sqlFile path="org/flowable/db/create/flowable.postgres.create.history.sql"
+                 relativeToChangelogFile="false"
+                 splitStatements="true"
+                 stripComments="true"/>
+        <sql>SET search_path TO public;</sql>
+
+        <rollback>
+            <sql splitStatements="false" stripComments="false">
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                        FROM workflow.ACT_RU_EXECUTION
+                    ) THEN
+                        RAISE EXCEPTION 'Flowable 存在活动流程实例，禁止删除 workflow schema';
+                    END IF;
+                END $$;
+                SET search_path TO workflow;
+            </sql>
+            <sqlFile path="org/flowable/db/drop/flowable.postgres.drop.history.sql"
+                     relativeToChangelogFile="false"
+                     splitStatements="true"
+                     stripComments="true"/>
+            <sqlFile path="org/flowable/db/drop/flowable.postgres.drop.engine.sql"
+                     relativeToChangelogFile="false"
+                     splitStatements="true"
+                     stripComments="true"/>
+            <sqlFile path="org/flowable/common/db/drop/flowable.postgres.drop.common.sql"
+                     relativeToChangelogFile="false"
+                     splitStatements="true"
+                     stripComments="true"/>
+            <sql>
+                SET search_path TO public;
+                DROP SCHEMA workflow;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

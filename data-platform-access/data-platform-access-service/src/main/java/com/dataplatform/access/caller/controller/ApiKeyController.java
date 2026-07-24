@@ -139,8 +139,10 @@ public class ApiKeyController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "API Key不存在"));
         }
-        apiKeyInterfaceService.assignInterfaces(id, interfaceIds);
-        return ResponseEntity.ok(Result.success(null));
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Result.error(
+                        HttpStatus.CONFLICT.value(),
+                        "接口权限已启用审批，请通过 /api/v1/api-permission/applications 提交申请"));
     }
 
     @GetMapping("/{id}/products")

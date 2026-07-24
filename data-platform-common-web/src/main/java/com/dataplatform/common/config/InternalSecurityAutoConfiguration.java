@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.beans.factory.BeanFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
@@ -31,8 +32,8 @@ public class InternalSecurityAutoConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "platform.security.internal", name = "enabled", havingValue = "true")
     public InternalAuthenticationInterceptor internalAuthenticationInterceptor(
-            InternalJwtService jwtService, ObjectMapper objectMapper) {
-        return new InternalAuthenticationInterceptor(jwtService, objectMapper);
+            InternalJwtService jwtService, ObjectMapper objectMapper, BeanFactory beanFactory) {
+        return new InternalAuthenticationInterceptor(jwtService, objectMapper, beanFactory);
     }
 
     @Bean
