@@ -464,7 +464,7 @@ com.dataplatform.masterdata/
 
 > **路径**: `data-platform-access/`
 > **端口**: 8082
-> **职责**: 调用方管理、API Key生命周期与授权、滑动窗口限流、契约化数据查询、动态接口文档、调用记录。
+> **职责**: 调用方管理、API Key 生命周期与授权、接口权限申请审批、滑动窗口限流、契约化数据查询、动态接口文档、调用记录。
 
 #### 子模块
 
@@ -505,6 +505,12 @@ com.dataplatform.access/
 │   ├── OpenApiDocumentController.java       # 管理端文档
 │   ├── CallerOpenApiDocumentController.java # API Key调用方文档
 │   └── OpenApiDocumentService.java          # OpenAPI 3.1生成
+├── approval/
+│   ├── controller/               # 申请、任务、授权管理业务 API
+│   ├── service/                  # 资格校验、状态机、到期、撤销与紧急授权
+│   ├── engine/                   # ApprovalEnginePort 与 Flowable 适配器
+│   ├── workflow/                 # 校验、授权、驳回 JavaDelegate 白名单
+│   └── domain/                   # 申请、申请项、动作、流程路由和状态
 └── service/
 ```
 
@@ -514,6 +520,9 @@ com.dataplatform.access/
 |------|------|
 | `/caller` | 调用方 CRUD |
 | `/caller/apikey` | API Key 管理，以及接口和产品授权 |
+| `/api-permission/applications/**` | 草稿、提交、撤回、复制、详情与资格选项 |
+| `/api-permission/tasks/**` | 候选任务、认领、释放、节点表单、批准/驳回与流程历史 |
+| `/api-permission/grants/**`、`/emergency-grants` | 授权台账、撤销与限时紧急授权 |
 | `PUT /caller/apikey/{id}/rate-limit` | 开关并配置该 Key 每分钟最大请求数，同时刷新 Gateway Redis 配置 |
 | `/openapi/v1/query`、`/batch-query` | 外部系统单笔/批量调用；执行认证、授权、请求契约、限流、配额和厂商代理 |
 | `/openapi-docs/interfaces/{id}` | 管理端按 `interface:view` 权限查看文档和下载 JSON/YAML |
@@ -522,6 +531,8 @@ com.dataplatform.access/
 | `/internal/v1/access/call-stats` | 向 Masterdata/Billing 提供只读统计，需 `access:stats:read` |
 
 请求契约在进入厂商调用前严格校验，覆盖 object/array 嵌套路径、必填、基础类型、枚举、正则、字符串长度、数值范围、数组长度和格式，并为缺失的可选字段应用默认值；暂时允许未声明的额外字段。响应在厂商映射完成后以及缓存命中链路上校验 `data`，不阻断正常返回，但写入 `call_record.response_contract_*`、结构化日志和 `openapi.response.contract.invalid` 监控计数。
+
+接口权限审批以 `api_key_interface` 为运行时权限事实源，以 `api_permission_action` 为不可变业务审计，以 Flowable `workflow` schema 为流程实例、活动任务和历史事实源。业务代码只依赖 `ApprovalEnginePort`；默认 BPMN 是单节点审批，但适配器和自动化测试覆盖顺序节点、条件网关、并行网关、并行多实例会签、版本并存和服务重启恢复。旧 `POST /caller/apikey/{id}/interfaces` 固定返回 409，避免绕过审批执行全量覆盖。
 
 ---
 

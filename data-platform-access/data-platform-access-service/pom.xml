@@ -37,6 +37,10 @@
         </dependency>
         <dependency>
             <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-identity-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
             <artifactId>data-platform-billing-api</artifactId>
         </dependency>
         <dependency>
@@ -122,6 +126,16 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flowable</groupId>
+            <artifactId>flowable-spring-boot-starter-process</artifactId>
+            <version>${flowable.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

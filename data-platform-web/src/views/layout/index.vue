@@ -12,6 +12,12 @@ const route = useRoute()
 const userStore = useUserStore()
 const isCollapse = ref(false)
 
+const handleViewportResize = () => {
+  if (window.innerWidth <= 900) {
+    isCollapse.value = true
+  }
+}
+
 const handleStorageChange = (e: StorageEvent) => {
   if (e.key === STORAGE_KEYS.THEME) {
     applyTheme((e.newValue || THEME_MODE.DARK) as typeof THEME_MODE[keyof typeof THEME_MODE])
@@ -24,13 +30,16 @@ const handleThemeChange = () => {
 
 onMounted(() => {
   applyTheme(getStoredTheme())
+  handleViewportResize()
   window.addEventListener('storage', handleStorageChange)
   window.addEventListener('theme-change', handleThemeChange)
+  window.addEventListener('resize', handleViewportResize)
 })
 
 onUnmounted(() => {
   window.removeEventListener('storage', handleStorageChange)
   window.removeEventListener('theme-change', handleThemeChange)
+  window.removeEventListener('resize', handleViewportResize)
 })
 
 const activeMenu = computed(() => route.path)
@@ -72,6 +81,12 @@ const allMenuItems = [
     title: '调用记录',
     icon: 'connection',
     permission: 'call:view'
+  },
+  {
+    path: '/api-permission',
+    title: '接口权限审批',
+    icon: 'document',
+    permission: 'api-permission:view'
   },
   {
     path: '/billing',
@@ -248,7 +263,12 @@ const handleCommand = (command: string) => {
 
         <!-- 底部折叠按钮 -->
         <div class="sidebar-footer">
-          <button class="collapse-btn" type="button" :aria-label="isCollapse ? '展开侧边栏' : '收起侧边栏'">
+          <button
+            class="collapse-btn"
+            type="button"
+            :aria-label="isCollapse ? '展开侧边栏' : '收起侧边栏'"
+            @click="isCollapse = !isCollapse"
+          >
             <svg v-if="isCollapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 18l6-6-6-6"/>
             </svg>
@@ -717,6 +737,65 @@ const handleCommand = (command: string) => {
   padding: 24px;
   overflow-y: auto;
   background: var(--color-bg);
+}
+
+@media (max-width: 900px) {
+  .sidebar,
+  .sidebar.collapsed {
+    width: 64px;
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+
+  .header {
+    padding: 0 16px;
+  }
+
+  .username,
+  .dropdown-arrow {
+    display: none;
+  }
+
+  .user-info {
+    margin-left: 0;
+    padding: 6px;
+  }
+
+  .main-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar,
+  .sidebar.collapsed {
+    width: 56px;
+  }
+
+  .logo {
+    height: 64px;
+    padding: 0 12px;
+  }
+
+  .logo-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .header {
+    height: 64px;
+    padding: 0 12px;
+  }
+
+  .header-btn {
+    display: none;
+  }
+
+  .main-content {
+    padding: 12px;
+  }
 }
 
 /* 过渡动画 */

@@ -38,6 +38,8 @@ export DB_PASSWORD
 
 bash ./migrate-db.sh dry-run >"$DRY_RUN_FILE"
 grep -q "CREATE TABLE" "$DRY_RUN_FILE"
+grep -q "ACT_RU_EXECUTION" "$DRY_RUN_FILE"
+grep -q "api_permission_application" "$DRY_RUN_FILE"
 
 bash ./migrate-db.sh update
 
@@ -51,14 +53,27 @@ if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('migratio
 fi
 bash ./migrate-db.sh update
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "2" ]]; then
-  echo "Liquibase 基线与清理变更没有各自且仅有一条执行记录" >&2
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "4" ]]; then
+  echo "Liquibase 基线、清理、Flowable 与接口权限审批变更记录不完整" >&2
   exit 1
 fi
 
 bash ./migrate-db.sh rollback-dry-run 1 >"$DRY_RUN_FILE"
-grep -q "sign_type" "$DRY_RUN_FILE"
+grep -q "api_permission_application" "$DRY_RUN_FILE"
 MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 1
+
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
+    SELECT to_regclass('api_permission_application') IS NULL
+       AND to_regclass('workflow.act_ru_execution') IS NOT NULL")" != "t" ]]; then
+  echo "V026 回滚后审批业务表仍存在，或错误删除了 Flowable 表" >&2
+  exit 1
+fi
+
+bash ./migrate-db.sh update
+
+bash ./migrate-db.sh rollback-dry-run 3 >"$DRY_RUN_FILE"
+grep -q "sign_type" "$DRY_RUN_FILE"
+MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 3
 
 if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
     SELECT count(*) = 3
@@ -86,11 +101,13 @@ if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
   exit 1
 fi
 
-bash ./migrate-db.sh rollback-dry-run 2 >"$DRY_RUN_FILE"
+bash ./migrate-db.sh rollback-dry-run 4 >"$DRY_RUN_FILE"
 grep -q "DROP TABLE" "$DRY_RUN_FILE"
-MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 2
+MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 4
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('tenant_info') IS NULL")" != "t" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
+    SELECT to_regclass('tenant_info') IS NULL
+       AND to_regclass('workflow.act_ru_execution') IS NULL")" != "t" ]]; then
   echo "Liquibase 全量回滚后仍存在业务表" >&2
   exit 1
 fi
@@ -137,9 +154,9 @@ SQL
 DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$VERIFY_DB_NAME" \
   bash ./migrate-db.sh baseline
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "2" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "4" ]]; then
   echo "现有数据库基线登记失败" >&2
   exit 1
 fi
 
-echo "数据库迁移回归通过（dry-run/update/idempotency/V025 rollback/reapply/full rollback/backup/restore/baseline）: $VERIFY_DB_NAME"
+echo "数据库迁移回归通过（dry-run/update/idempotency/V026+Flowable/V025 rollback/reapply/full rollback/backup/restore/baseline）: $VERIFY_DB_NAME"

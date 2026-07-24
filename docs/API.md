@@ -159,11 +159,36 @@
 | PUT | `/caller/apikey/{id}/status` | 状态：`active`、`expired`、`revoked` |
 | PUT | `/caller/apikey/{id}/rate-limit` | 限流开关与每分钟上限 |
 | DELETE | `/caller/apikey/{id}` | 删除 API Key |
-| GET/POST | `/caller/apikey/{id}/interfaces` | 查询或分配接口权限 |
+| GET | `/caller/apikey/{id}/interfaces` | 查询当前有效接口权限 |
+| POST | `/caller/apikey/{id}/interfaces` | 已收口，固定返回 409；改用接口权限申请或紧急授权 |
 | GET/POST | `/caller/apikey/{id}/products` | 查询或分配产品权限 |
 | GET/POST | `/call-scene/list`、`/call-scene` | 公共调用场景 |
 
 创建 API Key 时完整密钥只在创建响应中返回；后续列表不应作为密钥恢复通道。
+
+### 4.1 接口权限申请与审批
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET/POST | `/api-permission/applications` | 分页查询可见申请、创建草稿 |
+| GET/PUT | `/api-permission/applications/{id}` | 查看详情与动作轨迹、编辑本人草稿 |
+| POST | `/api-permission/applications/{id}/submit` | 使用 `Idempotency-Key` 幂等提交并启动 Flowable 流程 |
+| POST | `/api-permission/applications/{id}/cancel`、`/copy` | 撤回/取消、复制为新草稿 |
+| GET | `/api-permission/eligible-callers` | 当前用户可管理的 Caller |
+| GET | `/api-permission/callers/{callerId}/api-keys` | Caller 下可申请的有效 API Key |
+| GET | `/api-permission/interface-options?apiKeyId={id}` | 接口选项及已授权/审批中标记 |
+| GET | `/api-permission/tasks`、`/tasks/{taskId}` | 当前用户候选或已认领任务、动态节点表单 |
+| POST | `/api-permission/tasks/{taskId}/claim`、`/unclaim` | 认领、释放任务 |
+| POST | `/api-permission/tasks/{taskId}/complete` | 按节点允许的决定和字段推进审批 |
+| GET | `/api-permission/applications/{id}/process-history` | 流程节点历史 |
+| GET | `/api-permission/grants` | 本租户授权台账 |
+| POST | `/api-permission/grants/{id}/revoke` | 撤销有效授权，原因必填 |
+| GET | `/api-permission/emergency-options/callers` | 紧急授权可选的本租户 Caller |
+| GET | `/api-permission/emergency-options/callers/{callerId}/api-keys` | 紧急授权可选的有效 API Key |
+| GET | `/api-permission/emergency-options/interfaces?apiKeyId={id}` | 紧急授权可选的启用接口及已有授权标记 |
+| POST | `/api-permission/emergency-grants` | 最长 24 小时的增量紧急授权，原因和工单号必填 |
+
+审批通过只开通“API Key + 接口”权限；调用仍需满足 Caller/API Key、产品、场景、限流、配额、计费和厂商路由条件。到期或撤销后，单条、批量和调用方文档均按同一权限谓词立即返回 403。
 
 ## 5. OpenAPI 调用与文档
 

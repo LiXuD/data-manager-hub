@@ -7,6 +7,16 @@ spring:
   application:
     name: data-platform-access
 
+flowable:
+  database-schema-update: false
+  history-level: audit
+  check-process-definitions: true
+  async-executor-activate: false
+  idm:
+    enabled: false
+  eventregistry:
+    enabled: false
+
 management:
   endpoints:
     web:

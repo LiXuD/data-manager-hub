@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://dataplatform.com/access/approval">
+    <process id="apiPermissionApproval" name="API 接口权限审批" isExecutable="true">
+        <startEvent id="start" name="开始"/>
+        <sequenceFlow id="start-to-validate" sourceRef="start" targetRef="validateApplication"/>
+
+        <serviceTask id="validateApplication"
+                     name="校验申请"
+                     flowable:delegateExpression="${validateApiPermissionDelegate}"/>
+        <sequenceFlow id="validate-to-approval" sourceRef="validateApplication" targetRef="apiPermissionApprovalTask"/>
+
+        <userTask id="apiPermissionApprovalTask"
+                  name="接口权限审批"
+                  flowable:candidateGroups="${approverGroup}">
+            <extensionElements>
+                <flowable:formProperty id="_allowWithdraw"
+                                       type="boolean"
+                                       default="true"
+                                       readable="false"
+                                       writable="false"/>
+                <flowable:formProperty id="_allowExpireAdjustment"
+                                       type="boolean"
+                                       default="true"
+                                       readable="false"
+                                       writable="false"/>
+                <flowable:formProperty id="decision"
+                                       name="审批决定"
+                                       type="enum"
+                                       required="true">
+                    <flowable:value id="APPROVE" name="同意"/>
+                    <flowable:value id="REJECT" name="驳回"/>
+                </flowable:formProperty>
+            </extensionElements>
+        </userTask>
+        <sequenceFlow id="approval-to-decision" sourceRef="apiPermissionApprovalTask" targetRef="decisionGateway"/>
+
+        <exclusiveGateway id="decisionGateway" name="审批结果"/>
+        <sequenceFlow id="decision-approved" sourceRef="decisionGateway" targetRef="grantPermission">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${decision == 'APPROVE'}]]></conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="decision-rejected" sourceRef="decisionGateway" targetRef="rejectApplication">
+            <conditionExpression xsi:type="tFormalExpression"><![CDATA[${decision == 'REJECT'}]]></conditionExpression>
+        </sequenceFlow>
+
+        <serviceTask id="grantPermission"
+                     name="开通接口权限"
+                     flowable:delegateExpression="${grantApiPermissionDelegate}"/>
+        <sequenceFlow id="grant-to-effective" sourceRef="grantPermission" targetRef="effectiveEnd"/>
+        <endEvent id="effectiveEnd" name="已生效"/>
+
+        <serviceTask id="rejectApplication"
+                     name="记录驳回"
+                     flowable:delegateExpression="${rejectApiPermissionDelegate}"/>
+        <sequenceFlow id="reject-to-end" sourceRef="rejectApplication" targetRef="rejectedEnd"/>
+        <endEvent id="rejectedEnd" name="已驳回"/>
+    </process>
+</definitions>

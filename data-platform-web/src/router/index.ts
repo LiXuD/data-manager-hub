@@ -54,6 +54,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调用方管理' }
       },
       {
+        path: '/api-permission',
+        name: 'ApiPermission',
+        component: () => import('@/views/api-permission/index.vue'),
+        meta: { title: '接口权限审批' }
+      },
+      {
         path: '/datatype',
         name: 'DataType',
         component: () => import('@/views/datatype/index.vue'),

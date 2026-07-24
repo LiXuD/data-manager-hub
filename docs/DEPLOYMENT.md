@@ -61,6 +61,10 @@ export DB_PORT=15432
 
 Liquibase 使用 `DATABASECHANGELOG` 和 `DATABASECHANGELOGLOCK` 管理顺序、校验和与并发锁。旧的手工初始化数据库必须先执行 `./migrate-db.sh backup`，再用 `MIGRATION_CONFIRM_BASELINE=<数据库名> ./migrate-db.sh baseline` 接管，不能直接重复执行历史 SQL。`start-services.sh` 默认也会在任何 Java 服务启动前执行 `update`。
 
+接口权限审批由 V026 创建业务表，并使用 Flowable 7.1.0 官方 PostgreSQL 脚本在独立 `workflow` schema 创建引擎表。生产环境保持 `flowable.database-schema-update=false`；应用通过表前缀访问 `workflow`，业务 MyBatis 仍固定使用 `public` schema。引擎表只能经 Liquibase 升级，禁止应用启动时自动建表或手工修改已登记 changeset。
+
+发布新审批节点时，将经过评审的 BPMN 作为 `data-platform-access-service/src/main/resources/processes/` 下的新版本资源发布。新申请使用最新版本，运行中实例继续原定义；禁止在线暴露 Flowable REST、引擎 Actuator 管理端点或 workflow schema。
+
 ### 4. 构建项目
 
 ```bash
@@ -103,7 +107,7 @@ npm run dev
 |----|------|------|------|
 | - | Gateway | 8888 | API 网关 |
 | masterdata | data-platform-masterdata | 8081 | 厂商/数据类型/接口/灰度 |
-| access | data-platform-access | 8082 | 调用方/API Key/调用 |
+| access | data-platform-access | 8082 | 调用方/API Key/接口权限审批/调用 |
 | billing | data-platform-billing | 8084 | 计费 |
 | identity | data-platform-identity | 8086 | 身份/租户/安全 |
 | governance | data-platform-governance | 8085 | 监控/日志/质量/血缘 |

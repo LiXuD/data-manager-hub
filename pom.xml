@@ -49,6 +49,7 @@
         <maven.enforcer.version>3.5.0</maven.enforcer.version>
         <liquibase.version>4.29.2</liquibase.version>
         <postgresql.driver.version>42.7.13</postgresql.driver.version>
+        <flowable.version>7.1.0</flowable.version>
         <profiles.active>dev</profiles.active>
     </properties>
 
@@ -251,6 +252,13 @@
                         <release>${java.version}</release>
                         <encoding>UTF-8</encoding>
                         <parameters>true</parameters>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -285,6 +293,16 @@
                         <groupId>org.postgresql</groupId>
                         <artifactId>postgresql</artifactId>
                         <version>${postgresql.driver.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.flowable</groupId>
+                        <artifactId>flowable-engine-common</artifactId>
+                        <version>${flowable.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.flowable</groupId>
+                        <artifactId>flowable-engine</artifactId>
+                        <version>${flowable.version}</version>
                     </dependency>
                 </dependencies>
             </plugin>

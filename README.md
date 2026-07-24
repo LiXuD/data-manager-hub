@@ -24,6 +24,7 @@
 | Spring Boot | 3.4.13 |
 | Spring Cloud | 2024.0.3 |
 | MyBatis-Plus | 3.5.8 |
+| Flowable Process Engine | 7.1.0 |
 | PostgreSQL | 16 |
 | Redis | 7.4 |
 | Nacos | 2.3 (本地配置模式) |
@@ -84,7 +85,8 @@ data-platform/
 | 领域 | 核心表 |
 |------|--------|
 | masterdata | `vendor_info`、`data_type`、`vendor_config`、`vendor_config_extended`、`api_interface`、`interface_param`、`gray_rule` |
-| access | `caller_info`、`caller_product`、`api_key`、`api_key_product`、`call_scene`、`call_record` |
+| access | `caller_info`、`caller_product`、`api_key`、`api_key_interface`、`api_permission_application`、`api_permission_application_item`、`api_permission_action`、`api_approval_process_config`、`call_scene`、`call_record` |
+| workflow | Flowable 7.1.0 原生流程、任务和历史表（独立 `workflow` schema） |
 | billing | `billing_template`、`billing_plan`、`billing_plan_tier`、`billing_event`（不可变账本）、`billing_usage_balance`、`billing_daily`（查询投影）、`billing_daily_event`、`billing_reconciliation` |
 | identity | `tenant_info`、`user_info`、`role_info`、`user_role` |
 | governance | `alert_rule`、`alert_record`、`circuit_breaker`、`operation_log`、`data_lineage`、`quality_rule`、`quality_score` |
@@ -100,13 +102,14 @@ data-platform/
 | 厂商、数据类型与配置 | `/api/v1/vendor/**`、`/api/v1/datatype/**`、`/api/v1/config/**` |
 | 接口契约 | `GET/PUT /api/v1/interface/{id}/contract` |
 | 调用方与 API Key | `/api/v1/caller/**`、`/api/v1/caller/apikey/**` |
+| 接口权限申请与审批 | `/api/v1/api-permission/applications/**`、`/api/v1/api-permission/tasks/**`、`/api/v1/api-permission/grants/**` |
 | 调用记录 | `/api/v1/call-record/**` |
 | 版本化计费 | `/api/v1/billing/plan/**`、`/api/v1/billing/event/**` |
 | 身份与租户 | `/api/v1/auth/**`、`/api/v1/user/**`、`/api/v1/role/**`、`/api/v1/tenant/**` |
 | 治理 | `/api/v1/alert/**`、`/api/v1/log/**`、`/api/v1/quality/**`、`/api/v1/trace/**` |
 | 外部单条/批量调用 | `POST /openapi/v1/query`、`POST /openapi/v1/batch-query` |
 
-完整方法、路径和错误语义见 [HTTP API 文档](docs/API.md)。旧 `/interface/**/schema`、`/params`、访问域 `/data/**` 和重复 API Key 路由已删除。
+完整方法、路径和错误语义见 [HTTP API 文档](docs/API.md)，审批领域设计见 [接口调用权限审批功能设计方案](docs/2026-07-23-api-permission-approval-design.md)。旧 `/interface/**/schema`、`/params`、访问域 `/data/**` 和重复 API Key 路由已删除。
 
 ---
 

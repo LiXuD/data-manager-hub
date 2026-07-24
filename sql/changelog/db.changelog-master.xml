@@ -60,4 +60,24 @@
                      stripComments="false"/>
         </rollback>
     </changeSet>
+
+    <include file="workflow/flowable-7.1.0.xml" relativeToChangelogFile="true"/>
+
+    <changeSet id="api-permission-approval-2026-07-24"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V026__create_api_permission_approval.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U026__remove_api_permission_approval.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>

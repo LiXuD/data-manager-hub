@@ -171,7 +171,7 @@
         </el-table-column>
         <el-table-column label="操作" width="340">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleInterfaceAuth(row.id!)">接口授权</el-button>
+            <el-button type="primary" link @click="handleInterfaceAuth(row.id!)">申请接口权限</el-button>
             <el-button type="primary" link @click="handleProductAuth(row.id!)">产品授权</el-button>
             <el-button type="primary" link @click="handleRateLimitConfig(row)">限流配置</el-button>
             <el-button type="danger" link @click="handleDeleteApiKey(row.id!)">删除</el-button>
@@ -206,20 +206,6 @@
       </template>
     </el-dialog>
 
-    <!-- 接口授权弹窗 -->
-    <el-dialog v-model="interfaceAuthVisible" title="API Key接口授权" width="500px">
-      <el-transfer
-        v-model="selectedInterfaces"
-        :data="interfaceList"
-        :titles="['可选接口', '已授权接口']"
-        :props="{ key: 'id', label: 'interfaceName' }"
-      />
-      <template #footer>
-        <el-button @click="interfaceAuthVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSaveInterfaceAuth">确定</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 产品授权弹窗 -->
     <el-dialog v-model="productAuthVisible" title="API Key产品授权" width="520px">
       <el-transfer
@@ -238,6 +224,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getCallerList,
@@ -248,8 +235,6 @@ import {
   updateApiKeyRateLimit,
   deleteApiKey,
   updateCallerStatus,
-  getApiKeyInterfaces,
-  assignApiKeyInterfaces,
   getCallerProducts,
   createCallerProduct,
   getApiKeyProducts,
@@ -257,10 +242,9 @@ import {
   updateCaller
 } from '@/api/caller'
 import type { Caller, ApiKey, CallerProduct } from '@/api/caller'
-import { getInterfaceList } from '@/api/interface'
 import { COMMON_STATUS } from '@/constants'
 
-interface Interface { id: number; interfaceName: string; interfaceCode: string }
+const router = useRouter()
 
 const searchForm = reactive({ keyword: '', status: '' })
 const tableData = ref<Caller[]>([])
@@ -279,9 +263,6 @@ const productForm = reactive<CallerProduct>({
   cacheScope: 'GLOBAL',
   status: 'active'
 })
-const interfaceAuthVisible = ref(false)
-const interfaceList = ref<Interface[]>([])
-const selectedInterfaces = ref<number[]>([])
 const productAuthVisible = ref(false)
 const selectedProducts = ref<number[]>([])
 const currentApiKeyId = ref<number | null>(null)
@@ -470,32 +451,14 @@ const handleSaveProductAuth = async () => {
 }
 
 const handleInterfaceAuth = async (apiKeyId: number) => {
-  currentApiKeyId.value = apiKeyId
-  try {
-    const [interfacesRes, apiKeyInterfacesRes] = await Promise.all([
-      getInterfaceList({ page: 1, pageSize: 100 }),
-      getApiKeyInterfaces(apiKeyId)
-    ])
-    interfaceList.value = interfacesRes.data || []
-    selectedInterfaces.value = apiKeyInterfacesRes.data || []
-    interfaceAuthVisible.value = true
-  } catch (error) {
-    ElMessage.error('加载接口数据失败')
-  }
-}
-
-const handleSaveInterfaceAuth = async () => {
-  if (!currentApiKeyId.value) return
-  submitting.value = true
-  try {
-    await assignApiKeyInterfaces(currentApiKeyId.value, selectedInterfaces.value)
-    ElMessage.success('接口授权成功')
-    interfaceAuthVisible.value = false
-  } catch (error) {
-    ElMessage.error('接口授权失败')
-  } finally {
-    submitting.value = false
-  }
+  await router.push({
+    path: '/api-permission',
+    query: {
+      create: '1',
+      callerId: String(currentCallerId.value),
+      apiKeyId: String(apiKeyId)
+    }
+  })
 }
 
 onMounted(() => { loadData() })
