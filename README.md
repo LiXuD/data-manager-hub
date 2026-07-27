@@ -118,7 +118,7 @@ data-platform/
 ### 前置要求
 
 - Java 21+
-- Node.js 18.18+
+- Node.js 20.19+、22.13+ 或 24+
 - Maven 3.9+
 - Docker (用于基础设施)
 - PostgreSQL 客户端（`psql`、`pg_dump`，用于迁移基线与备份恢复）

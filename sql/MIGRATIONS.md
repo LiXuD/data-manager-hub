@@ -9,6 +9,7 @@
 - **禁止重命名已执行的迁移文件**：文件路径参与 Liquibase changeset 的执行记录与校验（checksum），重命名会破坏已部署环境的校验。
 - 历史事实说明：`V007__add_permission_tables.sql` 与 `V007__create_interface_param.sql` 重号是既成历史，保持原样，不再新增任何重号。
 - 编号唯一性由 `migrate-db.sh` 在 `update`/`dry-run`/`validate`/`baseline` 时自动校验：除历史 V007 外若存在重号，迁移直接失败。
+- 可单独执行 `./migrate-db.sh check-numbering`，在不连接数据库的情况下校验编号；V007 文件集合必须严格等于上述两个历史文件。
 
 ## Changeset 与 rollback
 

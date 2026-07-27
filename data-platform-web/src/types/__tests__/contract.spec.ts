@@ -1,38 +1,57 @@
 import { describe, expect, it } from 'vitest'
 import type {
-  ApiResponse,
   DataType,
   PageParams,
-  PageResponse,
   Tenant
 } from '@/types'
+import { extractPageData } from '@/utils/pagination'
 
-// 后端统一返回结构见 data-platform-common-contract 的 Result/PageResult
-describe('types 契约映射冒烟', () => {
-  it('ApiResponse 与后端 Result 的 code/message/data 对齐', () => {
-    const res: ApiResponse<{ id: number }> = {
+// 后端目前有 com.dataplatform.common.result 与 com.dataplatform.api 两套结果契约。
+// 前端通过统一的分页提取器兼容两者，避免把二者误写成不存在的混合结构。
+describe('后端结果契约兼容', () => {
+  it('提取 common PageResult 的 data/total/page/pageSize', () => {
+    const response = {
       code: 200,
       message: 'success',
-      data: { id: 1 }
-    }
-    expect(Object.keys(res)).toEqual(expect.arrayContaining(['code', 'message', 'data']))
-    expect(res.code).toBe(200)
-    expect(res.data.id).toBe(1)
-  })
-
-  it('PageResponse 携带 list/total/page/pageSize 分页字段', () => {
-    const page: PageResponse<Tenant> = {
-      list: [],
-      total: 0,
+      data: [{ id: 1 }],
+      total: 1,
       page: 1,
       pageSize: 10
     }
-    expect(page.list).toHaveLength(0)
-    expect(page.total).toBe(0)
-    expect(page.page).toBe(1)
-    expect(page.pageSize).toBe(10)
+
+    expect(extractPageData<{ id: number }>(response)).toEqual({
+      list: [{ id: 1 }],
+      total: 1
+    })
   })
 
+  it('提取 api PageResult 的 data/list/total/pageNum/pageSize', () => {
+    const response = {
+      code: 200,
+      msg: 'success',
+      data: [{ id: 1 }],
+      list: [{ id: 1 }],
+      total: 1,
+      pageNum: 1,
+      pageSize: 10,
+      totalPages: 1
+    }
+
+    expect(extractPageData<{ id: number }>(response)).toEqual({
+      list: [{ id: 1 }],
+      total: 1
+    })
+  })
+
+  it('分页 data 为空时仍保留后端 total', () => {
+    expect(extractPageData({ code: 200, message: 'success', data: [], total: 3 })).toEqual({
+      list: [],
+      total: 3
+    })
+  })
+})
+
+describe('前端实体与查询类型', () => {
   it('PageParams 查询参数全部可选', () => {
     const empty: PageParams = {}
     const full: PageParams = { page: 1, pageSize: 20, keyword: 'k', status: 'active' }
