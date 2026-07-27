@@ -4,6 +4,7 @@ import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
+import com.dataplatform.common.util.UserContext;
 import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.service.CallerService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,6 +61,7 @@ public class CallerController {
         }
 
         caller.setId(null);
+        caller.setTenantId(UserContext.getCurrentTenantId());
         caller.setStatus(CommonStatus.ACTIVE);
         callerService.save(caller);
         return ResponseEntity.ok(Result.success(caller));

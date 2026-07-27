@@ -194,6 +194,10 @@
 
 ## 5. OpenAPI 调用与文档
 
+已内置 UAPI 指定日期程序员历史接口 `PROGRAMMER_HISTORY_BY_DATE`。调用时在
+`params` 中传入整数 `month`（1～12）和 `day`（1～31）；平台会先执行接口契约校验，
+再向 `GET https://uapis.cn/api/v1/history/programmer` 发送查询参数。
+
 ### 单条调用
 
 `POST /openapi/v1/query`
@@ -208,6 +212,23 @@
   "useCache": true,
   "cacheDays": 2,
   "params": {}
+}
+```
+
+指定日期查询示例：
+
+```json
+{
+  "requestId": "history-04-04",
+  "apiCode": "PROGRAMMER_HISTORY_BY_DATE",
+  "apiVersion": "v1",
+  "productCode": "RISK",
+  "sceneCode": "DEFAULT",
+  "useCache": false,
+  "params": {
+    "month": 4,
+    "day": 4
+  }
 }
 ```
 

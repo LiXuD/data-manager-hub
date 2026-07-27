@@ -123,7 +123,12 @@ guard_rollback() {
     applied_count="$(query_scalar 'SELECT count(*) FROM databasechangelog')"
     if [[ "$(query_scalar "
         SELECT count(*)
-        FROM databasechangelog
+        FROM (
+            SELECT id, author
+            FROM databasechangelog
+            ORDER BY orderexecuted DESC
+            LIMIT $requested_count
+        ) pending_rollback
         WHERE id = 'api-permission-rbac-hardening-2026-07-24'
           AND author = 'data-platform'")" != "0" ]]; then
         fail "V027 包含角色大小写合并，禁止原地回滚；请保留规范化数据或使用迁移前备份 restore"
