@@ -75,6 +75,14 @@ validate_connection_values() {
     [[ "$DB_USERNAME" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "DB_USERNAME 包含不支持的字符"
 }
 
+# 除历史 V007 重号外，迁移编号必须唯一（见 sql/MIGRATIONS.md 编号规则）。
+check_unique_migration_numbers() {
+    local duplicates
+    duplicates="$(ls sql/migrations | sed 's/__.*//' | sort | uniq -d | grep -v '^V007$' || true)"
+    [[ -z "$duplicates" ]] || \
+        fail "迁移编号重复: ${duplicates//$'\n'/ }。除历史 V007 外编号必须唯一，新迁移从 V030 起顺延，详见 sql/MIGRATIONS.md 的编号规则"
+}
+
 run_liquibase() {
     "$MAVEN_BIN" -N -DskipTests "$@"
 }
@@ -140,6 +148,7 @@ guard_rollback() {
 }
 
 preflight_update() {
+    check_unique_migration_numbers
     require_command psql
     if database_has_application_schema && ! database_has_liquibase_history; then
         fail "检测到未纳入 Liquibase 的现有数据库。先备份并执行 MIGRATION_CONFIRM_BASELINE=$DB_NAME ./migrate-db.sh baseline"
@@ -200,9 +209,11 @@ case "$command_name" in
         run_liquibase -Dliquibase.verbose=true liquibase:status
         ;;
     validate)
+        check_unique_migration_numbers
         run_liquibase liquibase:validate
         ;;
     baseline)
+        check_unique_migration_numbers
         require_command psql
         [[ "${MIGRATION_CONFIRM_BASELINE:-}" == "$DB_NAME" ]] || \
             fail "基线操作需设置 MIGRATION_CONFIRM_BASELINE=$DB_NAME"
