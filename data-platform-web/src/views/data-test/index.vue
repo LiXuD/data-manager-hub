@@ -400,6 +400,9 @@ const formattedResultData = computed(() => {
 
 const getParamInputType = (param: InterfaceParam): ParamInputType => {
   const type = (param.paramType || 'string').toLowerCase()
+  if (type === 'integer') {
+    return 'number'
+  }
   if (type === 'number' || type === 'boolean' || type === 'object' || type === 'array') {
     return type
   }

@@ -116,4 +116,22 @@
                      stripComments="false"/>
         </rollback>
     </changeSet>
+
+    <changeSet id="uapi-programmer-history-by-date-2026-07-24"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V029__seed_uapi_programmer_history_by_date.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U029__remove_uapi_programmer_history_by_date.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>
