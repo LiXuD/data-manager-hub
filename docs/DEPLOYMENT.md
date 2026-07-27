@@ -12,7 +12,7 @@
 |------|----------|------|
 | Java | 21+ | OpenJDK 或 Oracle JDK |
 | Maven | 3.9+ | 构建工具 |
-| Node.js | 18+ | 前端构建 |
+| Node.js | 20.19+、22.13+ 或 24+ | 前端构建 |
 | Docker | 24+ | 容器化部署 |
 | Docker Compose | 2.x | 容器编排 |
 | OpenSSL | 3.x | 本地生成服务间认证 RSA 密钥 |

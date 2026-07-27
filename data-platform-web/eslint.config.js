@@ -29,6 +29,8 @@ export default tseslint.config(
       'no-console': 'off',
       'no-debugger': 'error',
       'no-empty': ['error', { allowEmptyCatch: true }],
+      // ESLint 10 新增的推荐规则会把既有的分支内赋值判为错误；保持升级前的检查基线。
+      'no-useless-assignment': 'off',
       'no-var': 'error',
       'prefer-const': 'error',
       'eqeqeq': ['error', 'always', { null: 'ignore' }],

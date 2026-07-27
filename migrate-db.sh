@@ -46,6 +46,7 @@ usage() {
   update                    校验并应用尚未执行的变更
   dry-run                   输出待执行 SQL，不修改数据库
   status                    显示数据库迁移状态
+  check-numbering           仅校验迁移编号与历史 V007 文件集合
   validate                  校验变更日志及已执行校验和
   baseline                  备份、补齐并接管手工迁移的现有数据库
   rollback-dry-run <count>  输出回滚最近 count 个变更的 SQL
@@ -78,9 +79,18 @@ validate_connection_values() {
 # 除历史 V007 重号外，迁移编号必须唯一（见 sql/MIGRATIONS.md 编号规则）。
 check_unique_migration_numbers() {
     local duplicates
-    duplicates="$(ls sql/migrations | sed 's/__.*//' | sort | uniq -d | grep -v '^V007$' || true)"
+    local historical_v007_files
+    local expected_v007_files
+
+    duplicates="$(find sql/migrations -maxdepth 1 -type f -name 'V[0-9]*__*.sql' -exec basename {} \; \
+        | sed 's/__.*//' | sort | uniq -d | grep -v '^V007$' || true)"
     [[ -z "$duplicates" ]] || \
         fail "迁移编号重复: ${duplicates//$'\n'/ }。除历史 V007 外编号必须唯一，新迁移从 V030 起顺延，详见 sql/MIGRATIONS.md 的编号规则"
+
+    expected_v007_files=$'V007__add_permission_tables.sql\nV007__create_interface_param.sql'
+    historical_v007_files="$(find sql/migrations -maxdepth 1 -type f -name 'V007__*.sql' -exec basename {} \; | sort)"
+    [[ "$historical_v007_files" == "$expected_v007_files" ]] || \
+        fail "历史 V007 文件集合发生变化。只允许保留 V007__add_permission_tables.sql 和 V007__create_interface_param.sql；新迁移必须从 V030 起顺延"
 }
 
 run_liquibase() {
@@ -207,6 +217,9 @@ case "$command_name" in
         ;;
     status)
         run_liquibase -Dliquibase.verbose=true liquibase:status
+        ;;
+    check-numbering)
+        check_unique_migration_numbers
         ;;
     validate)
         check_unique_migration_numbers

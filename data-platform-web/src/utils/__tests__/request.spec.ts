@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 
 const elMessageError = vi.fn()
+const logout = vi.fn()
 
 vi.mock('element-plus', () => ({
   ElMessage: {
@@ -10,7 +11,7 @@ vi.mock('element-plus', () => ({
 }))
 
 vi.mock('@/stores/user', () => ({
-  useUserStore: () => ({ logout: vi.fn() })
+  useUserStore: () => ({ logout })
 }))
 
 import instance, { request } from '@/utils/request'
@@ -33,11 +34,15 @@ describe('utils/request 冒烟', () => {
       setItem: (key: string, value: string) => void store.set(key, value),
       removeItem: (key: string) => void store.delete(key)
     })
+    vi.stubGlobal('window', {
+      location: { pathname: '/dashboard', href: '/dashboard' }
+    })
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
     elMessageError.mockClear()
+    logout.mockClear()
   })
 
   it('开发态 baseURL 指向 /api/v1 且默认 JSON 请求头', () => {
@@ -70,6 +75,22 @@ describe('utils/request 冒烟', () => {
     stubAdapter({ code: 4001, message: '参数错误' })
     await expect(request.post('/ping', {})).rejects.toThrow('参数错误')
     expect(elMessageError).toHaveBeenCalledWith('参数错误')
+  })
+
+  it('api.Result 的 msg 字段可作为业务错误提示', async () => {
+    stubAdapter({ code: 4001, msg: '接口参数错误' })
+    await expect(request.post('/ping', {})).rejects.toThrow('接口参数错误')
+    expect(elMessageError).toHaveBeenCalledWith('接口参数错误')
+  })
+
+  it('业务 401 清理登录态并跳转登录页', async () => {
+    localStorage.setItem('token', 'expired-token')
+    stubAdapter({ code: 401, msg: '登录已过期' })
+
+    await expect(request.get('/ping')).rejects.toThrow('登录已过期')
+
+    expect(logout).toHaveBeenCalledOnce()
+    expect(window.location.href).toBe('/login')
   })
 
   it('blob 响应不做统一结果解包', async () => {
