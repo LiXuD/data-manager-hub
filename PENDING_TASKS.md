@@ -72,7 +72,7 @@
 - 通过环境变量或密钥系统提供 `NACOS_SERVER_ADDR`、数据库和 Redis 的连接及凭据；`docker-compose.yml` 仅用于本地开发和测试。
 - 在真实集成环境显式开启外部 API 测试：`mvn test -Dintegration.tests=true` 或 `INTEGRATION_TESTS=true`。
 - SkyWalking 生产环境使用持久化后端，不使用本地 compose 中的 H2 存储。
-- 合入 `dev` 前执行 `mvn verify`、`npm audit`、`npm run lint`、`npm run build`、隔离数据库迁移回归和 `bash arch-scan.sh`。
+- 合入 `dev` 前执行 `mvn verify`、`npm audit`、`npm run lint`、`npm test`、`npm run build`、隔离数据库迁移回归和 `bash arch-scan.sh`。
 
 ## 文档职责
 

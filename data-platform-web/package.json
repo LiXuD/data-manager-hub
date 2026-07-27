@@ -10,7 +10,8 @@
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint",
-    "lint:fix": "npm run lint -- --fix"
+    "lint:fix": "npm run lint -- --fix",
+    "test": "vitest run"
   },
   "dependencies": {
     "@types/nprogress": "^0.2.3",
@@ -35,6 +36,7 @@
     "unplugin-auto-import": "^0.17.8",
     "unplugin-vue-components": "^0.27.5",
     "vite": "^6.4.3",
+    "vitest": "^3.2.4",
     "vue-tsc": "^2.2.12"
   }
 }
