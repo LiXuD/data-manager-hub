@@ -282,7 +282,7 @@
               v-model="draft.requestedExpireAt"
               type="datetime"
               value-format="YYYY-MM-DDTHH:mm:ss"
-              placeholder="最长 365 天"
+              placeholder="选择未来时间"
               style="width: 100%"
             />
           </el-form-item>
@@ -361,6 +361,14 @@
         </div>
       </el-form>
       <template #footer>
+        <el-alert
+          v-if="draftValidationMessage"
+          :title="draftValidationMessage"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="draft-validation-alert"
+        />
         <el-button @click="createVisible = false">取消</el-button>
         <el-button :loading="saving" @click="saveDraft(false)">保存草稿</el-button>
         <el-button type="primary" :loading="saving" @click="saveDraft(true)">保存并提交</el-button>
@@ -669,7 +677,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, type TabsPaneContext } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
@@ -705,6 +713,7 @@ import {
   type Grant,
   type InterfaceOption
 } from '@/api/api-permission'
+import { getDraftValidationError } from './validation'
 
 const route = useRoute()
 const router = useRouter()
@@ -725,6 +734,7 @@ const grantStatus = ref('')
 const createVisible = ref(false)
 const editingId = ref<number | null>(null)
 const saving = ref(false)
+const draftValidationMessage = ref('')
 const callers = ref<CallerOption[]>([])
 const apiKeys = ref<ApiKeyOption[]>([])
 const interfaces = ref<InterfaceOption[]>([])
@@ -918,31 +928,22 @@ const handleApiKeyChange = async (apiKeyId: number) => {
   interfaces.value = response.data || []
 }
 
-const validateDraft = () => {
-  if (!draft.callerId || !draft.apiKeyId || draft.interfaceIds.length === 0) {
-    ElMessage.warning('请选择内部系统、API Key 和申请接口')
-    return false
-  }
-  if (draft.businessPurpose.trim().length < 10 || !draft.businessScene.trim()) {
-    ElMessage.warning('请完整填写业务用途和业务场景')
-    return false
-  }
-  if (!draft.requestedExpireAt) {
-    ElMessage.warning('请选择期望有效截止时间')
-    return false
-  }
-  if (draft.cacheEnabled
-    && (!draft.requestedCacheDays
-      || draft.requestedCacheDays < 1
-      || draft.requestedCacheDays > 365)) {
-    ElMessage.warning('申请缓存时效必须在 1 到 365 天之间')
+watch(draft, () => {
+  draftValidationMessage.value = ''
+}, { deep: true })
+
+const validateDraft = (submit: boolean) => {
+  const validationError = getDraftValidationError(draft, submit)
+  draftValidationMessage.value = validationError || ''
+  if (validationError) {
+    ElMessage.warning(validationError)
     return false
   }
   return true
 }
 
 const saveDraft = async (submit: boolean) => {
-  if (!validateDraft()) return
+  if (!validateDraft(submit)) return
   saving.value = true
   try {
     const payload: ApplicationDraft = {
@@ -1237,6 +1238,7 @@ onMounted(async () => {
 .link-button { padding: 0; border: 0; color: var(--el-color-primary); background: transparent; cursor: pointer; }
 .code { font-family: var(--font-mono); font-size: 13px; }
 .application-form { padding: 0 4px 24px; }
+.draft-validation-alert { margin-bottom: 12px; text-align: left; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
 .application-form :deep(.el-select) { width: 100%; }
 .field-hint { margin-top: 6px; color: var(--color-text-tertiary); font-size: 12px; line-height: 1.5; }

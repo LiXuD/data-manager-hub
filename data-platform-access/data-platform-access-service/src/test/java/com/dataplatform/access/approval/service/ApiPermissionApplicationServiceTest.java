@@ -27,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -123,6 +124,48 @@ class ApiPermissionApplicationServiceTest {
                 .isInstanceOfSatisfying(ApiPermissionException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo("INVALID_CACHE_POLICY"));
+    }
+
+    @Test
+    void shouldAllowRequestedExpiryMoreThan365DaysWhenSubmitting() {
+        ApplicationUpsertRequest request = new ApplicationUpsertRequest(
+                "OPEN",
+                1L,
+                2L,
+                List.of(3L),
+                "用于后台服务批量查询业务数据",
+                "后台批处理",
+                1000L,
+                LocalDateTime.now().plusYears(10),
+                null,
+                false,
+                null);
+
+        assertThatCode(() -> ReflectionTestUtils.invokeMethod(
+                service, "validateRequest", request, true))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldRejectPastRequestedExpiryWhenSubmitting() {
+        ApplicationUpsertRequest request = new ApplicationUpsertRequest(
+                "OPEN",
+                1L,
+                2L,
+                List.of(3L),
+                "用于后台服务批量查询业务数据",
+                "后台批处理",
+                1000L,
+                LocalDateTime.now().minusMinutes(1),
+                null,
+                false,
+                null);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                service, "validateRequest", request, true))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("INVALID_EXPIRY"));
     }
 
     @Test

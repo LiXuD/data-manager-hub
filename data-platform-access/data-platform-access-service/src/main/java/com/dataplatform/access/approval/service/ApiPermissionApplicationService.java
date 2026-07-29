@@ -617,9 +617,8 @@ public class ApiPermissionApplicationService {
             throw badRequest("INVALID_DAILY_CALLS", "预计日调用量必须在 1 到 100000000 之间");
         }
         if (submitting && (request.requestedExpireAt() == null
-                || !request.requestedExpireAt().isAfter(LocalDateTime.now())
-                || request.requestedExpireAt().isAfter(LocalDateTime.now().plusDays(365)))) {
-            throw badRequest("INVALID_EXPIRY", "申请有效期必须在未来 365 天内");
+                || !request.requestedExpireAt().isAfter(LocalDateTime.now()))) {
+            throw badRequest("INVALID_EXPIRY", "申请有效截止时间必须晚于当前时间");
         }
         boolean cacheEnabled = Boolean.TRUE.equals(request.cacheEnabled());
         if (cacheEnabled && (request.requestedCacheDays() == null
