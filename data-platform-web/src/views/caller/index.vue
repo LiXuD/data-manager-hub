@@ -3,14 +3,14 @@
     <!-- 页面标题 -->
     <div class="page-header">
       <div>
-        <h2>调用方管理</h2>
-        <p class="header-desc">管理内部系统API调用方与密钥</p>
+        <h2>内部系统管理</h2>
+        <p class="header-desc">管理内部系统及其 API Key</p>
       </div>
       <el-button type="primary" @click="handleAdd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
-        新增调用方
+        新增内部系统
       </el-button>
     </div>
 
@@ -18,7 +18,7 @@
     <el-card class="search-card">
       <div class="search-bar">
         <div class="search-inputs">
-          <el-input v-model="searchForm.keyword" placeholder="搜索调用方名称/编码" clearable class="search-input" @keyup.enter="handleSearch" />
+          <el-input v-model="searchForm.keyword" placeholder="搜索内部系统名称/编码" clearable class="search-input" @keyup.enter="handleSearch" />
           <el-select v-model="searchForm.status" placeholder="状态" clearable class="search-select">
             <el-option label="启用" value="active" />
             <el-option label="禁用" value="inactive" />
@@ -34,12 +34,12 @@
     <!-- 数据表格 -->
     <el-card class="table-card">
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="callerCode" label="调用方编码" width="140">
+        <el-table-column prop="callerCode" label="系统编码" width="140">
           <template #default="{ row }">
             <span class="code-tag">{{ row.callerCode }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="callerName" label="调用方名称" min-width="160" />
+        <el-table-column prop="callerName" label="系统名称" min-width="160" />
         <el-table-column prop="contactPerson" label="联系人" width="100" />
         <el-table-column prop="contactPhone" label="联系电话" width="130" />
         <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
@@ -70,15 +70,15 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="callerDialogVisible" :title="callerForm.id ? '编辑调用方' : '新增调用方'" width="520px">
+    <el-dialog v-model="callerDialogVisible" :title="callerForm.id ? '编辑内部系统' : '新增内部系统'" width="520px">
       <el-form :model="callerForm" label-width="100px">
-        <el-form-item label="调用方编码" required>
+        <el-form-item label="系统编码" required>
           <el-input v-model="callerForm.callerCode" :disabled="Boolean(callerForm.id)" />
         </el-form-item>
-        <el-form-item label="调用方名称" required>
+        <el-form-item label="系统名称" required>
           <el-input v-model="callerForm.callerName" />
         </el-form-item>
-        <el-form-item label="调用方类型">
+        <el-form-item label="系统类型">
           <el-input v-model="callerForm.callerType" />
         </el-form-item>
         <el-form-item label="联系人">
@@ -104,7 +104,7 @@
     </el-dialog>
 
     <!-- 产品配置弹窗 -->
-    <el-dialog v-model="productVisible" title="调用方产品配置" width="760px" class="form-dialog">
+    <el-dialog v-model="productVisible" title="内部系统产品配置" width="760px" class="form-dialog">
       <el-form :model="productForm" inline class="inline-form">
         <el-form-item label="产品编码">
           <el-input v-model="productForm.productCode" placeholder="loan-risk" />

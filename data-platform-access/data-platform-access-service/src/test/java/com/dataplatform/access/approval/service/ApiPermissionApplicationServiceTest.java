@@ -1,5 +1,6 @@
 package com.dataplatform.access.approval.service;
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.dataplatform.access.approval.api.ApiPermissionException;
 import com.dataplatform.access.approval.api.ApplicationUpsertRequest;
 import com.dataplatform.access.approval.domain.ApiPermissionApplication;
@@ -8,9 +9,11 @@ import com.dataplatform.access.approval.mapper.ApiPermissionActionMapper;
 import com.dataplatform.access.approval.mapper.ApiPermissionApplicationItemMapper;
 import com.dataplatform.access.approval.mapper.ApiPermissionApplicationMapper;
 import com.dataplatform.access.approval.mapper.ApprovalProcessConfigMapper;
+import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.service.ApiKeyInterfaceService;
 import com.dataplatform.access.caller.service.ApiKeyService;
 import com.dataplatform.access.caller.service.CallerService;
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.identity.api.feign.IdentityAccessInternalFeignClient;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +29,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -118,5 +124,33 @@ class ApiPermissionApplicationServiceTest {
                 .isInstanceOfSatisfying(ApiPermissionException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo("INVALID_CACHE_POLICY"));
+    }
+
+    @Test
+    void shouldExposeAllActiveTenantCallersToSystemAdmin() {
+        CallerInfo caller = new CallerInfo();
+        caller.setId(11L);
+        caller.setCallerCode("INTERNAL_SYSTEM");
+        caller.setCallerName("内部系统");
+        caller.setTenantId(7L);
+        caller.setStatus(CommonStatus.ACTIVE);
+        when(callerService.list(any(Wrapper.class))).thenReturn(List.of(caller));
+
+        var result = service.eligibleCallers(22L, 7L, true);
+
+        assertThat(result).singleElement().satisfies(option -> {
+            assertThat(option.id()).isEqualTo(11L);
+            assertThat(option.callerCode()).isEqualTo("INTERNAL_SYSTEM");
+        });
+        verify(identityClient, never()).getCallerIds(any());
+    }
+
+    @Test
+    void shouldKeepRegularUserCallerScopeRestricted() {
+        when(identityClient.getCallerIds(22L))
+                .thenReturn(com.dataplatform.api.Result.success(List.of()));
+
+        assertThat(service.eligibleCallers(22L, 7L, false)).isEmpty();
+        verify(callerService, never()).list(any(Wrapper.class));
     }
 }

@@ -51,7 +51,7 @@ const routes: RouteRecordRaw[] = [
         path: '/caller',
         name: 'Caller',
         component: () => import('@/views/caller/index.vue'),
-        meta: { title: '调用方管理', permissions: ['caller:view'] }
+        meta: { title: '内部系统管理', permissions: ['caller:view'] }
       },
       {
         path: '/api-permission',
@@ -96,7 +96,7 @@ const routes: RouteRecordRaw[] = [
         path: '/call-scene',
         name: 'CallScene',
         component: () => import('@/views/call-scene/index.vue'),
-        meta: { title: '场景字典', permissions: ['call-scene:view'] }
+        meta: { title: '场景管理', permissions: ['call-scene:view'] }
       },
       {
         path: '/billing',
