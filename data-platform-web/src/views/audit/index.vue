@@ -113,7 +113,7 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="detailVisible" title="操作日志详情" width="720px">
+    <el-dialog v-model="detailVisible" title="操作日志详情" width="720px" class="audit-detail-dialog">
       <el-descriptions v-if="detail" :column="2" border>
         <el-descriptions-item label="操作人">{{ detail.username || '-' }}</el-descriptions-item>
         <el-descriptions-item label="状态">{{ getStatusTextLocalized(detail.status) }}</el-descriptions-item>
@@ -301,4 +301,11 @@ onMounted(async () => {
 .time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
 
 .pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }
+
+.audit-detail-dialog { max-width: calc(100vw - 32px); }
+.audit-detail-dialog :deep(.el-dialog__body) { max-height: calc(100vh - 180px); overflow-y: auto; }
+.audit-detail-dialog :deep(.el-descriptions__table) { table-layout: fixed; }
+.audit-detail-dialog :deep(.el-descriptions__label) { width: 96px; white-space: nowrap; }
+.audit-detail-dialog :deep(.el-descriptions__content) { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.audit-detail-dialog pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-family: var(--font-mono); line-height: 1.6; }
 </style>
