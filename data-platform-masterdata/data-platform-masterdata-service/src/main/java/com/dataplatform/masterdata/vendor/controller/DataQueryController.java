@@ -67,7 +67,7 @@ public class DataQueryController {
         VendorInfo vendor = vendorInfoMapper.selectOne(
             new LambdaQueryWrapper<VendorInfo>()
                 .eq(VendorInfo::getVendorCode, vendorCode)
-                .eq(VendorInfo::getStatus, CommonStatus.ACTIVE));
+                .eq(VendorInfo::getStatus, CommonStatus.ACTIVE.getCode()));
         if (vendor == null) {
             return errorResult("VENDOR_NOT_FOUND", "厂商不存在或已禁用: " + vendorCode);
         }
@@ -76,7 +76,7 @@ public class DataQueryController {
         DataType dataType = dataTypeMapper.selectOne(
             new LambdaQueryWrapper<DataType>()
                 .eq(DataType::getDataTypeCode, dataTypeCode)
-                .eq(DataType::getStatus, CommonStatus.ACTIVE));
+                .eq(DataType::getStatus, CommonStatus.ACTIVE.getCode()));
         if (dataType == null) {
             return errorResult("DATATYPE_NOT_FOUND", "数据类型不存在或已禁用: " + dataTypeCode);
         }
@@ -85,7 +85,7 @@ public class DataQueryController {
         LambdaQueryWrapper<VendorConfig> configWrapper = new LambdaQueryWrapper<VendorConfig>()
             .eq(VendorConfig::getVendorId, vendor.getId())
             .eq(VendorConfig::getDataTypeId, dataType.getId())
-            .eq(VendorConfig::getStatus, CommonStatus.ACTIVE);
+            .eq(VendorConfig::getStatus, CommonStatus.ACTIVE.getCode());
 
         // interfaceCode 是接口编码(如 "interface_001")，统一通过接口定义服务解析。
         if (interfaceCode != null && !interfaceCode.isEmpty()) {

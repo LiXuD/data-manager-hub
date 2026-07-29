@@ -158,7 +158,7 @@ public class VendorConfigController {
         }
 
         LambdaUpdateWrapper<VendorConfig> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(VendorConfig::getId, id).set(VendorConfig::getStatus, statusEnum);
+        wrapper.eq(VendorConfig::getId, id).set(VendorConfig::getStatus, statusEnum.getCode());
         boolean success = vendorConfigService.update(wrapper);
         if (!success) {
             return Result.error(404, "配置不存在");
