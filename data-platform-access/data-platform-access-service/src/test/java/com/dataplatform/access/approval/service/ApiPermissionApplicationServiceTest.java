@@ -1,6 +1,5 @@
 package com.dataplatform.access.approval.service;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.dataplatform.access.approval.api.ApiPermissionException;
 import com.dataplatform.access.approval.api.ApplicationUpsertRequest;
 import com.dataplatform.access.approval.domain.ApiPermissionApplication;
@@ -134,7 +133,7 @@ class ApiPermissionApplicationServiceTest {
         caller.setCallerName("内部系统");
         caller.setTenantId(7L);
         caller.setStatus(CommonStatus.ACTIVE);
-        when(callerService.list(any(Wrapper.class))).thenReturn(List.of(caller));
+        when(callerService.listByTenant(7L)).thenReturn(List.of(caller));
 
         var result = service.eligibleCallers(22L, 7L, true);
 
@@ -142,6 +141,7 @@ class ApiPermissionApplicationServiceTest {
             assertThat(option.id()).isEqualTo(11L);
             assertThat(option.callerCode()).isEqualTo("INTERNAL_SYSTEM");
         });
+        verify(callerService).listByTenant(7L);
         verify(identityClient, never()).getCallerIds(any());
     }
 
@@ -151,6 +151,6 @@ class ApiPermissionApplicationServiceTest {
                 .thenReturn(com.dataplatform.api.Result.success(List.of()));
 
         assertThat(service.eligibleCallers(22L, 7L, false)).isEmpty();
-        verify(callerService, never()).list(any(Wrapper.class));
+        verify(callerService, never()).listByTenant(any());
     }
 }

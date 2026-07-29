@@ -316,9 +316,7 @@ public class ApiPermissionApplicationService {
             Long tenantId,
             boolean tenantWideCallerAccess) {
         if (tenantWideCallerAccess) {
-            return callerService.list(new LambdaQueryWrapper<CallerInfo>()
-                            .eq(CallerInfo::getTenantId, tenantId)
-                            .eq(CallerInfo::getStatus, CommonStatus.ACTIVE))
+            return callerService.listByTenant(tenantId)
                     .stream()
                     .map(caller -> new CallerOptionResponse(
                             caller.getId(), caller.getCallerCode(), caller.getCallerName()))
