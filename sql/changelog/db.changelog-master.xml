@@ -63,6 +63,141 @@
 
     <include file="workflow/flowable-7.1.0.xml" relativeToChangelogFile="true"/>
 
+    <!--
+      Runs before V026-V029 because legacy baseline adoption may be missing
+      caller_product, which V028 alters. The V030 filename is the repository
+      migration number; declaration order remains the Liquibase execution order.
+    -->
+    <changeSet id="runtime-schema-contract-repair-2026-07-28"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V030__repair_runtime_schema_contract.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U030__refuse_runtime_schema_contract_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="operation-log-runtime-widths-2026-07-28"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V031__normalize_operation_log_runtime_widths.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U031__refuse_operation_log_width_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+      Declared before V032 because legacy init.sql lacks user_role.deleted,
+      which the idempotent admin-role assignment uses for reactivation.
+    -->
+    <changeSet id="user-role-runtime-contract-2026-07-28"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V033__normalize_user_role_runtime_contract.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U033__refuse_user_role_contract_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="bootstrap-admin-role-assignment-2026-07-28"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V032__assign_bootstrap_admin_role.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U032__refuse_bootstrap_admin_role_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="call-scene-permission-2026-07-28"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V034__add_call_scene_permission.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U034__refuse_call_scene_permission_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="document-all-tables-2026-07-28"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V035__document_all_tables.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U035__refuse_table_comment_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="api-key-runtime-contract-2026-07-29"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="../migrations/V036__normalize_api_key_runtime_contract.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U036__refuse_api_key_contract_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
     <changeSet id="api-permission-approval-2026-07-24"
                author="data-platform"
                runInTransaction="true">
@@ -134,4 +269,5 @@
                      stripComments="false"/>
         </rollback>
     </changeSet>
+
 </databaseChangeLog>

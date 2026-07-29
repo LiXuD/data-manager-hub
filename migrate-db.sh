@@ -15,7 +15,7 @@ export PGPASSWORD="$DB_PASSWORD"
 MAVEN_BIN="${MAVEN_BIN:-mvn}"
 BACKUP_DIR="${DB_BACKUP_DIR:-$SCRIPT_DIR/.runtime/db-backups}"
 LEGACY_MIGRATIONS=(
-    sql/rollbacks/U025__restore_obsolete_compatibility_fields.sql
+    sql/baseline/prepare-obsolete-compatibility-fields.sql
     sql/migrations/V001__add_data_type_code.sql
     sql/migrations/V002__create_api_interface.sql
     sql/migrations/V003__add_billing_and_vendor_fields.sql
@@ -26,6 +26,7 @@ LEGACY_MIGRATIONS=(
     sql/migrations/V008__create_current_call_record_partitions.sql
     sql/migrations/V009__seed_openapi_demo_flow.sql
     sql/migrations/V010__add_api_key_name.sql
+    sql/baseline/prepare-v012-compatibility-fields.sql
     sql/migrations/V012__replace_placeholder_business_logic.sql
     sql/migrations/V013__add_vendor_security_pipeline.sql
     sql/migrations/V014__add_interface_contract_fields.sql
@@ -119,6 +120,49 @@ database_has_liquibase_history() {
     [[ "$(query_scalar "SELECT to_regclass('public.databasechangelog') IS NOT NULL")" == "t" ]]
 }
 
+repair_inconsistent_history() {
+    local inconsistent_count
+    database_has_liquibase_history || return 0
+    inconsistent_count="$(query_scalar "
+        SELECT count(*)
+        FROM databasechangelog changelog
+        WHERE
+            (changelog.id = 'flowable-process-schema-7.1.0'
+             AND changelog.author = 'flowable'
+             AND to_regclass('workflow.act_ge_property') IS NULL)
+         OR (changelog.id = 'api-permission-approval-2026-07-24'
+             AND changelog.author = 'data-platform'
+             AND to_regclass('public.api_permission_application') IS NULL)
+         OR (changelog.id = 'api-permission-rbac-hardening-2026-07-24'
+             AND changelog.author = 'data-platform'
+             AND NOT EXISTS (
+                 SELECT 1 FROM pg_constraint
+                 WHERE conname = 'ck_api_approval_group_lowercase'
+                   AND conrelid = to_regclass('public.api_approval_process_config')
+             ))
+         OR (changelog.id = 'api-permission-cache-policy-2026-07-24'
+             AND changelog.author = 'data-platform'
+             AND NOT EXISTS (
+                 SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = 'public'
+                   AND table_name = 'api_permission_application_item'
+                   AND column_name = 'requested_cache_enabled'
+             ))
+         OR (changelog.id = 'uapi-programmer-history-by-date-2026-07-24'
+             AND changelog.author = 'data-platform'
+             AND NOT EXISTS (
+                 SELECT 1 FROM data_type
+                 WHERE data_type_code = 'programmer_history_by_date'
+             ));")"
+    [[ "$inconsistent_count" == "0" ]] && return 0
+
+    echo "检测到 $inconsistent_count 条迁移历史与物理结构不一致，先备份再执行前向修复"
+    backup_database
+    psql -X -v ON_ERROR_STOP=1 --single-transaction \
+        -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_NAME" \
+        -f sql/baseline/repair-inconsistent-liquibase-history.sql
+}
+
 reconcile_legacy_database() {
     local psql_args
     local migration
@@ -208,6 +252,7 @@ command_name="${1:-}"
 case "$command_name" in
     update)
         preflight_update
+        repair_inconsistent_history
         run_liquibase liquibase:validate
         run_liquibase liquibase:update
         ;;
@@ -240,8 +285,91 @@ case "$command_name" in
             -U "$DB_USERNAME" -d "$DB_NAME" -f sql/validate-existing-baseline.sql
         run_liquibase liquibase:changelogSync
         psql -X -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" \
-            -U "$DB_USERNAME" -d "$DB_NAME" \
-            -c "UPDATE databasechangelog SET exectype = 'MARK_RAN' WHERE id = 'baseline-2026-07-22' AND author = 'data-platform'" >/dev/null
+            -U "$DB_USERNAME" -d "$DB_NAME" <<'SQL' >/dev/null
+BEGIN;
+-- changelogSync is used only to record the two changes reconciled above.
+-- Later changes must execute normally. Keep Flowable marked only when its
+-- physical schema already exists; otherwise Liquibase must create it.
+DELETE FROM databasechangelog
+WHERE NOT (
+        (id = 'baseline-2026-07-22' AND author = 'data-platform')
+        OR (id = 'cleanup-obsolete-compatibility-2026-07-23' AND author = 'data-platform')
+    )
+  AND NOT (
+        id = 'flowable-process-schema-7.1.0'
+        AND author = 'flowable'
+        AND to_regclass('workflow.act_ge_property') IS NOT NULL
+    )
+  AND NOT (
+        id = 'api-permission-approval-2026-07-24'
+        AND author = 'data-platform'
+        AND to_regclass('public.api_permission_application') IS NOT NULL
+        AND to_regclass('public.api_permission_application_item') IS NOT NULL
+        AND to_regclass('public.api_permission_action') IS NOT NULL
+        AND to_regclass('public.api_approval_process_config') IS NOT NULL
+        AND EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'api_key_interface'
+              AND column_name = 'grant_source'
+        )
+    )
+  AND NOT (
+        id = 'api-permission-rbac-hardening-2026-07-24'
+        AND author = 'data-platform'
+        AND EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'ck_role_info_code_lowercase'
+              AND conrelid = 'public.role_info'::regclass
+        )
+        AND EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'ck_api_approval_group_lowercase'
+              AND conrelid = to_regclass('public.api_approval_process_config')
+        )
+        AND EXISTS (
+            SELECT 1 FROM permission
+            WHERE permission_code = 'system:admin' AND deleted = FALSE
+        )
+    )
+  AND NOT (
+        id = 'api-permission-cache-policy-2026-07-24'
+        AND author = 'data-platform'
+        AND EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'api_permission_application_item'
+              AND column_name = 'requested_cache_enabled'
+        )
+        AND EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'api_key_interface'
+              AND column_name = 'cache_enabled'
+        )
+    )
+  AND NOT (
+        id = 'uapi-programmer-history-by-date-2026-07-24'
+        AND author = 'data-platform'
+        AND EXISTS (
+            SELECT 1 FROM data_type
+            WHERE data_type_code = 'programmer_history_by_date'
+        )
+        AND EXISTS (
+            SELECT 1 FROM api_interface
+            WHERE interface_code = 'PROGRAMMER_HISTORY_BY_DATE'
+        )
+        AND EXISTS (
+            SELECT 1 FROM billing_plan
+            WHERE plan_code = 'UAPI-PROGRAMMER-HISTORY-BY-DATE'
+        )
+    );
+
+UPDATE databasechangelog
+SET exectype = 'MARK_RAN'
+WHERE exectype = 'EXECUTED';
+COMMIT;
+SQL
+        run_liquibase liquibase:validate
+        run_liquibase liquibase:update
         ;;
     rollback-dry-run)
         validate_positive_count "${2:-}"
