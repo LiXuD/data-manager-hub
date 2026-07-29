@@ -4,13 +4,17 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { ElConfigProvider, ElMenu, ElMenuItem, ElSubMenu, ElDropdown, ElDropdownItem, ElDropdownMenu, ElBadge } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getAlertRecordList } from '@/api/monitor'
 import { STORAGE_KEYS, THEME_MODE } from '@/constants'
 import { applyTheme, getStoredTheme } from '@/composables/useTheme'
+import { extractPageData } from '@/utils/pagination'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const isCollapse = ref(false)
+const pendingAlertCount = ref(0)
+let alertCountTimer: number | undefined
 
 const handleViewportResize = () => {
   if (window.innerWidth <= 900) {
@@ -28,18 +32,27 @@ const handleThemeChange = () => {
   applyTheme(getStoredTheme())
 }
 
+const handleAlertRecordUpdated = () => {
+  void fetchPendingAlertCount()
+}
+
 onMounted(() => {
   applyTheme(getStoredTheme())
   handleViewportResize()
   window.addEventListener('storage', handleStorageChange)
   window.addEventListener('theme-change', handleThemeChange)
   window.addEventListener('resize', handleViewportResize)
+  window.addEventListener('alert-record-updated', handleAlertRecordUpdated)
+  void fetchPendingAlertCount()
+  alertCountTimer = window.setInterval(fetchPendingAlertCount, 60_000)
 })
 
 onUnmounted(() => {
   window.removeEventListener('storage', handleStorageChange)
   window.removeEventListener('theme-change', handleThemeChange)
   window.removeEventListener('resize', handleViewportResize)
+  window.removeEventListener('alert-record-updated', handleAlertRecordUpdated)
+  if (alertCountTimer) window.clearInterval(alertCountTimer)
 })
 
 const activeMenu = computed(() => route.path)
@@ -136,6 +149,26 @@ const isAdmin = computed(() => {
   const roles = userStore.userInfo?.roles || []
   return roles.some(role => role.trim().toLowerCase() === 'admin')
 })
+
+const canViewNotifications = computed(() => isAdmin.value || userStore.hasPermission('monitor:view'))
+
+const fetchPendingAlertCount = async () => {
+  if (!canViewNotifications.value) {
+    pendingAlertCount.value = 0
+    return
+  }
+  try {
+    const response = await getAlertRecordList({ page: 1, pageSize: 1, status: 'pending' })
+    pendingAlertCount.value = extractPageData(response).total
+  } catch {
+    pendingAlertCount.value = 0
+  }
+}
+
+const handleNotificationClick = () => {
+  if (!canViewNotifications.value) return
+  router.push({ path: '/monitor', query: { tab: 'record', status: 'pending' } })
+}
 
 // 过滤菜单 - 根据用户权限
 const menuItems = computed(() => {
@@ -319,8 +352,14 @@ const handleCommand = (command: string) => {
             </button>
 
             <!-- 通知 -->
-            <el-badge :value="3" :max="99" class="notification-badge" @click="router.push('/monitor')">
-              <button class="header-btn" type="button" aria-label="通知">
+            <el-badge
+              v-if="canViewNotifications"
+              :value="pendingAlertCount"
+              :hidden="pendingAlertCount === 0"
+              :max="99"
+              class="notification-badge"
+            >
+              <button class="header-btn" type="button" aria-label="通知" @click="handleNotificationClick">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                   <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
