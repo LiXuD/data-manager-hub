@@ -252,8 +252,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   checkServiceHealth,
@@ -272,8 +272,10 @@ import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 import { extractPageData } from '@/utils/pagination'
 
 const loading = ref(false)
+const route = useRoute()
 const router = useRouter()
-const activeTab = ref('health')
+const monitorTabs = ['health', 'alert', 'record', 'chart']
+const activeTab = ref(typeof route.query.tab === 'string' && monitorTabs.includes(route.query.tab) ? route.query.tab : 'health')
 const tableData = ref<ServiceHealth[]>([])
 const alertData = ref<AlertRule[]>([])
 const alertRecords = ref<AlertRecord[]>([])
@@ -341,9 +343,18 @@ const fetchAlerts = async () => {
 }
 
 const fetchAlertRecords = async () => {
-  const response = await getAlertRecordList({ page: 1, pageSize: 100 })
+  const response = await getAlertRecordList({
+    page: 1,
+    pageSize: 100,
+    status: route.query.status === 'pending' ? 'pending' : undefined
+  })
   alertRecords.value = extractPageData<AlertRecord>(response).list
 }
+
+watch([() => route.query.tab, () => route.query.status], ([tab]) => {
+  activeTab.value = typeof tab === 'string' && monitorTabs.includes(tab) ? tab : 'health'
+  void fetchAlertRecords()
+})
 
 const handleSearch = () => { fetchHealth() }
 const handleReset = () => { searchForm.serviceName = ''; searchForm.status = ''; fetchHealth() }
@@ -397,7 +408,8 @@ const handleResolveAlert = async () => {
     await resolveAlertRecord(resolvingRecordId.value, resolution.value.trim())
     ElMessage.success('告警已处理')
     resolveDialogVisible.value = false
-    fetchAlertRecords()
+    await fetchAlertRecords()
+    window.dispatchEvent(new Event('alert-record-updated'))
   } finally {
     resolving.value = false
   }
