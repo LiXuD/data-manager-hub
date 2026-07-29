@@ -102,8 +102,10 @@ public class ApiPermissionApplicationService {
             ApplicationUpsertRequest request,
             Long userId,
             String username,
-            Long tenantId) {
-        ValidatedResources resources = validateResources(request, userId, tenantId, false);
+            Long tenantId,
+            boolean tenantWideCallerAccess) {
+        ValidatedResources resources = validateResources(
+                request, userId, tenantId, false, tenantWideCallerAccess);
         return transactionTemplate.execute(status -> {
             LocalDateTime now = LocalDateTime.now();
             ApiPermissionApplication application = new ApiPermissionApplication();
@@ -128,8 +130,10 @@ public class ApiPermissionApplicationService {
             ApplicationUpsertRequest request,
             Long userId,
             String username,
-            Long tenantId) {
-        ValidatedResources resources = validateResources(request, userId, tenantId, false);
+            Long tenantId,
+            boolean tenantWideCallerAccess) {
+        ValidatedResources resources = validateResources(
+                request, userId, tenantId, false, tenantWideCallerAccess);
         return transactionTemplate.execute(status -> {
             ApiPermissionApplication application = requireOwnedApplication(id, userId);
             requireStatus(application, ApplicationStatus.DRAFT);
@@ -145,7 +149,8 @@ public class ApiPermissionApplicationService {
             String idempotencyKey,
             Long userId,
             String username,
-            Long tenantId) {
+            Long tenantId,
+            boolean tenantWideCallerAccess) {
         if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 64) {
             throw badRequest("IDEMPOTENCY_KEY_REQUIRED", "提交申请必须携带有效 Idempotency-Key");
         }
@@ -167,7 +172,7 @@ public class ApiPermissionApplicationService {
                 List<ApiPermissionApplicationItem> items = listItems(id);
                 ApplicationUpsertRequest request = toRequest(locked, items);
                 ValidatedResources resources = validateResources(
-                        request, userId, tenantId, true);
+                        request, userId, tenantId, true, tenantWideCallerAccess);
                 validateNoPendingOrEffectiveGrant(locked, resources.interfaces());
                 ApprovalProcessConfig processConfig = resolveProcessConfig(
                         tenantId, "API_PERMISSION_" + locked.getRequestType(), riskLevel(locked));
@@ -260,11 +265,16 @@ public class ApiPermissionApplicationService {
         return application;
     }
 
-    public ApiPermissionApplication copy(Long id, Long userId, String username, Long tenantId) {
+    public ApiPermissionApplication copy(
+            Long id,
+            Long userId,
+            String username,
+            Long tenantId,
+            boolean tenantWideCallerAccess) {
         requireOwnedApplication(id, userId);
         ApplicationDetailResponse source = detail(id);
         ApplicationUpsertRequest request = toRequest(source.application(), source.items());
-        return createDraft(request, userId, username, tenantId);
+        return createDraft(request, userId, username, tenantId, tenantWideCallerAccess);
     }
 
     public PageResult<ApiPermissionApplication> list(
@@ -301,7 +311,19 @@ public class ApiPermissionApplicationService {
         return new ApplicationDetailResponse(application, listItems(id), actions);
     }
 
-    public List<CallerOptionResponse> eligibleCallers(Long userId, Long tenantId) {
+    public List<CallerOptionResponse> eligibleCallers(
+            Long userId,
+            Long tenantId,
+            boolean tenantWideCallerAccess) {
+        if (tenantWideCallerAccess) {
+            return callerService.list(new LambdaQueryWrapper<CallerInfo>()
+                            .eq(CallerInfo::getTenantId, tenantId)
+                            .eq(CallerInfo::getStatus, CommonStatus.ACTIVE))
+                    .stream()
+                    .map(caller -> new CallerOptionResponse(
+                            caller.getId(), caller.getCallerCode(), caller.getCallerName()))
+                    .toList();
+        }
         List<Long> callerIds = requireData(identityClient.getCallerIds(userId), "身份服务返回异常");
         if (callerIds.isEmpty()) {
             return List.of();
@@ -314,8 +336,12 @@ public class ApiPermissionApplicationService {
                 .toList();
     }
 
-    public List<ApiKeyOptionResponse> callerApiKeys(Long callerId, Long userId, Long tenantId) {
-        validateCallerAccess(callerId, userId, tenantId);
+    public List<ApiKeyOptionResponse> callerApiKeys(
+            Long callerId,
+            Long userId,
+            Long tenantId,
+            boolean tenantWideCallerAccess) {
+        validateCallerAccess(callerId, userId, tenantId, tenantWideCallerAccess);
         LocalDateTime now = LocalDateTime.now();
         return apiKeyService.listByCaller(callerId).stream()
                 .filter(key -> ApiKeyStatus.ACTIVE.equals(key.getStatus()))
@@ -333,9 +359,11 @@ public class ApiPermissionApplicationService {
             Long apiKeyId,
             String keyword,
             Long userId,
-            Long tenantId) {
+            Long tenantId,
+            boolean tenantWideCallerAccess) {
         ApiKey apiKey = requireApiKey(apiKeyId);
-        validateCallerAccess(apiKey.getCallerId(), userId, tenantId);
+        validateCallerAccess(
+                apiKey.getCallerId(), userId, tenantId, tenantWideCallerAccess);
         List<ApiInterfaceDTO> options = requireData(interfaceClient.getOptions(keyword), "主数据服务返回异常");
         Set<Long> granted = new HashSet<>(grantService.getInterfaceIdsByApiKeyId(apiKeyId));
         Set<Long> pending = itemMapper.selectList(
@@ -497,9 +525,11 @@ public class ApiPermissionApplicationService {
             ApplicationUpsertRequest request,
             Long userId,
             Long tenantId,
-            boolean submitting) {
+            boolean submitting,
+            boolean tenantWideCallerAccess) {
         validateRequest(request, submitting);
-        CallerInfo caller = validateCallerAccess(request.callerId(), userId, tenantId);
+        CallerInfo caller = validateCallerAccess(
+                request.callerId(), userId, tenantId, tenantWideCallerAccess);
         ApiKey apiKey = requireApiKey(request.apiKeyId());
         if (!caller.getId().equals(apiKey.getCallerId())) {
             throw badRequest("API_KEY_CALLER_MISMATCH", "API Key 不属于所选 Caller");
@@ -526,13 +556,20 @@ public class ApiPermissionApplicationService {
                 interfaceIds.stream().map(byId::get).toList());
     }
 
-    private CallerInfo validateCallerAccess(Long callerId, Long userId, Long tenantId) {
+    private CallerInfo validateCallerAccess(
+            Long callerId,
+            Long userId,
+            Long tenantId,
+            boolean tenantWideCallerAccess) {
         CallerInfo caller = callerService.getById(callerId);
         if (caller == null) {
             throw notFound("CALLER_NOT_FOUND", "Caller 不存在");
         }
         if (!tenantId.equals(caller.getTenantId()) || !CommonStatus.ACTIVE.equals(caller.getStatus())) {
             throw forbidden("CALLER_ACCESS_DENIED", "Caller 不属于当前租户或已停用");
+        }
+        if (tenantWideCallerAccess) {
+            return caller;
         }
         CallerAccessDTO access = requireData(
                 identityClient.getCallerAccess(userId, callerId), "身份服务返回异常");

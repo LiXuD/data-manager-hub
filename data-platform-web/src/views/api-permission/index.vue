@@ -247,6 +247,7 @@
               v-model="draft.callerId"
               placeholder="选择有权管理的内部系统"
               filterable
+              :disabled="callers.length === 0"
               @change="handleCallerChange"
             >
               <el-option
@@ -256,6 +257,10 @@
                 :value="item.id"
               />
             </el-select>
+            <div v-if="callers.length === 0" class="empty-caller-hint">
+              <span>当前租户还没有可申请的内部系统，请先新增内部系统并创建 API Key。</span>
+              <el-button type="primary" link @click="goToInternalSystems">前往内部系统管理</el-button>
+            </div>
           </el-form-item>
           <el-form-item label="API Key" required>
             <el-select
@@ -666,7 +671,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type TabsPaneContext } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import {
   cancelApplication,
@@ -702,6 +707,7 @@ import {
 } from '@/api/api-permission'
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 const defaultTab = userStore.hasPermission('api-permission:view')
   ? 'applications'
@@ -859,6 +865,11 @@ const openCreate = async () => {
       await handleApiKeyChange(apiKeyId)
     }
   }
+}
+
+const goToInternalSystems = () => {
+  createVisible.value = false
+  void router.push('/caller')
 }
 
 const openEdit = async (row: ApiPermissionApplication) => {
@@ -1229,6 +1240,7 @@ onMounted(async () => {
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
 .application-form :deep(.el-select) { width: 100%; }
 .field-hint { margin-top: 6px; color: var(--color-text-tertiary); font-size: 12px; line-height: 1.5; }
+.empty-caller-hint { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--el-color-warning); font-size: 12px; line-height: 1.5; }
 .option-meta { float: right; margin-left: 24px; color: var(--color-text-tertiary); font-size: 12px; }
 .detail-heading, .task-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
 .detail-heading h3, .task-summary h3 { margin: 6px 0 0; color: var(--color-text-primary); font-size: 20px; }

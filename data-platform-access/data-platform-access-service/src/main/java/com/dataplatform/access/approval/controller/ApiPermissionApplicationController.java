@@ -66,7 +66,7 @@ public class ApiPermissionApplicationController {
             @RequestBody ApplicationUpsertRequest request) {
         requirePermission("api-permission:apply");
         return Result.success(applicationService.createDraft(
-                request, userId(), username(), tenantId()));
+                request, userId(), username(), tenantId(), tenantWideCallerAccess()));
     }
 
     @OperationLog(module = "接口权限审批", operation = "编辑接口权限申请草稿")
@@ -76,7 +76,7 @@ public class ApiPermissionApplicationController {
             @RequestBody ApplicationUpsertRequest request) {
         requirePermission("api-permission:apply");
         return Result.success(applicationService.updateDraft(
-                id, request, userId(), username(), tenantId()));
+                id, request, userId(), username(), tenantId(), tenantWideCallerAccess()));
     }
 
     @OperationLog(module = "接口权限审批", operation = "提交接口权限申请")
@@ -86,7 +86,7 @@ public class ApiPermissionApplicationController {
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
         requirePermission("api-permission:apply");
         return Result.success(applicationService.submit(
-                id, idempotencyKey, userId(), username(), tenantId()));
+                id, idempotencyKey, userId(), username(), tenantId(), tenantWideCallerAccess()));
     }
 
     @OperationLog(module = "接口权限审批", operation = "取消接口权限申请")
@@ -101,20 +101,21 @@ public class ApiPermissionApplicationController {
     public Result<ApiPermissionApplication> copy(@PathVariable Long id) {
         requirePermission("api-permission:apply");
         return Result.success(applicationService.copy(
-                id, userId(), username(), tenantId()));
+                id, userId(), username(), tenantId(), tenantWideCallerAccess()));
     }
 
     @GetMapping("/eligible-callers")
     public Result<List<CallerOptionResponse>> eligibleCallers() {
         requirePermission("api-permission:apply");
-        return Result.success(applicationService.eligibleCallers(userId(), tenantId()));
+        return Result.success(applicationService.eligibleCallers(
+                userId(), tenantId(), tenantWideCallerAccess()));
     }
 
     @GetMapping("/callers/{callerId}/api-keys")
     public Result<List<ApiKeyOptionResponse>> apiKeys(@PathVariable Long callerId) {
         requirePermission("api-permission:apply");
         return Result.success(applicationService.callerApiKeys(
-                callerId, userId(), tenantId()));
+                callerId, userId(), tenantId(), tenantWideCallerAccess()));
     }
 
     @GetMapping("/interface-options")
@@ -123,7 +124,11 @@ public class ApiPermissionApplicationController {
             @RequestParam(required = false) String keyword) {
         requirePermission("api-permission:apply");
         return Result.success(applicationService.interfaceOptions(
-                apiKeyId, keyword, userId(), tenantId()));
+                apiKeyId, keyword, userId(), tenantId(), tenantWideCallerAccess()));
+    }
+
+    private boolean tenantWideCallerAccess() {
+        return UserContext.hasPermission("system:admin");
     }
 
     private void requirePermission(String permission) {
