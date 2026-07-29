@@ -270,4 +270,29 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="api-permission-dedicated-approver-route-2026-07-29"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="api_approval_process_config"/>
+            <tableExists schemaName="public" tableName="api_permission_application"/>
+            <tableExists schemaName="workflow" tableName="act_ru_task"/>
+            <tableExists schemaName="workflow" tableName="act_ru_identitylink"/>
+            <tableExists schemaName="workflow" tableName="act_hi_identitylink"/>
+            <tableExists schemaName="workflow" tableName="act_ru_variable"/>
+            <tableExists schemaName="workflow" tableName="act_hi_varinst"/>
+        </preConditions>
+        <sqlFile path="../migrations/V037__route_api_permission_to_dedicated_approver.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U037__refuse_api_permission_approver_route_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>
