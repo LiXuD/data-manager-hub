@@ -12,14 +12,6 @@ spring:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
       - org.springframework.boot.actuate.autoconfigure.jdbc.DataSourceHealthContributorAutoConfiguration
   cloud:
-    nacos:
-      discovery:
-        server-addr: ${NACOS_SERVER_ADDR}
-        namespace: ${NACOS_NAMESPACE:prod}
-        group: DEFAULT_GROUP
-        enabled: true
-      config:
-        enabled: false
     gateway:
       httpclient:
         connect-timeout: 5000
@@ -148,20 +140,21 @@ sa-token:
   is-concurrent: true
   is-share: false
   token-style: uuid
+  token-prefix: Bearer
   check-exclude-paths:
     - /actuator/**
     - /health/**
 
 spring.data.redis:
-  host: ${REDIS_HOST}
-  port: ${REDIS_PORT}
-  password: ${REDIS_PASSWORD}
+  host: ${REDIS_HOST:localhost}
+  port: ${REDIS_PORT:6379}
+  password: ${REDIS_PASSWORD:redis_password}
   database: 0
 
 gateway:
   rate-limit:
-    default-window-sec: ${GATEWAY_RATE_LIMIT_WINDOW_SEC:60}
-    default-max-requests: ${GATEWAY_RATE_LIMIT_MAX_REQUESTS:100}
+    default-window-sec: 60
+    default-max-requests: 100
 
 management:
   endpoints:
@@ -171,3 +164,7 @@ management:
   health:
     db:
       enabled: false
+
+server.port: 8888
+logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"
+
