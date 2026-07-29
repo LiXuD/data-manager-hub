@@ -8,14 +8,27 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.dataplatform.common.util.UserContext;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigCreateReqDTO;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import com.dataplatform.masterdata.vendor.service.VendorHealthService;
+import java.util.Map;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class VendorConfigControllerTest {
+
+    @BeforeAll
+    static void initializeTableMetadata() {
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), "test"),
+                VendorConfig.class);
+    }
 
     private final VendorConfigService service = mock(VendorConfigService.class);
     private final VendorConfigController controller = new VendorConfigController(
@@ -55,6 +68,24 @@ class VendorConfigControllerTest {
             assertThat(result.getCode()).isEqualTo(400);
             verify(service).getDataTypeIdByCode("WORLD_TIME");
             verify(service, never()).save(any(VendorConfig.class));
+        }
+    }
+
+    @Test
+    void updateStatusWritesPersistedEnumCode() {
+        when(service.update(any(LambdaUpdateWrapper.class))).thenAnswer(invocation -> {
+            LambdaUpdateWrapper<VendorConfig> wrapper = invocation.getArgument(0);
+            assertThat(wrapper.getSqlSet()).contains("status");
+            assertThat(wrapper.getParamNameValuePairs()).containsValue("active");
+            return true;
+        });
+
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("vendor:edit")).thenReturn(true);
+
+            var result = controller.updateStatus(9L, Map.of("status", "active"));
+
+            assertThat(result.getCode()).isEqualTo(200);
         }
     }
 

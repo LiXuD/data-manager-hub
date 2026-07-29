@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.AlertStatus;
+import com.dataplatform.common.handler.CodeEnumTypeHandler;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -12,7 +13,7 @@ import java.time.LocalDateTime;
  * 观测治理域监控告警的 Alert Rule。
  * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
  */
-@TableName("alert_rule")
+@TableName(value = "alert_rule", autoResultMap = true)
 public class AlertRule {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -29,6 +30,7 @@ public class AlertRule {
     private Integer timeWindowMinutes;
     @TableField("notification_channels")
     private String notifyChannels;
+    @TableField(typeHandler = CodeEnumTypeHandler.class)
     private AlertStatus status;
     @TableField("severity")
     private String severity;
