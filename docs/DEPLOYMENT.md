@@ -23,6 +23,7 @@
 |------|------|------|------|
 | PostgreSQL | 16 | 5432 | 主数据库 |
 | Redis | 7.x | 6379 | 缓存/会话 |
+| Nacos | 2.3.x | 8848 | 服务注册与配置中心 |
 | SkyWalking OAP | 9.4.0 | 11800/12800 | 链路追踪服务端 (gRPC/HTTP) |
 | SkyWalking UI | 9.4.0 | 8088 | 链路追踪可视化 |
 
@@ -40,23 +41,32 @@ cd data-manager-hub
 ### 2. 启动本地基础设施
 
 ```bash
-docker compose up -d
+# 使用本机 PostgreSQL
+docker compose up -d redis kafka nacos
 ```
 
 > `docker-compose.yml` 仅用于本地开发/测试，包含 PostgreSQL、Redis、Kafka、Nacos、Prometheus、Grafana、Elasticsearch、Kibana 和 SkyWalking。生产环境应使用独立的高可用基础设施，并通过环境变量或密钥系统提供连接信息和密码。
 
-如本机 5432 已被占用，可改用备用宿主端口：
+如需使用 Compose PostgreSQL，可改用备用宿主端口：
 
 ```bash
 POSTGRES_PORT=15432 docker compose up -d postgres
 export DB_PORT=15432
 ```
 
-### 3. 初始化数据库
+### 3. 发布 Nacos 配置
 
 ```bash
-./migrate-db.sh dry-run
-./migrate-db.sh update
+./publish-nacos-config.sh dev
+```
+
+应用采用 Spring Boot `spring.config.import` 标准机制加载 Nacos Config。五个业务域加载共享数据库 Data ID 和各自服务 Data ID，Gateway 只加载自身 Data ID。Data ID 缺失或 Nacos 不可用时应用拒绝启动，避免退回不完整的本地配置。
+
+### 4. 初始化数据库
+
+```bash
+DB_PASSWORD=123456 ./migrate-db.sh dry-run
+DB_PASSWORD=123456 ./migrate-db.sh update
 ```
 
 Liquibase 使用 `DATABASECHANGELOG` 和 `DATABASECHANGELOGLOCK` 管理顺序、校验和与并发锁。旧的手工初始化数据库必须先执行 `./migrate-db.sh backup`，再用 `MIGRATION_CONFIRM_BASELINE=<数据库名> ./migrate-db.sh baseline` 接管，不能直接重复执行历史 SQL。`start-services.sh` 默认也会在任何 Java 服务启动前执行 `update`。
@@ -67,13 +77,13 @@ V028 将结果缓存策略纳入申请项和最终授权事实。由于旧服务
 
 发布新审批节点时，将经过评审的 BPMN 作为 `data-platform-access-service/src/main/resources/processes/` 下的新版本资源发布。新申请使用最新版本，运行中实例继续原定义；禁止在线暴露 Flowable REST、引擎 Actuator 管理端点或 workflow schema。
 
-### 4. 构建项目
+### 5. 构建项目
 
 ```bash
 mvn clean install -DskipTests
 ```
 
-### 5. 启动服务
+### 6. 启动服务
 
 **使用一键启动脚本 (推荐)**:
 
@@ -93,7 +103,7 @@ cd data-platform-governance/data-platform-governance-service && mvn spring-boot:
 cd data-platform-gateway && mvn spring-boot:run &
 ```
 
-### 6. 启动前端
+### 7. 启动前端
 
 ```bash
 cd data-platform-web
@@ -180,37 +190,25 @@ java -cp data-platform-sdk.jar com.dataplatform.sdk.generator.SDKCli --lang go -
 
 ## 配置说明
 
-### 数据库配置
+### Nacos Config
 
 ```yaml
 spring:
-  datasource:
-    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-```
-
-### Redis 配置
-
-```yaml
-spring:
-  data:
-    redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
-      password: ${REDIS_PASSWORD}
-```
-
-### Nacos 配置
-
-```yaml
-spring:
+  config:
+    import:
+      - nacos:data-platform-database-${spring.profiles.active}.properties?group=DEFAULT_GROUP&refreshEnabled=true
+      - nacos:${spring.application.name}-${spring.profiles.active}.yml?group=DEFAULT_GROUP&refreshEnabled=true
   cloud:
     nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR}
+        namespace: ${NACOS_NAMESPACE:prod}
       discovery:
         server-addr: ${NACOS_SERVER_ADDR}
         namespace: ${NACOS_NAMESPACE:prod}
 ```
+
+版本化配置模板位于 `nacos-config/`，通过 `publish-nacos-config.sh` 发布。应用本地不再保存数据库、Redis、Kafka、Gateway 路由等业务运行配置。生产模板中的密码和密钥占位符必须由部署环境或密钥系统提供。
 
 ### Sa-Token 认证配置
 
@@ -374,6 +372,7 @@ export REDIS_PASSWORD=your_redis_password
 
 # Nacos
 export NACOS_SERVER_ADDR=nacos-server:8848
+export NACOS_NAMESPACE=prod
 
 # SkyWalking
 export SW_AGENT_ENABLED=true

@@ -27,7 +27,7 @@
 | Flowable Process Engine | 7.1.0 |
 | PostgreSQL | 16 |
 | Redis | 7.4 |
-| Nacos | 2.3 (本地配置模式) |
+| Nacos | 2.3（注册中心 + 配置中心） |
 
 ### 前端
 
@@ -126,24 +126,33 @@ data-platform/
 ### 1. 启动本地基础设施
 
 ```bash
-docker compose up -d
+# 使用本机 PostgreSQL 时只启动其余必要中间件
+docker compose up -d redis kafka nacos
 ```
 
 > `docker-compose.yml` 仅用于本地开发/测试，不作为生产部署模板。
 
 服务端口：
-- PostgreSQL: 5432
+- PostgreSQL: 5432（本机服务）
 - Redis: 6379
 - Nacos: 8848
 
-如果本机已安装 PostgreSQL 并占用 5432，可使用 `POSTGRES_PORT=15432 docker compose up -d postgres` 为 compose 内数据库改用备用宿主端口；启动 Java 服务前同时设置 `DB_PORT=15432`。
+如需改用 Compose PostgreSQL，可执行 `POSTGRES_PORT=15432 docker compose up -d postgres`，并在发布 Nacos 开发配置前调整 `nacos-config/dev/data-platform-database-dev.properties`。
 
-### 2. 初始化数据库
+### 2. 发布 Nacos 配置
+
+```bash
+./publish-nacos-config.sh dev
+```
+
+脚本会幂等创建 `dev` namespace，发布数据库和六个服务的 Data ID，并在被 Git 忽略的 `.runtime/` 中生成开发环境 RSA/字段加密密钥。应用本地只保留应用名、Profile 和 Nacos 连接信息；DataSource、Redis、Kafka、路由及业务参数均从 Nacos 加载。
+
+### 3. 初始化数据库
 
 ```bash
 # 先预演待执行 SQL，再由 Liquibase 应用迁移
-./migrate-db.sh dry-run
-./migrate-db.sh update
+DB_PASSWORD=123456 ./migrate-db.sh dry-run
+DB_PASSWORD=123456 ./migrate-db.sh update
 ```
 
 Liquibase 使用数据库中的 `DATABASECHANGELOG`/`DATABASECHANGELOGLOCK` 记录版本、执行顺序和校验和。同一变更不会重复执行，迁移失败会返回非零状态；`start-services.sh` 也会在启动任何 Java 服务前自动执行 `update`，失败时终止启动。仅在明确需要跳过时设置 `MIGRATE_DB=false`。
@@ -179,13 +188,13 @@ MIGRATION_CONFIRM_BASELINE=dataplatform ./migrate-db.sh baseline
 PGPASSWORD=postgres DB_PORT=15432 bash verify-db-bootstrap.sh
 ```
 
-### 3. 编译后端
+### 4. 编译后端
 
 ```bash
 mvn clean install -DskipTests
 ```
 
-### 4. 启动微服务
+### 5. 启动微服务
 
 ```bash
 # 网关 (端口 8888)
@@ -200,7 +209,7 @@ mvn spring-boot:run
 ./start-services.sh
 ```
 
-### 5. 启动前端
+### 6. 启动前端
 
 ```bash
 cd data-platform-web
@@ -217,32 +226,15 @@ npm run dev
 
 ## 🔧 配置说明
 
-### 环境变量
+### Nacos 启动配置
 
 ```bash
-# 数据库配置
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=dataplatform
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
-
-# Redis 配置
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=redis_password
-
-# Nacos 配置
 NACOS_SERVER_ADDR=localhost:8848
 NACOS_NAMESPACE=dev
-
-# 服务间认证（dev 默认开启；启动脚本自动生成本地 RSA 密钥）
-INTERNAL_AUTH_ENABLED=true
-INTERNAL_AUTH_TOKEN_URI=http://localhost:8086/internal-auth/v1/token
-
-# 字段加密主密钥（32字节随机值的Base64；必须由密钥管理系统注入）
-PLATFORM_ENCRYPTION_MASTER_KEY=<base64-encoded-32-byte-key>
+NACOS_GROUP=DEFAULT_GROUP
 ```
+
+开发环境业务配置位于 `nacos-config/dev/`；生产模板位于 `nacos-config/prod/`。生产密码和密钥仍由部署环境注入，发布方式见 `nacos-config/README.md`。`start-services.sh` 默认在启动前执行 Nacos 配置同步；仅在明确由外部发布系统管理配置时设置 `NACOS_CONFIG_SYNC=false`。
 
 ---
 

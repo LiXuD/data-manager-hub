@@ -43,9 +43,21 @@ fi
 
 cd "$SCRIPT_DIR"
 
+# 应用只保留 Nacos 连接信息；启动前将版本化配置幂等发布到对应 namespace。
+if [ "${NACOS_CONFIG_SYNC:-true}" = "true" ]; then
+    active_profile="${SPRING_PROFILES_ACTIVE:-dev}"
+    echo "同步 $active_profile 环境 Nacos 配置..."
+    if ! bash "$SCRIPT_DIR/publish-nacos-config.sh" "$active_profile"; then
+        echo "Nacos 配置同步失败，终止启动"
+        exit 1
+    fi
+else
+    echo "警告: NACOS_CONFIG_SYNC=false，已显式跳过 Nacos 配置同步"
+fi
+
 if [ "${SKIP_BUILD:-false}" != "true" ]; then
     echo "构建并安装最新模块依赖..."
-    if ! mvn -q -DskipTests install; then
+    if ! mvn -q -DskipTests clean install; then
         echo "构建失败，终止启动"
         exit 1
     fi
