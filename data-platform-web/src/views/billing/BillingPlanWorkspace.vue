@@ -12,46 +12,67 @@
       </div>
     </div>
 
-    <el-table :data="plans" v-loading="loading" stripe>
-      <el-table-column label="方案 / 版本" min-width="210">
-        <template #default="{ row }">
-          <div class="primary-cell">{{ row.planName }}</div>
-          <div class="secondary-cell">{{ row.planCode }} · v{{ row.version }}</div>
-        </template>
-      </el-table-column>
-      <el-table-column label="厂商 / 接口" min-width="220">
-        <template #default="{ row }">
-          <div>{{ row.vendorName }}</div>
-          <div class="secondary-cell">{{ row.interfaceName }} · {{ row.interfaceCode }}</div>
-        </template>
-      </el-table-column>
-      <el-table-column label="模板" width="145">
-        <template #default="{ row }">{{ templateName(row.templateCode) }}</template>
-      </el-table-column>
-      <el-table-column label="计费方向" width="130">
-        <template #default="{ row }">{{ row.accountingPurpose === 'INTERNAL_CHARGEBACK' ? '内部核算' : '厂商应付' }}</template>
-      </el-table-column>
-      <el-table-column label="生效区间" min-width="190">
-        <template #default="{ row }">
-          <div>{{ formatTime(row.effectiveFrom) }}</div>
-          <div class="secondary-cell">至 {{ row.effectiveTo ? formatTime(row.effectiveTo) : '长期' }}</div>
-        </template>
-      </el-table-column>
-      <el-table-column label="状态" width="110">
-        <template #default="{ row }">
-          <el-tag :type="statusMeta(row.status).type" size="small">{{ statusMeta(row.status).label }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="250" fixed="right">
-        <template #default="{ row }">
-          <el-button v-if="canManage && editable(row)" type="primary" link @click="openEdit(row)">编辑</el-button>
-          <el-button v-if="canManage && (editable(row) || row.status === 'NEEDS_REVIEW')" type="success" link @click="handlePublish(row)">{{ row.status === 'NEEDS_REVIEW' ? '复核发布' : '发布' }}</el-button>
-          <el-button v-if="canManage && !editable(row)" type="primary" link @click="handleNextVersion(row)">新版本</el-button>
-          <el-button link @click="openSimulation(row)">模拟</el-button>
-          <el-button v-if="canManage && editable(row)" type="danger" link @click="handleDelete(row)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div v-loading="loading" class="plan-groups">
+      <el-empty v-if="!planGroups.length" description="暂无计费方案" />
+      <section v-for="group in planGroups" :key="group.key" class="plan-group-card">
+        <div class="plan-group-header">
+          <div>
+            <div class="primary-cell">{{ group.vendorName }} / {{ group.interfaceName }}</div>
+            <div class="secondary-cell">
+              {{ group.vendorCode }} · {{ group.interfaceCode }} ·
+              {{ accountingPurposeName(group.accountingPurpose) }}
+            </div>
+          </div>
+          <div class="plan-group-summary">
+            <el-tag v-if="group.currentPlans.length" type="success">当前 v{{ group.currentPlans[0].version }}</el-tag>
+            <el-tag v-if="group.scheduledPlans.length" type="primary">待生效 {{ group.scheduledPlans.length }}</el-tag>
+            <el-tag v-if="group.draftPlans.length" type="info">草稿 {{ group.draftPlans.length }}</el-tag>
+            <span class="history-count">历史 {{ group.historyPlans.length }}</span>
+            <el-button v-if="canManage && group.adjustmentSource" type="primary" @click="handleAdjustPlan(group)">调整方案</el-button>
+          </div>
+        </div>
+        <el-alert v-if="group.hasConflict" title="检测到同一计费维度存在多个当前生效版本，运行时将拒绝计费，请立即处理。"
+          type="error" :closable="false" show-icon class="conflict-alert" />
+        <el-table :data="group.versions" stripe>
+          <el-table-column label="方案 / 版本" min-width="210">
+            <template #default="{ row }">
+              <div class="primary-cell">{{ row.planName }}</div>
+              <div class="secondary-cell">{{ row.planCode }} · v{{ row.version }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="模板 / 试算" min-width="220">
+            <template #default="{ row }">
+              <div>{{ templateName(row.templateCode) }}</div>
+              <div class="secondary-cell">{{ billingPricingPreview(row) }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="生效区间" min-width="190">
+            <template #default="{ row }">
+              <div>{{ formatTime(row.effectiveFrom) }}</div>
+              <div class="secondary-cell">至 {{ row.effectiveTo ? formatTime(row.effectiveTo) : '长期' }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="时间状态" width="105">
+            <template #default="{ row }">
+              <el-tag :type="temporalStatusMeta(row).type" size="small">{{ temporalStatusMeta(row).label }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="发布状态" width="115">
+            <template #default="{ row }">
+              <el-tag :type="statusMeta(row.status).type" size="small">{{ statusMeta(row.status).label }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="220" fixed="right">
+            <template #default="{ row }">
+              <el-button v-if="canManage && editable(row)" type="primary" link @click="openEdit(row)">编辑草稿</el-button>
+              <el-button v-if="canManage && (editable(row) || row.status === 'NEEDS_REVIEW')" type="success" link @click="handlePublish(row)">{{ row.status === 'NEEDS_REVIEW' ? '复核发布' : '发布' }}</el-button>
+              <el-button link @click="openSimulation(row)">模拟</el-button>
+              <el-button v-if="canManage && editable(row)" type="danger" link @click="handleDelete(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
+    </div>
 
     <div class="ledger-header">
       <div>
@@ -163,7 +184,11 @@
           <label>累计范围<el-select v-model="planForm.metering.aggregationScope"><el-option label="厂商+接口" value="VENDOR_INTERFACE" /><el-option label="租户" value="TENANT" /><el-option label="调用方" value="CALLER" /></el-select></label>
         </div>
         <h4>计费数量</h4>
-        <div class="quantity-row">
+        <div v-if="planForm.templateCode === 'PER_CALL'" class="quantity-locked">
+          <strong>1 次调用</strong>
+          <span>按次计费的数量由模板固定为 1，只需配置每次调用的单价。</span>
+        </div>
+        <div v-else class="quantity-row">
           <el-select v-model="planForm.metering.quantity.type" @change="handleQuantityType">
             <el-option label="固定数量" value="FIXED" />
             <el-option label="响应数值" value="FACT" />
@@ -222,7 +247,10 @@
           <strong>{{ templateName(planForm.templateCode) }}</strong>
           <span>{{ selectedVendorName }} / {{ selectedInterfaceName }}</span>
           <span>{{ planForm.metering.conditions.length }} 个收费条件 · {{ quantityTypeName(planForm.metering.quantity.type) }}</span>
+          <span class="pricing-equation">{{ billingPricingPreview(planForm) }}</span>
         </div>
+        <el-alert v-for="warning in reviewPricingWarnings" :key="warning" :title="warning"
+          type="warning" :closable="false" show-icon class="review-warning" />
       </el-form>
 
       <template #footer>
@@ -270,6 +298,10 @@ import {
   validateBillingPlan, type BillingCondition, type BillingEvent, type BillingPlan,
   type BillingTemplate
 } from '@/api/billing'
+import {
+  billingPlanTemporalState, billingPricingPreview, billingPricingWarnings,
+  groupBillingPlans, normalizeBillingPlanForSubmit, type BillingPlanGroup
+} from './billing-plan-view'
 
 interface FieldOption { id?: number; path: string; label: string; type: string }
 
@@ -338,6 +370,8 @@ const selectedVendorName = computed(() => cacheStore.vendorOptions.find(item => 
 const selectedInterfaceName = computed(() => interfaces.value.find(item => Number(item.id) === planForm.interfaceId)?.interfaceName || planForm.interfaceName || '-')
 const quantityFields = computed(() => responseFields.value.filter(field =>
   planForm.metering.quantity.type === 'ARRAY_SIZE' ? field.type === 'array' : ['integer', 'number'].includes(field.type)))
+const planGroups = computed(() => groupBillingPlans(plans.value))
+const reviewPricingWarnings = computed(() => billingPricingWarnings(planForm))
 
 const fetchPlans = async () => {
   loading.value = true
@@ -387,7 +421,7 @@ const openCreate = () => {
 const openEdit = async (row: BillingPlan) => {
   await loadInterfaces(row.vendorId)
   await loadContract(row.interfaceId)
-  const copy = JSON.parse(JSON.stringify(row)) as BillingPlan
+  const copy = normalizeBillingPlanForSubmit(row)
   copy.metering.conditions = (copy.metering.conditions || []).map(condition => ({
     ...condition,
     expectedValue: Array.isArray(condition.expectedValue) ? condition.expectedValue.join(',') : condition.expectedValue
@@ -459,12 +493,15 @@ const syncTier = (index: number) => { if (planForm.tiers[index + 1] && planForm.
 const nextStep = async () => {
   if (step.value === 0 && !planForm.templateCode) return ElMessage.warning('请选择计费模板')
   if (step.value === 1 && (!planForm.planName || !planForm.vendorId || !planForm.interfaceId)) return ElMessage.warning('请完整绑定方案、厂商和接口')
+  if (step.value === 2 && planForm.templateCode === 'PER_CALL') {
+    Object.assign(planForm.metering.quantity, normalizeBillingPlanForSubmit(planForm).metering.quantity)
+  }
   if (step.value === 2 && ['FACT', 'ARRAY_SIZE'].includes(planForm.metering.quantity.type) && !planForm.metering.quantity.path) return ElMessage.warning('请选择计费数量字段')
   step.value++
 }
 
 const payload = (): BillingPlan => {
-  const copy = JSON.parse(JSON.stringify(planForm)) as BillingPlan
+  const copy = normalizeBillingPlanForSubmit(planForm)
   copy.currency = copy.currency.toUpperCase()
   copy.metering.conditions = copy.metering.conditions.map((condition: BillingCondition) => {
     if (!needsExpected(condition.operator)) return { ...condition, expectedValue: undefined }
@@ -498,6 +535,7 @@ const saveAndPublish = async () => {
     if (!saved?.id) return
     const validation = await validateBillingPlan(saved.id)
     if (!validation.data.valid) return ElMessage.error(validation.data.errors.join('；'))
+    await confirmPublish(saved)
     await publishBillingPlan(saved.id)
     ElMessage.success('方案已发布并按生效时间解析')
     wizardVisible.value = false
@@ -509,6 +547,7 @@ const handlePublish = async (row: BillingPlan) => {
   if (!row.id) return
   const validation = await validateBillingPlan(row.id)
   if (!validation.data.valid) return ElMessage.error(validation.data.errors.join('；'))
+  await confirmPublish(row)
   await publishBillingPlan(row.id)
   ElMessage.success('发布成功')
   fetchPlans()
@@ -520,6 +559,37 @@ const handleNextVersion = async (row: BillingPlan) => {
   ElMessage.success(`已创建 v${response.data.version} 草稿`)
   await fetchPlans()
   openEdit(response.data)
+}
+
+const handleAdjustPlan = async (group: BillingPlanGroup) => {
+  const source = group.adjustmentSource
+  if (!source) return
+  const existingDraft = group.draftPlans.find(plan => plan.planCode === source.planCode)
+  if (existingDraft) {
+    ElMessage.info(`已打开现有 v${existingDraft.version} 调整草稿`)
+    await openEdit(existingDraft)
+    return
+  }
+  await ElMessageBox.confirm(
+    `将基于 ${source.planCode} v${source.version} 创建可编辑草稿；原版本及历史账单保持不变。`,
+    '调整计费方案',
+    { type: 'info', confirmButtonText: '创建调整草稿' }
+  )
+  await handleNextVersion(source)
+}
+
+const confirmPublish = (plan: BillingPlan) => {
+  const warnings = billingPricingWarnings(plan)
+  const details = [
+    `计费试算：${billingPricingPreview(normalizeBillingPlanForSubmit(plan))}`,
+    `生效时间：${formatTime(plan.effectiveFrom)}`,
+    ...warnings
+  ].join('；')
+  return ElMessageBox.confirm(details, '确认发布计费方案', {
+    type: warnings.length ? 'warning' : 'info',
+    confirmButtonText: '确认发布',
+    cancelButtonText: '返回检查'
+  })
 }
 
 const handleDelete = async (row: BillingPlan) => {
@@ -570,10 +640,16 @@ const handleReverse = async (event: BillingEvent) => {
 
 const templateName = (code: string) => templates.value.find(item => item.templateCode === code)?.templateName || code
 const editable = (row: BillingPlan) => row.status === 'DRAFT'
+const accountingPurposeName = (purpose: BillingPlan['accountingPurpose']) => purpose === 'INTERNAL_CHARGEBACK' ? '内部核算' : '厂商应付'
 const statusMeta = (status?: string) => ({
   DRAFT: { label: '草稿', type: 'info' }, PUBLISHED: { label: '待生效', type: 'primary' }, ACTIVE: { label: '生效中', type: 'success' },
   EXPIRED: { label: '已失效', type: 'info' }, DISABLED: { label: '已停用', type: 'info' }, NEEDS_REVIEW: { label: '契约待复核', type: 'warning' }
 }[status || ''] || { label: status || '-', type: 'info' }) as { label: string; type: 'primary' | 'success' | 'warning' | 'info' | 'danger' }
+const temporalStatusMeta = (row: BillingPlan) => ({
+  DRAFT: { label: '未生效', type: 'info' }, SCHEDULED: { label: '待生效', type: 'primary' },
+  CURRENT: { label: '当前有效', type: 'success' }, EXPIRED: { label: '区间已结束', type: 'info' },
+  DISABLED: { label: '已停用', type: 'info' }
+}[billingPlanTemporalState(row)] || { label: '-', type: 'info' }) as { label: string; type: 'primary' | 'success' | 'warning' | 'info' | 'danger' }
 const eventTypeName = (type: string) => ({ USAGE: '用量', RECURRING_FEE: '周期费', REVERSAL: '冲正' }[type] || type)
 const quantityTypeName = (type: string) => ({ FIXED: '固定数量', FACT: '响应数值', ARRAY_SIZE: '数组长度', DURATION: '调用耗时' }[type] || type)
 const formatTime = (value?: string) => value ? value.replace('T', ' ').slice(0, 16) : '-'
@@ -596,6 +672,12 @@ onMounted(async () => {
 .workspace-toolbar h3, .ledger-header h3 { margin: 0 0 5px; font-size: 17px; color: var(--color-text-primary); }
 .workspace-toolbar p, .ledger-header p { margin: 0; font-size: 13px; color: var(--color-text-tertiary); }
 .toolbar-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; }
+.plan-groups { display: flex; min-height: 120px; flex-direction: column; gap: 14px; }
+.plan-group-card { overflow: hidden; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-bg-card); }
+.plan-group-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 18px; background: var(--color-bg-page); }
+.plan-group-summary { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.history-count { color: var(--color-text-tertiary); font-size: 12px; }
+.conflict-alert { border-radius: 0; }
 .ledger-filters { display: flex; gap: 10px; }
 .primary-cell { color: var(--color-text-primary); font-weight: 600; }
 .secondary-cell { margin-top: 3px; color: var(--color-text-tertiary); font-size: 12px; }
@@ -618,11 +700,15 @@ onMounted(async () => {
 .metering-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; padding: 18px; background: var(--color-bg-page); border-radius: 9px; }
 .metering-options label { display: flex; flex-direction: column; gap: 8px; color: var(--color-text-secondary); font-size: 12px; }
 .quantity-row { display: grid; grid-template-columns: 180px minmax(220px, 1fr) 180px; gap: 12px; margin-top: 12px; }
+.quantity-locked { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border)); border-radius: 8px; background: color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-card)); color: var(--color-text-secondary); }
+.quantity-locked strong { color: var(--color-primary); font-size: 18px; }
 .tier-block { grid-column: 1 / -1; }
 .tier-row { display: grid; grid-template-columns: 1fr 1fr 1fr 130px 48px; gap: 10px; margin-bottom: 10px; }
 .tier-row :deep(.el-input-number), .quantity-row :deep(.el-input-number) { width: 100%; }
 .review-summary { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 7px; margin-top: 8px; padding: 18px 22px; border-left: 3px solid var(--color-primary); background: var(--color-bg-page); color: var(--color-text-secondary); }
 .review-summary strong { color: var(--color-text-primary); font-size: 16px; }
+.pricing-equation { color: var(--color-primary); font-family: var(--font-mono); font-weight: 600; }
+.review-warning { grid-column: 1 / -1; }
 .simulation-result { margin-bottom: 8px; font-weight: 600; }
 .error-text { color: var(--el-color-danger); }
 @media (max-width: 900px) {
@@ -630,6 +716,7 @@ onMounted(async () => {
   .metering-options { grid-template-columns: 1fr 1fr; }
   .condition-row { grid-template-columns: 1fr 1fr; }
   .quantity-row, .tier-row { grid-template-columns: 1fr 1fr; }
-  .workspace-toolbar, .ledger-header { flex-direction: column; }
+  .workspace-toolbar, .ledger-header, .plan-group-header { align-items: stretch; flex-direction: column; }
+  .plan-group-summary { justify-content: flex-start; }
 }
 </style>

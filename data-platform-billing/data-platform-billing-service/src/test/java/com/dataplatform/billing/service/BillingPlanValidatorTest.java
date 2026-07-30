@@ -67,6 +67,29 @@ class BillingPlanValidatorTest {
                 .anyMatch(error -> error.contains("必须是DURATION")));
     }
 
+    @Test
+    void perCallTemplateRequiresExactlyOneFixedCall() {
+        BillingPlanModel plan = basePlan();
+        plan.getMetering().getQuantity().setFixedValue(new BigDecimal("20"));
+
+        assertTrue(validator.validate(plan, contract()).stream()
+                .anyMatch(error -> error.contains("必须固定为1次")));
+
+        plan.getMetering().getQuantity().setFixedValue(BigDecimal.ONE);
+        assertTrue(validator.validate(plan, contract()).isEmpty());
+    }
+
+    @Test
+    void perCallTemplateRejectsResponseQuantity() {
+        BillingPlanModel plan = basePlan();
+        plan.getMetering().getQuantity().setType("FACT");
+        plan.getMetering().getQuantity().setFieldId(12L);
+        plan.getMetering().getQuantity().setPath("$.data.count");
+
+        assertTrue(validator.validate(plan, contract(scalarField(12L, "count", "integer"))).stream()
+                .anyMatch(error -> error.contains("必须固定为1次")));
+    }
+
     private BillingPlanModel basePlan() {
         BillingPlanModel plan = new BillingPlanModel();
         plan.setPlanName("test");

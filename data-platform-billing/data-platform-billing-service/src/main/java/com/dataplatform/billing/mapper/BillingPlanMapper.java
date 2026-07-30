@@ -20,12 +20,11 @@ public interface BillingPlanMapper extends BaseMapper<BillingPlan> {
           AND effective_from <= #{callTime}
           AND (effective_to IS NULL OR effective_to > #{callTime})
         ORDER BY version DESC
-        LIMIT 1
         """)
-    BillingPlan selectEffective(@Param("vendorCode") String vendorCode,
-                                @Param("interfaceCode") String interfaceCode,
-                                @Param("accountingPurpose") String accountingPurpose,
-                                @Param("callTime") LocalDateTime callTime);
+    List<BillingPlan> selectEffective(@Param("vendorCode") String vendorCode,
+                                      @Param("interfaceCode") String interfaceCode,
+                                      @Param("accountingPurpose") String accountingPurpose,
+                                      @Param("callTime") LocalDateTime callTime);
 
     @Select("SELECT COALESCE(MAX(version), 0) FROM billing_plan WHERE plan_code = #{planCode}")
     Integer selectMaxVersion(@Param("planCode") String planCode);

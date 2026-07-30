@@ -57,21 +57,21 @@ if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('migratio
 fi
 bash ./migrate-db.sh update
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "18" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "19" ]]; then
   echo "Liquibase 基线、运行时结构修复、Flowable、接口权限审批与 RBAC 安全变更记录不完整" >&2
   exit 1
 fi
 
-bash ./migrate-db.sh rollback-dry-run 7 >"$DRY_RUN_FILE"
+bash ./migrate-db.sh rollback-dry-run 8 >"$DRY_RUN_FILE"
 grep -q "禁止原地回滚角色合并" "$DRY_RUN_FILE"
 if MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" \
-    bash ./migrate-db.sh rollback-count 7 >/dev/null 2>&1; then
+    bash ./migrate-db.sh rollback-count 8 >/dev/null 2>&1; then
   echo "V027 前向安全迁移不应允许原地回滚" >&2
   exit 1
 fi
 
 if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
-    SELECT count(*) = 18
+    SELECT count(*) = 19
        AND to_regclass('api_permission_application') IS NOT NULL
        AND to_regclass('workflow.act_ru_execution') IS NOT NULL
        AND to_regclass('tenant_budget') IS NOT NULL
@@ -126,6 +126,41 @@ BEGIN
       WHERE plan_code = 'UAPI-PROGRAMMER-HISTORY-TODAY' AND version = 1) <> 1 THEN
     RAISE EXCEPTION 'UAPI 零元计费方案没有且仅有一条';
   END IF;
+
+  IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conrelid = 'public.billing_plan'::regclass
+        AND conname = 'ex_billing_plan_effective_window'
+        AND contype = 'x'
+  ) THEN
+    RAISE EXCEPTION '计费方案生效区间排他约束不存在';
+  END IF;
+
+  BEGIN
+    INSERT INTO billing_plan (
+      plan_code, version, plan_name,
+      vendor_id, vendor_code, vendor_name,
+      interface_id, interface_code, interface_name,
+      template_code, accounting_purpose, currency, timezone, settlement_cycle,
+      pricing_config, metering_config, adjustment_config,
+      status, effective_from, effective_to
+    )
+    SELECT
+      'REGRESSION-OVERLAPPING-PLAN', 1, '排他约束回归探针',
+      vendor_id, vendor_code, vendor_name,
+      interface_id, interface_code, interface_name,
+      template_code, accounting_purpose, currency, timezone, settlement_cycle,
+      pricing_config, metering_config, adjustment_config,
+      'ACTIVE', effective_from, effective_to
+    FROM billing_plan
+    WHERE plan_code = 'UAPI-PROGRAMMER-HISTORY-TODAY'
+      AND version = 1;
+    RAISE EXCEPTION '计费方案生效区间排他约束未拒绝重叠数据';
+  EXCEPTION
+    WHEN exclusion_violation THEN
+      NULL;
+  END;
 
   IF (SELECT count(*) FROM permission
       WHERE permission_code IN (
@@ -195,7 +230,7 @@ SQL
 DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$VERIFY_DB_NAME" \
   bash ./migrate-db.sh baseline
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "18" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "19" ]]; then
   echo "现有数据库基线登记失败" >&2
   exit 1
 fi
@@ -228,7 +263,7 @@ DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$LEGACY_VERIFY_
   bash ./migrate-db.sh baseline
 
 if [[ "$("${PSQL[@]}" -Atq -d "$LEGACY_VERIFY_DB_NAME" -c "
-    SELECT count(*) = 18
+    SELECT count(*) = 19
        AND to_regclass('interface_param') IS NOT NULL
        AND to_regclass('billing_daily_event') IS NOT NULL
        AND EXISTS (
@@ -364,4 +399,4 @@ BEGIN
 END $$;
 SQL
 
-echo "数据库迁移回归通过（dry-run/update/idempotency/V026+V027+V030+V031+V032+V033+V034+V035+V036+V037+V038+V039+V040+Flowable/forward-recovery/backup/restore/baseline/legacy-baseline）: $VERIFY_DB_NAME"
+echo "数据库迁移回归通过（dry-run/update/idempotency/V026+V027+V030+V031+V032+V033+V034+V035+V036+V037+V038+V039+V040+V041+Flowable/forward-recovery/backup/restore/baseline/legacy-baseline）: $VERIFY_DB_NAME"

@@ -55,7 +55,7 @@
 | 架构规则自动守护 | 已完成 | `arch-scan.sh` 检查公共 Feign、隐式扫描、scope、跨域读表和跨域 Kafka |
 | 本轮整改运行态复验 | 已完成 | 六服务健康检查均为 `UP`；认证负向用例返回 401/403；OpenAPI、统计、计费幂等聚合和治理日志链路均通过 |
 | UAPI 程序员历史外部数据源接入 | 已完成 | `V017__seed_uapi_programmer_history_provider.sql`；真实 GET 调用、响应契约、调用记录与零元计费由 `UapiProgrammerHistoryFlowTest` 验证 |
-| 计费方案按厂商 + 接口唯一绑定 | 已完成 | `billing_plan` 的厂商、接口和会计方向约束；计费匹配不再使用数据类型，页面按厂商联动选择接口 |
+| 计费方案按厂商 + 接口唯一绑定 | 已完成 | V041 对厂商、接口、会计方向和生效区间增加数据库排他约束；运行时多匹配失败关闭；页面按计费维度聚合展示当前、待生效和历史版本 |
 | 厂商接口方案支持多档阶梯计费 | 已完成 | `billing_plan_tier`、`billing_usage_balance`；按账期累计调用量并按区间累进计价，请求重试不重复推进阶梯 |
 | 模板化与版本化计费方案 | 已完成 | `V021__create_billing_plan_and_event_ledger.sql`；六类模板、响应字段计量、事件账本、套餐/周期费、SLA、契约复核、模拟发布和冲正；旧规则表和迁移已删除 |
 | 过期契约与安全兼容层清理 | 已完成 | `V025__remove_obsolete_compatibility_fields.sql`；结构化契约、安全流水线、BCrypt 与密文格式均在迁移和运行时失败关闭 |

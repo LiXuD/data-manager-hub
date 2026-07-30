@@ -74,8 +74,8 @@ public class BillingPlanService {
     }
 
     public BillingPlanModel getEffective(String vendorCode, String interfaceCode, LocalDateTime callTime) {
-        BillingPlan plan = planMapper.selectEffective(vendorCode, interfaceCode,
-                "VENDOR_PAYABLE", callTime != null ? callTime : LocalDateTime.now());
+        BillingPlan plan = resolveEffectivePlan(vendorCode, interfaceCode, "VENDOR_PAYABLE",
+                callTime != null ? callTime : LocalDateTime.now());
         return plan != null ? toModel(plan) : null;
     }
 
@@ -169,8 +169,8 @@ public class BillingPlanService {
 
     public BillingMeteringPolicyDTO resolvePolicy(String vendorCode, String interfaceCode,
                                                   LocalDateTime callTime) {
-        BillingPlan plan = planMapper.selectEffective(vendorCode, interfaceCode,
-                "VENDOR_PAYABLE", callTime != null ? callTime : LocalDateTime.now());
+        LocalDateTime effectiveAt = callTime != null ? callTime : LocalDateTime.now();
+        BillingPlan plan = resolveEffectivePlan(vendorCode, interfaceCode, "VENDOR_PAYABLE", effectiveAt);
         if (plan == null) throw new IllegalStateException("没有匹配的已发布计费方案");
         BillingPlanModel model = toModel(plan);
         BillingMeteringPolicyDTO dto = new BillingMeteringPolicyDTO();
@@ -182,8 +182,8 @@ public class BillingPlanService {
         dto.setEffectiveFrom(plan.getEffectiveFrom());
         dto.setEffectiveTo(plan.getEffectiveTo());
         dto.setSelectors(buildSelectors(model));
-        BillingPlan chargeback = planMapper.selectEffective(vendorCode, interfaceCode,
-                "INTERNAL_CHARGEBACK", callTime != null ? callTime : LocalDateTime.now());
+        BillingPlan chargeback = resolveEffectivePlan(vendorCode, interfaceCode,
+                "INTERNAL_CHARGEBACK", effectiveAt);
         if (chargeback != null) {
             BillingPlanModel chargebackModel = toModel(chargeback);
             BillingAdditionalPlanDTO additional = new BillingAdditionalPlanDTO();
@@ -197,6 +197,16 @@ public class BillingPlanService {
             dto.setAdditionalPlans(List.of(additional));
         }
         return dto;
+    }
+
+    private BillingPlan resolveEffectivePlan(String vendorCode, String interfaceCode,
+                                             String accountingPurpose, LocalDateTime callTime) {
+        List<BillingPlan> candidates = planMapper.selectEffective(
+                vendorCode, interfaceCode, accountingPurpose, callTime);
+        if (candidates.size() > 1) {
+            throw new IllegalStateException("计费方案数据冲突：同一厂商、接口、计费方向和调用时间匹配到多个生效版本");
+        }
+        return candidates.isEmpty() ? null : candidates.getFirst();
     }
 
     public List<BillingPlanTier> tiers(Long planId) {
