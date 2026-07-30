@@ -352,4 +352,23 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="billing-plan-effective-window-2026-07-30"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="billing_plan"/>
+        </preConditions>
+        <sqlFile path="../migrations/V041__enforce_billing_plan_effective_window.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U041__remove_billing_plan_effective_window.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>

@@ -169,6 +169,12 @@ public class BillingPlanValidator {
             errors.add("计费数量单位不能为空");
         }
         String template = upper(plan.getTemplateCode());
+        if ("PER_CALL".equals(template)
+                && (!"FIXED".equals(upper(quantity.getType()))
+                || quantity.getFixedValue() == null
+                || BigDecimal.ONE.compareTo(quantity.getFixedValue()) != 0)) {
+            errors.add("按次计费模板的计费数量必须固定为1次");
+        }
         if ("DURATION".equals(template) && !"DURATION".equals(upper(quantity.getType()))) {
             errors.add("按时长模板的计费数量类型必须是DURATION");
         }
