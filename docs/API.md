@@ -156,8 +156,9 @@
 | PATCH | `/caller/{id}/status` | 更新状态 |
 | GET/POST | `/caller/{callerId}/products` | 查询或创建调用产品 |
 | GET | `/caller/apikey/list?callerId={id}` | API Key 列表 |
+| GET | `/caller/apikey/current-user-options` | 当前登录人关联系统下的有效 API Key 选项；仅返回 Key ID 与掩码 |
 | GET | `/caller/apikey/{id}` | API Key 详情 |
-| POST | `/caller/apikey` | 创建 API Key；正文包含 `callerId`、`name` |
+| POST | `/caller/apikey` | 创建 API Key 并同步授权产品；正文包含 `callerId`、`name`、非空 `productIds` |
 | PUT | `/caller/apikey/{id}/status` | 状态：`active`、`expired`、`revoked` |
 | PUT | `/caller/apikey/{id}/rate-limit` | 限流开关与每分钟上限 |
 | DELETE | `/caller/apikey/{id}` | 删除 API Key |
@@ -165,8 +166,9 @@
 | POST | `/caller/apikey/{id}/interfaces` | 已收口，固定返回 409；改用接口权限申请或紧急授权 |
 | GET/POST | `/caller/apikey/{id}/products` | 查询或分配产品权限 |
 | GET/POST | `/call-scene/list`、`/call-scene` | 公共调用场景 |
+| POST | `/data-test/query` | 登录态测试调用；正文使用 `apiKeyId`，服务端校验用户关联后按该 Key 授权、限流、配额和计费 |
 
-创建 API Key 时完整密钥只在创建响应中返回；后续列表不应作为密钥恢复通道。
+创建 API Key 时会在同一事务中写入 `api_key` 与 `api_key_product`；产品必须启用且属于该 Caller。完整密钥只在创建响应中返回；后续列表不应作为密钥恢复通道。
 
 ### 4.1 接口权限申请与审批
 
