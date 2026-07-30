@@ -147,10 +147,11 @@
     <!-- API Key弹窗 -->
     <el-dialog v-model="apiKeyVisible" title="API Key管理" width="820px" class="form-dialog">
       <div class="api-key-header">
-        <el-button type="primary" @click="handleCreateApiKey">创建API Key</el-button>
+        <el-button type="primary" @click="handleOpenCreateApiKey">创建API Key</el-button>
       </div>
       <el-table :data="apiKeyList" stripe class="api-key-table">
-        <el-table-column prop="apiKey" label="API Key" min-width="250">
+        <el-table-column prop="keyName" label="名称" min-width="120" />
+        <el-table-column prop="apiKey" label="API Key" min-width="230">
           <template #default="{ row }">
             <code class="api-key-value">{{ row.apiKey }}</code>
           </template>
@@ -178,6 +179,42 @@
           </template>
         </el-table-column>
       </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="apiKeyCreateVisible" title="创建 API Key" width="560px">
+      <el-form :model="apiKeyCreateForm" label-width="100px">
+        <el-form-item label="Key 名称" required>
+          <el-input v-model="apiKeyCreateForm.name" maxlength="100" placeholder="例如：生产环境调用" />
+        </el-form-item>
+        <el-form-item label="授权产品" required>
+          <div class="product-select-field">
+            <el-select
+              v-model="apiKeyCreateForm.productIds"
+              multiple
+              filterable
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="请选择该 Key 可调用的产品"
+              class="product-select"
+            >
+              <el-option
+                v-for="product in activeProductList"
+                :key="product.id"
+                :label="`${product.productName} (${product.productCode})`"
+                :value="product.id!"
+              />
+            </el-select>
+            <div class="product-select-hint">
+              API Key 创建后，只能调用这里授权的产品。
+              <el-button link type="primary" @click="handleOpenProductFromApiKey">添加产品</el-button>
+            </div>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="apiKeyCreateVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleCreateApiKey">创建</el-button>
+      </template>
     </el-dialog>
 
     <el-dialog v-model="rateLimitDialogVisible" title="API Key限流配置" width="480px">
@@ -223,7 +260,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -252,11 +289,17 @@ const loading = ref(false)
 const submitting = ref(false)
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const apiKeyVisible = ref(false)
+const apiKeyCreateVisible = ref(false)
 const rateLimitDialogVisible = ref(false)
 const productVisible = ref(false)
 const currentCallerId = ref<number>(0)
 const apiKeyList = ref<ApiKey[]>([])
 const productList = ref<CallerProduct[]>([])
+const activeProductList = computed(() => productList.value.filter(product => product.id && product.status === COMMON_STATUS.ACTIVE))
+const apiKeyCreateForm = reactive({
+  name: '',
+  productIds: [] as number[]
+})
 const productForm = reactive<CallerProduct>({
   productCode: '',
   productName: '',
@@ -374,11 +417,41 @@ const handleApiKey = async (row: Caller) => {
   productList.value = productRes.data || []
   apiKeyVisible.value = true
 }
+const handleOpenCreateApiKey = () => {
+  apiKeyCreateForm.name = ''
+  apiKeyCreateForm.productIds = []
+  apiKeyCreateVisible.value = true
+}
+const handleOpenProductFromApiKey = async () => {
+  apiKeyCreateVisible.value = false
+  apiKeyVisible.value = false
+  resetProductForm()
+  await loadProducts()
+  productVisible.value = true
+}
 const handleCreateApiKey = async () => {
-  const res = await createApiKey(currentCallerId.value)
-  const apiKey = res.data
-  ElMessage.success('创建成功')
-  if (apiKey) apiKeyList.value = [...apiKeyList.value, apiKey]
+  if (!apiKeyCreateForm.name.trim()) {
+    ElMessage.warning('请填写 Key 名称')
+    return
+  }
+  if (apiKeyCreateForm.productIds.length === 0) {
+    ElMessage.warning('请至少选择一个授权产品')
+    return
+  }
+  submitting.value = true
+  try {
+    const res = await createApiKey({
+      callerId: currentCallerId.value,
+      name: apiKeyCreateForm.name.trim(),
+      productIds: apiKeyCreateForm.productIds
+    })
+    const apiKey = res.data
+    ElMessage.success('API Key及产品授权创建成功')
+    apiKeyCreateVisible.value = false
+    if (apiKey) apiKeyList.value = [...apiKeyList.value, apiKey]
+  } finally {
+    submitting.value = false
+  }
 }
 const handleRateLimitConfig = (apiKey: ApiKey) => {
   currentApiKeyId.value = apiKey.id!
@@ -428,7 +501,7 @@ const handleProductAuth = async (apiKeyId: number) => {
       getCallerProducts(currentCallerId.value),
       getApiKeyProducts(apiKeyId)
     ])
-    productList.value = productsRes.data || []
+    productList.value = (productsRes.data || []).filter(product => product.status === COMMON_STATUS.ACTIVE)
     selectedProducts.value = apiKeyProductsRes.data || []
     productAuthVisible.value = true
   } catch (error) {
@@ -481,6 +554,9 @@ onMounted(() => { loadData() })
 .pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }
 .api-key-header { margin-bottom: 16px; }
 .api-key-value { font-family: var(--font-mono); font-size: 12px; color: var(--color-text-secondary); background: var(--color-bg-light); padding: 4px 8px; border-radius: 4px; word-break: break-all; }
+.product-select-field { width: 100%; }
+.product-select { width: 100%; }
+.product-select-hint { margin-top: 8px; color: var(--color-text-tertiary); font-size: 12px; line-height: 1.5; }
 .inline-form { margin-bottom: 16px; }
 .cache-scope-select { width: 140px; }
 .rate-limit-input { width: 100%; }
