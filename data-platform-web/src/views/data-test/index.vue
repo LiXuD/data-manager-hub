@@ -345,6 +345,7 @@ import type { CurrentUserApiKeyOption } from '@/api/caller'
 import { getCallSceneList } from '@/api/call-scene'
 import { useUserStore } from '@/stores/user'
 import { filterGrantedActiveProducts } from './product-options'
+import { toQueryFailure } from './query-error'
 import type { Vendor, DataType, ApiInterface, InterfaceParam, DataQueryResponse, CallerProductDTO, CallSceneDTO } from '@/types'
 
 type ParamInputType = 'string' | 'number' | 'boolean' | 'object' | 'array'
@@ -803,14 +804,13 @@ const handleExecute = async () => {
     } else {
       ElMessage.error(res.errorMsg || '查询失败')
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('查询失败:', error)
+    const failure = toQueryFailure(error)
     result.value = {
       success: false,
-      errorCode: 'NETWORK_ERROR',
-      errorMsg: error.message || '网络请求失败'
+      ...failure
     }
-    ElMessage.error('查询请求失败')
   } finally {
     loading.value = false
   }
