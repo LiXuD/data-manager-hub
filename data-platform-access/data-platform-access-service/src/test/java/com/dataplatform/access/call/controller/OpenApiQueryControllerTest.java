@@ -212,6 +212,40 @@ class OpenApiQueryControllerTest {
     }
 
     @Test
+    void shouldRejectProductThatIsNotConfiguredForCaller() {
+        ApiKey apiKey = activeApiKey();
+        when(apiKeyService.getByKey("test-key")).thenReturn(apiKey);
+        when(callerService.getById(20L)).thenReturn(new CallerInfo());
+        when(callerProductService.getActiveProduct(20L, "loan-risk")).thenReturn(null);
+
+        ResponseEntity<Result<OpenApiQueryRespVO>> response =
+                controller.query("test-key", null, null, validRequest(), null);
+
+        assertEquals(403, response.getStatusCode().value());
+        assertEquals("调用方未配置该产品", response.getBody().getMsg());
+        verifyNoInteractions(apiKeyProductService);
+    }
+
+    @Test
+    void shouldRejectProductThatIsNotGrantedToApiKey() {
+        ApiKey apiKey = activeApiKey();
+        CallerProduct product = new CallerProduct();
+        product.setId(60L);
+        product.setCallerId(20L);
+        product.setProductCode("loan-risk");
+        when(apiKeyService.getByKey("test-key")).thenReturn(apiKey);
+        when(callerService.getById(20L)).thenReturn(new CallerInfo());
+        when(callerProductService.getActiveProduct(20L, "loan-risk")).thenReturn(product);
+        when(apiKeyProductService.hasProductPermission(10L, 60L)).thenReturn(false);
+
+        ResponseEntity<Result<OpenApiQueryRespVO>> response =
+                controller.query("test-key", null, null, validRequest(), null);
+
+        assertEquals(403, response.getStatusCode().value());
+        assertEquals("API Key没有访问该产品的权限", response.getBody().getMsg());
+    }
+
+    @Test
     void shouldRejectNullBatchItemBeforeAuthentication() {
         OpenApiBatchQueryReqVO request = new OpenApiBatchQueryReqVO();
         request.setApiCode("WORLD_TIME");
@@ -262,5 +296,23 @@ class OpenApiQueryControllerTest {
                 controller, "validateApprovedCachePolicy", true, 2, grant);
 
         assertEquals(null, error);
+    }
+
+    private ApiKey activeApiKey() {
+        ApiKey apiKey = new ApiKey();
+        apiKey.setId(10L);
+        apiKey.setCallerId(20L);
+        apiKey.setApiKey("test-key");
+        apiKey.setStatus(ApiKeyStatus.ACTIVE);
+        return apiKey;
+    }
+
+    private OpenApiQueryReqVO validRequest() {
+        OpenApiQueryReqVO request = new OpenApiQueryReqVO();
+        request.setApiCode("PERSONAL_QUERY");
+        request.setProductCode("loan-risk");
+        request.setSceneCode("pre-loan-review");
+        request.setParams(Map.of());
+        return request;
     }
 }

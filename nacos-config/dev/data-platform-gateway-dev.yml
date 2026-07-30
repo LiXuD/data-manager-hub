@@ -49,6 +49,12 @@ spring:
             - Path=/api/v1/caller/**
           filters:
             - StripPrefix=2
+        - id: access-data-test-route
+          uri: lb://data-platform-access
+          predicates:
+            - Path=/api/v1/data-test/**
+          filters:
+            - StripPrefix=2
         - id: access-api-permission-route
           uri: lb://data-platform-access
           predicates:
@@ -167,4 +173,3 @@ management:
 
 server.port: 8888
 logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"
-
