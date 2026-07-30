@@ -57,21 +57,21 @@ if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('migratio
 fi
 bash ./migrate-db.sh update
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "14" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "18" ]]; then
   echo "Liquibase 基线、运行时结构修复、Flowable、接口权限审批与 RBAC 安全变更记录不完整" >&2
   exit 1
 fi
 
-bash ./migrate-db.sh rollback-dry-run 3 >"$DRY_RUN_FILE"
+bash ./migrate-db.sh rollback-dry-run 7 >"$DRY_RUN_FILE"
 grep -q "禁止原地回滚角色合并" "$DRY_RUN_FILE"
 if MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" \
-    bash ./migrate-db.sh rollback-count 3 >/dev/null 2>&1; then
+    bash ./migrate-db.sh rollback-count 7 >/dev/null 2>&1; then
   echo "V027 前向安全迁移不应允许原地回滚" >&2
   exit 1
 fi
 
 if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
-    SELECT count(*) = 14
+    SELECT count(*) = 18
        AND to_regclass('api_permission_application') IS NOT NULL
        AND to_regclass('workflow.act_ru_execution') IS NOT NULL
        AND to_regclass('tenant_budget') IS NOT NULL
@@ -195,7 +195,7 @@ SQL
 DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$VERIFY_DB_NAME" \
   bash ./migrate-db.sh baseline
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "14" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "18" ]]; then
   echo "现有数据库基线登记失败" >&2
   exit 1
 fi
@@ -203,6 +203,11 @@ fi
 "${PSQL[@]}" -d postgres -c "CREATE DATABASE \"$LEGACY_VERIFY_DB_NAME\"" >/dev/null
 "${PSQL[@]}" -d "$LEGACY_VERIFY_DB_NAME" -f sql/init.sql >/dev/null
 "${PSQL[@]}" -d "$LEGACY_VERIFY_DB_NAME" -c '
+  DROP TABLE billing_daily_event;
+  ALTER TABLE billing_daily
+    DROP COLUMN avg_latency,
+    DROP CONSTRAINT billing_daily_tenant_id_caller_id_vendor_id_data_type_billi_key,
+    ADD CONSTRAINT billing_daily_caller_id_billing_date_key UNIQUE (caller_id, billing_date);
   ALTER TABLE quality_score
     DROP COLUMN rule_id CASCADE,
     DROP COLUMN score_date CASCADE,
@@ -223,8 +228,29 @@ DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$LEGACY_VERIFY_
   bash ./migrate-db.sh baseline
 
 if [[ "$("${PSQL[@]}" -Atq -d "$LEGACY_VERIFY_DB_NAME" -c "
-    SELECT count(*) = 14
+    SELECT count(*) = 18
        AND to_regclass('interface_param') IS NOT NULL
+       AND to_regclass('billing_daily_event') IS NOT NULL
+       AND EXISTS (
+         SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'billing_daily'
+           AND column_name = 'avg_latency' AND data_type = 'integer'
+       )
+       AND EXISTS (
+         SELECT 1
+         FROM pg_indexes
+         WHERE schemaname = 'public' AND tablename = 'billing_daily'
+           AND indexname = 'uk_billing_daily_runtime_projection'
+           AND indexdef LIKE '%(tenant_id, caller_id, vendor_id, data_type, billing_date)%'
+       )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM pg_constraint
+         WHERE conrelid = 'public.billing_daily'::regclass
+           AND contype = 'u'
+           AND pg_get_constraintdef(oid) = 'UNIQUE (caller_id, billing_date)'
+       )
        AND to_regclass('workflow.act_ge_property') IS NOT NULL
        AND to_regclass('workflow.act_ru_execution') IS NOT NULL
        AND to_regclass('tenant_budget') IS NOT NULL
@@ -338,4 +364,4 @@ BEGIN
 END $$;
 SQL
 
-echo "数据库迁移回归通过（dry-run/update/idempotency/V026+V027+V030+V031+V032+V033+V034+V035+V036+Flowable/forward-recovery/backup/restore/baseline/legacy-baseline）: $VERIFY_DB_NAME"
+echo "数据库迁移回归通过（dry-run/update/idempotency/V026+V027+V030+V031+V032+V033+V034+V035+V036+V037+V038+V039+V040+Flowable/forward-recovery/backup/restore/baseline/legacy-baseline）: $VERIFY_DB_NAME"
