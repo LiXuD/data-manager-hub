@@ -295,4 +295,61 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="billing-daily-event-runtime-contract-2026-07-30"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="billing_daily"/>
+        </preConditions>
+        <sqlFile path="../migrations/V038__repair_billing_daily_event.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U038__refuse_billing_daily_event_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="billing-daily-runtime-contract-2026-07-30"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="billing_daily"/>
+        </preConditions>
+        <sqlFile path="../migrations/V039__normalize_billing_daily_runtime_contract.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U039__refuse_billing_daily_runtime_contract_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="remove-legacy-billing-daily-uniqueness-2026-07-30"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="billing_daily"/>
+        </preConditions>
+        <sqlFile path="../migrations/V040__remove_legacy_billing_daily_uniqueness.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U040__refuse_legacy_billing_daily_uniqueness_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>
