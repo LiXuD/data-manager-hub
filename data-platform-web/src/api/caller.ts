@@ -24,7 +24,7 @@ export const getCallerList = (params: PageParams & { keyword?: string; status?: 
 }
 
 export const getCaller = (id: number) => {
-  return request.get<CallerDTO>(`/caller/${id}`)
+  return request.get<{ data: CallerDTO }>(`/caller/${id}`)
 }
 
 export const createCaller = (data: CallerDTO) => {
@@ -92,6 +92,10 @@ export const getCallerProducts = (callerId: number) => {
 
 export const createCallerProduct = (callerId: number, data: CallerProductDTO) => {
   return request.post<{ data: CallerProductDTO }>(`/caller/${callerId}/products`, data)
+}
+
+export const updateCallerProduct = (callerId: number, productId: number, data: CallerProductDTO) => {
+  return request.put<{ data: CallerProductDTO }>(`/caller/${callerId}/products/${productId}`, data)
 }
 
 export const getApiKeyProducts = (apiKeyId: number) => {

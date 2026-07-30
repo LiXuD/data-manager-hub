@@ -54,6 +54,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '内部系统管理', permissions: ['caller:view'] }
       },
       {
+        path: '/caller/:callerId/products',
+        name: 'CallerProducts',
+        component: () => import('@/views/caller/products.vue'),
+        meta: { title: '内部系统产品管理', permissions: ['caller:view'] }
+      },
+      {
         path: '/api-permission',
         name: 'ApiPermission',
         component: () => import('@/views/api-permission/index.vue'),
