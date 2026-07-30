@@ -39,13 +39,38 @@ public class CallerProductService extends ServiceImpl<CallerProductMapper, Calle
     public CallerProduct saveProduct(Long callerId, CallerProduct product) {
         product.setId(null);
         product.setCallerId(callerId);
+        product.setProductCode(product.getProductCode().trim());
+        product.setProductName(product.getProductName().trim());
         if (product.getStatus() == null || product.getStatus().trim().isEmpty()) {
             product.setStatus(StatusConstants.ACTIVE);
+        } else {
+            product.setStatus(product.getStatus().trim().toLowerCase());
         }
         if (product.getCacheScope() == null || product.getCacheScope().trim().isEmpty()) {
             product.setCacheScope("CALLER");
+        } else {
+            product.setCacheScope(product.getCacheScope().trim().toUpperCase());
         }
         save(product);
         return product;
+    }
+
+    @Transactional
+    public CallerProduct updateProduct(Long callerId, Long productId, CallerProduct changes) {
+        LambdaQueryWrapper<CallerProduct> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CallerProduct::getId, productId)
+                .eq(CallerProduct::getCallerId, callerId)
+                .last("LIMIT 1");
+        CallerProduct existing = getOne(wrapper, false);
+        if (existing == null) {
+            return null;
+        }
+        existing.setProductName(changes.getProductName().trim());
+        existing.setCacheScope(changes.getCacheScope() == null || changes.getCacheScope().trim().isEmpty()
+                ? "CALLER" : changes.getCacheScope().trim().toUpperCase());
+        existing.setStatus(changes.getStatus() == null || changes.getStatus().trim().isEmpty()
+                ? StatusConstants.ACTIVE : changes.getStatus().trim().toLowerCase());
+        updateById(existing);
+        return existing;
     }
 }

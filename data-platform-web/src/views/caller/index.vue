@@ -103,47 +103,6 @@
       </template>
     </el-dialog>
 
-    <!-- 产品配置弹窗 -->
-    <el-dialog v-model="productVisible" title="内部系统产品配置" width="760px" class="form-dialog">
-      <el-form :model="productForm" inline class="inline-form">
-        <el-form-item label="产品编码">
-          <el-input v-model="productForm.productCode" placeholder="loan-risk" />
-        </el-form-item>
-        <el-form-item label="产品名称">
-          <el-input v-model="productForm.productName" placeholder="信贷风控" />
-        </el-form-item>
-        <el-form-item label="缓存范围">
-          <el-select v-model="productForm.cacheScope" class="cache-scope-select">
-            <el-option label="全局复用" value="GLOBAL" />
-            <el-option label="调用方内复用" value="CALLER" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="handleCreateProduct">添加产品</el-button>
-        </el-form-item>
-      </el-form>
-      <el-table :data="productList" stripe>
-        <el-table-column prop="productCode" label="产品编码" min-width="150">
-          <template #default="{ row }">
-            <span class="code-tag">{{ row.productCode }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="productName" label="产品名称" min-width="160" />
-        <el-table-column prop="cacheScope" label="缓存范围" width="130">
-          <template #default="{ row }">
-            <el-tag size="small" :type="row.cacheScope === 'CALLER' ? 'warning' : 'info'">
-              {{ row.cacheScope === 'CALLER' ? '调用方内复用' : '全局复用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="90">
-          <template #default="{ row }">
-            <el-tag :type="row.status === COMMON_STATUS.ACTIVE ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-dialog>
-
     <!-- API Key弹窗 -->
     <el-dialog v-model="apiKeyVisible" title="API Key管理" width="820px" class="form-dialog">
       <div class="api-key-header">
@@ -244,16 +203,23 @@
     </el-dialog>
 
     <!-- 产品授权弹窗 -->
-    <el-dialog v-model="productAuthVisible" title="API Key产品授权" width="520px">
-      <el-transfer
-        v-model="selectedProducts"
-        :data="productList"
-        :titles="['调用方产品', '已授权产品']"
-        :props="{ key: 'id', label: 'productName' }"
-      />
+    <el-dialog v-model="productAuthVisible" title="API Key产品授权" width="800px" class="config-dialog">
+      <div class="config-container">
+        <el-transfer
+          v-model="selectedProducts"
+          :data="productTransferList"
+          :titles="['可选产品', '已授权产品']"
+          :props="{ key: 'id', label: 'transferLabel' }"
+          filterable
+          filter-placeholder="搜索产品名称或编码"
+          class="custom-transfer"
+        />
+      </div>
       <template #footer>
-        <el-button @click="productAuthVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSaveProductAuth">确定</el-button>
+        <div class="dialog-footer">
+          <el-button size="large" @click="productAuthVisible = false">取消</el-button>
+          <el-button type="primary" size="large" :loading="submitting" @click="handleSaveProductAuth">确定</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -273,7 +239,6 @@ import {
   deleteApiKey,
   updateCallerStatus,
   getCallerProducts,
-  createCallerProduct,
   getApiKeyProducts,
   assignApiKeyProducts,
   updateCaller
@@ -291,20 +256,17 @@ const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const apiKeyVisible = ref(false)
 const apiKeyCreateVisible = ref(false)
 const rateLimitDialogVisible = ref(false)
-const productVisible = ref(false)
 const currentCallerId = ref<number>(0)
 const apiKeyList = ref<ApiKey[]>([])
 const productList = ref<CallerProduct[]>([])
 const activeProductList = computed(() => productList.value.filter(product => product.id && product.status === COMMON_STATUS.ACTIVE))
+const productTransferList = computed(() => activeProductList.value.map(product => ({
+  ...product,
+  transferLabel: `${product.productName} (${product.productCode})`
+})))
 const apiKeyCreateForm = reactive({
   name: '',
   productIds: [] as number[]
-})
-const productForm = reactive<CallerProduct>({
-  productCode: '',
-  productName: '',
-  cacheScope: 'CALLER',
-  status: 'active'
 })
 const productAuthVisible = ref(false)
 const selectedProducts = ref<number[]>([])
@@ -369,46 +331,8 @@ const handleSaveCaller = async () => {
   }
 }
 const handleDelete = async (row: Caller) => { await ElMessageBox.confirm(`确认删除"${row.callerName}"?`, '提示', { type: 'warning' }); await deleteCaller(row.id!); ElMessage.success('删除成功'); loadData() }
-const resetProductForm = () => {
-  productForm.productCode = ''
-  productForm.productName = ''
-  productForm.cacheScope = 'CALLER'
-  productForm.status = 'active'
-}
-const loadProducts = async (callerId = currentCallerId.value) => {
-  if (!callerId) {
-    productList.value = []
-    return
-  }
-  const res = await getCallerProducts(callerId)
-  productList.value = res.data || []
-}
 const handleProducts = async (row: Caller) => {
-  currentCallerId.value = row.id!
-  resetProductForm()
-  await loadProducts(row.id!)
-  productVisible.value = true
-}
-const handleCreateProduct = async () => {
-  if (!currentCallerId.value) return
-  if (!productForm.productCode.trim() || !productForm.productName.trim()) {
-    ElMessage.warning('请填写产品编码和产品名称')
-    return
-  }
-  submitting.value = true
-  try {
-    await createCallerProduct(currentCallerId.value, {
-      productCode: productForm.productCode.trim(),
-      productName: productForm.productName.trim(),
-      cacheScope: productForm.cacheScope,
-      status: productForm.status
-    })
-    ElMessage.success('产品添加成功')
-    resetProductForm()
-    await loadProducts()
-  } finally {
-    submitting.value = false
-  }
+  await router.push(`/caller/${row.id}/products`)
 }
 const handleApiKey = async (row: Caller) => {
   currentCallerId.value = row.id!
@@ -425,9 +349,7 @@ const handleOpenCreateApiKey = () => {
 const handleOpenProductFromApiKey = async () => {
   apiKeyCreateVisible.value = false
   apiKeyVisible.value = false
-  resetProductForm()
-  await loadProducts()
-  productVisible.value = true
+  await router.push(`/caller/${currentCallerId.value}/products`)
 }
 const handleCreateApiKey = async () => {
   if (!apiKeyCreateForm.name.trim()) {
@@ -557,8 +479,19 @@ onMounted(() => { loadData() })
 .product-select-field { width: 100%; }
 .product-select { width: 100%; }
 .product-select-hint { margin-top: 8px; color: var(--color-text-tertiary); font-size: 12px; line-height: 1.5; }
-.inline-form { margin-bottom: 16px; }
-.cache-scope-select { width: 140px; }
 .rate-limit-input { width: 100%; }
 .policy-hint { margin-left: 140px; color: var(--color-text-tertiary); font-size: 12px; line-height: 1.6; }
+.config-dialog :deep(.el-dialog__header) { padding: 24px 24px 16px; border-bottom: 1px solid var(--color-border); }
+.config-dialog :deep(.el-dialog__title) { font-size: 20px; font-weight: 600; color: var(--color-text-primary); }
+.config-container { padding: 8px 0; }
+.custom-transfer { --el-transfer-panel-width: 300px; display: flex; align-items: center; justify-content: center; }
+.custom-transfer :deep(.el-transfer-panel) { border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); }
+.custom-transfer :deep(.el-transfer-panel__header) { background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%); padding: 16px 20px; }
+.custom-transfer :deep(.el-transfer-panel__header .el-checkbox__label) { color: white; font-weight: 600; font-size: 14px; }
+.custom-transfer :deep(.el-transfer-panel__header .el-checkbox__inner) { border-color: white; }
+.custom-transfer :deep(.el-transfer-panel__body) { height: 400px; }
+.custom-transfer :deep(.el-transfer-panel__item) { border-radius: 8px; }
+.custom-transfer :deep(.el-transfer__buttons) { padding: 0 24px; }
+.custom-transfer :deep(.el-transfer__button) { border-radius: 10px; width: 44px; height: 44px; }
+.dialog-footer { display: flex; gap: 12px; justify-content: flex-end; }
 </style>

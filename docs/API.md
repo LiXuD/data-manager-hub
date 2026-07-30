@@ -155,6 +155,7 @@
 | PUT/DELETE | `/caller/{id}` | 更新、删除调用方 |
 | PATCH | `/caller/{id}/status` | 更新状态 |
 | GET/POST | `/caller/{callerId}/products` | 查询或创建调用产品 |
+| PUT | `/caller/{callerId}/products/{productId}` | 修改产品名称、复用条件和状态；产品必须属于指定调用方 |
 | GET | `/caller/apikey/list?callerId={id}` | API Key 列表 |
 | GET | `/caller/apikey/current-user-options` | 当前登录人关联系统下的有效 API Key 选项；仅返回 Key ID 与掩码 |
 | GET | `/caller/apikey/{id}` | API Key 详情 |
