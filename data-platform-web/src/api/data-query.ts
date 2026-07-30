@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { request } from '@/utils/request'
 import type { DataQueryResponse, OpenApiQueryRequest } from '@/types'
 
 const openApiClient = axios.create({
@@ -20,4 +21,12 @@ export const executeOpenApiQuery = async (apiKey: string, data: OpenApiQueryRequ
     return res.data as DataQueryResponse
   }
   throw new Error(res?.message || res?.msg || '请求失败')
+}
+
+export const executeDataTestQuery = async (apiKeyId: number, data: OpenApiQueryRequest) => {
+  const res = await request.post<{ data: DataQueryResponse }>('/data-test/query', {
+    ...data,
+    apiKeyId
+  })
+  return res.data
 }

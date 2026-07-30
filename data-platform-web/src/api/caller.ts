@@ -2,8 +2,22 @@ import { request } from '@/utils/request'
 import type { PageParams, ListResponse, CallerDTO, ApiKeyDTO, CallerProductDTO } from '@/types'
 
 export type Caller = CallerDTO
-export type ApiKey = ApiKeyDTO
+export type ApiKey = ApiKeyDTO & { keyName?: string }
 export type CallerProduct = CallerProductDTO
+
+export interface CurrentUserApiKeyOption {
+  id: number
+  callerId: number
+  callerCode: string
+  callerName: string
+  keyName: string
+  maskedApiKey: string
+}
+
+export interface CurrentUserApiKeyOptions {
+  hasAssociatedCaller: boolean
+  options: CurrentUserApiKeyOption[]
+}
 
 export const getCallerList = (params: PageParams & { keyword?: string; status?: 'active' | 'inactive' }) => {
   return request.get<ListResponse<CallerDTO>>('/caller/list', { params })
@@ -30,11 +44,21 @@ export const updateCallerStatus = (id: number, status: 'active' | 'inactive') =>
 }
 
 export const getApiKeyList = (callerId: number) => {
-  return request.get<ListResponse<ApiKeyDTO>>('/caller/apikey/list', { params: { callerId } })
+  return request.get<ListResponse<ApiKey>>('/caller/apikey/list', { params: { callerId } })
 }
 
-export const createApiKey = (callerId: number) => {
-  return request.post<{ data: ApiKeyDTO }>('/caller/apikey', { callerId, name: 'default' })
+export const getCurrentUserApiKeyOptions = () => {
+  return request.get<{ data: CurrentUserApiKeyOptions }>('/caller/apikey/current-user-options')
+}
+
+export interface ApiKeyCreateRequest {
+  callerId: number
+  name: string
+  productIds: number[]
+}
+
+export const createApiKey = (data: ApiKeyCreateRequest) => {
+  return request.post<{ data: ApiKey }>('/caller/apikey', data)
 }
 
 export interface ApiKeyRateLimitPolicy {
@@ -43,7 +67,7 @@ export interface ApiKeyRateLimitPolicy {
 }
 
 export const updateApiKeyRateLimit = (id: number, data: ApiKeyRateLimitPolicy) => {
-  return request.put<{ data: ApiKeyDTO }>(`/caller/apikey/${id}/rate-limit`, data)
+  return request.put<{ data: ApiKey }>(`/caller/apikey/${id}/rate-limit`, data)
 }
 
 export const updateApiKeyStatus = (id: number, status: 'active' | 'revoked' | 'expired') => {

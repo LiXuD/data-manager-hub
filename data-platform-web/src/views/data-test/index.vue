@@ -20,12 +20,43 @@
       <div class="selector-row">
         <div class="selector-item wide">
           <label class="selector-label">API Key</label>
-          <el-input
-            v-model="apiKey"
-            placeholder="请输入外部调用 API Key"
-            show-password
+          <el-select
+            v-model="selectedApiKeyId"
+            placeholder="请选择本次调用计费的 API Key"
+            clearable
+            filterable
+            :loading="apiKeyLoading"
             class="selector-input"
-          />
+            @change="handleApiKeyChange"
+          >
+            <el-option
+              v-for="option in apiKeyOptions"
+              :key="option.id"
+              :label="`${option.callerName} / ${option.keyName} (${option.maskedApiKey})`"
+              :value="option.id"
+            />
+          </el-select>
+          <div v-if="apiKeyLoadError" class="api-key-hint warning">
+            API Key 列表加载失败，请稍后重试。
+            <el-link type="primary" :underline="false" @click="loadApiKeyOptions">重新加载</el-link>
+          </div>
+          <div v-else-if="apiKeyOptionsLoaded && !hasAssociatedCaller" class="api-key-hint warning">
+            当前账号尚未关联内部系统，请联系管理员完成关联绑定。
+            <el-link
+              v-if="userStore.hasPermission('user:view')"
+              type="primary"
+              :underline="false"
+              @click="router.push('/user')"
+            >
+              前往用户管理
+            </el-link>
+          </div>
+          <div
+            v-else-if="apiKeyOptionsLoaded && hasAssociatedCaller && apiKeyOptions.length === 0"
+            class="api-key-hint warning"
+          >
+            已关联系统暂无可用 API Key，请联系系统管理员创建或启用 Key。
+          </div>
         </div>
 
         <div class="selector-item">
@@ -87,37 +118,28 @@
 
       <div class="selector-row">
         <div class="selector-item">
-          <label class="selector-label">调用方</label>
-          <el-select
-            v-model="selectedCallerId"
-            placeholder="用于加载产品"
-            clearable
-            filterable
+          <label class="selector-label">归属系统</label>
+          <el-input
+            :model-value="selectedApiKeyOption?.callerName || ''"
+            placeholder="选择 API Key 后自动确定"
+            disabled
             class="selector-input"
-            @change="handleCallerChange"
-          >
-            <el-option
-              v-for="caller in callerList"
-              :key="caller.id"
-              :label="caller.callerName"
-              :value="caller.id"
-            />
-          </el-select>
+          />
         </div>
 
         <div class="selector-item">
           <label class="selector-label">产品</label>
           <el-select
             v-model="productCode"
-            placeholder="请选择或输入产品编码"
+            placeholder="请选择该 API Key 已授权的产品"
             clearable
             filterable
-            allow-create
+            :disabled="!selectedApiKeyId"
             class="selector-input"
           >
             <el-option
               v-for="product in productList"
-              :key="product.id || product.productCode"
+              :key="product.id"
               :label="`${product.productName} (${product.productCode})`"
               :value="product.productCode"
             />
@@ -247,7 +269,7 @@
         <el-button
           type="primary"
           :loading="loading"
-          :disabled="!canExecute"
+          :disabled="paramsLoading"
           @click="handleExecute"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
@@ -312,35 +334,44 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getVendorList } from '@/api/vendor'
 import { getDataTypeList } from '@/api/datatype'
 import { getInterfaceOptions, getInterfaceParams } from '@/api/interface'
-import { executeOpenApiQuery } from '@/api/data-query'
-import { getCallerList, getCallerProducts } from '@/api/caller'
+import { executeDataTestQuery } from '@/api/data-query'
+import { getApiKeyProducts, getCallerProducts, getCurrentUserApiKeyOptions } from '@/api/caller'
+import type { CurrentUserApiKeyOption } from '@/api/caller'
 import { getCallSceneList } from '@/api/call-scene'
-import type { Vendor, DataType, ApiInterface, InterfaceParam, DataQueryResponse, CallerDTO, CallerProductDTO, CallSceneDTO } from '@/types'
+import { useUserStore } from '@/stores/user'
+import { filterGrantedActiveProducts } from './product-options'
+import type { Vendor, DataType, ApiInterface, InterfaceParam, DataQueryResponse, CallerProductDTO, CallSceneDTO } from '@/types'
 
-type CallerOption = CallerDTO & { id: number }
 type ParamInputType = 'string' | 'number' | 'boolean' | 'object' | 'array'
 
 const EMPTY_PARAMS_JSON = '{}'
+const router = useRouter()
+const userStore = useUserStore()
 
 // 选择器数据
 const vendorList = ref<Vendor[]>([])
 const dataTypeList = ref<DataType[]>([])
 const interfaceList = ref<ApiInterface[]>([])
 const vendorInterfaceOptions = ref<ApiInterface[]>([])
-const callerList = ref<CallerOption[]>([])
+const apiKeyOptions = ref<CurrentUserApiKeyOption[]>([])
 const productList = ref<CallerProductDTO[]>([])
 const sceneList = ref<CallSceneDTO[]>([])
+const apiKeyLoading = ref(false)
+const apiKeyOptionsLoaded = ref(false)
+const apiKeyLoadError = ref(false)
+const hasAssociatedCaller = ref(false)
 
 // 选中值
 const selectedVendorId = ref<number | null>(null)
 const selectedDataTypeId = ref<number | null>(null)
 const selectedInterfaceId = ref<number | null>(null)
 const selectedCallerId = ref<number | null>(null)
-const apiKey = ref('')
+const selectedApiKeyId = ref<number | null>(null)
 const productCode = ref('')
 const sceneCode = ref('')
 const useCache = ref(false)
@@ -368,9 +399,8 @@ const filteredDataTypeList = computed(() => {
   return dataTypeList.value.filter(item => item.id && dataTypeIds.has(item.id))
 })
 
-// 是否可以执行查询
-const canExecute = computed(() => {
-  return Boolean(apiKey.value.trim() && selectedInterfaceId.value && productCode.value.trim() && sceneCode.value && !paramsLoading.value)
+const selectedApiKeyOption = computed(() => {
+  return apiKeyOptions.value.find(option => option.id === selectedApiKeyId.value)
 })
 
 // 是否有结果
@@ -598,12 +628,22 @@ const loadDataTypes = async () => {
   }
 }
 
-const loadCallers = async () => {
+const loadApiKeyOptions = async () => {
+  apiKeyLoading.value = true
+  apiKeyOptionsLoaded.value = false
+  apiKeyLoadError.value = false
   try {
-    const res = await getCallerList({ page: 1, pageSize: 1000, status: 'active' })
-    callerList.value = (res.data || []).filter((caller): caller is CallerOption => caller.id !== undefined)
+    const res = await getCurrentUserApiKeyOptions()
+    apiKeyOptions.value = res.data?.options || []
+    hasAssociatedCaller.value = Boolean(res.data?.hasAssociatedCaller)
   } catch (error) {
-    console.error('加载调用方列表失败:', error)
+    console.error('加载当前用户 API Key 失败:', error)
+    apiKeyOptions.value = []
+    hasAssociatedCaller.value = false
+    apiKeyLoadError.value = true
+  } finally {
+    apiKeyLoading.value = false
+    apiKeyOptionsLoaded.value = true
   }
 }
 
@@ -666,16 +706,21 @@ const handleInterfaceChange = async () => {
   }
 }
 
-const handleCallerChange = async () => {
+const handleApiKeyChange = async () => {
   productCode.value = ''
   productList.value = []
   result.value = null
-  if (!selectedCallerId.value) return
+  selectedCallerId.value = selectedApiKeyOption.value?.callerId || null
+  if (!selectedCallerId.value || !selectedApiKeyId.value) return
   try {
-    const res = await getCallerProducts(selectedCallerId.value)
-    productList.value = (res.data || []).filter(product => product.status === 'active')
+    const [productsRes, grantsRes] = await Promise.all([
+      getCallerProducts(selectedCallerId.value),
+      getApiKeyProducts(selectedApiKeyId.value)
+    ])
+    productList.value = filterGrantedActiveProducts(productsRes.data || [], grantsRes.data || [])
   } catch (error) {
     console.error('加载产品列表失败:', error)
+    ElMessage.error('加载 API Key 产品授权失败')
   }
 }
 
@@ -692,6 +737,26 @@ const formatJson = () => {
 
 // 执行查询
 const handleExecute = async () => {
+  const dataType = dataTypeList.value.find(dt => dt.id === selectedDataTypeId.value)
+  const intf = interfaceList.value.find(i => i.id === selectedInterfaceId.value)
+
+  if (!dataType || !intf) {
+    ElMessage.warning('请选择数据类型和接口')
+    return
+  }
+  if (!selectedApiKeyOption.value) {
+    ElMessage.warning('请选择 API Key')
+    return
+  }
+  if (!productCode.value.trim()) {
+    ElMessage.warning('请填写产品编码')
+    return
+  }
+  if (!sceneCode.value) {
+    ElMessage.warning('请选择调用场景')
+    return
+  }
+
   let params: Record<string, any> = {}
 
   if (advancedJsonVisible.value) {
@@ -718,24 +783,11 @@ const handleExecute = async () => {
     jsonError.value = ''
   }
 
-  // 获取选中的对象
-  const dataType = dataTypeList.value.find(dt => dt.id === selectedDataTypeId.value)
-  const intf = interfaceList.value.find(i => i.id === selectedInterfaceId.value)
-
-  if (!dataType || !intf) {
-    ElMessage.warning('请选择数据类型和接口')
-    return
-  }
-  if (!apiKey.value.trim() || !productCode.value.trim() || !sceneCode.value) {
-    ElMessage.warning('请填写 API Key、产品和场景')
-    return
-  }
-
   loading.value = true
   result.value = null
 
   try {
-    const res = await executeOpenApiQuery(apiKey.value.trim(), {
+    const res = await executeDataTestQuery(selectedApiKeyOption.value.id, {
       requestId: `web-${Date.now()}`,
       apiCode: intf.interfaceCode,
       productCode: productCode.value.trim(),
@@ -770,7 +822,7 @@ const handleClear = () => {
   selectedDataTypeId.value = null
   selectedInterfaceId.value = null
   selectedCallerId.value = null
-  apiKey.value = ''
+  selectedApiKeyId.value = null
   productCode.value = ''
   sceneCode.value = ''
   useCache.value = false
@@ -785,7 +837,7 @@ const handleClear = () => {
 onMounted(() => {
   loadVendors()
   loadDataTypes()
-  loadCallers()
+  loadApiKeyOptions()
   loadScenes()
 })
 </script>
@@ -855,6 +907,16 @@ onMounted(() => {
 
 .selector-input {
   width: 100%;
+}
+
+.api-key-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.api-key-hint.warning {
+  color: var(--el-color-warning-dark-2);
 }
 
 .cache-controls {
