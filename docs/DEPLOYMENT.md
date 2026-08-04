@@ -1,6 +1,6 @@
 # 数据管理平台部署文档
 
-**版本**: 2026-07-14
+**版本**: 2026-08-03
 
 ---
 
@@ -26,6 +26,7 @@
 | Nacos | 2.3.x | 8848 | 服务注册与配置中心 |
 | SkyWalking OAP | 9.4.0 | 11800/12800 | 链路追踪服务端 (gRPC/HTTP) |
 | SkyWalking UI | 9.4.0 | 8088 | 链路追踪可视化 |
+| Nexus/S3 兼容 HTTPS 制品库 | 由环境提供 | 443 | 连接器 JAR；坐标不可覆盖，仓库主机和路径必须在白名单 |
 
 ---
 
@@ -74,6 +75,11 @@ Liquibase 使用 `DATABASECHANGELOG` 和 `DATABASECHANGELOGLOCK` 管理顺序、
 接口权限审批由 V026 创建业务表，并使用 Flowable 7.1.0 官方 PostgreSQL 脚本在独立 `workflow` schema 创建引擎表。生产环境保持 `flowable.database-schema-update=false`；应用通过表前缀访问 `workflow`，业务 MyBatis 仍固定使用 `public` schema。引擎表只能经 Liquibase 升级，禁止应用启动时自动建表或手工修改已登记 changeset。
 
 V028 将结果缓存策略纳入申请项和最终授权事实。由于旧服务端未限制缓存天数，存量接口授权兼容回填为“允许缓存、上限 365 天”；新授权默认不允许缓存，必须通过审批显式开通。新建产品缓存作用域默认由 `GLOBAL` 收紧为 `CALLER`。回滚脚本会在发现新缓存申请、审批或非兼容授权事实时拒绝执行，发布前应使用隔离数据库完成 update、rollback、re-update 演练。
+
+V042 增加 Masterdata 所有的插件目录/连接器版本和不可变受控测试事实、Access 所有的逐实例激活事实、
+`vendor_config.runtime_mode/active_connector_version_id/connector_version` 以及 `call_record` 插件追踪字段，
+并种入内置 `legacy-http:1.0.0`。U042 只允许在不存在真实插件、连接器草稿/发布版本、激活事实、
+受控测试事实、PLUGIN 绑定和插件调用事实时回滚；出现任一事实后必须备份并做前向恢复，不能强制执行 U042。
 
 发布新审批节点时，将经过评审的 BPMN 作为 `data-platform-access-service/src/main/resources/processes/` 下的新版本资源发布。新申请使用最新版本，运行中实例继续原定义；禁止在线暴露 Flowable REST、引擎 Actuator 管理端点或 workflow schema。
 
@@ -243,6 +249,100 @@ export INTERNAL_AUTH_IDENTITY_SECRET=...
 
 最小授权关系：Access 可读 Masterdata、读取厂商密钥、调用 Billing 和写 Governance 日志；Billing 可读 Access 统计并写 Governance 告警/日志；Masterdata 可读 Access 统计并写 Governance 日志；Identity 仅写 Governance 日志。
 
+### 连接器制品、签名和运行时配置
+
+连接器有两个独立信任检查：Masterdata 在导入时验证目录数据，Access 在实际加载前再次验证本地
+缓存。同一 `keyId` 必须使用同一公钥，但配置格式不同：
+
+- `CONNECTOR_SIGNING_PUBLIC_KEY_BASE64`：X.509 DER 公钥的 Base64，供 Masterdata V1 Ed25519 验证；
+- `CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE`：只读 `file:` 或 `classpath:` PEM，供 Access 加载时验证；
+- JVM TLS TrustStore：信任制品库和厂商 HTTPS 证书，和插件签名公钥不是同一套密钥。
+
+生产环境必须提供以下变量，不能使用 dev 的 `*.invalid` 失败关闭占位值：
+
+```bash
+export CONNECTOR_ARTIFACT_REPOSITORY_HOST=plugins.example.com
+export CONNECTOR_ARTIFACT_REPOSITORY_PATH=/repository/data-platform
+export CONNECTOR_ARTIFACT_REPOSITORY_PREFIX=https://plugins.example.com/repository/data-platform
+export CONNECTOR_SIGNING_PUBLIC_KEY_BASE64='<X.509 DER Base64>'
+export CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE=file:/run/secrets/connector-signing-public.pem
+export CONNECTOR_PLUGIN_CACHE_DIR=/var/lib/data-platform/plugins
+export CONNECTOR_INSTANCE_ID="${HOSTNAME}:8082"
+export CONNECTOR_HOST_VERSION=1.0.0
+export CONNECTOR_VENDOR_ALLOWED_HOST=api.vendor.example.com
+export JAVA_TOOL_OPTIONS='-Djavax.net.ssl.trustStore=/run/secrets/connector-ca.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=***'
+```
+
+当前 Nacos 键由以下两个前缀绑定：
+
+```yaml
+masterdata.connector-plugin:
+  artifact-allowed-hosts: [${CONNECTOR_ARTIFACT_REPOSITORY_HOST}]
+  artifact-allowed-path-prefixes: [${CONNECTOR_ARTIFACT_REPOSITORY_PATH}]
+  trusted-signing-keys:
+    platform-default: ${CONNECTOR_SIGNING_PUBLIC_KEY_BASE64}
+  max-artifact-bytes: ${CONNECTOR_MAX_ARTIFACT_BYTES:52428800}
+  max-manifest-bytes: ${CONNECTOR_MAX_MANIFEST_BYTES:262144}
+  max-schema-bytes: ${CONNECTOR_MAX_SCHEMA_BYTES:131072}
+
+connector.runtime:
+  instance-id: ${CONNECTOR_INSTANCE_ID}
+  host-version: ${CONNECTOR_HOST_VERSION}
+  cache-directory: ${CONNECTOR_PLUGIN_CACHE_DIR}
+  repository-allowed-prefixes: [${CONNECTOR_ARTIFACT_REPOSITORY_PREFIX}]
+  network-allowed-protocols: [https]
+  network-allowed-hosts: [${CONNECTOR_VENDOR_ALLOWED_HOST}]
+  allow-private-networks: false
+  max-connect-timeout-ms: ${CONNECTOR_MAX_CONNECT_TIMEOUT_MS:5000}
+  max-read-timeout-ms: ${CONNECTOR_MAX_READ_TIMEOUT_MS:30000}
+  max-total-timeout-ms: ${CONNECTOR_MAX_TOTAL_TIMEOUT_MS:60000}
+  test-timeout-ms: ${CONNECTOR_TEST_TIMEOUT_MS:30000}
+  max-response-bytes: ${CONNECTOR_MAX_RESPONSE_BYTES:10485760}
+  signing-keys:
+    platform-default:
+      resource: ${CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE}
+      algorithm: Ed25519
+```
+
+仓库 URI 只允许无 user-info、query 和 fragment 的 HTTPS 地址；Masterdata 同时校验主机和路径，
+Access 校验完整 URI 前缀且禁止重定向。缓存路径固定为
+`<cache-directory>/<pluginId>/<version>/<sha256>/connector-plugin.jar`，下载先写临时文件，哈希通过后
+原子移动。缓存目录应挂载为仅 Access 服务账号可写，不可与插件构建或上传目录共享。
+
+Access 启动后会从 Masterdata 拉取所有活动连接器所需版本。健康组件名为
+`connectorRuntimeReadiness`：所需版本未完成本地加载、哈希不一致或仓库不可用且无已验证缓存时，
+Access `/actuator/health` 保持 `DOWN`；已有匹配缓存可在仓库故障时恢复。预加载会按 Nacos 服务发现
+中的活动 Access 实例创建 `connector_plugin_activation` 事实，只有聚合 `ready=true` 才允许激活。
+发布或切换期间旧版本继续服务在途租约，引用归零后才关闭插件和 ClassLoader。
+
+内部 JWT 最小 scope 还包括：Access 读取制品 `masterdata:connector-artifact:read`、读取运行快照
+`masterdata:connector-runtime:read`；Masterdata 查询/管理 Access 激活状态和受控测试分别使用
+`access:connector-runtime:read`、`access:connector-runtime:manage`、`access:connector-runtime:test`。
+
+### 隔离连接器 E2E 夹具
+
+`data-platform-test/test-fixtures/connector-e2e` 提供最小外部插件、Ed25519 签名、localhost HTTPS
+制品库/厂商端点、PKCS12 TrustStore 和唯一 PostgreSQL 测试库。它只用于测试，不改变生产默认值。
+
+```bash
+E2E_DB_HOST=localhost \
+E2E_DB_PORT=5432 \
+E2E_DB_USERNAME=postgres \
+E2E_DB_PASSWORD=postgres \
+  ./data-platform-test/test-fixtures/connector-e2e/prepare-e2e.sh
+```
+
+脚本输出 `E2E_STATE_FILE`、制品 URI/哈希/签名/`keyId`、两种公钥格式、TLS TrustStore、导入请求 JSON
+和 `FIXTURE_VENDOR_CONFIG_ID`。把输出值注入隔离服务进程后，按 `docs/API.md` 完成导入、stage、
+activate、草稿、validate、test、publish 和 OpenAPI 调用。`prepare-e2e.sh` 自身验证的是制品/TLS/迁移
+夹具，不代表六服务链路已经通过。
+
+验收结束必须使用脚本输出的精确状态文件清理；脚本会校验 PID、数据库名和目录归属后才删除：
+
+```bash
+./data-platform-test/test-fixtures/connector-e2e/cleanup-e2e.sh "$E2E_STATE_FILE"
+```
+
 ---
 
 ## 服务依赖关系
@@ -258,7 +358,7 @@ Gateway (8888)
 
 Access (8082)
     │
-    ├─→ Masterdata (8081) - 获取厂商配置/接口定义 (Feign)
+    ├─→ Masterdata (8081) - 获取厂商配置/接口定义/连接器制品与快照 (Feign)
     ├─→ Billing (8084) - 计算调用费用 (Feign)
     └─→ Governance (8085) - 写入操作日志 (Feign)
 
@@ -269,7 +369,7 @@ Billing (8084)
 
 Masterdata
     │
-    ├─→ Access (8082) - 接口调用统计 (Feign)
+    ├─→ Access (8082) - 接口调用统计/插件激活/受控测试 (Feign)
     └─→ Governance (8085) - 写入操作日志 (Feign)
 
 Identity
@@ -463,5 +563,5 @@ psql -h localhost -U postgres dataplatform < backup_20260516.sql
 
 ---
 
-**文档版本**: 2026-07-10
-**最后更新**: 补充全新数据库的迁移执行步骤，并与当前五域部署基线保持一致。
+**文档版本**: 2026-08-03
+**最后更新**: 同步 V042、签名连接器制品、双端信任密钥、Access 缓存/激活/readiness 和隔离 E2E 夹具。

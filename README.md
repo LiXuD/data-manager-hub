@@ -49,6 +49,7 @@ data-platform/
 ├── data-platform-common-web/         # Web公共能力：异常、拦截器、MVC配置
 ├── data-platform-common-persistence/ # 持久化公共能力：MyBatis配置、审计字段
 ├── data-platform-common-runtime/     # 运行时公共能力
+├── data-platform-plugin-spi/         # 连接器插件轻量 SPI Jar，不独立部署
 ├── data-platform-gateway/       # API网关 (端口 8888)
 ├── data-platform-masterdata/    # 主数据服务 (端口 8081)：vendor/datatype/interface/config/graylog
 │   ├── data-platform-masterdata-api/
@@ -72,6 +73,10 @@ data-platform/
 
 > **当前服务边界**: 项目已收敛为 masterdata / access / billing / identity / governance 五个业务域；旧 vendor/caller/call/tenant/iam/log/monitor/trace/quality/interface/graylog/security 小服务已退役。
 
+外部请求已具备版本化连接器插件运行时：Masterdata 管理签名制品和不可变厂商流水线，Access 负责
+HTTPS 制品缓存、隔离加载、逐实例激活和执行。存量配置默认仍为 `LEGACY`，只有发布厂商连接器
+版本后才按单个 `vendor_config` 切换到 `PLUGIN`；这不会增加第六个业务服务。
+
 同步跨域调用只依赖目标域 `*-api` 中的 Internal Feign 契约，统一使用 `/internal/v1/**` 和 Identity 签发的短期 Service JWT；每个客户端按 audience 获取最小 scope，Gateway 不暴露内部路径。领域表由所属域独占访问，跨域统计通过 Access 内部契约查询。
 
 `call-record` Kafka 仅承担 Access 域内调用记录异步落库。Access 同步调用 Billing 完成费用计算与幂等日聚合，计费失败直接向上游返回错误，不生成假价格。
@@ -84,8 +89,8 @@ data-platform/
 
 | 领域 | 核心表 |
 |------|--------|
-| masterdata | `vendor_info`、`data_type`、`vendor_config`、`vendor_config_extended`、`api_interface`、`interface_param`、`gray_rule` |
-| access | `caller_info`、`caller_product`、`api_key`、`api_key_interface`、`api_permission_application`、`api_permission_application_item`、`api_permission_action`、`api_approval_process_config`、`call_scene`、`call_record` |
+| masterdata | `vendor_info`、`data_type`、`vendor_config`、`vendor_config_extended`、`api_interface`、`interface_param`、`gray_rule`、`connector_plugin`、`connector_plugin_version`、`vendor_connector_version`、`vendor_connector_test_fact` |
+| access | `caller_info`、`caller_product`、`api_key`、`api_key_interface`、`api_permission_application`、`api_permission_application_item`、`api_permission_action`、`api_approval_process_config`、`call_scene`、`call_record`、`connector_plugin_activation` |
 | workflow | Flowable 7.1.0 原生流程、任务和历史表（独立 `workflow` schema） |
 | billing | `billing_template`、`billing_plan`、`billing_plan_tier`、`billing_event`（不可变账本）、`billing_usage_balance`、`billing_daily`（查询投影）、`billing_daily_event`、`billing_reconciliation` |
 | identity | `tenant_info`、`user_info`、`role_info`、`user_role` |
@@ -100,6 +105,7 @@ data-platform/
 | 范围 | 入口 |
 |---|---|
 | 厂商、数据类型与配置 | `/api/v1/vendor/**`、`/api/v1/datatype/**`、`/api/v1/config/**` |
+| 连接器插件与厂商流水线 | `/api/v1/connector-plugin/**`、`/api/v1/vendor/config/{id}/connector/**` |
 | 接口契约 | `GET/PUT /api/v1/interface/{id}/contract` |
 | 调用方与 API Key | `/api/v1/caller/**`、`/api/v1/caller/apikey/**` |
 | 接口权限申请与审批 | `/api/v1/api-permission/applications/**`、`/api/v1/api-permission/tasks/**`、`/api/v1/api-permission/grants/**` |
@@ -297,6 +303,7 @@ data-platform/
 | 数据测试页自动填充接口参数 | ✅ 100% | 2026-07-10 |
 | 跨域调用最小权限与领域数据边界整改 | ✅ 100% | 2026-07-14 |
 | 深度清理、契约收敛与知识库刷新 | ✅ 100% | 2026-07-23 |
+| 外部请求连接器插件化核心实现 | ✅ 隔离六服务/OpenAPI/浏览器已验收；存量迁移待执行 | 2026-08-03 |
 
 ---
 
@@ -306,6 +313,7 @@ data-platform/
 - [API 文档](docs/API.md)
 - [部署文档](docs/DEPLOYMENT.md)
 - [2026-07-23 深度清理审查](docs/2026-07-23-deep-cleanup-review.md)
+- [外部请求连接器插件化升级设计与实施状态](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)
 - [当前任务清单](PENDING_TASKS.md)
 
 ---

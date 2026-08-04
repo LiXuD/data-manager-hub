@@ -119,6 +119,7 @@ data-manager-hub/
 ├── data-platform-common-web/            # Web层 (拦截器、AOP、工具)
 ├── data-platform-common-persistence/     # 持久层 (Entity、MyBatis-Plus)
 ├── data-platform-common-runtime/        # 运行时 (适配器、认证、计费)
+├── data-platform-plugin-spi/            # 连接器插件轻量编译契约 Jar
 
 # 五域业务模块
 ├── data-platform-masterdata/            # 厂商/数据类型/接口/灰度 (8081)
@@ -204,9 +205,9 @@ AbstractVendorAdapter (抽象类)
 
 HttpVendorAdapter (具体实现)
     └── 基于 OkHttp 的 HTTP 厂商适配器
-        ├── buildRequest()   — 构建HTTP请求 (支持GET/POST)
+        ├── buildRequest()   — 构建HTTP请求 (支持GET/POST/PUT/PATCH/DELETE)
         ├── applyAuth()      — 应用认证配置
-        ├── addSignature()   — 添加签名
+        ├── SecurityPipelineExecutor — 请求签名、加密及响应验签、解密
         └── handleResponse() — 处理HTTP响应
 
 VendorAdapterFactory (工厂类)
@@ -215,9 +216,39 @@ VendorAdapterFactory (工厂类)
     └── clearCache()             — 清除缓存
 ```
 
+> **兼容边界**：`VendorAdapterFactory + HttpVendorAdapter` 仍是 `LEGACY` 模式的当前实现和迁移回滚
+> 路径，不再是唯一运行时。`vendor_config.runtime_mode=PLUGIN` 时，Access 改为读取 Masterdata 的
+> 不可变连接器快照并执行固定 `pluginId + pluginVersion` 流水线。存量配置默认 `LEGACY`，阶段 5
+> 退役门槛满足前不得删除本节旧链。
+
+##### 连接器插件运行时 (`plugin/`)
+
+`data-platform-plugin-spi` 定义 `ConnectorPlugin`、`ConnectorStageFactory`、`ConnectorStage`、
+`PluginContext`、强类型请求/响应和六种 `StageCapability`。它只依赖 Jackson，不依赖 Spring、
+数据库、Redis、Nacos、Feign 或五域 Service。
+
+`data-platform-common-runtime/common/plugin` 实现 Manifest 读取、制品哈希/签名验证、版本隔离
+ClassLoader、引用计数注册表、流水线编译执行、受控 OkHttp Transport 和内置 `legacy-http:1.0.0`。
+Access 对外部 JAR 进行 HTTPS 白名单下载并缓存到
+`<cache-directory>/<pluginId>/<version>/<sha256>/connector-plugin.jar`；每个版本可与旧版本同时驻留，
+在途请求通过租约固定版本，引用归零后关闭插件和 ClassLoader。
+
+2026-08-03 的隔离运行验收已使用真实签名外部插件和 HTTPS fixture 完成导入、预加载、激活、
+受控测试、连接器发布、Gateway OpenAPI、调用记录、计费事件、草稿 CAS、历史版本回滚和活动绑定
+禁用保护；U042 在存在活动引用和运行痕迹时按设计拒绝破坏性回滚。in-app Browser 进一步核对了
+插件 ACTIVE/逐实例 READY、动态 Schema 表单、版本差异和 V3 ACTIVE、V2/V1 SUPERSEDED 历史。
+该证据不代表全部存量厂商、多 Access 实例、生产容量或故障演练已经完成，当前仍保留 `LEGACY`
+回滚路径。
+
+插件模式的六阶段顺序为 `REQUEST_BUILDER → REQUEST_PROCESSOR* → TRANSPORT →
+RESPONSE_PROCESSOR* → RESPONSE_PARSER* → RESPONSE_NORMALIZER`，启用步骤必须恰好有一个
+`TRANSPORT`。执行结果同时表达传输、业务、缓存、计费和 `NOT_SENT/MAYBE_SENT/SENT`；只有
+`NOT_SENT` 才能进入兼容旧链或备用厂商，防止已发出请求后重复双发。完整安全边界和迁移状态见
+[外部请求连接器插件化升级设计](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)。
+
 **VendorAdapterConfig** — 适配器配置数据类：
 - `apiUrl` — API地址
-- `method` — 请求方法 (GET/POST)
+- `method` — HTTP 请求方法
 - `authType` — 认证类型
 - `requestTemplate` — 请求映射模板
 - `responseMapping` — 响应映射模板
@@ -373,7 +404,7 @@ VendorAdapterFactory (工厂类)
 
 > **路径**: `data-platform-masterdata/`
 > **端口**: 8081
-> **职责**: 厂商管理、数据类型管理、接口契约、厂商API与安全流水线配置、灰度规则管理。
+> **职责**: 厂商管理、数据类型管理、接口契约、厂商 API 与安全流水线配置、连接器插件目录与不可变版本、灰度规则管理。
 
 #### 子模块
 
@@ -404,6 +435,11 @@ com.dataplatform.masterdata/
 │   └── graylog/                    # 灰度相关
 │       ├── GraylogController.java  # /graylog
 │       └── GraylogInternalController.java  # /internal/v1/masterdata/gray-rules
+├── connector/                      # 连接器插件控制面
+│   ├── controller/                 # /connector-plugin、/vendor/config/{id}/connector
+│   ├── service/                    # 签名导入、Schema校验、版本发布/回滚
+│   ├── mapper/                     # 插件目录和连接器版本
+│   └── entity/
 ├── service/
 │   ├── vendor/
 │   │   ├── VendorService.java
@@ -449,11 +485,15 @@ com.dataplatform.masterdata/
 | `/vendor/config/{configId}/security-steps/order` | 调整同方向安全步骤顺序 |
 | `/vendor/config/{configId}/security-preview`、`/security-test` | 脱敏预览流水线结果、执行厂商连通性测试 |
 | `/vendor/config/{configId}/security-versions` | 查询版本历史，并通过 `/{versionId}/rollback` 回滚 |
+| `/connector-plugin/**` | 插件目录、签名导入、验证、预加载、逐实例状态、激活和禁用 |
+| `/vendor/config/{configId}/connector/**` | 连接器草稿、Schema 校验、受控测试、不可变发布、历史和回滚 |
 | `/interface` | 接口定义 CRUD |
 | `/interface/{id}/contract` | 查询或事务性替换完整请求/响应字段树，并自动刷新派生 Schema |
 | `/graylog` | 灰度规则 CRUD |
 | `/internal/v1/masterdata/interfaces/{id}/contract` | 向 Access 暴露稳定的 `InterfaceContractDTO` Feign 契约 |
 | `/internal/v1/masterdata/vendor-security/{configId}` | 向 Access 提供运行时安全步骤；跨域不直连 Masterdata 数据库 |
+| `/internal/v1/masterdata/connector-plugins/**` | 向 Access 提供固定制品描述和当前活动绑定所需版本，需 `masterdata:connector-artifact:read` |
+| `/internal/v1/masterdata/vendor-configs/{id}/connector-runtime` | 向 Access 提供不可变连接器运行快照，需 `masterdata:connector-runtime:read` |
 | `/internal/v1/masterdata/**` | 受 Service JWT 和 `masterdata:read` 保护；厂商密钥另需 `masterdata:vendor-secret:read` |
 
 `interface_param` 是接口契约的唯一结构化数据源：使用 `direction` 区分 `REQUEST`/`RESPONSE`，通过 `parentId` 组织 object/array 子树，并保存类型、必填、默认值、示例、约束和同级排序。`api_interface.request_schema`、`response_schema` 仅作为由字段树自动生成的派生 Schema，不接受独立写入。
@@ -464,7 +504,7 @@ com.dataplatform.masterdata/
 
 > **路径**: `data-platform-access/`
 > **端口**: 8082
-> **职责**: 调用方管理、API Key 生命周期与授权、接口权限申请审批、滑动窗口限流、契约化数据查询、动态接口文档、调用记录。
+> **职责**: 调用方管理、API Key 生命周期与授权、接口权限申请审批、滑动窗口限流、连接器插件加载与执行、契约化数据查询、动态接口文档、调用记录。
 
 #### 子模块
 
@@ -511,6 +551,14 @@ com.dataplatform.access/
 │   ├── engine/                   # ApprovalEnginePort 与 Flowable 适配器
 │   ├── workflow/                 # 校验、授权、驳回 JavaDelegate 白名单
 │   └── domain/                   # 申请、申请项、动作、流程路由和状态
+├── connector/                    # 插件运行面
+│   ├── artifact/                 # HTTPS下载、哈希地址缓存
+│   ├── runtime/                  # 签名密钥、Manifest网络上下文和指标
+│   ├── service/                  # 预加载、执行、受控测试和启动同步
+│   ├── health/                   # connectorRuntimeReadiness
+│   ├── controller/               # Access Internal API
+│   ├── mapper/
+│   └── entity/
 └── service/
 ```
 
@@ -529,8 +577,15 @@ com.dataplatform.access/
 | `/openapi/v1/docs/interfaces/**` | 调用方用 API Key 查看已授权接口的文档和 OpenAPI，不消耗业务限流或配额 |
 | `/call-record` | 调用记录查询 |
 | `/internal/v1/access/call-stats` | 向 Masterdata/Billing 提供只读统计，需 `access:stats:read` |
+| `/internal/v1/access/connector-plugins/**` | 预加载、逐实例状态和释放，分别使用 runtime read/manage scope |
+| `/internal/v1/access/vendor-connectors/test` | 执行不计费、不缓存、不写调用记录的脱敏草稿测试，需 `access:connector-runtime:test` |
 
 请求契约在进入厂商调用前严格校验，覆盖 object/array 嵌套路径、必填、基础类型、枚举、正则、字符串长度、数值范围、数组长度和格式，并为缺失的可选字段应用默认值；暂时允许未声明的额外字段。响应在厂商映射完成后以及缓存命中链路上校验 `data`，不阻断正常返回，但写入 `call_record.response_contract_*`、结构化日志和 `openapi.response.contract.invalid` 监控计数。
+
+`VendorProxyService` 按 `VendorConfigDTO.runtimeMode` 选择旧适配器或 `ConnectorVendorExecutor`。
+插件执行固定连接器 `pipelineVersion/snapshotHash`，调用记录额外保存实际 `pluginId`、
+`pluginVersion`、`pipelineVersion` 和 `snapshotHash`。插件只给出 `billingSignal/cacheSignal`，最终
+计费、缓存、熔断和主备厂商仍由 Access 平台编排。
 
 接口权限审批以 `api_key_interface` 为运行时权限事实源，以 `api_permission_action` 为不可变业务审计，以 Flowable `workflow` schema 为流程实例、活动任务和历史事实源。业务代码只依赖 `ApprovalEnginePort`；默认 BPMN 是单节点审批，但适配器和自动化测试覆盖顺序节点、条件网关、并行网关、并行多实例会签、版本并存和服务重启恢复。旧 `POST /caller/apikey/{id}/interfaces` 固定返回 409，避免绕过审批执行全量覆盖。
 
@@ -845,6 +900,7 @@ data-platform-web/src/
 │   ├── dashboard/         # 数据概览
 │   ├── layout/            # 布局框架
 │   ├── vendor/            # 厂商管理
+│   ├── connector-plugin/  # 签名插件目录、版本和逐实例激活状态
 │   ├── caller/            # 调用方管理
 │   ├── datatype/          # 数据类型
 │   ├── interface/         # 接口管理
@@ -882,6 +938,7 @@ data-platform-web/src/
 | `/user` | 用户管理 | 需登录 |
 | `/role` | 角色管理 | 需登录 |
 | `/vendor` | 厂商管理 | 需登录 |
+| `/connector-plugin` | 连接器插件目录、版本和激活管理 | 需登录及任一 `connector-plugin:view/import/verify/activate/disable` 权限 |
 | `/caller` | 调用方管理 | 需登录 |
 | `/datatype` | 数据类型 | 需登录 |
 | `/interface` | 接口管理 | 需登录 |
@@ -932,10 +989,10 @@ data-platform-web/src/
 
 | 调用方 | 被调用方 | 接口 | 说明 |
 |--------|----------|------|------|
-| access | masterdata | `ApiInterfaceFeignClient`、`Vendor*InternalFeignClient`、`VendorSecurityInternalFeignClient`、`GraylogInternalFeignClient` | 获取接口契约、厂商配置、安全流水线和灰度规则 |
+| access | masterdata | `ApiInterfaceFeignClient`、`Vendor*InternalFeignClient`、`VendorSecurityInternalFeignClient`、`GraylogInternalFeignClient`、`ConnectorPluginInternalFeignClient`、`VendorConnectorInternalFeignClient` | 获取接口契约、厂商配置、安全流水线、灰度规则、连接器制品和固定运行快照 |
 | access | billing | `BillingInternalFeignClient` | 计算费用并更新幂等日聚合 |
 | billing | access | `CallStatsInternalFeignClient` | 获取厂商日调用统计用于对账 |
-| masterdata | access | `CallStatsInternalFeignClient` | 获取接口汇总与每日统计 |
+| masterdata | access | `CallStatsInternalFeignClient`、`ConnectorPluginActivationInternalFeignClient`、`VendorConnectorRuntimeInternalFeignClient` | 获取统计、编排插件预加载/状态及执行受控测试 |
 | access / billing / masterdata / identity | governance | `LogClient` | 写入操作日志 |
 | billing | governance | `GovernanceInternalFeignClient` | 写入对账告警 |
 
@@ -1002,8 +1059,16 @@ data-platform-web/src/
 | 38 | quality_rule | 数据质量规则 | governance |
 | 39 | quality_score | 数据质量评分 | governance |
 | 40 | service_health_check | 服务健康检查记录 | governance |
+| 41 | connector_plugin | 插件逻辑身份目录 | masterdata |
+| 42 | connector_plugin_version | 不可变签名插件版本和 Manifest/Schema | masterdata |
+| 43 | vendor_connector_version | 厂商连接器草稿和不可变发布快照 | masterdata |
+| 44 | vendor_connector_test_fact | 受控测试的不可变安全事实及发布门禁 | masterdata |
+| 45 | connector_plugin_activation | Access 各实例的插件加载事实 | access |
 
-`sql/init.sql` 与 V001–V024 只作为 `baseline-2026-07-22` 的历史输入；V025 是独立清理 changeset，负责无损迁移后删除废弃契约/安全字段。全新库使用 `./migrate-db.sh update`，旧库先备份并按 `./migrate-db.sh baseline` 的确认流程接管，禁止直接手工执行历史 SQL。
+V042 以加法迁移增加连接器控制面、不可变受控测试事实、Access 激活事实、`vendor_config` 双模式字段及
+`call_record` 插件追踪字段，并种入内置 `legacy-http:1.0.0`；U042 在发现任一真实插件、连接器版本、
+受控测试事实、激活事实、PLUGIN 绑定或调用追踪后拒绝破坏性回滚。全新库使用 `./migrate-db.sh update`，旧库先备份
+并按 `./migrate-db.sh baseline` 的确认流程接管，禁止直接手工执行历史 SQL。
 
 ---
 
