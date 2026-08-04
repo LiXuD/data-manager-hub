@@ -13,6 +13,7 @@ import {
   saveVendorSecuritySteps
 } from '@/api/vendor-config'
 import { useCacheStore } from '@/stores'
+import { useUserStore } from '@/stores/user'
 import { getStatusType } from '@/utils/status'
 import type {
   ApiInterface,
@@ -30,6 +31,7 @@ import ParamsMappingEditor from './config/ParamsMappingEditor.vue'
 import AuthConfigComponent from './config/AuthConfig.vue'
 import SecurityPipelineEditor from './config/SecurityPipelineEditor.vue'
 import RequestBodyEditor from './config/RequestBodyEditor.vue'
+import VendorConnectorWorkspace from './config/VendorConnectorWorkspace.vue'
 
 interface Props {
   modelValue: boolean
@@ -40,7 +42,16 @@ const props = defineProps<Props>()
 const emit = defineEmits(['update:modelValue', 'success'])
 
 const cacheStore = useCacheStore()
+const userStore = useUserStore()
 const { vendorOptions, dataTypeOptions } = storeToRefs(cacheStore)
+const isAdmin = computed(() => userStore.userInfo?.roles?.some(role => role.trim().toLowerCase() === 'admin'))
+const canManageConnector = computed(() => isAdmin.value || [
+  'connector-plugin:view',
+  'connector-plugin:bind',
+  'connector-plugin:test',
+  'connector-plugin:publish',
+  'connector-plugin:rollback'
+].some(permission => userStore.hasPermission(permission)))
 
 const loading = ref(false)
 const configList = ref<VendorInterfaceConfig[]>([])
@@ -52,6 +63,13 @@ const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const isEdit = ref(false)
 const currentConfig = ref<VendorInterfaceConfig | null>(null)
+const connectorVisible = ref(false)
+const connectorConfig = ref<VendorInterfaceConfig | null>(null)
+
+const handleConnector = (config: VendorInterfaceConfig) => {
+  connectorConfig.value = config
+  connectorVisible.value = true
+}
 
 // 表单数据
 const form = ref({
@@ -312,6 +330,14 @@ const handleStatusChange = async (config: VendorInterfaceConfig) => {
   }
 }
 
+const handleConnectorChanged = async () => {
+  await loadConfigList()
+  if (connectorConfig.value) {
+    connectorConfig.value = configList.value.find(item => item.id === connectorConfig.value?.id) || connectorConfig.value
+  }
+  emit('success')
+}
+
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
@@ -454,6 +480,9 @@ const handleSubmit = async () => {
                 <el-tag :type="config.status === 'active' ? 'success' : 'info'" size="small">
                   {{ config.status === 'active' ? '启用' : '禁用' }}
                 </el-tag>
+                <el-tag :type="config.runtimeMode === 'PLUGIN' ? 'success' : 'info'" size="small" effect="plain">
+                  {{ config.runtimeMode || 'LEGACY' }}
+                </el-tag>
               </div>
               <div class="card-actions">
                 <el-switch
@@ -472,6 +501,7 @@ const handleSubmit = async () => {
                     <el-dropdown-menu>
                       <el-dropdown-item @click="handleEdit(config)">编辑配置</el-dropdown-item>
                       <el-dropdown-item @click="handleTest(config)">测试连接</el-dropdown-item>
+                      <el-dropdown-item v-if="canManageConnector" divided @click="handleConnector(config)">连接器配置</el-dropdown-item>
                       <el-dropdown-item divided @click="handleDelete(config)">删除配置</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
@@ -495,6 +525,10 @@ const handleSubmit = async () => {
                 <div class="config-item">
                   <span class="label">重试次数</span>
                   <span class="value">{{ config.retryCount }}</span>
+                </div>
+                <div class="config-item">
+                  <span class="label">连接器版本</span>
+                  <span class="value">{{ config.connectorVersion ? `V${config.connectorVersion}` : '未发布' }}</span>
                 </div>
               </div>
               <div v-if="config.fallbackVendorId" class="fallback-info">
@@ -664,6 +698,11 @@ const handleSubmit = async () => {
         <el-button type="primary" @click="handleSubmit" :loading="submitting">保存配置</el-button>
       </template>
     </el-drawer>
+    <VendorConnectorWorkspace
+      v-model="connectorVisible"
+      :config="connectorConfig"
+      @changed="handleConnectorChanged"
+    />
   </el-drawer>
 </template>
 

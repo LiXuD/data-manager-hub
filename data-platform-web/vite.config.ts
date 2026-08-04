@@ -5,6 +5,8 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
+const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:8888'
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -27,11 +29,11 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api/v1': {
-        target: 'http://localhost:8888',
+        target: proxyTarget,
         changeOrigin: true
       },
       '^/openapi/': {
-        target: 'http://localhost:8888',
+        target: proxyTarget,
         changeOrigin: true
       }
     }

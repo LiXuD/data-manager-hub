@@ -1,0 +1,81 @@
+import { describe, expect, it } from 'vitest'
+import {
+  canActivate,
+  canDisable,
+  canStage,
+  canVerify,
+  disablePluginConfirmation,
+  diffConnectorPipelines,
+  mergeSchemaDefaults,
+  normalizePipelineOrder,
+  normalizedBindingCount,
+  orderedSchemaProperties,
+  parseJsonDocument,
+  schemaDefault
+} from '../connector'
+import type { ConnectorPipelineStep, JsonSchemaNode } from '@/types'
+
+const step = (stageKey: string, order = 0): ConnectorPipelineStep => ({
+  stageKey,
+  capability: 'REQUEST_BUILDER',
+  pluginId: 'demo',
+  pluginVersion: '1.0.0',
+  order,
+  enabled: true,
+  config: {}
+})
+
+describe('connector helpers', () => {
+  it('parses valid JSON and returns fallback for invalid JSON', () => {
+    expect(parseJsonDocument('{"a":1}', {})).toEqual({ a: 1 })
+    expect(parseJsonDocument('{', { safe: true })).toEqual({ safe: true })
+  })
+
+  it('creates defaults for supported schema types', () => {
+    const schema: JsonSchemaNode = { type: 'object', properties: {
+      enabled: { type: 'boolean' }, names: { type: 'array', items: { type: 'string' } }, mode: { type: 'string', enum: ['A', 'B'] }
+    } }
+    expect(schemaDefault(schema)).toEqual({ enabled: false, names: [], mode: 'A' })
+  })
+
+  it('merges stored values with newly introduced schema fields', () => {
+    const schema: JsonSchemaNode = { type: 'object', properties: { url: { type: 'string' }, enabled: { type: 'boolean' } } }
+    expect(mergeSchemaDefaults(schema, { url: 'https://a.test' })).toEqual({ url: 'https://a.test', enabled: false })
+  })
+
+  it('orders properties using x-ui-order', () => {
+    const schema: JsonSchemaNode = { properties: { late: { 'x-ui-order': 2 }, early: { 'x-ui-order': 1 }, last: {} } }
+    expect(orderedSchemaProperties(schema).map(([key]) => key)).toEqual(['early', 'late', 'last'])
+  })
+
+  it('reports added, removed and changed stages', () => {
+    const changed = { ...step('keep'), pluginVersion: '2.0.0' }
+    const diff = diffConnectorPipelines([step('keep'), step('gone')], [changed, step('new')])
+    expect(diff.map(item => [item.stageKey, item.change])).toEqual([
+      ['keep', 'CHANGED'], ['gone', 'REMOVED'], ['new', 'ADDED']
+    ])
+  })
+
+  it('normalizes order after moves and deletions', () => {
+    expect(normalizePipelineOrder([step('b', 8), step('a', 4)]).map(item => item.order)).toEqual([0, 1])
+  })
+
+  it('enforces version lifecycle actions', () => {
+    expect(canVerify('VERIFIED')).toBe(true)
+    expect(canVerify('ACTIVE')).toBe(false)
+    expect(canStage('STAGING_FAILED')).toBe(true)
+    expect(canStage('ACTIVE')).toBe(false)
+    expect(canActivate('STAGING', true)).toBe(true)
+    expect(canActivate('STAGING', false)).toBe(false)
+    expect(canDisable('ACTIVE')).toBe(true)
+    expect(canDisable('STAGING')).toBe(false)
+  })
+
+  it('explains disable conflicts and keeps binding counts safe for display', () => {
+    expect(disablePluginConfirmation('vendor-demo', '1.2.0')).toContain('活动绑定会被后端 409 拒绝')
+    expect(disablePluginConfirmation('vendor-demo', '1.2.0')).toContain('历史版本仍保留')
+    expect(normalizedBindingCount(3)).toBe(3)
+    expect(normalizedBindingCount(undefined)).toBe(0)
+    expect(normalizedBindingCount(-1)).toBe(0)
+  })
+})

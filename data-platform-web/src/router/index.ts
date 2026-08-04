@@ -48,6 +48,21 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '厂商管理', permissions: ['vendor:view'] }
       },
       {
+        path: '/connector-plugin',
+        name: 'ConnectorPlugin',
+        component: () => import('@/views/connector-plugin/index.vue'),
+        meta: {
+          title: '连接器插件',
+          permissions: [
+            'connector-plugin:view',
+            'connector-plugin:import',
+            'connector-plugin:verify',
+            'connector-plugin:activate',
+            'connector-plugin:disable'
+          ]
+        }
+      },
+      {
         path: '/caller',
         name: 'Caller',
         component: () => import('@/views/caller/index.vue'),
