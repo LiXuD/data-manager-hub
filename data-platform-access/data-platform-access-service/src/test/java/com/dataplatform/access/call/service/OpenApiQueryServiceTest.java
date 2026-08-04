@@ -18,6 +18,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -172,6 +173,57 @@ class OpenApiQueryServiceTest {
                 sinceCaptor.getAllValues().get(1), sinceCaptor.getAllValues().get(0)).toHours();
         assertTrue(windowDifferenceHours >= 191 && windowDifferenceHours <= 193);
         verify(vendorProxyService, never()).callVendor(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    void shouldPersistActualPluginAndFallbackVendorTrace() {
+        Map<String, Object> pluginResult = new java.util.LinkedHashMap<>();
+        pluginResult.put("success", true);
+        pluginResult.put("data", Map.of("score", 88));
+        pluginResult.put("actualVendorId", 41L);
+        pluginResult.put("actualVendorCode", "vendor-b");
+        pluginResult.put("pluginId", "vendor-http");
+        pluginResult.put("pluginVersion", "1.2.0");
+        pluginResult.put("pipelineVersion", "7");
+        pluginResult.put("snapshotHash", "a".repeat(64));
+        pluginResult.put("billingSignal", "INELIGIBLE");
+        pluginResult.put("cacheSignal", "NOT_CACHEABLE");
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+                .thenReturn(pluginResult);
+
+        OpenApiQueryRespVO response = service.query(buildContext(true, 3));
+
+        assertTrue(response.getSuccess());
+        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
+        verify(callRecordEventPublisher).publish(recordCaptor.capture());
+        CallRecord record = recordCaptor.getValue();
+        assertEquals(41L, record.getVendorId());
+        assertEquals("vendor-b", record.getVendorCode());
+        assertEquals("vendor-http", record.getPluginId());
+        assertEquals("1.2.0", record.getPluginVersion());
+        assertEquals(7, record.getPipelineVersion());
+        assertEquals("a".repeat(64), record.getSnapshotHash());
+        assertFalse(record.getUseCache());
+        ArgumentCaptor<BillingChargeReqDTO> billingCaptor =
+                ArgumentCaptor.forClass(BillingChargeReqDTO.class);
+        verify(billingFeignClient).charge(billingCaptor.capture());
+        assertFalse(billingCaptor.getValue().getSuccess());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldRecursivelyMaskSecretsInRecordedCollections() {
+        Map<String, Object> source = new java.util.LinkedHashMap<>();
+        source.put("items", java.util.List.of(
+                Map.of("token", "top-secret", "safe", "visible"),
+                Map.of("nested", Map.of("password", "hidden"))));
+
+        Map<String, Object> sanitized = ReflectionTestUtils.invokeMethod(service, "sanitizeForRecord", source);
+
+        java.util.List<Map<String, Object>> items = (java.util.List<Map<String, Object>>) sanitized.get("items");
+        assertEquals("***MASKED***", items.get(0).get("token"));
+        assertEquals("visible", items.get(0).get("safe"));
+        assertEquals("***MASKED***", ((Map<String, Object>) items.get(1).get("nested")).get("password"));
     }
 
     private OpenApiCallContext buildContext(boolean useCache, Integer cacheDays) {

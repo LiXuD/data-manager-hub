@@ -20,3 +20,5 @@ spring:
         namespace: ${NACOS_NAMESPACE:${spring.profiles.active}}
         group: ${NACOS_GROUP:DEFAULT_GROUP}
         enabled: true
+        metadata:
+          connectorInstanceId: ${CONNECTOR_INSTANCE_ID:${spring.application.name}:${server.port}}
