@@ -69,6 +69,9 @@ coverage/
 test-results/
 junit/
 *.exec
+data-platform-test/test-fixtures/.runtime/
+__pycache__/
+*.py[cod]
 
 # -------- Docker --------
 .docker/
