@@ -36,4 +36,14 @@ spring.datasource.hikari.maximum-pool-size: 5
 server.port: 8081
 management.endpoints.web.exposure.include: health,info,prometheus
 masterdata.vendor-config.cache-ttl-seconds: 300
+masterdata.connector-plugin:
+  artifact-allowed-hosts:
+    - ${CONNECTOR_ARTIFACT_REPOSITORY_HOST:plugins.example.invalid}
+  artifact-allowed-path-prefixes:
+    - ${CONNECTOR_ARTIFACT_REPOSITORY_PATH:/repository/data-platform}
+  trusted-signing-keys:
+    platform-default: ${CONNECTOR_SIGNING_PUBLIC_KEY_BASE64:}
+  max-artifact-bytes: 52428800
+  max-manifest-bytes: 262144
+  max-schema-bytes: 131072
 logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"

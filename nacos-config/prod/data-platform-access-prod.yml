@@ -44,6 +44,26 @@ platform.security.internal:
 platform.openapi:
   public-base-url: ${OPENAPI_PUBLIC_BASE_URL}
 
+connector.runtime:
+  instance-id: ${CONNECTOR_INSTANCE_ID}
+  host-version: ${CONNECTOR_HOST_VERSION}
+  cache-directory: ${CONNECTOR_PLUGIN_CACHE_DIR}
+  repository-allowed-prefixes:
+    - ${CONNECTOR_ARTIFACT_REPOSITORY_PREFIX}
+  network-allowed-protocols: [https]
+  network-allowed-hosts:
+    - ${CONNECTOR_VENDOR_ALLOWED_HOST}
+  allow-private-networks: false
+  max-connect-timeout-ms: ${CONNECTOR_MAX_CONNECT_TIMEOUT_MS:5000}
+  max-read-timeout-ms: ${CONNECTOR_MAX_READ_TIMEOUT_MS:30000}
+  max-total-timeout-ms: ${CONNECTOR_MAX_TOTAL_TIMEOUT_MS:60000}
+  test-timeout-ms: ${CONNECTOR_TEST_TIMEOUT_MS:30000}
+  max-response-bytes: ${CONNECTOR_MAX_RESPONSE_BYTES:10485760}
+  signing-keys:
+    platform-default:
+      resource: ${CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE}
+      algorithm: Ed25519
+
 server.port: 8082
 flowable.database-schema-update: false
 flowable.history-level: audit
@@ -53,4 +73,3 @@ flowable.idm.enabled: false
 flowable.eventregistry.enabled: false
 management.endpoints.web.exposure.include: health,info,prometheus
 logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"
-

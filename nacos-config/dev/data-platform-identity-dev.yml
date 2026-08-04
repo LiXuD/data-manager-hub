@@ -47,7 +47,7 @@ platform:
           secret: ${INTERNAL_AUTH_ACCESS_SECRET:dev-access-internal-secret}
           grants:
             data-platform-identity: [identity:access:read]
-            data-platform-masterdata: [masterdata:read, masterdata:vendor-secret:read, masterdata:vendor-security:read]
+            data-platform-masterdata: [masterdata:read, masterdata:vendor-secret:read, masterdata:vendor-security:read, masterdata:connector-artifact:read, masterdata:connector-runtime:read]
             data-platform-billing: [billing:calculate]
             data-platform-governance: [governance:log]
         data-platform-billing:
@@ -59,7 +59,7 @@ platform:
         data-platform-masterdata:
           secret: ${INTERNAL_AUTH_MASTERDATA_SECRET:dev-masterdata-internal-secret}
           grants:
-            data-platform-access: [access:stats:read]
+            data-platform-access: [access:stats:read, access:connector-runtime:read, access:connector-runtime:manage, access:connector-runtime:test]
             data-platform-identity: [identity:encryption]
             data-platform-governance: [governance:log]
         data-platform-identity:

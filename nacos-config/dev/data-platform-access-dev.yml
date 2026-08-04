@@ -45,6 +45,26 @@ platform.security.internal:
 platform.openapi:
   public-base-url: ${OPENAPI_PUBLIC_BASE_URL:http://localhost:8888}
 
+connector.runtime:
+  instance-id: ${CONNECTOR_INSTANCE_ID:${spring.application.name}:${server.port}}
+  host-version: ${CONNECTOR_HOST_VERSION:1.0.0}
+  cache-directory: ${CONNECTOR_PLUGIN_CACHE_DIR:__PROJECT_ROOT__/.runtime/plugins}
+  repository-allowed-prefixes:
+    - ${CONNECTOR_ARTIFACT_REPOSITORY_PREFIX:https://plugins.example.invalid/repository/data-platform}
+  network-allowed-protocols: [https]
+  network-allowed-hosts:
+    - ${CONNECTOR_VENDOR_ALLOWED_HOST:api.example.invalid}
+  allow-private-networks: false
+  max-connect-timeout-ms: 5000
+  max-read-timeout-ms: 30000
+  max-total-timeout-ms: 60000
+  test-timeout-ms: 30000
+  max-response-bytes: 10485760
+  signing-keys:
+    platform-default:
+      resource: ${CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE:}
+      algorithm: Ed25519
+
 server.port: 8082
 flowable.database-schema-update: false
 flowable.history-level: audit
@@ -54,4 +74,3 @@ flowable.idm.enabled: false
 flowable.eventregistry.enabled: false
 management.endpoints.web.exposure.include: health,info,prometheus
 logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"
-
