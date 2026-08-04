@@ -18,6 +18,10 @@
     <dependencies>
         <dependency>
             <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-plugin-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
             <artifactId>data-platform-common-contract</artifactId>
         </dependency>
         <dependency>
