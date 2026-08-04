@@ -371,4 +371,26 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="connector-plugin-control-plane-2026-08-03"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="vendor_config"/>
+            <tableExists schemaName="public" tableName="call_record"/>
+            <tableExists schemaName="public" tableName="permission"/>
+            <tableExists schemaName="public" tableName="role_permission"/>
+        </preConditions>
+        <sqlFile path="../migrations/V042__create_connector_plugin_control_plane.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U042__remove_connector_plugin_control_plane.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>

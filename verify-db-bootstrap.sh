@@ -44,6 +44,9 @@ grep -q "CREATE TABLE" "$DRY_RUN_FILE"
 grep -q "ACT_RU_EXECUTION" "$DRY_RUN_FILE"
 grep -q "api_permission_application" "$DRY_RUN_FILE"
 grep -q "system:admin" "$DRY_RUN_FILE"
+grep -q "connector_plugin_version" "$DRY_RUN_FILE"
+grep -q "vendor_connector_test_fact" "$DRY_RUN_FILE"
+grep -q "legacy-http" "$DRY_RUN_FILE"
 
 bash ./migrate-db.sh update
 
@@ -57,21 +60,68 @@ if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "SELECT to_regclass('migratio
 fi
 bash ./migrate-db.sh update
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "19" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "20" ]]; then
   echo "Liquibase 基线、运行时结构修复、Flowable、接口权限审批与 RBAC 安全变更记录不完整" >&2
   exit 1
 fi
 
-bash ./migrate-db.sh rollback-dry-run 8 >"$DRY_RUN_FILE"
+# V042 must be safely reversible before any connector facts exist. Its canonical built-in
+# legacy-http catalog entry is migration-owned and therefore does not block this rollback.
+MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" bash ./migrate-db.sh rollback-count 1 >/dev/null
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
+    SELECT count(*) = 19
+       AND to_regclass('connector_plugin') IS NULL
+       AND to_regclass('connector_plugin_version') IS NULL
+       AND to_regclass('vendor_connector_version') IS NULL
+       AND to_regclass('vendor_connector_test_fact') IS NULL
+       AND to_regclass('connector_plugin_activation') IS NULL
+    FROM databasechangelog")" != "t" ]]; then
+  echo "V042 空数据回滚未完整移除连接器插件结构" >&2
+  exit 1
+fi
+bash ./migrate-db.sh update
+bash ./migrate-db.sh update
+
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
+    SELECT count(*) = 20
+       AND (SELECT count(*) FROM connector_plugin WHERE plugin_id = 'legacy-http') = 1
+       AND (SELECT count(*) FROM connector_plugin_version
+            WHERE plugin_id = 'legacy-http' AND version = '1.0.0') = 1
+    FROM databasechangelog")" != "t" ]]; then
+  echo "V042 重放或幂等更新未恢复唯一的内置 legacy-http 插件" >&2
+  exit 1
+fi
+
+# Once a user-owned catalog fact exists, U042 must fail closed and preserve all state.
+"${PSQL[@]}" -d "$VERIFY_DB_NAME" -c "
+  INSERT INTO connector_plugin (plugin_id, display_name, provider, status)
+  VALUES ('rollback-probe', 'Rollback Probe', 'regression', 'ACTIVE')" >/dev/null
+if MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" \
+    bash ./migrate-db.sh rollback-count 1 >/dev/null 2>&1; then
+  echo "V042 不应允许在连接器事实存在时原地回滚" >&2
+  exit 1
+fi
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
+    SELECT count(*) = 20
+       AND to_regclass('connector_plugin') IS NOT NULL
+       AND EXISTS (SELECT 1 FROM connector_plugin WHERE plugin_id = 'rollback-probe')
+    FROM databasechangelog")" != "t" ]]; then
+  echo "拒绝 V042 受保护回滚后数据库状态发生变化" >&2
+  exit 1
+fi
+"${PSQL[@]}" -d "$VERIFY_DB_NAME" -c \
+  "DELETE FROM connector_plugin WHERE plugin_id = 'rollback-probe'" >/dev/null
+
+bash ./migrate-db.sh rollback-dry-run 9 >"$DRY_RUN_FILE"
 grep -q "禁止原地回滚角色合并" "$DRY_RUN_FILE"
 if MIGRATION_CONFIRM_ROLLBACK="$VERIFY_DB_NAME" \
-    bash ./migrate-db.sh rollback-count 8 >/dev/null 2>&1; then
+    bash ./migrate-db.sh rollback-count 9 >/dev/null 2>&1; then
   echo "V027 前向安全迁移不应允许原地回滚" >&2
   exit 1
 fi
 
 if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c "
-    SELECT count(*) = 19
+    SELECT count(*) = 20
        AND to_regclass('api_permission_application') IS NOT NULL
        AND to_regclass('workflow.act_ru_execution') IS NOT NULL
        AND to_regclass('tenant_budget') IS NOT NULL
@@ -104,6 +154,67 @@ BEGIN
       OR to_regclass('config_version') IS NULL
       OR to_regclass('vendor_params_mapping') IS NULL THEN
     RAISE EXCEPTION '运行时实体基础表不完整';
+  END IF;
+
+  IF to_regclass('connector_plugin') IS NULL
+      OR to_regclass('connector_plugin_version') IS NULL
+      OR to_regclass('vendor_connector_version') IS NULL
+      OR to_regclass('vendor_connector_test_fact') IS NULL
+      OR to_regclass('connector_plugin_activation') IS NULL THEN
+    RAISE EXCEPTION '连接器插件控制面或运行时事实表不完整';
+  END IF;
+
+  IF NOT EXISTS (
+      SELECT 1 FROM pg_trigger
+      WHERE tgname = 'trg_vendor_connector_test_fact_immutable' AND NOT tgisinternal
+  ) THEN
+    RAISE EXCEPTION '连接器受控测试事实不可变门禁不存在';
+  END IF;
+
+  IF (
+      SELECT count(*)
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'vendor_config'
+        AND column_name IN ('runtime_mode', 'active_connector_version_id', 'connector_version')
+  ) <> 3 OR (
+      SELECT count(*)
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'call_record'
+        AND column_name IN ('plugin_id', 'plugin_version', 'pipeline_version', 'snapshot_hash')
+  ) <> 4 THEN
+    RAISE EXCEPTION '连接器运行模式或调用追踪字段不完整';
+  END IF;
+
+  IF (SELECT count(*) FROM permission
+      WHERE permission_code LIKE 'connector-plugin:%'
+        AND status = 'active' AND deleted = FALSE) <> 9 THEN
+    RAISE EXCEPTION '连接器插件权限集合不完整';
+  END IF;
+
+  IF (SELECT count(*)
+      FROM role_info role
+      JOIN role_permission relation ON relation.role_id = role.id
+      JOIN permission permission ON permission.id = relation.permission_id
+      WHERE role.role_code = 'admin'
+        AND permission.permission_code LIKE 'connector-plugin:%') <> 9 THEN
+    RAISE EXCEPTION '管理员连接器插件权限绑定不完整';
+  END IF;
+
+  IF (SELECT count(*) FROM connector_plugin
+      WHERE plugin_id = 'legacy-http' AND status = 'ACTIVE'
+        AND provider = 'internal' AND deleted = FALSE) <> 1 THEN
+    RAISE EXCEPTION '内置 legacy-http 插件身份不存在或状态不正确';
+  END IF;
+
+  IF (SELECT count(*) FROM connector_plugin_version
+      WHERE plugin_id = 'legacy-http' AND version = '1.0.0'
+        AND spi_version = '1.0' AND status = 'ACTIVE'
+        AND artifact_uri = 'builtin://legacy-http/1.0.0'
+        AND entry_class = 'com.dataplatform.common.plugin.legacy.LegacyHttpConnectorPlugin'
+        AND jsonb_array_length(capabilities) = 6
+        AND capabilities @> '["REQUEST_BUILDER","REQUEST_PROCESSOR","TRANSPORT","RESPONSE_PROCESSOR","RESPONSE_PARSER","RESPONSE_NORMALIZER"]'::jsonb
+        AND verified_at IS NOT NULL) <> 1 THEN
+    RAISE EXCEPTION '内置 legacy-http 1.0.0 版本元数据与运行时描述不一致';
   END IF;
 
   IF NOT EXISTS (
@@ -230,7 +341,7 @@ SQL
 DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$VERIFY_DB_NAME" \
   bash ./migrate-db.sh baseline
 
-if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "19" ]]; then
+if [[ "$("${PSQL[@]}" -Atq -d "$VERIFY_DB_NAME" -c 'SELECT count(*) FROM databasechangelog')" != "20" ]]; then
   echo "现有数据库基线登记失败" >&2
   exit 1
 fi
@@ -263,8 +374,14 @@ DB_BACKUP_DIR="$BASELINE_BACKUP_DIR" MIGRATION_CONFIRM_BASELINE="$LEGACY_VERIFY_
   bash ./migrate-db.sh baseline
 
 if [[ "$("${PSQL[@]}" -Atq -d "$LEGACY_VERIFY_DB_NAME" -c "
-    SELECT count(*) = 19
+    SELECT count(*) = 20
        AND to_regclass('interface_param') IS NOT NULL
+       AND to_regclass('connector_plugin') IS NOT NULL
+       AND to_regclass('connector_plugin_version') IS NOT NULL
+       AND to_regclass('vendor_connector_test_fact') IS NOT NULL
+       AND (SELECT count(*) FROM connector_plugin_version
+            WHERE plugin_id = 'legacy-http' AND version = '1.0.0'
+              AND status = 'ACTIVE') = 1
        AND to_regclass('billing_daily_event') IS NOT NULL
        AND EXISTS (
          SELECT 1
@@ -399,4 +516,4 @@ BEGIN
 END $$;
 SQL
 
-echo "数据库迁移回归通过（dry-run/update/idempotency/V026+V027+V030+V031+V032+V033+V034+V035+V036+V037+V038+V039+V040+V041+Flowable/forward-recovery/backup/restore/baseline/legacy-baseline）: $VERIFY_DB_NAME"
+echo "数据库迁移回归通过（dry-run/update/idempotency/V026+V027+V030+V031+V032+V033+V034+V035+V036+V037+V038+V039+V040+V041+V042+Flowable/forward-recovery/backup/restore/baseline/legacy-baseline）: $VERIFY_DB_NAME"

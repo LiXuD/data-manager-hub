@@ -48,6 +48,12 @@ public class VendorConfigDTO implements Serializable {
 
     private String status;
 
+    private String runtimeMode;
+
+    private Long activeConnectorVersionId;
+
+    private Integer connectorVersion;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -211,6 +217,20 @@ public class VendorConfigDTO implements Serializable {
     public void setStatus(String status) {
         this.status = status;
     }
+
+    public String getRuntimeMode() { return runtimeMode; }
+
+    public void setRuntimeMode(String runtimeMode) { this.runtimeMode = runtimeMode; }
+
+    public Long getActiveConnectorVersionId() { return activeConnectorVersionId; }
+
+    public void setActiveConnectorVersionId(Long activeConnectorVersionId) {
+        this.activeConnectorVersionId = activeConnectorVersionId;
+    }
+
+    public Integer getConnectorVersion() { return connectorVersion; }
+
+    public void setConnectorVersion(Integer connectorVersion) { this.connectorVersion = connectorVersion; }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
