@@ -82,6 +82,7 @@ public class OpenApiQueryService {
                         requestTime, true, true, cachedResult);
                 CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
                         true, duration, cost, true, cachedRecord.getId(), requestTime, responseTime);
+                copyConnectorTrace(cachedRecord, record);
                 callRecordEventPublisher.publish(record);
                 return buildResponse(context, platformRequestId, cachedResult, true,
                         cachedRecord.getId(), requestTime, responseTime, duration, cost);
@@ -97,8 +98,10 @@ public class OpenApiQueryService {
         LocalDateTime responseTime = LocalDateTime.now();
         long duration = System.currentTimeMillis() - startTime;
         boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
+        boolean billingEligible = success
+                && !"INELIGIBLE".equals(String.valueOf(vendorResult.get("billingSignal")));
         BigDecimal cost = charge(context, meteringPolicy, platformRequestId, duration,
-                requestTime, success, false, vendorResult);
+                requestTime, billingEligible, false, vendorResult);
         vendorResult.put("requestId", platformRequestId);
         vendorResult.put("cached", false);
         vendorResult.put("latency", duration);
@@ -231,8 +234,9 @@ public class OpenApiQueryService {
         record.setTenantId(context.getTenantId());
         record.setCallerId(context.getCallerId());
         record.setApiKeyId(context.getApiKeyId());
-        record.setVendorId(context.getVendorId());
-        record.setVendorCode(context.getVendorCode());
+        record.setVendorId(longValue(result.get("actualVendorId"), context.getVendorId()));
+        record.setVendorCode(stringValue(result.get("actualVendorCode")) != null
+                ? stringValue(result.get("actualVendorCode")) : context.getVendorCode());
         record.setApiCode(context.getApiCode());
         record.setProductId(context.getProductId());
         record.setProductCode(context.getProductCode());
@@ -249,11 +253,16 @@ public class OpenApiQueryService {
         record.setDurationMs((int) duration);
         record.setCost(cost);
         record.setCached(cacheHit);
-        record.setUseCache(Boolean.TRUE.equals(context.getUseCache()));
+        record.setUseCache(Boolean.TRUE.equals(context.getUseCache())
+                && !"NOT_CACHEABLE".equals(String.valueOf(result.get("cacheSignal"))));
         record.setCacheDays(context.getCacheDays());
         record.setCacheHit(cacheHit);
         record.setCacheScope(normalize(context.getCacheScope()) != null ? context.getCacheScope() : "GLOBAL");
         record.setCacheSourceRecordId(cacheSourceRecordId);
+        record.setPluginId(stringValue(result.get("pluginId")));
+        record.setPluginVersion(stringValue(result.get("pluginVersion")));
+        record.setPipelineVersion(integerValue(result.get("pipelineVersion")));
+        record.setSnapshotHash(stringValue(result.get("snapshotHash")));
         record.setRequestTime(requestTime);
         record.setResponseAt(responseTime);
         record.setCallTime(requestTime);
@@ -268,6 +277,45 @@ public class OpenApiQueryService {
             record.setResponseData("{}");
         }
         return record;
+    }
+
+    private void copyConnectorTrace(CallRecord source, CallRecord target) {
+        target.setPluginId(source.getPluginId());
+        target.setPluginVersion(source.getPluginVersion());
+        target.setPipelineVersion(source.getPipelineVersion());
+        target.setSnapshotHash(source.getSnapshotHash());
+    }
+
+    private String stringValue(Object value) {
+        return value != null ? String.valueOf(value) : null;
+    }
+
+    private Integer integerValue(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private Long longValue(Object value, Long defaultValue) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -324,20 +372,49 @@ public class OpenApiQueryService {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> sanitizeForRecord(Map<String, Object> source) {
+        return sanitizeRecordMap(source, 0);
+    }
+
+    private Map<String, Object> sanitizeRecordMap(Map<String, Object> source, int depth) {
         if (source == null || source.isEmpty()) {
             return Collections.emptyMap();
         }
+        if (depth >= 16) return Map.of("_truncated", true);
         Map<String, Object> sanitized = new LinkedHashMap<>();
         source.forEach((key, value) -> {
+            if (sanitized.size() >= 500) return;
             if (isSensitiveKey(key)) {
                 sanitized.put(key, MASKED_VALUE);
-            } else if (value instanceof Map<?, ?> nested) {
-                sanitized.put(key, sanitizeForRecord((Map<String, Object>) nested));
             } else {
-                sanitized.put(key, value);
+                sanitized.put(key, sanitizeRecordValue(value, depth + 1));
             }
         });
         return sanitized;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object sanitizeRecordValue(Object value, int depth) {
+        if (depth >= 16) return "[TRUNCATED]";
+        if (value instanceof Map<?, ?> nested) {
+            return sanitizeRecordMap((Map<String, Object>) nested, depth);
+        }
+        if (value instanceof Iterable<?> iterable) {
+            java.util.List<Object> sanitized = new java.util.ArrayList<>();
+            for (Object item : iterable) {
+                if (sanitized.size() >= 500) break;
+                sanitized.add(sanitizeRecordValue(item, depth + 1));
+            }
+            return sanitized;
+        }
+        if (value != null && value.getClass().isArray()) {
+            java.util.List<Object> sanitized = new java.util.ArrayList<>();
+            int length = Math.min(java.lang.reflect.Array.getLength(value), 500);
+            for (int index = 0; index < length; index++) {
+                sanitized.add(sanitizeRecordValue(java.lang.reflect.Array.get(value, index), depth + 1));
+            }
+            return sanitized;
+        }
+        return value;
     }
 
     private boolean isSensitiveKey(String key) {
@@ -349,7 +426,15 @@ public class OpenApiQueryService {
                 || lower.contains("id_card")
                 || lower.contains("cert")
                 || lower.contains("secret")
-                || lower.contains("token");
+                || lower.contains("token")
+                || lower.contains("password")
+                || lower.contains("passwd")
+                || lower.contains("authorization")
+                || lower.contains("credential")
+                || lower.contains("privatekey")
+                || lower.contains("private_key")
+                || lower.equals("apikey")
+                || lower.equals("api_key");
     }
 
     private String generateRequestId() {
