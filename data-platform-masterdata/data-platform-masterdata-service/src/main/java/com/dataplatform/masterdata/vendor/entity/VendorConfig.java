@@ -37,6 +37,9 @@ public class VendorConfig {
     private String authType;
     private String authConfig;
     private Integer securityVersion;
+    private String runtimeMode;
+    private Long activeConnectorVersionId;
+    private Integer connectorVersion;
 
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String paramMapping;
@@ -91,6 +94,14 @@ public class VendorConfig {
     public void setAuthConfig(String authConfig) { this.authConfig = authConfig; }
     public Integer getSecurityVersion() { return securityVersion; }
     public void setSecurityVersion(Integer securityVersion) { this.securityVersion = securityVersion; }
+    public String getRuntimeMode() { return runtimeMode; }
+    public void setRuntimeMode(String runtimeMode) { this.runtimeMode = runtimeMode; }
+    public Long getActiveConnectorVersionId() { return activeConnectorVersionId; }
+    public void setActiveConnectorVersionId(Long activeConnectorVersionId) {
+        this.activeConnectorVersionId = activeConnectorVersionId;
+    }
+    public Integer getConnectorVersion() { return connectorVersion; }
+    public void setConnectorVersion(Integer connectorVersion) { this.connectorVersion = connectorVersion; }
     public String getParamMapping() { return paramMapping; }
     public void setParamMapping(String paramMapping) { this.paramMapping = paramMapping; }
     public CommonStatus getStatus() { return status; }
