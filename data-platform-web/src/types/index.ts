@@ -597,10 +597,15 @@ export interface VendorInterfaceConfig {
   // 扩展字段
   authType?: AuthType
   authConfig?: string
+  runtimeMode?: 'LEGACY' | 'PLUGIN'
+  activeConnectorVersionId?: number
+  connectorVersion?: number
   status: 'active' | 'inactive'
   createdAt: string
   updatedAt: string
 }
+
+export * from './connector'
 
 // ===================== API 专用 DTO 类型 =====================
 

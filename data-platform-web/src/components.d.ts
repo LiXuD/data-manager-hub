@@ -56,6 +56,8 @@ declare module 'vue' {
     ElTimelineItem: typeof import('element-plus/es')['ElTimelineItem']
     ElTransfer: typeof import('element-plus/es')['ElTransfer']
     JsonEditor: typeof import('./components/common/JsonEditor.vue')['default']
+    JsonSchemaField: typeof import('./components/connector/JsonSchemaField.vue')['default']
+    JsonSchemaForm: typeof import('./components/connector/JsonSchemaForm.vue')['default']
     KeyValueEditor: typeof import('./components/common/KeyValueEditor.vue')['default']
     PageHeader: typeof import('./components/PageHeader.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
