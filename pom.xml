@@ -16,6 +16,7 @@
         <module>data-platform-common-contract</module>
         <module>data-platform-common-web</module>
         <module>data-platform-common-persistence</module>
+        <module>data-platform-plugin-spi</module>
         <module>data-platform-common-runtime</module>
 
         <!-- Five business domains -->
@@ -183,6 +184,11 @@
             <dependency>
                 <groupId>com.dataplatform</groupId>
                 <artifactId>data-platform-common-persistence</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-plugin-spi</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
