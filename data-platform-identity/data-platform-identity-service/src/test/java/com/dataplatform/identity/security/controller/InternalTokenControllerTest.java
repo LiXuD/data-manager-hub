@@ -27,13 +27,27 @@ class InternalTokenControllerTest {
     void setUp() {
         InternalSecurityProperties properties = new InternalSecurityProperties();
         properties.setTokenTtl(Duration.ofMinutes(5));
-        InternalSecurityProperties.ClientRegistration client =
+        InternalSecurityProperties.ClientRegistration accessClient =
                 new InternalSecurityProperties.ClientRegistration();
-        client.setSecret("access-secret");
-        client.setGrants(Map.of(
-                "data-platform-masterdata", Set.of("masterdata:read"),
+        accessClient.setSecret("access-secret");
+        accessClient.setGrants(Map.of(
+                "data-platform-masterdata", Set.of(
+                        "masterdata:read",
+                        "masterdata:connector-artifact:read",
+                        "masterdata:connector-runtime:read"),
                 "data-platform-billing", Set.of("billing:calculate")));
-        properties.setClients(Map.of("data-platform-access", client));
+        InternalSecurityProperties.ClientRegistration masterdataClient =
+                new InternalSecurityProperties.ClientRegistration();
+        masterdataClient.setSecret("masterdata-secret");
+        masterdataClient.setGrants(Map.of(
+                "data-platform-access", Set.of(
+                        "access:stats:read",
+                        "access:connector-runtime:read",
+                        "access:connector-runtime:manage",
+                        "access:connector-runtime:test")));
+        properties.setClients(Map.of(
+                "data-platform-access", accessClient,
+                "data-platform-masterdata", masterdataClient));
         jwtService = mock(InternalJwtService.class);
         controller = new InternalTokenController(properties, jwtService);
     }
@@ -50,6 +64,40 @@ class InternalTokenControllerTest {
         assertEquals(300L, response.getExpiresIn());
         verify(jwtService).issue("data-platform-access", "data-platform-billing",
                 Set.of("billing:calculate"));
+    }
+
+    @Test
+    void grantsOnlyConnectorRuntimeScopesFromMasterdataToAccess() {
+        Set<String> scopes = Set.of(
+                "access:stats:read",
+                "access:connector-runtime:read",
+                "access:connector-runtime:manage",
+                "access:connector-runtime:test");
+        when(jwtService.issue("data-platform-masterdata", "data-platform-access", scopes))
+                .thenReturn("connector-jwt");
+
+        InternalTokenResponse response = controller.issue(request(
+                "data-platform-masterdata", "masterdata-secret", "data-platform-access"));
+
+        assertEquals("connector-jwt", response.getAccessToken());
+        verify(jwtService).issue("data-platform-masterdata", "data-platform-access", scopes);
+    }
+
+    @Test
+    void grantsConnectorArtifactAndRuntimeScopesFromAccessToMasterdata() {
+        Set<String> scopes = Set.of(
+                "masterdata:read",
+                "masterdata:connector-artifact:read",
+                "masterdata:connector-runtime:read");
+        when(jwtService.issue("data-platform-access", "data-platform-masterdata",
+                scopes)).thenReturn("artifact-jwt");
+
+        InternalTokenResponse response = controller.issue(request(
+                "data-platform-access", "access-secret", "data-platform-masterdata"));
+
+        assertEquals("artifact-jwt", response.getAccessToken());
+        verify(jwtService).issue("data-platform-access", "data-platform-masterdata",
+                scopes);
     }
 
     @Test
