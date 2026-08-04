@@ -1,6 +1,6 @@
 # 数据管理平台 HTTP API
 
-> 当前契约索引，最后核对日期：2026-07-23。本文只描述经 Gateway 暴露的 HTTP API；跨域 Feign 契约位于各域 `*-api` 模块，并统一使用 `/internal/v1/**`。
+> 当前契约索引，最后核对日期：2026-08-03。第 1—9 节描述经 Gateway 暴露的 HTTP API；第 10 节单独记录不经 Gateway 的跨域 Internal API。Feign 契约只位于目标域 `*-api` 模块。
 
 ## 1. 入口与认证
 
@@ -109,7 +109,79 @@
 
 `signType`、`encryptType` 和简单签名回退已移除；运行时只执行已启用的安全流水线。敏感扩展配置必须以平台 `v1:<keyVersion>:<ciphertext>` 格式存储，否则读取失败关闭。
 
-### 3.3 扩展配置
+### 3.3 连接器插件与版本化厂商流水线
+
+插件目录管理需要对应 `connector-plugin:*` 权限。插件导入只接受受信 HTTPS 制品坐标，不接受本地
+JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入口类静态验证，成功后直接保存
+为 `VERIFIED`。相同 `pluginId + version` 不可覆盖。
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/connector-plugin` | `connector-plugin:view` | 插件目录、活动版本及活动厂商绑定数 `bindingCount` |
+| GET | `/connector-plugin/{pluginId}` | `connector-plugin:view` | 插件详情，含活动厂商绑定数 `bindingCount` |
+| GET | `/connector-plugin/{pluginId}/versions` | `connector-plugin:view` | 全部不可变版本 |
+| POST | `/connector-plugin/versions/import` | `connector-plugin:import` | 从受信仓库导入并验证签名版本 |
+| POST | `/connector-plugin/{pluginId}/versions/{version}/verify` | `connector-plugin:verify` | 重新下载并执行静态验证 |
+| POST | `/connector-plugin/{pluginId}/versions/{version}/stage` | `connector-plugin:activate` | 请求当前 Access 实例集合预加载 |
+| GET | `/connector-plugin/{pluginId}/versions/{version}/activation` | `connector-plugin:view` | 查询逐实例加载事实和聚合 `ready` |
+| POST | `/connector-plugin/{pluginId}/versions/{version}/activate` | `connector-plugin:activate` | 仅全部实例 READY 时激活 |
+| POST | `/connector-plugin/{pluginId}/versions/{version}/disable` | `connector-plugin:disable` | 禁止新绑定；仍被活动连接器引用时返回 409，历史目录保留 |
+
+导入请求：
+
+```json
+{
+  "artifactUri": "https://artifacts.example.com/connectors/demo/1.0.0/connector-plugin.jar",
+  "expectedSha256": "64位小写十六进制",
+  "detachedSignature": "Base64 Ed25519 signature",
+  "signingKeyId": "connector-signing-2026"
+}
+```
+
+厂商连接器路径中的 `{configId}` 是 `vendor_config.id`：
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/vendor/config/{configId}/connector` | `connector-plugin:view` | 当前活动不可变版本；未发布时 `data` 可为空 |
+| GET | `/vendor/config/{configId}/connector/draft` | `connector-plugin:view` | 当前草稿；首次读取会得到可编辑草稿语义 |
+| PUT | `/vendor/config/{configId}/connector/draft` | `connector-plugin:bind` | 乐观锁保存完整流水线 |
+| POST | `/vendor/config/{configId}/connector/validate` | `connector-plugin:bind` | 校验步骤、能力、插件状态、Schema 和哈希 |
+| POST | `/vendor/config/{configId}/connector/test` | `connector-plugin:test` | Access 执行脱敏受控测试，不计费、不缓存、不写调用记录 |
+| POST | `/vendor/config/{configId}/connector/publish` | `connector-plugin:publish` | 发布不可变版本并把该配置切换到 `PLUGIN` |
+| GET | `/vendor/config/{configId}/connector/versions` | `connector-plugin:view` | 查询发布历史 |
+| POST | `/vendor/config/{configId}/connector/rollback/{version}` | `connector-plugin:rollback` | 复制历史快照生成新的活动版本 |
+
+保存草稿请求的 `pipelineSnapshot` 最多 50 步，每个启用流水线必须恰好一个 `TRANSPORT`：
+
+```json
+{
+  "expectedDraftVersion": 3,
+  "pipelineSnapshot": [
+    {
+      "stageKey": "build-request",
+      "capability": "REQUEST_BUILDER",
+      "pluginId": "legacy-http",
+      "pluginVersion": "1.0.0",
+      "order": 10,
+      "enabled": true,
+      "config": {},
+      "configHash": "由服务端规范化并重算"
+    }
+  ]
+}
+```
+
+发布请求为 `{"expectedDraftVersion": 4}`；回滚请求为
+`{"expectedConnectorVersion": 2}`。乐观锁冲突返回 HTTP 409。受控测试请求为
+`{"params": {...}}`，结果只包含 `success/errorCategory/errorCode/safeMessage/normalizedData/stageTimings`，
+不返回原始厂商报文或解析后的秘密。
+
+每次受控测试都会追加一条不可修改/删除的安全事实，关联
+`vendorConfigId + draftVersion + snapshotHash`，但不保存测试参数、原始响应或标准化数据。发布时若没有
+与当前草稿版本和快照哈希精确匹配的成功事实，返回 HTTP 409；修改草稿后必须重新测试。
+插件版本激活前也必须已有一条包含该 `pluginId + pluginVersion` 的成功草稿测试事实。
+
+### 3.4 扩展配置
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -120,7 +192,7 @@
 | PATCH | `/vendor/extended-config/{id}/status` | 更新状态 |
 | GET/POST/PUT/DELETE | `/config/**` | 平台配置管理、发布、版本和缓存管理 |
 
-### 3.4 接口契约
+### 3.5 接口契约
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -136,7 +208,7 @@
 
 `interface_param` 字段树是唯一契约数据源。`requestSchema` 和 `responseSchema` 由字段树生成，不能通过普通接口或独立 Schema API 写入；旧 `/schema`、`/params` 和 `import-schema` 端点已删除。约束只使用 JSON `constraintConfig`。
 
-### 3.5 灰度与管理端调用测试
+### 3.6 灰度与管理端调用测试
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -264,6 +336,9 @@
 | GET | `/call-record/quality-report` | 接口质量报表 |
 | GET | `/call-record/export` | 导出 |
 
+插件模式调用记录额外返回实际 `pluginId`、`pluginVersion`、`pipelineVersion` 和 `snapshotHash`；
+发生厂商或兼容链切换时仍以实际执行事实为准，不以草稿或当前最新插件版本反推历史。
+
 ## 7. 计费
 
 | 方法 | 路径 | 说明 |
@@ -320,3 +395,30 @@
 | 503 | 服务暂不可用 |
 
 调用方必须同时检查 HTTP 状态和响应 `code`，不得把非 200 业务码当作成功。
+
+插件运行时错误通过 `errorCategory` 区分：`CONFIGURATION_ERROR`、`PLUGIN_NOT_READY`、
+`PLUGIN_VERSION_MISMATCH`、`REQUEST_BUILD_ERROR`、`AUTH_SECURITY_ERROR`、`TRANSPORT_TIMEOUT`、
+`TRANSPORT_CONNECTION_ERROR`、`TRANSPORT_HTTP_ERROR`、`RESPONSE_SECURITY_ERROR`、
+`RESPONSE_PARSE_ERROR`、`BUSINESS_REJECTED`、`CONTRACT_VIOLATION`、`PLUGIN_INTERNAL_ERROR`。
+`deliveryState` 为 `NOT_SENT`、`MAYBE_SENT` 或 `SENT`；只有 `NOT_SENT` 允许平台自动走兼容旧链，
+避免外部请求已经发出后重复调用。
+
+## 10. Internal API（不经 Gateway）
+
+以下路径只能由带正确 audience 和最小 scope 的 Identity Service JWT 调用。Gateway 明确不路由
+`/internal/**`；前端、用户 Token 和 API Key 均不能调用。
+
+| 提供方 | 方法 | 路径 | Scope |
+|---|---|---|---|
+| Masterdata | GET | `/internal/v1/masterdata/connector-plugins/{pluginId}/versions/{version}/artifact` | `masterdata:connector-artifact:read` |
+| Masterdata | GET | `/internal/v1/masterdata/connector-plugins/runtime/required-artifacts` | `masterdata:connector-artifact:read` |
+| Masterdata | GET | `/internal/v1/masterdata/vendor-configs/{vendorConfigId}/connector-runtime` | `masterdata:connector-runtime:read` |
+| Access | POST | `/internal/v1/access/connector-plugins/stage` | `access:connector-runtime:manage` |
+| Access | GET | `/internal/v1/access/connector-plugins/{pluginId}/versions/{version}/activation` | `access:connector-runtime:read` |
+| Access | POST | `/internal/v1/access/connector-plugins/{pluginId}/versions/{version}/release` | `access:connector-runtime:manage` |
+| Access | POST | `/internal/v1/access/vendor-connectors/test` | `access:connector-runtime:test` |
+
+`stage` 请求为 `{"pluginId":"demo","pluginVersion":"1.0.0"}`。激活响应包含
+`pluginId/pluginVersion/ready/instances`，每个实例记录 `serviceInstanceId`、制品哈希、宿主版本、
+`state`、加载/心跳时间和安全错误摘要。受控测试 Internal 请求包含
+`vendorConfigId/pipelineSnapshot/params`，响应在 Access 侧递归脱敏、限深和截断。

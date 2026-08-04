@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-07-24
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、过期兼容层清理和接口调用权限审批闭环；计费使用版本化方案、事件账本和查询投影。
+**最后更新**: 2026-08-03
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、过期兼容层清理和接口调用权限审批闭环；计费使用版本化方案、事件账本和查询投影。外部请求连接器插件化的核心代码、V042、管理端和隔离 E2E 夹具已完成；隔离六服务、Gateway、签名插件、真实 OpenAPI、发布/回滚、数据库副作用和浏览器管理页面已验收，存量厂商迁移和旧链退役未完成。
 
 ---
 
@@ -65,6 +65,24 @@
 | 缓存策略审批与运行时强制 | 已完成 | 申请/审批天数写入授权事实；未获批或超限调用 403；租户、Caller、接口版本隔离；缓存命中不续期 |
 | UAPI 指定日期程序员历史接口 | 已完成 | V029 提供 month/day 契约、真实 UAPI GET 路由、零元计费方案及受保护回滚 |
 
+## 外部请求连接器插件化升级（核心实现与隔离运行验收完成）
+
+详细设计见 [外部请求连接器插件化升级设计](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)。
+状态只按已有证据填写：组件测试或夹具通过不等同全服务上线，存量厂商迁移也不因插件运行时存在而自动完成。
+
+| 阶段 | 状态 | 验收门槛 |
+|---|---|---|
+| 0. [当前外部请求行为基线固化](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#141-阶段-0基线固化) | 已完成 | GET/POST/映射/认证/安全/主备路由和错误语义有自动化基线；隔离环境真实 Gateway OpenAPI 首次发布与回滚后调用均成功 |
+| 1. [轻量 SPI 与内置 `legacy-http`](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#142-阶段-1spi-与内置兼容插件) | 已完成 | SPI、六阶段内置插件、强类型结果与 `LEGACY` 默认开关已落地；受控测试和真实 OpenAPI 已执行内置 Transport/Normalizer |
+| 2. [插件目录与连接器版本控制面](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#143-阶段-2版本化控制面) | 已完成 | 真实 API 已验证导入、校验、预加载、激活、草稿 CAS、受控测试、发布、回滚和禁用保护；浏览器已核对动态表单、逐实例状态、差异和版本历史 |
+| 3. [签名制品与隔离热加载](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#144-阶段-3签名制品与隔离热加载) | 单实例隔离运行验收完成 | 签名/哈希、HTTPS 白名单、隔离加载、激活/readiness 和真实调用已通过；多 Access 一致激活、容量和故障演练仍是发布环境门禁 |
+| 4. [现有厂商逐项迁移](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#145-阶段-4逐厂商迁移) | 机制与 fixture 发布/回滚已验收，存量迁移待执行 | 单个 fixture 厂商已由版本 1 发布、版本 2 替换并回滚为新活动版本 3；全部活动厂商迁移与稳定观察尚未执行 |
+| 5. [旧静态适配器退役](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#146-阶段-5旧实现退役) | 未实施 | 当前必须保留 `VendorAdapterFactory`、`HttpVendorAdapter` 和 `LEGACY` 回滚路径，满足全部退役前置条件后再删除 |
+
+受控测试会以 `vendorConfigId + draftVersion + snapshotHash` 追加不可变事实；发布必须匹配当前草稿
+的成功事实，插件激活也必须先有包含该固定版本的成功测试事实。隔离环境已验证成功事实、事实不可变、
+草稿版本冲突、发布/回滚和活动绑定禁用保护；管理页面的关键状态与交互已通过浏览器操作验收。
+
 ## 发布前仍需执行的环境验证
 
 以下是部署环境的必做检查，不是待开发功能：
@@ -83,4 +101,5 @@
 | `docs/API.md` | 对外 HTTP API 契约 |
 | `docs/DEPLOYMENT.md` | 本地与生产部署要求 |
 | `docs/2026-07-23-deep-cleanup-review.md` | 本轮清理范围、架构决策和回归证据 |
+| `docs/2026-08-03-external-request-connector-plugin-upgrade-design.md` | 外部请求连接器插件化当前实现、剩余迁移阶段和验收边界 |
 历史实施计划、已验收报告和过期性能样本不保留在当前知识库，需要追溯时请查阅 Git 历史。
