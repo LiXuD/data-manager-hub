@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.Iterator;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -68,6 +70,7 @@ public final class PluginManifestReader {
                 throw new PluginArtifactException("Config Schema exceeds 128 KiB");
             }
             validateSchemaPolicy(schema, "$");
+            validateLocalReferenceGraph(schema);
             PluginPermissions permissions = permissions(root.required("permissions"));
             return new PluginManifest(manifestVersion, pluginId, version, spiVersion,
                     text(root, "displayName"), text(root, "provider"), entryClass,
@@ -121,9 +124,13 @@ public final class PluginManifestReader {
             while (names.hasNext()) {
                 String name = names.next();
                 JsonNode child = node.get(name);
-                if (("$ref".equals(name) || "$dynamicRef".equals(name))
-                        && child.isTextual() && !child.asText().startsWith("#")) {
-                    throw new PluginArtifactException("Remote Schema references are forbidden at " + path);
+                if ("$dynamicRef".equals(name) || "$recursiveRef".equals(name)) {
+                    throw new PluginArtifactException(
+                            "Dynamic or recursive Schema references are forbidden at " + path);
+                }
+                if ("$ref".equals(name) && (!child.isTextual() || !isLocalJsonPointer(child.asText()))) {
+                    throw new PluginArtifactException(
+                            "Remote or unsupported Schema references are forbidden at " + path);
                 }
                 if ("default".equals(name) && Boolean.TRUE.equals(node.path("x-secret-ref").asBoolean(false))) {
                     throw new PluginArtifactException("Secret reference fields cannot define defaults at " + path);
@@ -135,6 +142,52 @@ public final class PluginManifestReader {
                 validateSchemaPolicy(node.get(index), path + "[" + index + "]");
             }
         }
+    }
+
+    private void validateLocalReferenceGraph(JsonNode root) {
+        Set<JsonNode> visiting = Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<JsonNode> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        visitSchemaNode(root, root, "$", visiting, visited);
+    }
+
+    private void visitSchemaNode(JsonNode root, JsonNode node, String path,
+                                 Set<JsonNode> visiting, Set<JsonNode> visited) {
+        if (node == null || node.isValueNode() || visited.contains(node)) {
+            return;
+        }
+        if (!visiting.add(node)) {
+            throw new PluginArtifactException("Recursive local Schema reference is forbidden at " + path);
+        }
+        if (node.isObject()) {
+            JsonNode reference = node.get("$ref");
+            if (reference != null && reference.isTextual() && isLocalJsonPointer(reference.asText())) {
+                JsonNode target = resolveLocalPointer(root, reference.asText(), path);
+                visitSchemaNode(root, target, path + ".$ref", visiting, visited);
+            }
+            node.fields().forEachRemaining(entry -> {
+                if (!"$ref".equals(entry.getKey())) {
+                    visitSchemaNode(root, entry.getValue(), path + "." + entry.getKey(), visiting, visited);
+                }
+            });
+        } else if (node.isArray()) {
+            for (int index = 0; index < node.size(); index++) {
+                visitSchemaNode(root, node.get(index), path + "[" + index + "]", visiting, visited);
+            }
+        }
+        visiting.remove(node);
+        visited.add(node);
+    }
+
+    private boolean isLocalJsonPointer(String reference) {
+        return "#".equals(reference) || reference.startsWith("#/");
+    }
+
+    private JsonNode resolveLocalPointer(JsonNode root, String reference, String path) {
+        JsonNode target = "#".equals(reference) ? root : root.at(reference.substring(1));
+        if (target.isMissingNode()) {
+            throw new PluginArtifactException("Local Schema reference does not resolve at " + path);
+        }
+        return target;
     }
 
     private String version(JsonNode root, String field) {

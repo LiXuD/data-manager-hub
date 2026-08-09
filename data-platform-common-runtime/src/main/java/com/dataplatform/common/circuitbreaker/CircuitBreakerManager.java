@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -33,6 +35,7 @@ public class CircuitBreakerManager {
             .waitDurationInOpenState(Duration.ofSeconds(30))  // 熔断30秒
             .permittedNumberOfCallsInHalfOpenState(5)   // 半开状态允许5次调用
             .slidingWindowSize(10)                       // 滑动窗口10次
+            .minimumNumberOfCalls(10)                   // 累积10次后计算失败率
             .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
             .build();
 
@@ -67,21 +70,35 @@ public class CircuitBreakerManager {
      * 使用熔断和重试执行操作
      */
     public <T> T executeWithProtection(String vendorCode, Supplier<T> supplier) {
+        return executeWithProtection(vendorCode, supplier, ignored -> false);
+    }
+
+    /** Executes once and records both thrown exceptions and typed failure results. */
+    public <T> T executeWithProtection(String vendorCode, Supplier<T> supplier,
+                                       Predicate<T> resultFailurePredicate) {
         CircuitBreaker cb = getCircuitBreaker(vendorCode);
-        Retry retry = getRetry(vendorCode);
-
-        // 组合熔断和重试
-        Supplier<T> decoratedSupplier = io.github.resilience4j.decorators.Decorators
-            .ofSupplier(supplier)
-            .withRetry(retry)
-            .withCircuitBreaker(cb)
-            .decorate();
-
+        cb.acquirePermission();
+        long startedAt = System.nanoTime();
         try {
-            return decoratedSupplier.get();
-        } catch (Exception e) {
-            log.error("厂商调用失败(已重试): vendor={}, error={}", vendorCode, e.getMessage());
+            T result = supplier.get();
+            long duration = System.nanoTime() - startedAt;
+            if (resultFailurePredicate.test(result)) {
+                cb.onError(duration, TimeUnit.NANOSECONDS,
+                        new TypedConnectorFailureException());
+            } else {
+                cb.onSuccess(duration, TimeUnit.NANOSECONDS);
+            }
+            return result;
+        } catch (RuntimeException e) {
+            cb.onError(System.nanoTime() - startedAt, TimeUnit.NANOSECONDS, e);
+            log.error("厂商调用失败: vendor={}, error={}", vendorCode, e.getMessage());
             throw e;
+        }
+    }
+
+    private static final class TypedConnectorFailureException extends RuntimeException {
+        private TypedConnectorFailureException() {
+            super("typed connector failure");
         }
     }
 

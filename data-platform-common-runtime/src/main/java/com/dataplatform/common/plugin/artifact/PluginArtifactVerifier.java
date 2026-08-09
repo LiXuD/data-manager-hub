@@ -96,6 +96,7 @@ public final class PluginArtifactVerifier {
                 }
                 if (name.endsWith(".class")) {
                     validateClassVersion(name, content, supportedClassMajor);
+                    PluginBytecodePolicy.validate(name, content);
                 }
                 if (PluginManifestReader.MANIFEST_PATH.equals(name)) {
                     manifestBytes = content;

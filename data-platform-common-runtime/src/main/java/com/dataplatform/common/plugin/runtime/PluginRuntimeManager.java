@@ -50,6 +50,10 @@ public final class PluginRuntimeManager implements AutoCloseable {
         return registry;
     }
 
+    public int isolatedClassLoaderCount() {
+        return PluginHandle.isolatedClassLoaderCount();
+    }
+
     @Override
     public void close() {
         registry.close();

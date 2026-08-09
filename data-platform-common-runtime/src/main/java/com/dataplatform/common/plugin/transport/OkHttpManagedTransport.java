@@ -72,6 +72,11 @@ public final class OkHttpManagedTransport implements ManagedHttpTransport {
         } catch (java.net.SocketTimeoutException exception) {
             throw failure(ErrorCategory.TRANSPORT_TIMEOUT, "TRANSPORT_TIMEOUT", "Vendor request timed out",
                     sendStarted.get() ? RequestDeliveryState.MAYBE_SENT : RequestDeliveryState.NOT_SENT, exception);
+        } catch (java.io.InterruptedIOException exception) {
+            // OkHttp reports the total call deadline as InterruptedIOException rather than
+            // SocketTimeoutException. It is still a transport timeout, not a connection error.
+            throw failure(ErrorCategory.TRANSPORT_TIMEOUT, "TRANSPORT_TIMEOUT", "Vendor request timed out",
+                    sendStarted.get() ? RequestDeliveryState.MAYBE_SENT : RequestDeliveryState.NOT_SENT, exception);
         } catch (IOException exception) {
             throw failure(ErrorCategory.TRANSPORT_CONNECTION_ERROR, "TRANSPORT_CONNECTION_ERROR",
                     "Vendor connection failed",
