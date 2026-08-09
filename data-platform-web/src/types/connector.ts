@@ -7,7 +7,46 @@ export type ConnectorCapability =
   | 'RESPONSE_NORMALIZER'
 
 export type ConnectorPluginStatus = 'ACTIVE' | 'VERIFIED' | 'STAGING' | 'STAGING_FAILED' | 'DISABLED'
+/** Historical value retained only for immutable Stage-4 migration audit rows. */
 export type ConnectorRuntimeMode = 'LEGACY' | 'PLUGIN'
+
+/** Plugin-only vendor identity/routing and platform execution policy. */
+export interface VendorConfigSummary {
+  id: number
+  vendorId: number
+  vendorName?: string
+  dataTypeId: number
+  dataTypeName?: string
+  dataTypeCode?: string
+  interfaceId: number
+  interfaceName?: string
+  timeout: number
+  retryCount: number
+  circuitThreshold: number
+  circuitTimeout: number
+  fallbackVendorId?: number
+  fallbackVendorName?: string
+  runtimeMode: 'PLUGIN'
+  activeConnectorVersionId?: number
+  connectorVersion: number
+  status: 'active' | 'inactive'
+  createdAt: string
+  updatedAt: string
+}
+
+export interface VendorConfigCreateRequest {
+  vendorId: number
+  dataTypeCode: string
+  interfaceId: number
+  timeout?: number
+  retryCount?: number
+  circuitThreshold?: number
+  circuitTimeout?: number
+  fallbackVendorId?: number
+}
+
+export type VendorConfigUpdateRequest = Partial<Pick<VendorConfigSummary,
+  'timeout' | 'retryCount' | 'circuitThreshold' | 'circuitTimeout' | 'fallbackVendorId'>>
 
 /** Response envelope used by the lightweight cross-domain contract module. */
 export interface ConnectorApiResponse<T> {
@@ -131,6 +170,53 @@ export interface ConnectorTestResult {
   safeMessage?: string
   normalizedData?: Record<string, unknown>
   stageTimings: ConnectorStageTiming[]
+}
+
+export type VendorConnectorMigrationState =
+  | 'PREPARED' | 'VALIDATED' | 'TEST_PASSED' | 'OBSERVING' | 'READY'
+  | 'STABLE' | 'FAILED' | 'BLOCKED' | 'ROLLED_BACK'
+
+export interface VendorConnectorMigration {
+  id: number
+  vendorConfigId: number
+  vendorId: number
+  interfaceId: number
+  state: VendorConnectorMigrationState
+  recordVersion: number
+  sourceConfigHash?: string
+  draftId?: number
+  draftVersion?: number
+  draftSnapshotHash?: string
+  publishedConnectorVersionId?: number
+  publishedVersionNo?: number
+  previousRuntimeMode: ConnectorRuntimeMode
+  previousActiveConnectorVersionId?: number
+  previousConnectorVersion: number
+  minimumObservationMinutes: number
+  minimumCalls: number
+  maximumErrorRate: number
+  maximumP95DurationMs: number
+  minimumBillingCoverageRate: number
+  observationStartedAt?: string
+  observationEligibleAt?: string
+  observedCalls: number
+  observedSuccesses: number
+  observedFailures: number
+  observedErrorRate: number
+  observedP95DurationMs: number
+  observedCacheHits: number
+  observedRealtimeCalls: number
+  observedBillingEvents: number
+  observedPostedBillingEvents: number
+  observedBillingCoverageRate: number
+  observedBillingAmount: number
+  observationGatePassed: boolean
+  safeErrorCode?: string
+  safeErrorDigest?: string
+  completedAt?: string
+  rolledBackAt?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface JsonSchemaNode {

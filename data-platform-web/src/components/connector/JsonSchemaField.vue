@@ -1,19 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { JsonSchemaNode } from '@/types'
-import { orderedSchemaProperties, schemaDefault } from '@/utils/connector'
+import {
+  orderedSchemaProperties,
+  readSecretReference,
+  schemaDefault,
+  secretFieldRepresentation,
+  writeSecretReference
+} from '@/utils/connector'
 
 defineOptions({ name: 'JsonSchemaField' })
 
 const props = withDefaults(defineProps<{
   modelValue?: unknown
   schema: JsonSchemaNode
+  fieldName?: string
   label?: string
   required?: boolean
   secretOptions?: string[]
   disabled?: boolean
 }>(), {
   label: '',
+  fieldName: '',
   required: false,
   secretOptions: () => [],
   disabled: false
@@ -22,6 +30,15 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: unknown] }>()
 const properties = computed(() => orderedSchemaProperties(props.schema))
 const requiredKeys = computed(() => new Set(props.schema.required || []))
+const secretRepresentation = computed(() => secretFieldRepresentation(props.schema, props.fieldName))
+const secretSelector = computed(() => Boolean(secretRepresentation.value))
+const selectedSecretRef = computed(() => readSecretReference(props.modelValue))
+
+function updateSecretRef(value: unknown) {
+  if (secretRepresentation.value) {
+    emit('update:modelValue', writeSecretReference(secretRepresentation.value, value))
+  }
+}
 
 function updateObject(key: string, value: unknown) {
   const current = props.modelValue && typeof props.modelValue === 'object' && !Array.isArray(props.modelValue)
@@ -70,6 +87,7 @@ function enumValue(value: unknown): string | number | boolean {
       :key="key"
       :model-value="(modelValue as Record<string, unknown> | undefined)?.[key]"
       :schema="child"
+      :field-name="key"
       :label="child.title || key"
       :required="requiredKeys.has(key)"
       :secret-options="secretOptions"
@@ -84,6 +102,7 @@ function enumValue(value: unknown): string | number | boolean {
         <JsonSchemaField
           :model-value="itemValue(index)"
           :schema="schema.items || { type: 'string' }"
+          :field-name="fieldName"
           :label="`第 ${index + 1} 项`"
           :secret-options="secretOptions"
           :disabled="disabled"
@@ -98,16 +117,14 @@ function enumValue(value: unknown): string | number | boolean {
 
   <el-form-item v-else :label="label" :required="required" class="schema-field">
     <el-select
-      v-if="schema['x-secret-ref']"
-      :model-value="primitiveValue(modelValue)"
+      v-if="secretSelector"
+      :model-value="selectedSecretRef"
       filterable
-      allow-create
-      default-first-option
       clearable
       :disabled="disabled"
       placeholder="选择密钥引用（不保存明文）"
       style="width: 100%"
-      @update:model-value="value => emit('update:modelValue', value)"
+      @update:model-value="updateSecretRef"
     >
       <el-option v-for="item in secretOptions" :key="item" :label="item" :value="item" />
     </el-select>

@@ -63,6 +63,21 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: '/connector-migration',
+        name: 'ConnectorMigration',
+        component: () => import('@/views/connector-migration/index.vue'),
+        meta: {
+          title: '厂商连接器迁移',
+          permissions: [
+            'connector-plugin:view',
+            'connector-plugin:migrate',
+            'connector-plugin:test',
+            'connector-plugin:publish',
+            'connector-plugin:rollback'
+          ]
+        }
+      },
+      {
         path: '/caller',
         name: 'Caller',
         component: () => import('@/views/caller/index.vue'),

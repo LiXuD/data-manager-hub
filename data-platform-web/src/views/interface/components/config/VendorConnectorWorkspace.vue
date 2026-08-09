@@ -26,11 +26,11 @@ import type {
   JsonSchemaNode,
   VendorConnectorDraft,
   VendorConnectorVersion,
-  VendorInterfaceConfig
+  VendorConfigSummary
 } from '@/types'
 import { diffConnectorPipelines, mergeSchemaDefaults, normalizePipelineOrder, parseJsonDocument } from '@/utils/connector'
 
-const props = defineProps<{ modelValue: boolean; config: VendorInterfaceConfig | null }>()
+const props = defineProps<{ modelValue: boolean; config: VendorConfigSummary | null }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; changed: [] }>()
 const userStore = useUserStore()
 const loading = ref(false)
@@ -190,13 +190,13 @@ watch(() => props.modelValue, visible => { if (visible) void load() })
   <el-drawer :model-value="modelValue" direction="rtl" size="min(1100px, 94vw)" append-to-body @close="emit('update:modelValue', false)">
     <template #header>
       <div class="workspace-header">
-        <div><div class="eyebrow">VERSIONED CONNECTOR</div><h3>{{ config?.vendorName || `厂商 #${config?.vendorId}` }}</h3><p>{{ config?.apiUrl }}</p></div>
-        <div class="runtime-state"><el-tag :type="config?.runtimeMode === 'PLUGIN' ? 'success' : 'info'">{{ config?.runtimeMode || 'LEGACY' }}</el-tag><span>配置版本 {{ config?.connectorVersion || 0 }}</span><span>活动流水线 V{{ active?.versionNo || '—' }}</span></div>
+        <div><div class="eyebrow">VERSIONED CONNECTOR</div><h3>{{ config?.vendorName || `厂商 #${config?.vendorId}` }}</h3><p>{{ config?.dataTypeCode || `配置 #${config?.id}` }}</p></div>
+        <div class="runtime-state"><el-tag type="success">PLUGIN</el-tag><span>配置版本 {{ config?.connectorVersion || 0 }}</span><span>活动流水线 V{{ active?.versionNo || '—' }}</span></div>
       </div>
     </template>
 
     <div v-loading="loading" class="connector-workspace">
-      <el-alert v-if="config?.runtimeMode !== 'PLUGIN'" type="info" :closable="false" show-icon>当前仍由 LEGACY 链路服务；发布首个连接器版本后才切换到 PLUGIN，现有 OpenAPI 契约不变。</el-alert>
+      <el-alert v-if="!config?.activeConnectorVersionId" type="warning" :closable="false" show-icon>当前配置尚未发布连接器版本；发布完成前保持停用，现有 OpenAPI 契约不变。</el-alert>
       <div class="workspace-toolbar">
         <div><strong>流水线草稿</strong><span>草稿版本 {{ draft?.draftVersion || 0 }}</span><el-tag :type="transportCount === 1 ? 'success' : 'danger'" size="small">TRANSPORT {{ transportCount }}/1</el-tag></div>
         <div class="toolbar-actions">

@@ -11,6 +11,39 @@ export interface ConnectorDiffItem {
   after?: ConnectorPipelineStep
 }
 
+export type SecretFieldRepresentation = 'string' | 'object'
+
+export function secretFieldRepresentation(
+  schema: JsonSchemaNode,
+  fieldName = ''
+): SecretFieldRepresentation | undefined {
+  const normalized = fieldName.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const semanticSensitive = [
+    'password', 'token', 'secret', 'privatekey', 'certificate', 'apikey', 'credential'
+  ].some(name => normalized.includes(name))
+  if (!schema['x-secret-ref'] && !schema['x-sensitive'] && !semanticSensitive) return undefined
+  return schema['x-secret-ref'] && schema.type === 'string' && !schema['x-sensitive'] && !semanticSensitive
+    ? 'string'
+    : 'object'
+}
+
+export function readSecretReference(value: unknown): string | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const reference = (value as Record<string, unknown>).secretRef
+    return typeof reference === 'string' ? reference : undefined
+  }
+  return typeof value === 'string' ? value : undefined
+}
+
+export function writeSecretReference(
+  representation: SecretFieldRepresentation,
+  value: unknown
+): string | { secretRef: string } | undefined {
+  const reference = typeof value === 'string' && value ? value : undefined
+  if (!reference) return undefined
+  return representation === 'object' ? { secretRef: reference } : reference
+}
+
 export function parseJsonDocument<T>(value?: string, fallback?: T): T {
   if (!value?.trim()) return fallback as T
   try {

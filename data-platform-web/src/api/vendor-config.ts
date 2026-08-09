@@ -1,6 +1,8 @@
 import { request } from '@/utils/request'
 import type {
-  VendorInterfaceConfig,
+  VendorConfigCreateRequest,
+  VendorConfigSummary,
+  VendorConfigUpdateRequest,
   ApiResponse,
   SecurityDirection,
   VendorSecurityCapability,
@@ -17,32 +19,32 @@ export const getVendorConfigList = (params?: {
   interfaceId?: number
   status?: string
 }) => {
-  return request.get<ApiResponse<VendorInterfaceConfig[]>>('/vendor/config/list', { params })
+  return request.get<ApiResponse<VendorConfigSummary[]>>('/vendor/config/list', { params })
 }
 
 // 获取单个配置
 export const getVendorConfigById = (id: number) => {
-  return request.get<ApiResponse<VendorInterfaceConfig>>(`/vendor/config/${id}`)
+  return request.get<ApiResponse<VendorConfigSummary>>(`/vendor/config/${id}`)
 }
 
 // 根据厂商ID获取配置
 export const getVendorConfigByVendor = (vendorId: number) => {
-  return request.get<ApiResponse<VendorInterfaceConfig[]>>(`/vendor/config/vendor/${vendorId}`)
+  return request.get<ApiResponse<VendorConfigSummary[]>>(`/vendor/config/vendor/${vendorId}`)
 }
 
 // 根据接口ID获取配置列表
 export const getVendorConfigByInterface = (interfaceId: number) => {
-  return request.get<ApiResponse<VendorInterfaceConfig[]>>(`/vendor/config/interface/${interfaceId}`)
+  return request.get<ApiResponse<VendorConfigSummary[]>>(`/vendor/config/interface/${interfaceId}`)
 }
 
 // 创建配置
-export const createVendorConfig = (data: Partial<VendorInterfaceConfig>) => {
-  return request.post<ApiResponse<VendorInterfaceConfig>>('/vendor/config', data)
+export const createVendorConfig = (data: VendorConfigCreateRequest) => {
+  return request.post<ApiResponse<VendorConfigSummary>>('/vendor/config', data)
 }
 
 // 更新配置
-export const updateVendorConfig = (id: number, data: Partial<VendorInterfaceConfig>) => {
-  return request.put<ApiResponse<VendorInterfaceConfig>>(`/vendor/config/${id}`, data)
+export const updateVendorConfig = (id: number, data: VendorConfigUpdateRequest) => {
+  return request.put<ApiResponse<VendorConfigSummary>>(`/vendor/config/${id}`, data)
 }
 
 // 删除配置
@@ -57,7 +59,14 @@ export const updateVendorConfigStatus = (id: number, status: 'active' | 'inactiv
 
 // 测试配置连接
 export const testVendorConfig = (id: number) => {
-  return request.post<ApiResponse<{ success: boolean; latency?: number; error?: string }>>(`/vendor/config/${id}/test`)
+  return request.post<ApiResponse<{
+    success: boolean
+    errorCode?: string
+    errorMsg?: string
+    pipelineVersion?: number
+    snapshotHash?: string
+    runtimeMode: 'PLUGIN'
+  }>>(`/vendor/config/${id}/test`)
 }
 
 export const getSecurityCapabilities = () => {
