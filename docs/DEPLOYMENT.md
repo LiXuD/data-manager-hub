@@ -1,6 +1,6 @@
 # 数据管理平台部署文档
 
-**版本**: 2026-08-03
+**版本**: 2026-08-10
 
 ---
 
@@ -80,6 +80,19 @@ V042 增加 Masterdata 所有的插件目录/连接器版本和不可变受控�
 `vendor_config.runtime_mode/active_connector_version_id/connector_version` 以及 `call_record` 插件追踪字段，
 并种入内置 `legacy-http:1.0.0`。U042 只允许在不存在真实插件、连接器草稿/发布版本、激活事实、
 受控测试事实、PLUGIN 绑定和插件调用事实时回滚；出现任一事实后必须备份并做前向恢复，不能强制执行 U042。
+
+后续连接器迁移必须连续应用到 V047：
+
+- V043：迁移计划和 Access/Billing 观察事实；完成后迁移控制面只读；
+- V044：失败关闭地为存量配置建立活动连接器并强制 PLUGIN-only；
+- V045：删除旧适配器配置列；
+- V046：新增 `V1_DERIVED/V2_EMBEDDED` 完整性事实，不改写旧快照、调用或计费历史；
+- V047：升级前核对目录、发布步骤和调用/计费事实，随后冻结插件制品、发布版本和物理删除。
+
+V043—V047 在坏目录/完整性历史上必须原子 HALT，禁止临时关闭 precondition 或原地修历史。发布前
+执行 `backup + validate + dry-run`，在隔离 PostgreSQL 同时验证 fresh V001—V047 和 V046→V047。
+受保护事实产生后，U043—U047 不作为普通回滚路径；使用升级前备份恢复或新增 forward-recovery
+changeset。精确策略见 `sql/MIGRATIONS.md`。
 
 发布新审批节点时，将经过评审的 BPMN 作为 `data-platform-access-service/src/main/resources/processes/` 下的新版本资源发布。新申请使用最新版本，运行中实例继续原定义；禁止在线暴露 Flowable REST、引擎 Actuator 管理端点或 workflow schema。
 
@@ -315,9 +328,39 @@ Access `/actuator/health` 保持 `DOWN`；已有匹配缓存可在仓库故障�
 中的活动 Access 实例创建 `connector_plugin_activation` 事实，只有聚合 `ready=true` 才允许激活。
 发布或切换期间旧版本继续服务在途租约，引用归零后才关闭插件和 ClassLoader。
 
+生产至少部署两个具有唯一 `CONNECTOR_INSTANCE_ID` 的 Access 实例。新实例在当前活动绑定全部预加载
+完成前 readiness 必须保持 DOWN；候选版本只有所有服务发现中的活动实例 READY 后才能激活。任一
+实例失败时旧 ACTIVE 继续服务。实例下线后由服务发现更新活动集合，不永久阻塞；发布/回滚/禁用/
+解绑在事务提交后触发 release，定时 required-artifact 对账重试部分失败并释放无绑定版本。
+
 内部 JWT 最小 scope 还包括：Access 读取制品 `masterdata:connector-artifact:read`、读取运行快照
 `masterdata:connector-runtime:read`；Masterdata 查询/管理 Access 激活状态和受控测试分别使用
 `access:connector-runtime:read`、`access:connector-runtime:manage`、`access:connector-runtime:test`。
+
+### 连接器供应链 CI
+
+插件源码必须在独立 CI 构建、测试、扫描、计算 SHA-256，并由受信离线私钥对规范化 Manifest 与
+JAR 哈希进行 Ed25519 脱离签名；平台只导入 HTTPS 制品坐标，不提供本地 JAR 执行入口。同坐标不得
+覆盖。宿主仓库的可复现扫描命令为：
+
+```bash
+mvn -B -ntp -Pconnector-supply-chain-scan -DskipTests -DskipTests=true verify
+```
+
+`.github/workflows/connector-plugin-supply-chain.yml` 在相关变更上执行 OWASP Dependency-Check、CycloneDX
+SBOM 和许可证报告；`NVD_API_KEY` 只配置在 CI Secret。危险字节码门禁属于日常离线测试与导入/加载
+路径，不依赖在线服务，并拒绝直接 Socket/URL/HttpClient、文件系统、宿主反射、System/ClassLoader、
+Thread/Executors 和 native load。扫描失败或签名/哈希/白名单不匹配时不得导入或激活。
+
+### 连接器发布与回滚 Runbook
+
+1. 通过管理 API import/verify，确认制品哈希、签名 keyId、SPI/Host 版本和权限清单。
+2. stage 后查看逐实例 activation；任何实例不是 READY 都停止，不能调用 activate。
+3. 使用目标 vendor 草稿完成 Schema/secretRef 校验和有界受控测试，再以 CAS 发布。
+4. 观察错误率、P95、ClassLoader gauge、缓存/计费和实际完整性事实，按批次放量。
+5. 运行错误时对厂商连接器执行历史版本 rollback；该动作创建新发布版本，不修改旧历史。
+6. 制品加载错误时保持旧 ACTIVE，修复制品/信任配置后重新 stage；不要删除目录事实。
+7. 数据库 changeset 错误使用升级前备份恢复或 forward recovery；不要强制执行受保护 U 脚本。
 
 ### 隔离连接器 E2E 夹具
 
@@ -342,6 +385,12 @@ activate、草稿、validate、test、publish 和 OpenAPI 调用。`prepare-e2e.
 ```bash
 ./data-platform-test/test-fixtures/connector-e2e/cleanup-e2e.sh "$E2E_STATE_FILE"
 ```
+
+2026-08-10 已按此隔离方式启动五域、Gateway、Web 和双 Access，完成签名插件、控制面、单条/批量
+OpenAPI、权限/限流/配额、缓存/契约、delivery/主备/计费、离线缓存/readiness、并发切换、卸载和浏览器
+验收。清理后数据库、Nacos、Redis、缓存、进程、端口和凭据残留为 0。精确验收结论见
+[外部请求连接器插件化升级设计第 0.1 节](2026-08-03-external-request-connector-plugin-upgrade-design.md#01-隔离运行环境与浏览器验收记录)；
+该隔离证据不替代生产容量和放量验收。
 
 ---
 
@@ -477,6 +526,15 @@ export NACOS_NAMESPACE=prod
 # SkyWalking
 export SW_AGENT_ENABLED=true
 export SW_OAP_ADDRESS=skywalking-oap:11800
+
+# 连接器（示例；真实值来自部署 Secret/只读挂载）
+export CONNECTOR_ARTIFACT_REPOSITORY_HOST=plugins.example.com
+export CONNECTOR_ARTIFACT_REPOSITORY_PATH=/repository/data-platform
+export CONNECTOR_ARTIFACT_REPOSITORY_PREFIX=https://plugins.example.com/repository/data-platform
+export CONNECTOR_SIGNING_PUBLIC_KEY_BASE64='<X.509 DER Base64>'
+export CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE=file:/run/secrets/connector-signing-public.pem
+export CONNECTOR_PLUGIN_CACHE_DIR=/var/lib/data-platform/plugins
+export CONNECTOR_INSTANCE_ID="${HOSTNAME}:8082"
 ```
 
 ### Docker 部署
@@ -563,5 +621,5 @@ psql -h localhost -U postgres dataplatform < backup_20260516.sql
 
 ---
 
-**文档版本**: 2026-08-03
-**最后更新**: 同步 V042、签名连接器制品、双端信任密钥、Access 缓存/激活/readiness 和隔离 E2E 夹具。
+**文档版本**: 2026-08-10
+**最后更新**: 同步 V042—V047、PLUGIN-only、供应链 CI、双 Access 激活/readiness、release/回滚和隔离 E2E。

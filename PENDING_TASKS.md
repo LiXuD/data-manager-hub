@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-08-03
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、过期兼容层清理和接口调用权限审批闭环；计费使用版本化方案、事件账本和查询投影。外部请求连接器插件化的核心代码、V042、管理端和隔离 E2E 夹具已完成；隔离六服务、Gateway、签名插件、真实 OpenAPI、发布/回滚、数据库副作用和浏览器管理页面已验收，存量厂商迁移和旧链退役未完成。
+**最后更新**: 2026-08-10
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现：V043—V045 完成存量配置迁移、PLUGIN-only 约束和旧静态适配器退役，V046—V047 固化完整性与历史不可变约束；双 Access 隔离环境、真实 Gateway/OpenAPI、管理 API、浏览器页面和数据库副作用均已验收。该结论不表示已经部署到生产环境。
 
 ---
 
@@ -14,6 +14,7 @@
 - 数据测试页面通过 `/interface/{id}/contract` 读取请求字段树，自动生成输入项、应用默认值并校验必填项、类型与约束。
 - 接口契约只保留 `/contract` 读写；旧 Schema/params/import 端点、访问域旧 `/data/**` 链路和重复 API Key 路由已删除。
 - 厂商安全只执行版本化安全流水线；简单 `signType`/`encryptType`、签名构建器和失败回退已删除。
+- 厂商外部请求只走发布后的连接器插件流水线；`VendorAdapterFactory`、`HttpVendorAdapter`、旧请求列和 LEGACY 写路径已删除，`legacy-http` 仅作为宿主内置阶段桥接现有 HTTP/映射/安全能力。
 
 ## 已完成里程碑
 
@@ -28,6 +29,7 @@
 | 接口调用权限申请、Flowable 审批与自动授权 | 已完成 | 2026-07-24 |
 | 分系统、分接口缓存策略审批与绝对时效 | 已完成 | 2026-07-24 |
 | UAPI 指定日期程序员历史接口与前后端真实链路 | 已完成 | 2026-07-24 |
+| 外部请求连接器插件化阶段 0—5 与旧链退役 | 已完成并通过隔离验收 | 2026-08-10 |
 
 ## 当前整改进度
 
@@ -65,31 +67,33 @@
 | 缓存策略审批与运行时强制 | 已完成 | 申请/审批天数写入授权事实；未获批或超限调用 403；租户、Caller、接口版本隔离；缓存命中不续期 |
 | UAPI 指定日期程序员历史接口 | 已完成 | V029 提供 month/day 契约、真实 UAPI GET 路由、零元计费方案及受保护回滚 |
 
-## 外部请求连接器插件化升级（核心实现与隔离运行验收完成）
+## 外部请求连接器插件化升级（阶段 0—5 已完成并通过隔离验收）
 
 详细设计见 [外部请求连接器插件化升级设计](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)。
-状态只按已有证据填写：组件测试或夹具通过不等同全服务上线，存量厂商迁移也不因插件运行时存在而自动完成。
+状态只按已有证据填写：当前工作树与隔离运行环境已经完成验收，但未声称生产部署、生产流量切换或生产容量演练已经完成。
 
 | 阶段 | 状态 | 验收门槛 |
 |---|---|---|
-| 0. [当前外部请求行为基线固化](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#141-阶段-0基线固化) | 已完成 | GET/POST/映射/认证/安全/主备路由和错误语义有自动化基线；隔离环境真实 Gateway OpenAPI 首次发布与回滚后调用均成功 |
-| 1. [轻量 SPI 与内置 `legacy-http`](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#142-阶段-1spi-与内置兼容插件) | 已完成 | SPI、六阶段内置插件、强类型结果与 `LEGACY` 默认开关已落地；受控测试和真实 OpenAPI 已执行内置 Transport/Normalizer |
-| 2. [插件目录与连接器版本控制面](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#143-阶段-2版本化控制面) | 已完成 | 真实 API 已验证导入、校验、预加载、激活、草稿 CAS、受控测试、发布、回滚和禁用保护；浏览器已核对动态表单、逐实例状态、差异和版本历史 |
-| 3. [签名制品与隔离热加载](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#144-阶段-3签名制品与隔离热加载) | 单实例隔离运行验收完成 | 签名/哈希、HTTPS 白名单、隔离加载、激活/readiness 和真实调用已通过；多 Access 一致激活、容量和故障演练仍是发布环境门禁 |
-| 4. [现有厂商逐项迁移](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#145-阶段-4逐厂商迁移) | 机制与 fixture 发布/回滚已验收，存量迁移待执行 | 单个 fixture 厂商已由版本 1 发布、版本 2 替换并回滚为新活动版本 3；全部活动厂商迁移与稳定观察尚未执行 |
-| 5. [旧静态适配器退役](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#146-阶段-5旧实现退役) | 未实施 | 当前必须保留 `VendorAdapterFactory`、`HttpVendorAdapter` 和 `LEGACY` 回滚路径，满足全部退役前置条件后再删除 |
+| 0. [当前外部请求行为基线固化](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#141-阶段-0基线固化) | 已实现并通过隔离验收 | GET/POST、映射、安全、主备、错误、缓存和计费行为有自动化与真实 Gateway 基线 |
+| 1. [轻量 SPI 与内置 `legacy-http`](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#142-阶段-1spi-与内置兼容插件) | 已实现并通过隔离验收 | 六阶段 SPI、强类型结果、Stage 生命周期、内置 Transport/Normalizer 和受限执行器已落地 |
+| 2. [插件目录与连接器版本控制面](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#143-阶段-2版本化控制面) | 已实现并通过隔离验收 | 导入、验证、双实例预加载/激活、草稿 CAS、Schema/secretRef、受控测试、发布、历史和回滚均通过 |
+| 3. [签名制品与隔离热加载](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#144-阶段-3签名制品与隔离热加载) | 已实现并通过隔离验收 | 双 Access 一致激活、单实例失败门禁、离线缓存/readiness、在途租约、卸载 gauge 和 100 次生命周期专测均通过 |
+| 4. [现有厂商逐项迁移](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#145-阶段-4逐厂商迁移) | 已实现并通过隔离验收 | V043 迁移观测事实与只读历史、V044 全量 PLUGIN 转换及失败关闭约束已完成；真实 fixture 迁移/回滚通过 |
+| 5. [旧静态适配器退役](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md#146-阶段-5旧实现退役) | 已实现并通过隔离验收 | V045 删除旧请求列；静态工厂、旧 HTTP Adapter、迁移写端点和旧固定编辑器均已删除；V047 冻结历史事实 |
 
 受控测试会以 `vendorConfigId + draftVersion + snapshotHash` 追加不可变事实；发布必须匹配当前草稿
 的成功事实，插件激活也必须先有包含该固定版本的成功测试事实。隔离环境已验证成功事实、事实不可变、
 草稿版本冲突、发布/回滚和活动绑定禁用保护；管理页面的关键状态与交互已通过浏览器操作验收。
 
-## 发布前仍需执行的环境验证
+## 仍需执行的生产发布门禁
 
 以下是部署环境的必做检查，不是待开发功能：
 
 - 通过环境变量或密钥系统提供 `NACOS_SERVER_ADDR`、数据库和 Redis 的连接及凭据；`docker-compose.yml` 仅用于本地开发和测试。
 - 在真实集成环境显式开启外部 API 测试：`mvn test -Dintegration.tests=true` 或 `INTEGRATION_TESTS=true`。
 - SkyWalking 生产环境使用持久化后端，不使用本地 compose 中的 H2 存储。
+- 在生产制品库和部署 TrustStore 中配置经审批的签名公钥、仓库前缀、证书链和 Access 持久缓存卷；隔离验收使用的一次性凭据已经销毁。
+- 按生产 Access 实例规模执行容量、滚动升级、制品库故障和告警联动演练，并依据生产变更流程决定上线窗口；这些是环境/发布工作，不是待开发功能。
 - 合入 `dev` 前执行 `mvn verify`、`npm audit`、`npm run lint`、`npm test`、`npm run build`、隔离数据库迁移回归和 `bash arch-scan.sh`。
 
 ## 文档职责
@@ -101,5 +105,6 @@
 | `docs/API.md` | 对外 HTTP API 契约 |
 | `docs/DEPLOYMENT.md` | 本地与生产部署要求 |
 | `docs/2026-07-23-deep-cleanup-review.md` | 本轮清理范围、架构决策和回归证据 |
-| `docs/2026-08-03-external-request-connector-plugin-upgrade-design.md` | 外部请求连接器插件化当前实现、剩余迁移阶段和验收边界 |
+| `sql/MIGRATIONS.md` | V001—V047 的迁移、不可逆边界和前向恢复要求 |
+| `docs/2026-08-03-external-request-connector-plugin-upgrade-design.md` | Bumblebee 参考、实施前基线、现已落地架构和隔离验收边界 |
 历史实施计划、已验收报告和过期性能样本不保留在当前知识库，需要追溯时请查阅 Git 历史。

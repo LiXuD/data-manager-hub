@@ -48,8 +48,8 @@ data-platform/
 ├── data-platform-common-contract/    # 通用契约：Result/PageResult、错误码、基础枚举/常量
 ├── data-platform-common-web/         # Web公共能力：异常、拦截器、MVC配置
 ├── data-platform-common-persistence/ # 持久化公共能力：MyBatis配置、审计字段
-├── data-platform-common-runtime/     # 运行时公共能力
-├── data-platform-plugin-spi/         # 连接器插件轻量 SPI Jar，不独立部署
+├── data-platform-common-runtime/     # 连接器加载、注册表、流水线、HTTP Transport 与内置 bridge
+├── data-platform-plugin-spi/         # 六阶段连接器插件轻量 SPI Jar，不独立部署
 ├── data-platform-gateway/       # API网关 (端口 8888)
 ├── data-platform-masterdata/    # 主数据服务 (端口 8081)：vendor/datatype/interface/config/graylog
 │   ├── data-platform-masterdata-api/
@@ -73,9 +73,10 @@ data-platform/
 
 > **当前服务边界**: 项目已收敛为 masterdata / access / billing / identity / governance 五个业务域；旧 vendor/caller/call/tenant/iam/log/monitor/trace/quality/interface/graylog/security 小服务已退役。
 
-外部请求已具备版本化连接器插件运行时：Masterdata 管理签名制品和不可变厂商流水线，Access 负责
-HTTPS 制品缓存、隔离加载、逐实例激活和执行。存量配置默认仍为 `LEGACY`，只有发布厂商连接器
-版本后才按单个 `vendor_config` 切换到 `PLUGIN`；这不会增加第六个业务服务。
+外部请求已采用 PLUGIN-only 版本化连接器运行时：Masterdata 管理签名制品、Schema/secretRef 和
+不可变厂商流水线，Access 负责 HTTPS 制品缓存、隔离加载、双实例激活/readiness、租约执行和卸载。
+V044/V045 已完成存量配置迁移与旧字段/静态适配器退役；内置 `legacy-http` 只是插件内部 bridge，
+不会增加第六个业务服务，也不会形成第二套执行入口。
 
 同步跨域调用只依赖目标域 `*-api` 中的 Internal Feign 契约，统一使用 `/internal/v1/**` 和 Identity 签发的短期 Service JWT；每个客户端按 audience 获取最小 scope，Gateway 不暴露内部路径。领域表由所属域独占访问，跨域统计通过 Access 内部契约查询。
 
@@ -89,7 +90,7 @@ HTTPS 制品缓存、隔离加载、逐实例激活和执行。存量配置默�
 
 | 领域 | 核心表 |
 |------|--------|
-| masterdata | `vendor_info`、`data_type`、`vendor_config`、`vendor_config_extended`、`api_interface`、`interface_param`、`gray_rule`、`connector_plugin`、`connector_plugin_version`、`vendor_connector_version`、`vendor_connector_test_fact` |
+| masterdata | `vendor_info`、`data_type`、`vendor_config`、`vendor_config_extended`、`api_interface`、`interface_param`、`gray_rule`、`connector_plugin`、`connector_plugin_version`、`vendor_connector_version`、`vendor_connector_test_fact`、`vendor_connector_migration` |
 | access | `caller_info`、`caller_product`、`api_key`、`api_key_interface`、`api_permission_application`、`api_permission_application_item`、`api_permission_action`、`api_approval_process_config`、`call_scene`、`call_record`、`connector_plugin_activation` |
 | workflow | Flowable 7.1.0 原生流程、任务和历史表（独立 `workflow` schema） |
 | billing | `billing_template`、`billing_plan`、`billing_plan_tier`、`billing_event`（不可变账本）、`billing_usage_balance`、`billing_daily`（查询投影）、`billing_daily_event`、`billing_reconciliation` |
@@ -106,6 +107,7 @@ HTTPS 制品缓存、隔离加载、逐实例激活和执行。存量配置默�
 |---|---|
 | 厂商、数据类型与配置 | `/api/v1/vendor/**`、`/api/v1/datatype/**`、`/api/v1/config/**` |
 | 连接器插件与厂商流水线 | `/api/v1/connector-plugin/**`、`/api/v1/vendor/config/{id}/connector/**` |
+| 已完成迁移历史（只读） | `GET /api/v1/vendor/connector-migration` |
 | 接口契约 | `GET/PUT /api/v1/interface/{id}/contract` |
 | 调用方与 API Key | `/api/v1/caller/**`、`/api/v1/caller/apikey/**` |
 | 接口权限申请与审批 | `/api/v1/api-permission/applications/**`、`/api/v1/api-permission/tasks/**`、`/api/v1/api-permission/grants/**` |
@@ -177,7 +179,10 @@ MIGRATION_CONFIRM_ROLLBACK=dataplatform ./migrate-db.sh rollback-count 1
 MIGRATION_CONFIRM_RESTORE=dataplatform ./migrate-db.sh restore path/to/backup.sql
 ```
 
-当前历史 SQL 被固化为 `baseline-2026-07-22` 单一基线，因为 `init.sql` 已包含部分历史增量结构。后续数据库变更必须作为独立 Liquibase changeset 添加，并提供显式 `<rollback>`。初始基线的回滚会把应用表恢复为空库，仅适用于一次性环境；有业务数据的环境应先执行 `backup`，需要恢复时使用 `restore`。
+当前历史 SQL 被固化为 `baseline-2026-07-22` 单一基线，根变更日志最新为 V047。V042—V047 依次
+落地插件控制面、迁移观察/PLUGIN-only/旧字段删除、V1/V2 完整性和历史不可变保护。后续变更必须
+追加独立 Liquibase changeset；对已有受保护事实的 V043—V047 不执行破坏性 U 脚本，使用升级前备份
+恢复或 forward recovery。完整规则见 [数据库迁移说明](sql/MIGRATIONS.md)。
 
 已有数据库如果过去通过手工 SQL 初始化，不要直接运行 `update`。`baseline` 会先自动备份，再在单个事务中幂等补齐历史迁移；只有结构校验通过后才登记基线：
 
@@ -259,6 +264,7 @@ data-platform/
 ├── data-platform-common-web/        # Web公共能力
 ├── data-platform-common-persistence/# 持久化公共能力
 ├── data-platform-common-runtime/    # 运行时公共能力
+├── data-platform-plugin-spi/        # 连接器插件轻量 SPI
 ├── data-platform-gateway/          # API 网关
 ├── data-platform-masterdata/        # 主数据域
 ├── data-platform-access/            # 访问域
@@ -303,7 +309,7 @@ data-platform/
 | 数据测试页自动填充接口参数 | ✅ 100% | 2026-07-10 |
 | 跨域调用最小权限与领域数据边界整改 | ✅ 100% | 2026-07-14 |
 | 深度清理、契约收敛与知识库刷新 | ✅ 100% | 2026-07-23 |
-| 外部请求连接器插件化核心实现 | ✅ 隔离六服务/OpenAPI/浏览器已验收；存量迁移待执行 | 2026-08-03 |
+| 外部请求连接器插件化阶段 0—5 | ✅ 已实现并通过双 Access 隔离 OpenAPI/浏览器验收（未声称生产部署） | 2026-08-10 |
 
 ---
 
@@ -313,7 +319,7 @@ data-platform/
 - [API 文档](docs/API.md)
 - [部署文档](docs/DEPLOYMENT.md)
 - [2026-07-23 深度清理审查](docs/2026-07-23-deep-cleanup-review.md)
-- [外部请求连接器插件化升级设计与实施状态](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)
+- [外部请求连接器插件化升级设计（已实现并通过隔离验收）](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)
 - [当前任务清单](PENDING_TASKS.md)
 
 ---
@@ -330,6 +336,7 @@ mvn verify
 cd data-platform-web
 npm audit
 npm run lint
+npm test
 npm run build
 cd ..
 
