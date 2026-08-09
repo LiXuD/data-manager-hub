@@ -11,7 +11,10 @@ import {
   normalizedBindingCount,
   orderedSchemaProperties,
   parseJsonDocument,
-  schemaDefault
+  readSecretReference,
+  schemaDefault,
+  secretFieldRepresentation,
+  writeSecretReference
 } from '../connector'
 import type { ConnectorPipelineStep, JsonSchemaNode } from '@/types'
 
@@ -26,6 +29,22 @@ const step = (stageKey: string, order = 0): ConnectorPipelineStep => ({
 })
 
 describe('connector helpers', () => {
+  it('round-trips string x-secret-ref fields without violating the Schema type', () => {
+    const schema: JsonSchemaNode = { type: 'string', 'x-secret-ref': true }
+    expect(secretFieldRepresentation(schema, 'signingMaterial')).toBe('string')
+    const submitted = writeSecretReference('string', 'vendor.signing-key')
+    expect(submitted).toBe('vendor.signing-key')
+    expect(readSecretReference(submitted)).toBe('vendor.signing-key')
+  })
+
+  it('round-trips x-sensitive fields as an object and never as plaintext', () => {
+    const schema: JsonSchemaNode = { type: 'object', 'x-sensitive': true }
+    expect(secretFieldRepresentation(schema, 'clientCredential')).toBe('object')
+    const submitted = writeSecretReference('object', 'vendor.client-secret')
+    expect(submitted).toEqual({ secretRef: 'vendor.client-secret' })
+    expect(readSecretReference(submitted)).toBe('vendor.client-secret')
+  })
+
   it('parses valid JSON and returns fallback for invalid JSON', () => {
     expect(parseJsonDocument('{"a":1}', {})).toEqual({ a: 1 })
     expect(parseJsonDocument('{', { safe: true })).toEqual({ safe: true })
@@ -33,9 +52,14 @@ describe('connector helpers', () => {
 
   it('creates defaults for supported schema types', () => {
     const schema: JsonSchemaNode = { type: 'object', properties: {
-      enabled: { type: 'boolean' }, names: { type: 'array', items: { type: 'string' } }, mode: { type: 'string', enum: ['A', 'B'] }
+      text: { type: 'string' }, count: { type: 'integer' }, ratio: { type: 'number' },
+      enabled: { type: 'boolean' }, names: { type: 'array', items: { type: 'string' } },
+      mode: { type: 'string', enum: ['A', 'B'] }, nested: { type: 'object', properties: { active: { type: 'boolean' } } }
     } }
-    expect(schemaDefault(schema)).toEqual({ enabled: false, names: [], mode: 'A' })
+    expect(schemaDefault(schema)).toEqual({
+      text: '', count: undefined, ratio: undefined, enabled: false,
+      names: [], mode: 'A', nested: { active: false }
+    })
   })
 
   it('merges stored values with newly introduced schema fields', () => {

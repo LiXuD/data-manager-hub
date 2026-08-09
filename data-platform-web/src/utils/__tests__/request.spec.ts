@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AxiosError } from 'axios'
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 
 const elMessageError = vi.fn()
@@ -24,6 +25,13 @@ function stubAdapter(body: unknown, status = 200) {
     return { data: body, status, statusText: 'OK', headers: {}, config }
   }
   return captured
+}
+
+function stubHttpError(body: unknown, status: number) {
+  instance.defaults.adapter = async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
+    const response: AxiosResponse = { data: body, status, statusText: 'Conflict', headers: {}, config }
+    throw new AxiosError('Request failed', AxiosError.ERR_BAD_REQUEST, config, undefined, response)
+  }
 }
 
 describe('utils/request 冒烟', () => {
@@ -81,6 +89,17 @@ describe('utils/request 冒烟', () => {
     stubAdapter({ code: 4001, msg: '接口参数错误' })
     await expect(request.post('/ping', {})).rejects.toThrow('接口参数错误')
     expect(elMessageError).toHaveBeenCalledWith('接口参数错误')
+  })
+
+  it('HTTP 409 草稿 CAS 冲突给出明确刷新提示', async () => {
+    stubHttpError({}, 409)
+
+    await expect(request.put('/vendor/config/42/connector/draft', {
+      expectedDraftVersion: 3,
+      pipelineSnapshot: []
+    })).rejects.toBeInstanceOf(AxiosError)
+
+    expect(elMessageError).toHaveBeenCalledWith('数据已被其他用户修改，请刷新后重试')
   })
 
   it('业务 401 清理登录态并跳转登录页', async () => {

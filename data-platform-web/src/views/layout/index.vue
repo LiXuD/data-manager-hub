@@ -94,6 +94,17 @@ const allMenuItems = [
           'connector-plugin:disable'
         ]
       },
+      {
+        path: '/connector-migration',
+        title: '厂商连接器迁移',
+        permissions: [
+          'connector-plugin:view',
+          'connector-plugin:migrate',
+          'connector-plugin:test',
+          'connector-plugin:publish',
+          'connector-plugin:rollback'
+        ]
+      },
       { path: '/caller', title: '内部系统管理', permission: 'caller:view' },
       { path: '/call-scene', title: '场景管理', permission: 'call-scene:view' },
       { path: '/datatype', title: '数据类型', permission: 'datatype:view' },
