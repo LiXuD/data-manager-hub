@@ -51,6 +51,9 @@ class VendorConfigControllerTest {
 
             assertThat(result.getCode()).isEqualTo(200);
             assertThat(result.getData().getDataTypeId()).isEqualTo(42L);
+            assertThat(result.getData().getRuntimeMode()).isEqualTo("PLUGIN");
+            assertThat(result.getData().getStatus()).isEqualTo("inactive");
+            assertThat(result.getData().getActiveConnectorVersionId()).isNull();
             verify(service).save(any(VendorConfig.class));
         }
     }
@@ -73,6 +76,7 @@ class VendorConfigControllerTest {
 
     @Test
     void updateStatusWritesPersistedEnumCode() {
+        when(service.canActivate(9L)).thenReturn(true);
         when(service.update(any(LambdaUpdateWrapper.class))).thenAnswer(invocation -> {
             LambdaUpdateWrapper<VendorConfig> wrapper = invocation.getArgument(0);
             assertThat(wrapper.getSqlSet()).contains("status");
@@ -89,13 +93,24 @@ class VendorConfigControllerTest {
         }
     }
 
+    @Test
+    void rejectsActivationBeforeConnectorPublication() {
+        when(service.canActivate(9L)).thenReturn(false);
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("vendor:edit")).thenReturn(true);
+
+            var result = controller.updateStatus(9L, Map.of("status", "active"));
+
+            assertThat(result.getCode()).isEqualTo(409);
+            verify(service, never()).update(any(LambdaUpdateWrapper.class));
+        }
+    }
+
     private VendorConfigCreateReqDTO request() {
         VendorConfigCreateReqDTO request = new VendorConfigCreateReqDTO();
         request.setVendorId(1L);
         request.setInterfaceId(2L);
         request.setDataTypeCode("WORLD_TIME");
-        request.setApiUrl("https://uapis.cn/api/v1/misc/worldtime");
-        request.setMethod("GET");
         return request;
     }
 }

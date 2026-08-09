@@ -60,6 +60,7 @@ platform:
           secret: ${INTERNAL_AUTH_MASTERDATA_SECRET:dev-masterdata-internal-secret}
           grants:
             data-platform-access: [access:stats:read, access:connector-runtime:read, access:connector-runtime:manage, access:connector-runtime:test]
+            data-platform-billing: [billing:connector-observation:read]
             data-platform-identity: [identity:encryption]
             data-platform-governance: [governance:log]
         data-platform-identity:

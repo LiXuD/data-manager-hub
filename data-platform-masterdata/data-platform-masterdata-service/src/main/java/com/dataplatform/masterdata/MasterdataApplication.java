@@ -1,8 +1,10 @@
 package com.dataplatform.masterdata;
 
 import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
+import com.dataplatform.access.connector.api.feign.ConnectorMigrationObservationInternalFeignClient;
 import com.dataplatform.access.connector.api.feign.ConnectorPluginActivationInternalFeignClient;
 import com.dataplatform.access.connector.api.feign.VendorConnectorRuntimeInternalFeignClient;
+import com.dataplatform.billing.api.feign.ConnectorBillingObservationInternalFeignClient;
 import com.dataplatform.governance.log.api.LogClient;
 import com.dataplatform.identity.api.feign.EncryptionInternalFeignClient;
 import org.mybatis.spring.annotation.MapperScan;
@@ -20,8 +22,10 @@ import org.springframework.context.annotation.ComponentScan;
 @EnableDiscoveryClient
 @EnableFeignClients(clients = {
         CallStatsInternalFeignClient.class,
+        ConnectorMigrationObservationInternalFeignClient.class,
         ConnectorPluginActivationInternalFeignClient.class,
         VendorConnectorRuntimeInternalFeignClient.class,
+        ConnectorBillingObservationInternalFeignClient.class,
         EncryptionInternalFeignClient.class,
         LogClient.class
 })

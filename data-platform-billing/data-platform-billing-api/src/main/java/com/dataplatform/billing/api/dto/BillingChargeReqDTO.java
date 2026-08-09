@@ -28,6 +28,13 @@ public class BillingChargeReqDTO implements Serializable {
     private Boolean responseContractValid;
     private Long latencyMs;
     private Integer httpStatus;
+    /** Optional connector trace. Null for legacy callers and non-connector billing sources. */
+    private String pluginId;
+    private String pluginVersion;
+    private Integer pipelineVersion;
+    private String snapshotHash;
+    private String hashAlgorithm;
+    private String integrityHash;
     private Map<String, Object> meteringFacts = new LinkedHashMap<>();
     private List<BillingAdditionalPlanDTO> additionalPlans = new ArrayList<>();
 
@@ -65,6 +72,18 @@ public class BillingChargeReqDTO implements Serializable {
     public void setLatencyMs(Long latencyMs) { this.latencyMs = latencyMs; }
     public Integer getHttpStatus() { return httpStatus; }
     public void setHttpStatus(Integer httpStatus) { this.httpStatus = httpStatus; }
+    public String getPluginId() { return pluginId; }
+    public void setPluginId(String pluginId) { this.pluginId = pluginId; }
+    public String getPluginVersion() { return pluginVersion; }
+    public void setPluginVersion(String pluginVersion) { this.pluginVersion = pluginVersion; }
+    public Integer getPipelineVersion() { return pipelineVersion; }
+    public void setPipelineVersion(Integer pipelineVersion) { this.pipelineVersion = pipelineVersion; }
+    public String getSnapshotHash() { return snapshotHash; }
+    public void setSnapshotHash(String snapshotHash) { this.snapshotHash = snapshotHash; }
+    public String getHashAlgorithm() { return hashAlgorithm; }
+    public void setHashAlgorithm(String hashAlgorithm) { this.hashAlgorithm = hashAlgorithm; }
+    public String getIntegrityHash() { return integrityHash; }
+    public void setIntegrityHash(String integrityHash) { this.integrityHash = integrityHash; }
     public Map<String, Object> getMeteringFacts() { return meteringFacts; }
     public void setMeteringFacts(Map<String, Object> meteringFacts) {
         this.meteringFacts = meteringFacts != null ? meteringFacts : new LinkedHashMap<>();

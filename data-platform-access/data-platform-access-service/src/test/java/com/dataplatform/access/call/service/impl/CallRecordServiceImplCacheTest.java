@@ -55,9 +55,11 @@ class CallRecordServiceImplCacheTest {
                 .contains("tenant_id")
                 .contains("caller_id")
                 .contains("cache_hit")
+                .contains("response_contract_valid IS NULL")
+                .contains("OR response_contract_valid =")
                 .contains("call_time");
         assertThat(wrapperCaptor.getValue().getParamNameValuePairs().values())
-                .contains(7L, 20L, false);
+                .contains(7L, 20L, false, true);
     }
 
     @Test
@@ -76,9 +78,11 @@ class CallRecordServiceImplCacheTest {
         verify(mapper).selectOne(wrapperCaptor.capture(), eq(false));
         String sql = wrapperCaptor.getValue().getSqlSegment();
 
-        assertThat(sql).contains("tenant_id").contains("cache_hit");
+        assertThat(sql).contains("tenant_id").contains("cache_hit")
+                .contains("response_contract_valid IS NULL")
+                .contains("OR response_contract_valid =");
         assertThat(sql).doesNotContain("caller_id");
         assertThat(wrapperCaptor.getValue().getParamNameValuePairs().values())
-                .contains(7L, false);
+                .contains(7L, false, true);
     }
 }

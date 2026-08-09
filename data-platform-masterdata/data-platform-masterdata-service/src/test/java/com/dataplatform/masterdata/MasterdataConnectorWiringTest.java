@@ -3,8 +3,10 @@ package com.dataplatform.masterdata;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.dataplatform.access.connector.api.feign.ConnectorMigrationObservationInternalFeignClient;
 import com.dataplatform.access.connector.api.feign.ConnectorPluginActivationInternalFeignClient;
 import com.dataplatform.access.connector.api.feign.VendorConnectorRuntimeInternalFeignClient;
+import com.dataplatform.billing.api.feign.ConnectorBillingObservationInternalFeignClient;
 import com.dataplatform.masterdata.connector.config.ConnectorPluginProperties;
 import com.dataplatform.masterdata.connector.service.PluginArtifactVerifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,6 +31,8 @@ class MasterdataConnectorWiringTest {
         assertTrue(List.of(scan.value()).contains("com.dataplatform.masterdata.connector.mapper"));
         assertTrue(List.of(feign.clients()).contains(ConnectorPluginActivationInternalFeignClient.class));
         assertTrue(List.of(feign.clients()).contains(VendorConnectorRuntimeInternalFeignClient.class));
+        assertTrue(List.of(feign.clients()).contains(ConnectorMigrationObservationInternalFeignClient.class));
+        assertTrue(List.of(feign.clients()).contains(ConnectorBillingObservationInternalFeignClient.class));
     }
 
     @Test

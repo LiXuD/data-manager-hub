@@ -4,6 +4,7 @@ import com.dataplatform.masterdata.connector.api.dto.PluginImportRequestDTO;
 import com.dataplatform.masterdata.connector.config.ConnectorPluginProperties;
 import com.dataplatform.common.plugin.artifact.PluginManifestReader;
 import com.dataplatform.common.plugin.artifact.PluginArtifactException;
+import com.dataplatform.common.plugin.artifact.PluginBytecodePolicy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -191,6 +192,11 @@ public class PluginArtifactVerifier {
                         throw new IllegalArgumentException("插件包含禁止覆盖的宿主或SPI类: " + name);
                     }
                     classEntries.add(name);
+                    try {
+                        PluginBytecodePolicy.validate(name, readEntry(jar, properties.getMaxArtifactBytes()));
+                    } catch (PluginArtifactException exception) {
+                        throw new IllegalArgumentException("插件字节码违反宿主能力边界", exception);
+                    }
                 }
                 if (MANIFEST_PATH.equals(name)) {
                     if (manifest != null) {

@@ -28,6 +28,8 @@ public class CallRecordDTO implements Serializable {
     private String pluginVersion;
     private Integer pipelineVersion;
     private String snapshotHash;
+    private String hashAlgorithm;
+    private String integrityHash;
     private LocalDateTime callTime;
 
     public Long getId() {
@@ -142,6 +144,10 @@ public class CallRecordDTO implements Serializable {
     public void setPipelineVersion(Integer pipelineVersion) { this.pipelineVersion = pipelineVersion; }
     public String getSnapshotHash() { return snapshotHash; }
     public void setSnapshotHash(String snapshotHash) { this.snapshotHash = snapshotHash; }
+    public String getHashAlgorithm() { return hashAlgorithm; }
+    public void setHashAlgorithm(String hashAlgorithm) { this.hashAlgorithm = hashAlgorithm; }
+    public String getIntegrityHash() { return integrityHash; }
+    public void setIntegrityHash(String integrityHash) { this.integrityHash = integrityHash; }
 
     public LocalDateTime getCallTime() {
         return callTime;

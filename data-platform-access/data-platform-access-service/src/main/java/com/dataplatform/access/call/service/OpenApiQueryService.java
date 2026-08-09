@@ -12,6 +12,9 @@ import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.access.call.service.VendorProxyService;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
+import com.dataplatform.plugin.spi.ConnectorErrorPolicy;
+import com.dataplatform.plugin.spi.ErrorCategory;
+import com.dataplatform.plugin.spi.RequestDeliveryState;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.math.BigDecimal;
@@ -19,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Collections;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import io.micrometer.core.instrument.Metrics;
 import org.slf4j.Logger;
@@ -54,7 +58,7 @@ public class OpenApiQueryService {
         this.vendorProxyService = vendorProxyService;
         this.billingFeignClient = billingFeignClient;
         this.billingFactExtractor = billingFactExtractor;
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = new ObjectMapper().findAndRegisterModules();
         this.objectMapper.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
     }
 
@@ -64,8 +68,6 @@ public class OpenApiQueryService {
         String platformRequestId = generateRequestId();
         String requestHash = buildRequestHash(context);
         boolean useCache = Boolean.TRUE.equals(context.getUseCache());
-        BillingMeteringPolicyDTO meteringPolicy = resolveMeteringPolicy(context, requestTime);
-
         if (useCache) {
             CallRecord cachedRecord = callRecordService.findLatestReusableCache(
                     context.getApiCode(),
@@ -74,18 +76,29 @@ public class OpenApiQueryService {
                     context.getCallerId(),
                     requestTime.minusDays(context.getCacheDays()),
                     context.getCacheScope());
-            if (cachedRecord != null) {
+            if (cachedRecord != null && !Boolean.FALSE.equals(cachedRecord.getResponseContractValid())) {
                 LocalDateTime responseTime = LocalDateTime.now();
                 long duration = System.currentTimeMillis() - startTime;
-                Map<String, Object> cachedResult = readResponseData(cachedRecord.getResponseData());
-                BigDecimal cost = charge(context, meteringPolicy, platformRequestId, duration,
-                        requestTime, true, true, cachedResult);
-                CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
-                        true, duration, cost, true, cachedRecord.getId(), requestTime, responseTime);
-                copyConnectorTrace(cachedRecord, record);
-                callRecordEventPublisher.publish(record);
-                return buildResponse(context, platformRequestId, cachedResult, true,
-                        cachedRecord.getId(), requestTime, responseTime, duration, cost);
+                Map<String, Object> cachedResult = new LinkedHashMap<>(readResponseData(cachedRecord.getResponseData()));
+                cachedResult.putIfAbsent("actualVendorId", cachedRecord.getVendorId());
+                cachedResult.putIfAbsent("actualVendorCode", cachedRecord.getVendorCode());
+                ResponseContractEvaluation contractEvaluation = evaluateResponseContract(context, cachedResult);
+                if (contractEvaluation.valid()) {
+                    cachedResult.put("responseContractValid", true);
+                    BillingMeteringPolicyDTO meteringPolicy = resolveMeteringPolicy(
+                            actualVendorCode(context, cachedResult), context.getApiCode(), requestTime);
+                    BigDecimal cost = charge(context, meteringPolicy, platformRequestId, duration,
+                            requestTime, true, true, cachedResult,
+                            cachedRecord.getPluginId(), cachedRecord.getPluginVersion(),
+                            cachedRecord.getPipelineVersion(), cachedRecord.getSnapshotHash(),
+                            cachedRecord.getHashAlgorithm(), cachedRecord.getIntegrityHash());
+                    CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
+                            true, duration, cost, true, cachedRecord.getId(), requestTime, responseTime);
+                    copyConnectorTrace(cachedRecord, record);
+                    callRecordEventPublisher.publish(record);
+                    return buildResponse(context, platformRequestId, cachedResult, true,
+                            cachedRecord.getId(), requestTime, responseTime, duration, cost);
+                }
             }
         }
 
@@ -97,11 +110,26 @@ public class OpenApiQueryService {
 
         LocalDateTime responseTime = LocalDateTime.now();
         long duration = System.currentTimeMillis() - startTime;
+        if (Boolean.TRUE.equals(vendorResult.get("success"))) {
+            ResponseContractEvaluation contractEvaluation = evaluateResponseContract(context, vendorResult);
+            if (contractEvaluation.valid()) {
+                vendorResult.put("responseContractValid", true);
+            } else {
+                applyContractViolation(vendorResult, contractEvaluation.errors());
+            }
+        }
         boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
-        boolean billingEligible = success
-                && !"INELIGIBLE".equals(String.valueOf(vendorResult.get("billingSignal")));
-        BigDecimal cost = charge(context, meteringPolicy, platformRequestId, duration,
-                requestTime, billingEligible, false, vendorResult);
+        boolean billingEligible = "ELIGIBLE".equals(String.valueOf(vendorResult.get("billingSignal")));
+        BigDecimal cost = BigDecimal.ZERO;
+        if (billingEligible) {
+            BillingMeteringPolicyDTO meteringPolicy = resolveMeteringPolicy(
+                    actualVendorCode(context, vendorResult), context.getApiCode(), requestTime);
+            cost = charge(context, meteringPolicy, platformRequestId, duration,
+                    requestTime, success, false, vendorResult,
+                    stringValue(vendorResult.get("pluginId")), stringValue(vendorResult.get("pluginVersion")),
+                    integerValue(vendorResult.get("pipelineVersion")), stringValue(vendorResult.get("snapshotHash")),
+                    stringValue(vendorResult.get("hashAlgorithm")), stringValue(vendorResult.get("integrityHash")));
+        }
         vendorResult.put("requestId", platformRequestId);
         vendorResult.put("cached", false);
         vendorResult.put("latency", duration);
@@ -113,10 +141,10 @@ public class OpenApiQueryService {
                 null, requestTime, responseTime, duration, cost);
     }
 
-    private BillingMeteringPolicyDTO resolveMeteringPolicy(OpenApiCallContext context,
+    private BillingMeteringPolicyDTO resolveMeteringPolicy(String vendorCode, String apiCode,
                                                            LocalDateTime callTime) {
         Result<BillingMeteringPolicyDTO> result = billingFeignClient.getMeteringPolicy(
-                context.getVendorCode(), context.getApiCode(), callTime);
+                vendorCode, apiCode, callTime);
         BillingMeteringPolicyDTO policy = result != null ? result.getData() : null;
         if (policy == null || policy.getPlanId() == null) {
             throw new IllegalStateException("Billing service returned an empty metering policy");
@@ -126,24 +154,33 @@ public class OpenApiQueryService {
 
     private BigDecimal charge(OpenApiCallContext context, BillingMeteringPolicyDTO policy,
                               String requestId, long latencyMs, LocalDateTime callTime,
-                              boolean success, boolean cached, Map<String, Object> result) {
+                              boolean success, boolean cached, Map<String, Object> result,
+                              String pluginId, String pluginVersion,
+                              Integer pipelineVersion, String snapshotHash,
+                              String hashAlgorithm, String integrityHash) {
         BillingChargeReqDTO request = new BillingChargeReqDTO();
         request.setRequestId(requestId);
         request.setPlanId(policy.getPlanId());
         request.setPlanVersion(policy.getPlanVersion());
         request.setPolicyHash(policy.getPolicyHash());
-        request.setVendorCode(context.getVendorCode());
+        request.setVendorCode(actualVendorCode(context, result));
         request.setInterfaceCode(context.getApiCode());
         request.setDataType(context.getDataTypeCode());
         request.setTenantId(context.getTenantId());
         request.setCallerId(context.getCallerId());
-        request.setVendorId(context.getVendorId());
+        request.setVendorId(longValue(result.get("actualVendorId"), context.getVendorId()));
         request.setCallTime(callTime);
         request.setSuccess(success);
         request.setCached(cached);
-        request.setResponseContractValid(isResponseContractValid(context, result));
+        request.setResponseContractValid(Boolean.TRUE.equals(result.get("responseContractValid")));
         request.setLatencyMs(latencyMs);
         request.setHttpStatus(success ? 200 : 502);
+        request.setPluginId(pluginId);
+        request.setPluginVersion(pluginVersion);
+        request.setPipelineVersion(pipelineVersion);
+        request.setSnapshotHash(snapshotHash);
+        request.setHashAlgorithm(hashAlgorithm);
+        request.setIntegrityHash(integrityHash);
         request.setMeteringFacts(billingFactExtractor.extract(
                 policy, result, context.getParams()));
         request.setAdditionalPlans(buildAdditionalPlans(policy, result, context.getParams()));
@@ -173,15 +210,34 @@ public class OpenApiQueryService {
     }
 
     @SuppressWarnings("unchecked")
-    private boolean isResponseContractValid(OpenApiCallContext context, Map<String, Object> result) {
+    private ResponseContractEvaluation evaluateResponseContract(OpenApiCallContext context,
+                                                                 Map<String, Object> result) {
         InterfaceContractDTO contract = context.getInterfaceContract();
         if (contract == null || contract.getResponseFields() == null || contract.getResponseFields().isEmpty()) {
-            return true;
+            return new ResponseContractEvaluation(true, List.of());
         }
         Object rawData = result.get("data");
-        return rawData instanceof Map<?, ?> map
-                && InterfaceContractValidator.validate(
-                    contract.getResponseFields(), (Map<String, Object>) map, false).valid();
+        if (!(rawData instanceof Map<?, ?> map)) {
+            return new ResponseContractEvaluation(false, List.of("data类型必须为object"));
+        }
+        InterfaceContractValidator.ValidationResult validation = InterfaceContractValidator.validate(
+                contract.getResponseFields(), (Map<String, Object>) map, false);
+        return new ResponseContractEvaluation(validation.valid(), validation.errors());
+    }
+
+    private void applyContractViolation(Map<String, Object> result, List<String> errors) {
+        ConnectorErrorPolicy policy = ConnectorErrorPolicy.CONTRACT_VIOLATION;
+        result.put("success", false);
+        result.put("data", Collections.emptyMap());
+        result.put("errorCategory", ErrorCategory.CONTRACT_VIOLATION.name());
+        result.put("connectorErrorCode", "RESPONSE_CONTRACT_INVALID");
+        result.put("errorCode", policy.externalCode());
+        result.put("errorMsg", "厂商响应不符合接口契约");
+        result.put("billingSignal", policy.billingSignal(null).name());
+        result.put("cacheSignal", policy.cacheSignal(null).name());
+        result.put("deliveryState", policy.deliveryState(deliveryState(result.get("deliveryState"))).name());
+        result.put("responseContractValid", false);
+        result.put("responseContractErrors", List.copyOf(errors));
     }
 
     @SuppressWarnings("unchecked")
@@ -254,7 +310,7 @@ public class OpenApiQueryService {
         record.setCost(cost);
         record.setCached(cacheHit);
         record.setUseCache(Boolean.TRUE.equals(context.getUseCache())
-                && !"NOT_CACHEABLE".equals(String.valueOf(result.get("cacheSignal"))));
+                && "CACHEABLE".equals(String.valueOf(result.get("cacheSignal"))));
         record.setCacheDays(context.getCacheDays());
         record.setCacheHit(cacheHit);
         record.setCacheScope(normalize(context.getCacheScope()) != null ? context.getCacheScope() : "GLOBAL");
@@ -263,6 +319,8 @@ public class OpenApiQueryService {
         record.setPluginVersion(stringValue(result.get("pluginVersion")));
         record.setPipelineVersion(integerValue(result.get("pipelineVersion")));
         record.setSnapshotHash(stringValue(result.get("snapshotHash")));
+        record.setHashAlgorithm(stringValue(result.get("hashAlgorithm")));
+        record.setIntegrityHash(stringValue(result.get("integrityHash")));
         record.setRequestTime(requestTime);
         record.setResponseAt(responseTime);
         record.setCallTime(requestTime);
@@ -273,6 +331,8 @@ public class OpenApiQueryService {
                     ? result : sanitizeForRecord(result);
             record.setResponseData(objectMapper.writeValueAsString(responseForRecord));
         } catch (Exception e) {
+            log.warn("Failed to serialize call record payload: requestId={}, type={}",
+                    platformRequestId, e.getClass().getSimpleName());
             record.setRequestParams("{}");
             record.setResponseData("{}");
         }
@@ -284,6 +344,8 @@ public class OpenApiQueryService {
         target.setPluginVersion(source.getPluginVersion());
         target.setPipelineVersion(source.getPipelineVersion());
         target.setSnapshotHash(source.getSnapshotHash());
+        target.setHashAlgorithm(source.getHashAlgorithm());
+        target.setIntegrityHash(source.getIntegrityHash());
     }
 
     private String stringValue(Object value) {
@@ -318,22 +380,39 @@ public class OpenApiQueryService {
         }
     }
 
+    private String actualVendorCode(OpenApiCallContext context, Map<String, Object> result) {
+        String actual = stringValue(result.get("actualVendorCode"));
+        return actual != null ? actual : context.getVendorCode();
+    }
+
+    private RequestDeliveryState deliveryState(Object value) {
+        if (value == null) return null;
+        try {
+            return RequestDeliveryState.valueOf(String.valueOf(value));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void applyResponseContractResult(CallRecord record, OpenApiCallContext context,
                                              Map<String, Object> result) {
-        InterfaceContractDTO contract = context.getInterfaceContract();
-        if (contract == null || contract.getResponseFields() == null || contract.getResponseFields().isEmpty()) {
+        Object explicitValid = result.get("responseContractValid");
+        if (explicitValid instanceof Boolean valid) {
+            record.setResponseContractValid(valid);
+            Object explicitErrors = result.get("responseContractErrors");
+            if (!valid && explicitErrors != null) {
+                try {
+                    record.setResponseContractErrors(objectMapper.writeValueAsString(explicitErrors));
+                } catch (Exception ignored) {
+                    record.setResponseContractErrors("[]");
+                }
+                Metrics.counter("openapi.response.contract.invalid", "apiCode", context.getApiCode()).increment();
+            }
             return;
         }
-        Object rawData = result.get("data");
-        InterfaceContractValidator.ValidationResult validation;
-        if (rawData instanceof Map<?, ?> map) {
-            validation = InterfaceContractValidator.validate(
-                    contract.getResponseFields(), (Map<String, Object>) map, false);
-        } else {
-            validation = new InterfaceContractValidator.ValidationResult(
-                    false, java.util.List.of("data类型必须为object"));
-        }
+        if (!Boolean.TRUE.equals(result.get("success"))) return;
+        ResponseContractEvaluation validation = evaluateResponseContract(context, result);
         record.setResponseContractValid(validation.valid());
         if (!validation.valid()) {
             try {
@@ -446,6 +525,9 @@ public class OpenApiQueryService {
             return null;
         }
         return value.trim();
+    }
+
+    private record ResponseContractEvaluation(boolean valid, List<String> errors) {
     }
 
     public static class OpenApiCallContext {

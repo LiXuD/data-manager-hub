@@ -11,6 +11,8 @@ import com.dataplatform.masterdata.vendor.entity.VendorInfo;
 import com.dataplatform.masterdata.vendor.mapper.DataTypeMapper;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import com.dataplatform.masterdata.vendor.mapper.VendorInfoMapper;
+import com.dataplatform.masterdata.connector.entity.VendorConnectorVersion;
+import com.dataplatform.masterdata.connector.mapper.VendorConnectorVersionMapper;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +54,9 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+
+    @Autowired
+    private VendorConnectorVersionMapper connectorVersionMapper;
 
     @Override
     public List<VendorConfig> listByVendor(Long vendorId) {
@@ -137,6 +142,19 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
     public Long getDataTypeIdByCode(String dataTypeCode) {
         DataType dataType = getDataTypeByCode(dataTypeCode);
         return dataType != null ? dataType.getId() : null;
+    }
+
+    @Override
+    public boolean canActivate(Long vendorConfigId) {
+        VendorConfig config = getById(vendorConfigId);
+        if (config == null || !"PLUGIN".equals(config.getRuntimeMode())
+                || config.getActiveConnectorVersionId() == null) {
+            return false;
+        }
+        VendorConnectorVersion version = connectorVersionMapper.selectById(config.getActiveConnectorVersionId());
+        return version != null
+                && vendorConfigId.equals(version.getVendorConfigId())
+                && "ACTIVE".equals(version.getStatus());
     }
 
     @Override

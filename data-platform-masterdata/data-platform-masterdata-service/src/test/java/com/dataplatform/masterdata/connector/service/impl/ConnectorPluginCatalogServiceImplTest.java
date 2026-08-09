@@ -27,6 +27,8 @@ import com.dataplatform.masterdata.connector.mapper.VendorConnectorVersionMapper
 import com.dataplatform.masterdata.connector.mapper.VendorConnectorTestFactMapper;
 import com.dataplatform.masterdata.connector.service.PluginArtifactVerifier;
 import com.dataplatform.masterdata.connector.service.VerifiedPluginArtifact;
+import com.dataplatform.masterdata.vendor.entity.VendorConfig;
+import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.dataplatform.access.connector.api.dto.ConnectorPluginActivationSummaryDTO;
 import com.dataplatform.api.Result;
@@ -42,6 +44,8 @@ class ConnectorPluginCatalogServiceImplTest {
     static void initializeTableMetadata() {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "test"),
                 ConnectorPluginVersion.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "test"),
+                VendorConfig.class);
     }
 
     @Test
@@ -125,9 +129,11 @@ class ConnectorPluginCatalogServiceImplTest {
         when(activationClient.stage(any())).thenThrow(new IllegalStateException("downstream unavailable"));
         ConnectorPluginCatalogServiceImpl service = new ConnectorPluginCatalogServiceImpl(
                 mock(ConnectorPluginMapper.class), versionMapper,
-                mock(VendorConnectorVersionMapper.class), mock(VendorConnectorTestFactMapper.class),
+                mock(VendorConnectorVersionMapper.class),
+                mock(com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper.class),
+                mock(VendorConnectorTestFactMapper.class),
                 mock(PluginArtifactVerifier.class),
-                activationClient, new ObjectMapper());
+                activationClient, releaseCoordinator(), new ObjectMapper());
 
         assertThrows(IllegalStateException.class, () -> service.stage("demo", "1.0.0"));
 
@@ -153,9 +159,10 @@ class ConnectorPluginCatalogServiceImplTest {
         when(connectorMapper.selectList(any())).thenReturn(java.util.List.of(active));
         ConnectorPluginCatalogServiceImpl service = new ConnectorPluginCatalogServiceImpl(
                 mock(ConnectorPluginMapper.class), versionMapper, connectorMapper,
+                mock(com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper.class),
                 mock(VendorConnectorTestFactMapper.class),
                 mock(PluginArtifactVerifier.class),
-                mock(ConnectorPluginActivationInternalFeignClient.class), new ObjectMapper());
+                mock(ConnectorPluginActivationInternalFeignClient.class), releaseCoordinator(), new ObjectMapper());
 
         assertThrows(ConnectorConflictException.class, () -> service.disable("demo", "1.0.0", 9L));
     }
@@ -177,8 +184,9 @@ class ConnectorPluginCatalogServiceImplTest {
         when(factMapper.selectList(any())).thenReturn(java.util.List.of());
         ConnectorPluginCatalogServiceImpl service = new ConnectorPluginCatalogServiceImpl(
                 mock(ConnectorPluginMapper.class), versionMapper,
-                mock(VendorConnectorVersionMapper.class), factMapper,
-                mock(PluginArtifactVerifier.class), activationClient, new ObjectMapper());
+                mock(VendorConnectorVersionMapper.class),
+                mock(com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper.class), factMapper,
+                mock(PluginArtifactVerifier.class), activationClient, releaseCoordinator(), new ObjectMapper());
 
         assertThrows(ConnectorConflictException.class, () -> service.activate("demo", "1.0.0", 9L));
         assertEquals("STAGING", version.getStatus());
@@ -205,11 +213,33 @@ class ConnectorPluginCatalogServiceImplTest {
         when(connectorMapper.selectList(any())).thenReturn(java.util.List.of(
                 first, duplicateVendor, otherPlugin));
         ConnectorPluginCatalogServiceImpl service = new ConnectorPluginCatalogServiceImpl(
-                pluginMapper, versionMapper, connectorMapper, mock(VendorConnectorTestFactMapper.class),
+                pluginMapper, versionMapper, connectorMapper,
+                mock(com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper.class),
+                mock(VendorConnectorTestFactMapper.class),
                 mock(PluginArtifactVerifier.class),
-                mock(ConnectorPluginActivationInternalFeignClient.class), new ObjectMapper());
+                mock(ConnectorPluginActivationInternalFeignClient.class), releaseCoordinator(), new ObjectMapper());
 
         assertEquals(1L, service.get("demo").bindingCount());
+    }
+
+    @Test
+    void requiredArtifactsFailsClosedWhenAnActiveVendorHasNoPublishedPluginBinding() {
+        VendorConfigMapper configMapper = mock(VendorConfigMapper.class);
+        VendorConfig invalid = new VendorConfig();
+        invalid.setId(77L);
+        invalid.setStatus(com.dataplatform.common.enums.CommonStatus.ACTIVE);
+        invalid.setRuntimeMode("PLUGIN");
+        invalid.setActiveConnectorVersionId(null);
+        when(configMapper.selectList(any())).thenReturn(List.of(invalid));
+        ConnectorPluginCatalogServiceImpl service = new ConnectorPluginCatalogServiceImpl(
+                mock(ConnectorPluginMapper.class), mock(ConnectorPluginVersionMapper.class),
+                mock(VendorConnectorVersionMapper.class), configMapper,
+                mock(VendorConnectorTestFactMapper.class), mock(PluginArtifactVerifier.class),
+                mock(ConnectorPluginActivationInternalFeignClient.class), releaseCoordinator(), new ObjectMapper());
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, service::requiredArtifacts);
+
+        assertEquals("ACTIVE_CONNECTOR_BINDING_INVALID", error.getMessage());
     }
 
     private VendorConnectorVersion activeBinding(Long vendorConfigId, String pluginId) {
@@ -229,8 +259,13 @@ class ConnectorPluginCatalogServiceImplTest {
             ConnectorPluginActivationInternalFeignClient activationClient) {
         return new ConnectorPluginCatalogServiceImpl(
                 mock(ConnectorPluginMapper.class), versionMapper,
-                mock(VendorConnectorVersionMapper.class), factMapper,
-                artifactVerifier, activationClient, new ObjectMapper());
+                mock(VendorConnectorVersionMapper.class),
+                mock(com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper.class), factMapper,
+                artifactVerifier, activationClient, releaseCoordinator(), new ObjectMapper());
+    }
+
+    private com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator releaseCoordinator() {
+        return mock(com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator.class);
     }
 
     private ConnectorPluginVersion failedVersion(String status) {

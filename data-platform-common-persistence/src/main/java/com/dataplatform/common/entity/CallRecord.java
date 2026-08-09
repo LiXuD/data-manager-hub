@@ -54,6 +54,8 @@ public class CallRecord {
     private String pluginVersion;
     private Integer pipelineVersion;
     private String snapshotHash;
+    private String hashAlgorithm;
+    private String integrityHash;
     private LocalDateTime requestTime;
     private LocalDateTime responseAt;
     private LocalDateTime callTime;
@@ -132,6 +134,10 @@ public class CallRecord {
     public void setPipelineVersion(Integer pipelineVersion) { this.pipelineVersion = pipelineVersion; }
     public String getSnapshotHash() { return snapshotHash; }
     public void setSnapshotHash(String snapshotHash) { this.snapshotHash = snapshotHash; }
+    public String getHashAlgorithm() { return hashAlgorithm; }
+    public void setHashAlgorithm(String hashAlgorithm) { this.hashAlgorithm = hashAlgorithm; }
+    public String getIntegrityHash() { return integrityHash; }
+    public void setIntegrityHash(String integrityHash) { this.integrityHash = integrityHash; }
     public LocalDateTime getRequestTime() { return requestTime; }
     public void setRequestTime(LocalDateTime requestTime) { this.requestTime = requestTime; }
     public LocalDateTime getResponseAt() { return responseAt; }

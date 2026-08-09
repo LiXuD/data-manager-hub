@@ -41,6 +41,9 @@ public interface VendorConfigService extends IService<VendorConfig> {
      */
     Long getDataTypeIdByCode(String dataTypeCode);
 
+    /** Whether the configuration has a pinned, ACTIVE immutable connector version. */
+    boolean canActivate(Long vendorConfigId);
+
     /**
      * 获取厂商密钥
      */

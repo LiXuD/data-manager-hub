@@ -95,6 +95,12 @@ public class BillingReversalService {
         target.setInterfaceId(source.getInterfaceId());
         target.setInterfaceCode(source.getInterfaceCode());
         target.setDataType(source.getDataType());
+        target.setPluginId(source.getPluginId());
+        target.setPluginVersion(source.getPluginVersion());
+        target.setPipelineVersion(source.getPipelineVersion());
+        target.setSnapshotHash(source.getSnapshotHash());
+        target.setHashAlgorithm(source.getHashAlgorithm());
+        target.setIntegrityHash(source.getIntegrityHash());
         target.setBillable(false);
         target.setQuantity(negative(source.getQuantity()));
         target.setUnit(source.getUnit());

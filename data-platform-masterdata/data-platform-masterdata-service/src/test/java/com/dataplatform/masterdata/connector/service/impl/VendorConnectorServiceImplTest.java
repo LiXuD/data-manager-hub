@@ -56,6 +56,8 @@ class VendorConnectorServiceImplTest {
         runtimeClient = mock(VendorConnectorRuntimeInternalFeignClient.class);
         service = new VendorConnectorServiceImpl(connectorMapper, pluginMapper, vendorConfigMapper,
                 new ConnectorConfigSchemaValidator(objectMapper),
+                mock(com.dataplatform.masterdata.connector.service.ConnectorSecretReferenceService.class),
+                mock(com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator.class),
                 runtimeClient,
                 activationClient, testFactMapper, objectMapper);
         VendorConfig vendorConfig = new VendorConfig();
@@ -69,6 +71,8 @@ class VendorConnectorServiceImplTest {
         pluginVersion.setVersion("1.0.0");
         pluginVersion.setStatus("ACTIVE");
         pluginVersion.setCapabilities("[\"TRANSPORT\"]");
+        pluginVersion.setArtifactSha256("a".repeat(64));
+        pluginVersion.setManifestJson("{}");
         pluginVersion.setConfigSchemaJson("{\"type\":\"object\",\"properties\":{\"endpoint\":{\"type\":\"string\"}}}");
         when(pluginMapper.selectOne(any())).thenReturn(pluginVersion);
     }
