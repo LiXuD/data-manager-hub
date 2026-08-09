@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class PluginHandle {
+    private static final AtomicInteger ISOLATED_CLASSLOADERS = new AtomicInteger();
 
     private final PluginKey key;
     private final ConnectorPlugin plugin;
@@ -35,6 +36,7 @@ public final class PluginHandle {
             throw new IllegalArgumentException("Plugin descriptor capabilities do not match stage factories");
         }
         this.factories = Map.copyOf(discovered);
+        if (closeableClassLoader != null) ISOLATED_CLASSLOADERS.incrementAndGet();
     }
 
     public static PluginHandle builtIn(ConnectorPlugin plugin) {
@@ -46,6 +48,7 @@ public final class PluginHandle {
     public ClassLoader classLoader() { return classLoader; }
     public PluginHandleState state() { return state.get(); }
     public int referenceCount() { return references.get(); }
+    public static int isolatedClassLoaderCount() { return ISOLATED_CLASSLOADERS.get(); }
 
     public ConnectorStageFactory factory(StageCapability capability) {
         ConnectorStageFactory factory = factories.get(capability);
@@ -113,7 +116,11 @@ public final class PluginHandle {
         } finally {
             try {
                 if (closeableClassLoader != null) {
-                    closeableClassLoader.close();
+                    try {
+                        closeableClassLoader.close();
+                    } finally {
+                        ISOLATED_CLASSLOADERS.decrementAndGet();
+                    }
                 }
             } catch (Exception ignored) {
                 // Best effort: the version is still removed from the active registry.

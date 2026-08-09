@@ -12,7 +12,17 @@ public record ConnectorStageDefinition(
         int order,
         boolean enabled,
         JsonNode config,
-        String configHash) {
+        String configHash,
+        String artifactSha256,
+        String manifestHash,
+        String schemaHash) {
+
+    public ConnectorStageDefinition(String stageKey, StageCapability capability, String pluginId,
+                                    String pluginVersion, int order, boolean enabled,
+                                    JsonNode config, String configHash) {
+        this(stageKey, capability, pluginId, pluginVersion, order, enabled, config, configHash,
+                null, null, null);
+    }
 
     public ConnectorStageDefinition {
         if (stageKey == null || stageKey.isBlank() || pluginId == null || pluginId.isBlank()

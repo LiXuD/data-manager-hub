@@ -6,6 +6,7 @@ import com.dataplatform.plugin.spi.CacheSignal;
 import com.dataplatform.plugin.spi.ConnectorException;
 import com.dataplatform.plugin.spi.ConnectorExecutionResult;
 import com.dataplatform.plugin.spi.ErrorCategory;
+import com.dataplatform.plugin.spi.IdempotencyPolicy;
 import com.dataplatform.plugin.spi.RequestDeliveryState;
 import com.dataplatform.plugin.spi.StageCapability;
 import com.dataplatform.plugin.spi.StageTiming;
@@ -41,6 +42,31 @@ public final class ConnectorPipelineExecutor {
 
     public ConnectorExecutionResult execute(CompiledConnectorPipeline pipeline,
                                             ConnectorExecutionRequest request) {
+        return executeWithOutcome(pipeline, request).result();
+    }
+
+    /**
+     * Executes a pinned pipeline and returns host-only request policy metadata used
+     * by Access retry governance. Plugins cannot set retry counts through this API.
+     */
+    public ConnectorPipelineExecutionOutcome executeWithOutcome(
+            CompiledConnectorPipeline pipeline,
+            ConnectorExecutionRequest request) {
+        try (CompiledConnectorPipeline.RequestLease lease = pipeline.acquire()) {
+            return executeWithOutcome(lease, request);
+        }
+    }
+
+    /** Executes against an already acquired version lease, used by atomic runtime selection. */
+    public ConnectorPipelineExecutionOutcome executeWithOutcome(
+            CompiledConnectorPipeline.RequestLease lease,
+            ConnectorExecutionRequest request) {
+        return executeLeased(lease.pipeline(), request);
+    }
+
+    private ConnectorPipelineExecutionOutcome executeLeased(
+            CompiledConnectorPipeline pipeline,
+            ConnectorExecutionRequest request) {
         DefaultConnectorExchange exchange = new DefaultConnectorExchange(request, pipeline.definition());
         DefaultStageExecutionContext context = new DefaultStageExecutionContext(clock, request.deadline(),
                 request.cancellationRequested(), logger, metrics);
@@ -60,10 +86,13 @@ public final class ConnectorPipelineExecutor {
                     }
                     exchange.transportAttempted();
                 }
+                CompiledPipelineStep.ExecutionStage executionStage = null;
                 try {
-                    secretScope.enter(step.definition().config());
+                    executionStage = step.openStage();
+                    var stage = executionStage.stage();
+                    secretScope.enter(step.definition().config(), step.secretReferences());
                     step.lease().handle().withContextClassLoader(() -> {
-                        step.stage().execute(exchange, context);
+                        stage.execute(exchange, context);
                         return null;
                     });
                     if (step.definition().capability() == StageCapability.TRANSPORT) {
@@ -86,6 +115,7 @@ public final class ConnectorPipelineExecutor {
                             deliveryForFailure(exchange, step.definition().capability()), exception);
                 } finally {
                     secretScope.leave();
+                    if (executionStage != null) executionStage.close();
                     exchange.leave();
                     timings.add(new StageTiming(step.definition().stageKey(), step.definition().capability(),
                             step.definition().pluginId(), step.definition().pluginVersion(),
@@ -98,26 +128,56 @@ public final class ConnectorPipelineExecutor {
             }
             TransportStatus transport = transportStatus(exchange);
             if (transport == TransportStatus.HTTP_ERROR) {
-                return failure(exchange, current, timings, ErrorCategory.TRANSPORT_HTTP_ERROR,
-                        "TRANSPORT_HTTP_ERROR", "Vendor returned an unsuccessful HTTP status", transport,
-                        exchange.deliveryState());
+                return outcome(exchange, failure(pipeline.definition(), exchange, current, timings,
+                        ErrorCategory.TRANSPORT_HTTP_ERROR, "TRANSPORT_HTTP_ERROR",
+                        "Vendor returned an unsuccessful HTTP status", transport,
+                        exchange.deliveryState()));
             }
             BusinessStatus business = exchange.businessStatus() == BusinessStatus.NOT_EVALUATED
                     ? BusinessStatus.SUCCESS : exchange.businessStatus();
-            return new ConnectorExecutionResult(transport, business, exchange.normalizedData(), null,
-                    null, null, exchange.billingSignal(), exchange.cacheSignal(), exchange.deliveryState(),
-                    transportPluginId(pipeline), transportPluginVersion(pipeline),
-                    pipeline.definition().pipelineVersion(), pipeline.definition().snapshotHash(), timings);
+            if (business == BusinessStatus.REJECTED) {
+                return outcome(exchange, failure(pipeline.definition(), exchange, current, timings,
+                        ErrorCategory.BUSINESS_REJECTED, "BUSINESS_REJECTED",
+                        "Vendor rejected the request", transport, exchange.deliveryState()));
+            }
+            return outcome(exchange, new ConnectorExecutionResult(transport, business,
+                    exchange.normalizedData(), null, null, null, exchange.billingSignal(),
+                    exchange.cacheSignal(), exchange.deliveryState(), transportPluginId(pipeline),
+                    transportPluginVersion(pipeline), pipeline.definition().pipelineVersion(),
+                    pipeline.definition().snapshotHash(), pipeline.definition().hashAlgorithm(),
+                    pipeline.definition().integrityHash(), timings));
         } catch (ConnectorException exception) {
-            return failure(exchange, current, timings, exception.category(), exception.errorCode(),
-                    exception.safeMessage(), mapTransportStatus(exception.category()), exception.deliveryState());
+            TransportStatus transport = failureTransportStatus(exchange, exception.category());
+            return outcome(exchange, failure(pipeline.definition(), exchange, current, timings, exception.category(),
+                    exception.errorCode(), exception.safeMessage(), transport, exception.deliveryState()));
         } catch (RuntimeException exception) {
             RequestDeliveryState delivery = current == null ? RequestDeliveryState.NOT_SENT
                     : deliveryForFailure(exchange, current.definition().capability());
-            return failure(exchange, current, timings, ErrorCategory.PLUGIN_INTERNAL_ERROR,
-                    "PIPELINE_RUNTIME_ERROR", "Connector pipeline failed",
-                    TransportStatus.FAILED, delivery);
+            return outcome(exchange, failure(pipeline.definition(), exchange, current, timings,
+                    ErrorCategory.PLUGIN_INTERNAL_ERROR, "PIPELINE_RUNTIME_ERROR",
+                    "Connector pipeline failed", failureTransportStatus(
+                            exchange, ErrorCategory.PLUGIN_INTERNAL_ERROR), delivery));
         }
+    }
+
+    private ConnectorPipelineExecutionOutcome outcome(
+            DefaultConnectorExchange exchange,
+            ConnectorExecutionResult result) {
+        return new ConnectorPipelineExecutionOutcome(result, requestRetryPermitted(exchange));
+    }
+
+    private boolean requestRetryPermitted(DefaultConnectorExchange exchange) {
+        var request = exchange.request();
+        if (request == null) {
+            return false;
+        }
+        String method = request.method();
+        if ("GET".equals(method) || "HEAD".equals(method) || "OPTIONS".equals(method)) {
+            return true;
+        }
+        return request.idempotencyPolicy() != IdempotencyPolicy.NON_IDEMPOTENT
+                && request.idempotencyKey() != null
+                && !request.idempotencyKey().isBlank();
     }
 
     private void ensureExecutable(DefaultConnectorExchange exchange) throws ConnectorException {
@@ -155,15 +215,36 @@ public final class ConnectorPipelineExecutor {
         };
     }
 
-    private ConnectorExecutionResult failure(DefaultConnectorExchange exchange, CompiledPipelineStep current,
+    private TransportStatus failureTransportStatus(
+            DefaultConnectorExchange exchange, ErrorCategory category) {
+        if (category == ErrorCategory.TRANSPORT_TIMEOUT
+                || category == ErrorCategory.TRANSPORT_CONNECTION_ERROR
+                || category == ErrorCategory.TRANSPORT_HTTP_ERROR) {
+            return mapTransportStatus(category);
+        }
+        if (exchange.rawResponse() != null) {
+            return transportStatus(exchange);
+        }
+        return exchange.deliveryState() == RequestDeliveryState.NOT_SENT
+                ? TransportStatus.NOT_ATTEMPTED : TransportStatus.FAILED;
+    }
+
+    private ConnectorExecutionResult failure(ConnectorPipelineDefinition definition,
+                                             DefaultConnectorExchange exchange, CompiledPipelineStep current,
                                              List<StageTiming> timings, ErrorCategory category,
                                              String code, String message, TransportStatus transport,
                                              RequestDeliveryState delivery) {
-        return new ConnectorExecutionResult(transport, BusinessStatus.UNKNOWN, java.util.Map.of(), category,
-                code, message, BillingSignal.UNKNOWN, CacheSignal.NOT_CACHEABLE, delivery,
+        boolean businessRejected = category == ErrorCategory.BUSINESS_REJECTED;
+        return new ConnectorExecutionResult(transport,
+                businessRejected ? BusinessStatus.REJECTED : BusinessStatus.UNKNOWN,
+                businessRejected ? exchange.normalizedData() : java.util.Map.of(), category,
+                code, ConnectorSafeMessageSanitizer.sanitize(message, secretScope.sensitiveValues()),
+                businessRejected ? exchange.billingSignal() : BillingSignal.UNKNOWN,
+                businessRejected ? exchange.cacheSignal() : CacheSignal.NOT_CACHEABLE, delivery,
                 current == null ? null : current.definition().pluginId(),
                 current == null ? null : current.definition().pluginVersion(),
-                exchange.pipelineVersion(), exchange.snapshotHash(), timings);
+                exchange.pipelineVersion(), exchange.snapshotHash(),
+                definition.hashAlgorithm(), definition.integrityHash(), timings);
     }
 
     private String transportPluginId(CompiledConnectorPipeline pipeline) {

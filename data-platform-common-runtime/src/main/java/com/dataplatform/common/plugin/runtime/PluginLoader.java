@@ -56,7 +56,8 @@ public final class PluginLoader {
             PluginSelfTestResult selfTest = selfTest(classLoader, initializedPlugin);
             if (selfTest == null || !selfTest.successful()) {
                 throw new PluginArtifactException("Plugin self-test failed: "
-                        + (selfTest == null ? "no result" : selfTest.safeMessage()));
+                        + (selfTest == null ? "no result" : ConnectorSafeMessageSanitizer.sanitize(
+                                selfTest.safeMessage(), java.util.List.of())));
             }
             return new PluginHandle(plugin, classLoader, classLoader);
         } catch (PluginArtifactException exception) {
