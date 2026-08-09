@@ -1,6 +1,6 @@
 # 数据管理平台 HTTP API
 
-> 当前契约索引，最后核对日期：2026-08-03。第 1—9 节描述经 Gateway 暴露的 HTTP API；第 10 节单独记录不经 Gateway 的跨域 Internal API。Feign 契约只位于目标域 `*-api` 模块。
+> 当前契约索引，最后核对日期：2026-08-10。第 1—9 节描述经 Gateway 暴露的 HTTP API；第 10 节单独记录不经 Gateway 的跨域 Internal API。Feign 契约只位于目标域 `*-api` 模块。
 
 ## 1. 入口与认证
 
@@ -98,7 +98,6 @@
 | PUT/DELETE | `/vendor/config/{id}` | 更新、删除配置 |
 | PATCH | `/vendor/config/{id}/status` | 更新状态 |
 | POST | `/vendor/config/{id}/test` | 连接与调用测试 |
-| GET/PUT | `/vendor/config/{id}/mapping` | 参数映射 |
 | GET | `/vendor/config/security-capabilities` | 安全步骤能力 |
 | GET/PUT | `/vendor/config/{configId}/security-steps` | 查询或替换安全流水线 |
 | PUT | `/vendor/config/{configId}/security-steps/order` | 调整步骤顺序 |
@@ -108,6 +107,7 @@
 | POST | `/vendor/config/{configId}/security-versions/{versionId}/rollback` | 回滚版本 |
 
 `signType`、`encryptType` 和简单签名回退已移除；运行时只执行已启用的安全流水线。敏感扩展配置必须以平台 `v1:<keyVersion>:<ciphertext>` 格式存储，否则读取失败关闭。
+新厂商配置固定创建为 `runtimeMode=PLUGIN` 且 `inactive`；必须发布活动连接器版本后才能启用。
 
 ### 3.3 连接器插件与版本化厂商流水线
 
@@ -147,7 +147,7 @@ JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入�
 | PUT | `/vendor/config/{configId}/connector/draft` | `connector-plugin:bind` | 乐观锁保存完整流水线 |
 | POST | `/vendor/config/{configId}/connector/validate` | `connector-plugin:bind` | 校验步骤、能力、插件状态、Schema 和哈希 |
 | POST | `/vendor/config/{configId}/connector/test` | `connector-plugin:test` | Access 执行脱敏受控测试，不计费、不缓存、不写调用记录 |
-| POST | `/vendor/config/{configId}/connector/publish` | `connector-plugin:publish` | 发布不可变版本并把该配置切换到 `PLUGIN` |
+| POST | `/vendor/config/{configId}/connector/publish` | `connector-plugin:publish` | 发布不可变 PLUGIN 版本 |
 | GET | `/vendor/config/{configId}/connector/versions` | `connector-plugin:view` | 查询发布历史 |
 | POST | `/vendor/config/{configId}/connector/rollback/{version}` | `connector-plugin:rollback` | 复制历史快照生成新的活动版本 |
 
@@ -165,7 +165,10 @@ JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入�
       "order": 10,
       "enabled": true,
       "config": {},
-      "configHash": "由服务端规范化并重算"
+      "configHash": "由服务端规范化并重算",
+      "artifactSha256": "V2由服务端固化",
+      "manifestHash": "V2由服务端固化",
+      "schemaHash": "V2由服务端固化"
     }
   ]
 }
@@ -180,6 +183,22 @@ JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入�
 `vendorConfigId + draftVersion + snapshotHash`，但不保存测试参数、原始响应或标准化数据。发布时若没有
 与当前草稿版本和快照哈希精确匹配的成功事实，返回 HTTP 409；修改草稿后必须重新测试。
 插件版本激活前也必须已有一条包含该 `pluginId + pluginVersion` 的成功草稿测试事实。
+
+发布版本返回 `snapshotHash/hashAlgorithm/integrityHash`。既有历史使用 `V1_DERIVED`：保留原快照和
+哈希，由固定目录材料派生完整性；新发布使用 `V2_EMBEDDED`：步骤固化 Artifact/Manifest/Schema
+摘要，快照哈希覆盖全部材料。回滚会复制历史内容形成新版本，不修改旧事实。
+
+Schema `type=string` 的 `x-secret-ref` 字段提交 secretRef 字符串；`x-sensitive` 或字段名具有
+password/token/secret/privateKey/certificate 语义时提交 `{"secretRef":"..."}`。后端拒绝明文、
+missing secretRef 和跨 vendor secretRef；测试和运行只解析当前阶段实际引用的最小集合。
+
+迁移计划已经冻结为只读历史：
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/vendor/connector-migration?state={state}` | `connector-plugin:view` | 查询已完成迁移及观察事实 |
+
+旧 migration prepare/execute/policy 写端点已经删除，调用返回 404/405。
 
 ### 3.4 扩展配置
 
@@ -336,8 +355,9 @@ JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入�
 | GET | `/call-record/quality-report` | 接口质量报表 |
 | GET | `/call-record/export` | 导出 |
 
-插件模式调用记录额外返回实际 `pluginId`、`pluginVersion`、`pipelineVersion` 和 `snapshotHash`；
-发生厂商或兼容链切换时仍以实际执行事实为准，不以草稿或当前最新插件版本反推历史。
+插件调用记录额外返回实际 `pluginId`、`pluginVersion`、`pipelineVersion`、`snapshotHash`、
+`hashAlgorithm` 和 `integrityHash`；发生备用厂商切换时仍以实际执行事实为准，不以主厂商、草稿或
+当前最新插件版本反推历史。缓存复用只选择 `responseContractValid=true` 的原始成功记录。
 
 ## 7. 计费
 
@@ -360,6 +380,8 @@ JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入�
 | POST | `/billing/event/{id}/reverse` | 追加冲正事件 |
 
 计费以 `billing_plan` 版本和 `billing_event` 不可变账本为准，不存在旧规则或默认价格回退。
+BillingEvent 同样保存实际 vendor/plugin/pipeline/snapshot/hashAlgorithm/integrityHash；冲正复制原事件的
+追踪事实。请求 `NOT_SENT`、响应契约失败或平台策略不允许时不生成收费事件，幂等键只产生一条事件。
 
 ## 8. 治理
 
@@ -400,8 +422,9 @@ JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入�
 `PLUGIN_VERSION_MISMATCH`、`REQUEST_BUILD_ERROR`、`AUTH_SECURITY_ERROR`、`TRANSPORT_TIMEOUT`、
 `TRANSPORT_CONNECTION_ERROR`、`TRANSPORT_HTTP_ERROR`、`RESPONSE_SECURITY_ERROR`、
 `RESPONSE_PARSE_ERROR`、`BUSINESS_REJECTED`、`CONTRACT_VIOLATION`、`PLUGIN_INTERNAL_ERROR`。
-`deliveryState` 为 `NOT_SENT`、`MAYBE_SENT` 或 `SENT`；只有 `NOT_SENT` 允许平台自动走兼容旧链，
-避免外部请求已经发出后重复调用。
+`deliveryState` 为 `NOT_SENT`、`MAYBE_SENT` 或 `SENT`。`ConnectorErrorPolicy` 穷举决定 retry、fallback、
+熔断、计费/cache 和外部错误码；只有策略允许且明确 `NOT_SENT` 才能调用一次备用厂商，
+`SENT/MAYBE_SENT` 禁止降级。`CONTRACT_VIOLATION` 对外失败、不收费、不缓存。
 
 ## 10. Internal API（不经 Gateway）
 
@@ -413,12 +436,17 @@ JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入�
 | Masterdata | GET | `/internal/v1/masterdata/connector-plugins/{pluginId}/versions/{version}/artifact` | `masterdata:connector-artifact:read` |
 | Masterdata | GET | `/internal/v1/masterdata/connector-plugins/runtime/required-artifacts` | `masterdata:connector-artifact:read` |
 | Masterdata | GET | `/internal/v1/masterdata/vendor-configs/{vendorConfigId}/connector-runtime` | `masterdata:connector-runtime:read` |
+| Masterdata | POST | `/internal/v1/masterdata/vendor-security/connector-secrets/resolve` | `masterdata:vendor-secret:read` |
 | Access | POST | `/internal/v1/access/connector-plugins/stage` | `access:connector-runtime:manage` |
 | Access | GET | `/internal/v1/access/connector-plugins/{pluginId}/versions/{version}/activation` | `access:connector-runtime:read` |
 | Access | POST | `/internal/v1/access/connector-plugins/{pluginId}/versions/{version}/release` | `access:connector-runtime:manage` |
 | Access | POST | `/internal/v1/access/vendor-connectors/test` | `access:connector-runtime:test` |
+| Access | POST | `/internal/v1/access/connector-migrations/observation` | `access:connector-runtime:read` |
+| Billing | POST | `/internal/v1/billing/connector-migrations/observation` | `billing:connector-observation:read` |
 
 `stage` 请求为 `{"pluginId":"demo","pluginVersion":"1.0.0"}`。激活响应包含
 `pluginId/pluginVersion/ready/instances`，每个实例记录 `serviceInstanceId`、制品哈希、宿主版本、
 `state`、加载/心跳时间和安全错误摘要。受控测试 Internal 请求包含
 `vendorConfigId/pipelineSnapshot/params`，响应在 Access 侧递归脱敏、限深和截断。
+secret resolve 请求携带 `vendorConfigId + secretRefs`，Masterdata 验证引用归属后只返回请求的最小集合；
+调用方不能用它枚举或跨 vendor 读取秘密。迁移 observation 只读，不提供迁移写入口。

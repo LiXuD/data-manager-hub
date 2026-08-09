@@ -2,8 +2,8 @@
 
 > **项目名称**: 数据管理平台 (Data Management Platform)
 > **仓库地址**: https://github.com/LiXuD/data-manager-hub.git
-> **文档版本**: 2026-07-20
-> **技术栈**: Java 21 + Spring Boot 3.4 + Spring Cloud 2024.0.0 + MyBatis-Plus 3.5.7 + Vue 3 + TypeScript
+> **文档版本**: 2026-08-10
+> **技术栈**: Java 21 + Spring Boot 3.4.13 + Spring Cloud 2024.0.3 + MyBatis-Plus 3.5.8 + Vue 3 + TypeScript
 
 ---
 
@@ -186,77 +186,42 @@ data-manager-hub/
 #### 3.1.2 data-platform-common-runtime (运行时)
 
 > **路径**: `data-platform-common-runtime/src/main/java/com/dataplatform/common/`
-> **职责**: 提供运行时复用代码，包括厂商适配器、认证处理、安全流水线、计费计算、熔断器等。
+> **职责**: 提供连接器插件的 Manifest/Schema 验证、隔离加载、注册表、流水线、受控 Transport、
+> 内置 bridge，以及认证、安全、映射、计费计算和熔断复用能力。
 
-##### 厂商适配器体系 (`adapter/`)
-
-采用 **策略模式 + 工厂模式** 实现多厂商API适配：
-
-```
-VendorAdapter (接口)
-    ├── getVendorCode()                    — 获取厂商编码
-    ├── supports(String dataTypeCode)      — 是否支持该数据类型
-    ├── execute(config, params)            — 执行数据查询
-    ├── transformRequest(params, mapping)  — 请求参数转换
-    └── transformResponse(response, mapping) — 响应数据转换
-
-AbstractVendorAdapter (抽象类)
-    └── 实现通用的 transformRequest / transformResponse 逻辑
-
-HttpVendorAdapter (具体实现)
-    └── 基于 OkHttp 的 HTTP 厂商适配器
-        ├── buildRequest()   — 构建HTTP请求 (支持GET/POST/PUT/PATCH/DELETE)
-        ├── applyAuth()      — 应用认证配置
-        ├── SecurityPipelineExecutor — 请求签名、加密及响应验签、解密
-        └── handleResponse() — 处理HTTP响应
-
-VendorAdapterFactory (工厂类)
-    ├── getAdapter(vendorCode)   — 获取/创建适配器 (ConcurrentHashMap缓存)
-    ├── registerAdapter()        — 注册自定义适配器
-    └── clearCache()             — 清除缓存
-```
-
-> **兼容边界**：`VendorAdapterFactory + HttpVendorAdapter` 仍是 `LEGACY` 模式的当前实现和迁移回滚
-> 路径，不再是唯一运行时。`vendor_config.runtime_mode=PLUGIN` 时，Access 改为读取 Masterdata 的
-> 不可变连接器快照并执行固定 `pluginId + pluginVersion` 流水线。存量配置默认 `LEGACY`，阶段 5
-> 退役门槛满足前不得删除本节旧链。
-
-##### 连接器插件运行时 (`plugin/`)
+##### 当前连接器插件运行时 (`plugin/`)
 
 `data-platform-plugin-spi` 定义 `ConnectorPlugin`、`ConnectorStageFactory`、`ConnectorStage`、
-`PluginContext`、强类型请求/响应和六种 `StageCapability`。它只依赖 Jackson，不依赖 Spring、
-数据库、Redis、Nacos、Feign 或五域 Service。
+`StageLifecycle`、`PluginContext`、强类型请求/响应、穷举 `ConnectorErrorPolicy` 和六种
+`StageCapability`。它只依赖 Jackson，不依赖 Spring、数据库、Redis、Nacos、Feign 或五域 Service。
 
 `data-platform-common-runtime/common/plugin` 实现 Manifest 读取、制品哈希/签名验证、版本隔离
-ClassLoader、引用计数注册表、流水线编译执行、受控 OkHttp Transport 和内置 `legacy-http:1.0.0`。
+ClassLoader、租约/引用计数注册表、流水线编译执行、受控 OkHttp Transport、统一安全消息处理和内置
+`legacy-http:1.0.0` bridge。
 Access 对外部 JAR 进行 HTTPS 白名单下载并缓存到
 `<cache-directory>/<pluginId>/<version>/<sha256>/connector-plugin.jar`；每个版本可与旧版本同时驻留，
 在途请求通过租约固定版本，引用归零后关闭插件和 ClassLoader。
 
-2026-08-03 的隔离运行验收已使用真实签名外部插件和 HTTPS fixture 完成导入、预加载、激活、
-受控测试、连接器发布、Gateway OpenAPI、调用记录、计费事件、草稿 CAS、历史版本回滚和活动绑定
-禁用保护；U042 在存在活动引用和运行痕迹时按设计拒绝破坏性回滚。in-app Browser 进一步核对了
-插件 ACTIVE/逐实例 READY、动态 Schema 表单、版本差异和 V3 ACTIVE、V2/V1 SUPERSEDED 历史。
-该证据不代表全部存量厂商、多 Access 实例、生产容量或故障演练已经完成，当前仍保留 `LEGACY`
-回滚路径。
+2026-08-10 的隔离运行验收使用真实签名外部插件、HTTPS fixture、双 Access 和浏览器完成供应链、
+逐实例 READY/激活失败门禁、Schema/secretRef、受控测试、V1/V2/V3 不可变历史、Gateway 单条/批量、
+缓存/契约、NOT_SENT/SENT/MAYBE_SENT、计费/调用事实、离线缓存/readiness、并发版本切换和 release。
+V001—V047 fresh/upgrade/HALT/不变性矩阵通过；这证明隔离环境落地，不代表生产部署或生产容量。
 
 插件模式的六阶段顺序为 `REQUEST_BUILDER → REQUEST_PROCESSOR* → TRANSPORT →
 RESPONSE_PROCESSOR* → RESPONSE_PARSER* → RESPONSE_NORMALIZER`，启用步骤必须恰好有一个
-`TRANSPORT`。执行结果同时表达传输、业务、缓存、计费和 `NOT_SENT/MAYBE_SENT/SENT`；只有
-`NOT_SENT` 才能进入兼容旧链或备用厂商，防止已发出请求后重复双发。完整安全边界和迁移状态见
+`TRANSPORT`。执行结果同时表达传输、业务、缓存、计费和 `NOT_SENT/MAYBE_SENT/SENT`；只有错误
+策略允许且明确 `NOT_SENT` 才能调用一次备用厂商，防止已发出请求后重复双发。完整安全边界见
 [外部请求连接器插件化升级设计](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)。
 
-**VendorAdapterConfig** — 适配器配置数据类：
-- `apiUrl` — API地址
-- `method` — HTTP 请求方法
-- `authType` — 认证类型
-- `requestTemplate` — 请求映射模板
-- `responseMapping` — 响应映射模板
-- `securitySteps` / `resolvedSecrets` — 按顺序执行的请求、响应安全步骤及运行时解析后的密钥
+> **历史说明**：实施前的 `VendorAdapterFactory + HttpVendorAdapter` 静态链是本设计的原基线。
+> V044/V045 完成 PLUGIN-only 迁移后，工厂、HTTP 实现和旧配置字段已经删除；`VendorAdapter`、
+> `AbstractVendorAdapter`、`VendorAdapterConfig` 仅由内置 `legacy-http` 的映射 bridge 使用，不构成
+> 静态工厂或第二运行时。
 
 ##### 厂商安全流水线 (`security/pipeline/`)
 
-`HttpVendorAdapter` 在请求参数映射后执行 `REQUEST` 流水线，在厂商响应解析后执行 `RESPONSE` 流水线。流水线配置缺失或加载失败时直接拒绝调用，不再执行简单签名回退。
+内置 `REQUEST_PROCESSOR/RESPONSE_PROCESSOR` 阶段复用安全流水线：请求构建后执行 `REQUEST`，厂商
+响应进入解析前执行 `RESPONSE`。流水线配置缺失或加载失败时拒绝调用，不执行简单签名回退。
 
 | 类名 | 说明 |
 |------|------|
@@ -833,10 +798,10 @@ com.dataplatform.governance/
 
 | 测试类 | 说明 |
 |--------|------|
-| `HttpVendorAdapterTest` | HTTP厂商适配器测试 |
 | `RequestMappingProcessorTest` | 请求映射处理测试 |
 | `ResponseMappingProcessorTest` | 响应映射处理测试 |
-| `SecurityPipelineExecutorTest` / `HttpVendorAdapterSecurityPipelineTest` | 安全步骤排序、引用和厂商请求/响应流水线集成测试 |
+| `ConnectorPipelineExecutionPolicyTest` / `DefaultConnectorVendorExecutorLifecycleTest` | 六阶段执行、租约切换、超时、错误和厂商调用集成测试 |
+| `PluginRuntimeConcurrencyTest` / `PluginArtifactVerifierTest` | 多版本并存、引用释放、危险字节码与 ClassLoader 生命周期测试 |
 | `VendorSecurityServiceImplTest` / `VendorSecurityControllerAuthorizationTest` | 安全配置版本、并发控制、回滚与权限测试 |
 | `InterfaceContractServiceImplTest` / `InterfaceContractValidatorTest` | 契约树、Schema生成、默认值、嵌套类型和约束校验测试 |
 | `OpenApiDocumentServiceTest` / `OpenApiDocumentControllerAuthorizationTest` | OpenAPI 3.1生成及管理端/调用方授权测试 |
@@ -1064,11 +1029,13 @@ data-platform-web/src/
 | 43 | vendor_connector_version | 厂商连接器草稿和不可变发布快照 | masterdata |
 | 44 | vendor_connector_test_fact | 受控测试的不可变安全事实及发布门禁 | masterdata |
 | 45 | connector_plugin_activation | Access 各实例的插件加载事实 | access |
+| 46 | vendor_connector_migration | 已完成迁移计划与三域观察的只读历史 | masterdata |
 
-V042 以加法迁移增加连接器控制面、不可变受控测试事实、Access 激活事实、`vendor_config` 双模式字段及
-`call_record` 插件追踪字段，并种入内置 `legacy-http:1.0.0`；U042 在发现任一真实插件、连接器版本、
-受控测试事实、激活事实、PLUGIN 绑定或调用追踪后拒绝破坏性回滚。全新库使用 `./migrate-db.sh update`，旧库先备份
-并按 `./migrate-db.sh baseline` 的确认流程接管，禁止直接手工执行历史 SQL。
+V042 建立连接器控制面并种入 `legacy-http:1.0.0`；V043 建立迁移与三域观察事实；V044 强制
+PLUGIN-only；V045 删除旧配置列；V046 引入 `V1_DERIVED/V2_EMBEDDED` 完整性；V047 在升级前检查
+目录/历史一致性并冻结插件制品、已发布连接器和物理删除。全新库使用 `./migrate-db.sh update`，旧库
+先备份并按 `./migrate-db.sh baseline` 接管。V043—V047 的受保护事实使用备份恢复或 forward recovery，
+不直接执行破坏性 U 脚本，详见 `sql/MIGRATIONS.md`。
 
 ---
 
@@ -1103,9 +1070,9 @@ V042 以加法迁移增加连接器控制面、不可变受控测试事实、Acc
 
 | 模式 | 应用位置 | 说明 |
 |------|----------|------|
-| **策略模式** | `VendorAdapter` / `AuthHandler` / `SecurityStepHandler` | 不同厂商、认证和安全步骤实现可互换 |
-| **工厂模式** | `VendorAdapterFactory` / `AuthHandlerFactory` | 根据类型创建对应策略实例 |
-| **模板方法模式** | `AbstractVendorAdapter` | 定义通用的请求/响应转换流程 |
+| **策略模式** | `ConnectorStage` / `ConnectorErrorPolicy` / `SecurityStepHandler` | 阶段能力与平台治理策略分离 |
+| **工厂模式** | `ConnectorStageFactory` / `AuthHandlerFactory` | 按固定插件版本创建共享或请求级阶段 |
+| **流水线模式** | `PipelineCompiler` / `ConnectorPipelineExecutor` | 编译并执行六阶段有序连接器 |
 | **AOP模式** | `OperationLogAspect` | 通过注解声明式记录操作日志 |
 | **代理模式** | `VendorProxyService` | 代理调用方请求到厂商API |
 | **自动配置模式** | Spring Boot AutoConfiguration | common模块自动注册Bean |
@@ -1131,26 +1098,31 @@ OpenApiQueryController (access:8082)
     │
     ▼
 OpenApiQueryService
-    ├── 可选读取历史调用缓存（命中也执行响应契约校验）
-    └── VendorProxyService → 获取厂商配置、安全步骤和灰度结果
+    ├── 可选读取历史调用缓存（只复用 response_contract_valid=true 的记录）
+    └── VendorProxyService → 获取主备厂商、灰度结果和 PLUGIN-only 配置
     │
     ▼
-VendorAdapterFactory.getAdapter(vendorCode)
+DefaultConnectorVendorExecutor
+    ├── Masterdata Internal API → 固定连接器快照与目录材料
+    ├── 校验 V1_DERIVED/V2_EMBEDDED snapshot/integrity hash
+    ├── acquire PipelineLease / PluginHandle
+    └── PipelineCompiler → 固定 pluginId + pluginVersion + stage config
     │
     ▼
-HttpVendorAdapter.execute(config, params)
-    ├── transformRequest()  — 请求参数映射
-    ├── SecurityPipelineExecutor(REQUEST) — 摘要/签名/加密/注入等有序步骤
-    ├── applyAuth()         — 认证注入
-    ├── OkHttp 调用厂商API
-    ├── SecurityPipelineExecutor(RESPONSE) — 解密/验签/解码等有序步骤
-    └── transformResponse() — 响应数据映射
+ConnectorPipelineExecutor
+    ├── REQUEST_BUILDER
+    ├── REQUEST_PROCESSOR* — 摘要/签名/加密/认证等
+    ├── TRANSPORT — 宿主管理 HTTPS、超时、响应上限和网络许可
+    ├── RESPONSE_PROCESSOR* — 解密/验签/解码等
+    ├── RESPONSE_PARSER*
+    └── RESPONSE_NORMALIZER
     │
     ▼
 OpenApiQueryService
-    ├── InterfaceContractValidator → 校验响应data；异常只告警、不阻断
+    ├── InterfaceContractValidator → 响应失败转 CONTRACT_VIOLATION 并阻断
+    ├── ConnectorErrorPolicy → retry/fallback/delivery/billing/cache/外部错误码
     ├── Access域内Kafka异步写入调用记录和契约异常
-    ├── BillingInternalFeignClient → 费用计算与幂等日聚合
+    ├── BillingInternalFeignClient → 以 actual vendor/plugin/integrity 事实幂等计费
     └── 返回OpenApiQueryRespVO
 ```
 
