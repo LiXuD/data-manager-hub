@@ -45,6 +45,7 @@ public class ConnectorPluginActivationService {
     private final ConnectorRuntimeProperties properties;
     private final MeterRegistry meterRegistry;
     private final ObjectProvider<Registration> localRegistrationProvider;
+    private final ObjectProvider<ConnectorPipelineRetirement> pipelineRetirementProvider;
     private final String localInstanceId;
     private final String localDiscoveryAddress;
     private final ConcurrentMap<String, Object> versionMonitors = new ConcurrentHashMap<>();
@@ -60,6 +61,7 @@ public class ConnectorPluginActivationService {
             ConnectorRuntimeProperties properties,
             MeterRegistry meterRegistry,
             ObjectProvider<Registration> localRegistrationProvider,
+            ObjectProvider<ConnectorPipelineRetirement> pipelineRetirementProvider,
             Environment environment) {
         this.mapper = mapper;
         this.pluginClient = pluginClient;
@@ -68,12 +70,13 @@ public class ConnectorPluginActivationService {
         this.properties = properties;
         this.meterRegistry = meterRegistry;
         this.localRegistrationProvider = localRegistrationProvider;
+        this.pipelineRetirementProvider = pipelineRetirementProvider;
         this.localInstanceId = resolveLocalInstanceId(properties, environment);
         this.localDiscoveryAddress = resolveLocalDiscoveryAddress(environment);
         meterRegistry.gauge("connector_plugin_active_versions", runtime,
                 ConnectorPluginRuntimeOperations::loadedVersionCount);
         meterRegistry.gauge("connector_plugin_classloaders", runtime,
-                ConnectorPluginRuntimeOperations::loadedVersionCount);
+                ConnectorPluginRuntimeOperations::isolatedClassLoaderCount);
     }
 
     public ConnectorPluginActivationSummaryDTO requestStage(String pluginId, String pluginVersion) {
@@ -167,7 +170,11 @@ public class ConnectorPluginActivationService {
         try {
             Result<List<PluginArtifactDescriptorDTO>> response = pluginClient.getRequiredArtifacts();
             if (response == null || response.getData() == null) {
-                throw new IllegalStateException("Required plugin artifact response is empty");
+                String message = response != null ? response.getMsg() : null;
+                if (message != null && message.contains("ACTIVE_CONNECTOR_BINDING_INVALID")) {
+                    throw new IllegalStateException("ACTIVE_CONNECTOR_BINDING_INVALID");
+                }
+                throw new IllegalStateException("REQUIRED_PLUGIN_ARTIFACTS_UNAVAILABLE");
             }
             Set<String> required = new LinkedHashSet<>();
             for (PluginArtifactDescriptorDTO artifact : response.getData()) {
@@ -269,9 +276,25 @@ public class ConnectorPluginActivationService {
         }
     }
 
+    private void markReleaseFailed(ConnectorPluginActivation activation, RuntimeException ex) {
+        LocalDateTime now = LocalDateTime.now();
+        activation.setState(ConnectorActivationState.RELEASING.name());
+        activation.setLastHeartbeatAt(now);
+        activation.setSafeErrorCode(safeErrorCode(ex));
+        activation.setSafeErrorDigest(digest(ex));
+        save(activation, now);
+        meterRegistry.counter("connector_plugin_release_failures_total",
+                "pluginId", activation.getPluginId(),
+                "pluginVersion", activation.getPluginVersion(),
+                "errorCategory", activation.getSafeErrorCode()).increment();
+    }
+
     private void release(ConnectorPluginActivation activation) {
         synchronized (versionMonitor(activation.getPluginId(), activation.getPluginVersion())) {
             try {
+                pipelineRetirementProvider.orderedStream().forEach(
+                        retirement -> retirement.retirePipelinesUsing(
+                                activation.getPluginId(), activation.getPluginVersion()));
                 boolean released = runtime.release(activation.getPluginId(), activation.getPluginVersion());
                 if (!released && runtime.isLoaded(activation.getPluginId(), activation.getPluginVersion())) {
                     return;
@@ -283,7 +306,7 @@ public class ConnectorPluginActivationService {
                 activation.setSafeErrorDigest(null);
                 save(activation, now);
             } catch (RuntimeException ex) {
-                markFailed(activation, ex);
+                markReleaseFailed(activation, ex);
             }
         }
     }
@@ -419,6 +442,14 @@ public class ConnectorPluginActivationService {
     }
 
     private String safeErrorCode(RuntimeException ex) {
+        Throwable current = ex;
+        while (current != null) {
+            if (current.getMessage() != null
+                    && current.getMessage().contains("ACTIVE_CONNECTOR_BINDING_INVALID")) {
+                return "ACTIVE_CONNECTOR_BINDING_INVALID";
+            }
+            current = current.getCause();
+        }
         String name = ex.getClass().getSimpleName().replaceAll("[^A-Za-z0-9_]", "_");
         return name.toUpperCase(Locale.ROOT);
     }

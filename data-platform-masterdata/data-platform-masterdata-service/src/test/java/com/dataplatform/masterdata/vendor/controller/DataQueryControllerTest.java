@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
+import com.dataplatform.masterdata.connector.service.ActiveVendorConnectorRuntimeService;
 import com.dataplatform.masterdata.vendor.entity.DataType;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.entity.VendorInfo;
@@ -44,6 +45,8 @@ class DataQueryControllerTest {
     private VendorConfigMapper vendorConfigMapper;
     @Mock
     private ApiInterfaceService apiInterfaceService;
+    @Mock
+    private ActiveVendorConnectorRuntimeService connectorRuntimeService;
 
     @Test
     void shouldRejectUnknownInterfaceInsteadOfDroppingInterfaceFilter() {
@@ -60,6 +63,7 @@ class DataQueryControllerTest {
         ReflectionTestUtils.setField(controller, "dataTypeMapper", dataTypeMapper);
         ReflectionTestUtils.setField(controller, "vendorConfigMapper", vendorConfigMapper);
         ReflectionTestUtils.setField(controller, "apiInterfaceService", apiInterfaceService);
+        ReflectionTestUtils.setField(controller, "connectorRuntimeService", connectorRuntimeService);
 
         Map<String, Object> result = controller.query(Map.of(
                 "vendorCode", "VENDOR_A",
@@ -100,11 +104,43 @@ class DataQueryControllerTest {
         ReflectionTestUtils.setField(controller, "dataTypeMapper", dataTypeMapper);
         ReflectionTestUtils.setField(controller, "vendorConfigMapper", vendorConfigMapper);
         ReflectionTestUtils.setField(controller, "apiInterfaceService", apiInterfaceService);
+        ReflectionTestUtils.setField(controller, "connectorRuntimeService", connectorRuntimeService);
 
         Map<String, Object> result = controller.query(Map.of(
                 "vendorCode", "VENDOR_A",
                 "dataTypeCode", "PERSONAL"));
 
         assertEquals("CONFIG_NOT_FOUND", result.get("errorCode"));
+    }
+
+    @Test
+    void shouldExecutePublishedConnectorSnapshot() {
+        VendorInfo vendor = new VendorInfo();
+        vendor.setId(1L);
+        DataType dataType = new DataType();
+        dataType.setId(2L);
+        VendorConfig config = new VendorConfig();
+        config.setId(3L);
+        when(vendorInfoMapper.selectOne(any())).thenReturn(vendor);
+        when(dataTypeMapper.selectOne(any())).thenReturn(dataType);
+        when(vendorConfigMapper.selectOne(any())).thenReturn(config);
+        when(connectorRuntimeService.execute(3L, Map.of("name", "Alice")))
+                .thenReturn(Map.of("success", true, "runtimeMode", "PLUGIN"));
+
+        DataQueryController controller = new DataQueryController();
+        ReflectionTestUtils.setField(controller, "vendorInfoMapper", vendorInfoMapper);
+        ReflectionTestUtils.setField(controller, "dataTypeMapper", dataTypeMapper);
+        ReflectionTestUtils.setField(controller, "vendorConfigMapper", vendorConfigMapper);
+        ReflectionTestUtils.setField(controller, "apiInterfaceService", apiInterfaceService);
+        ReflectionTestUtils.setField(controller, "connectorRuntimeService", connectorRuntimeService);
+
+        Map<String, Object> result = controller.query(Map.of(
+                "vendorCode", "VENDOR_A",
+                "dataTypeCode", "PERSONAL",
+                "params", Map.of("name", "Alice")));
+
+        assertEquals(true, result.get("success"));
+        assertEquals("PLUGIN", result.get("runtimeMode"));
+        verify(connectorRuntimeService).execute(3L, Map.of("name", "Alice"));
     }
 }

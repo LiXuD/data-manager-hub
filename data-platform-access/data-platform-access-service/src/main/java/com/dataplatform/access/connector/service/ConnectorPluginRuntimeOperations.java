@@ -12,4 +12,6 @@ public interface ConnectorPluginRuntimeOperations {
     boolean isLoaded(String pluginId, String pluginVersion);
 
     int loadedVersionCount();
+
+    int isolatedClassLoaderCount();
 }

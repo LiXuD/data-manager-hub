@@ -27,6 +27,12 @@ public class BillingEvent {
     private Long interfaceId;
     private String interfaceCode;
     private String dataType;
+    private String pluginId;
+    private String pluginVersion;
+    private Integer pipelineVersion;
+    private String snapshotHash;
+    private String hashAlgorithm;
+    private String integrityHash;
     private Boolean billable;
     private BigDecimal quantity;
     private String unit;
@@ -75,6 +81,18 @@ public class BillingEvent {
     public void setInterfaceCode(String interfaceCode) { this.interfaceCode = interfaceCode; }
     public String getDataType() { return dataType; }
     public void setDataType(String dataType) { this.dataType = dataType; }
+    public String getPluginId() { return pluginId; }
+    public void setPluginId(String pluginId) { this.pluginId = pluginId; }
+    public String getPluginVersion() { return pluginVersion; }
+    public void setPluginVersion(String pluginVersion) { this.pluginVersion = pluginVersion; }
+    public Integer getPipelineVersion() { return pipelineVersion; }
+    public void setPipelineVersion(Integer pipelineVersion) { this.pipelineVersion = pipelineVersion; }
+    public String getSnapshotHash() { return snapshotHash; }
+    public void setSnapshotHash(String snapshotHash) { this.snapshotHash = snapshotHash; }
+    public String getHashAlgorithm() { return hashAlgorithm; }
+    public void setHashAlgorithm(String hashAlgorithm) { this.hashAlgorithm = hashAlgorithm; }
+    public String getIntegrityHash() { return integrityHash; }
+    public void setIntegrityHash(String integrityHash) { this.integrityHash = integrityHash; }
     public Boolean getBillable() { return billable; }
     public void setBillable(Boolean billable) { this.billable = billable; }
     public BigDecimal getQuantity() { return quantity; }

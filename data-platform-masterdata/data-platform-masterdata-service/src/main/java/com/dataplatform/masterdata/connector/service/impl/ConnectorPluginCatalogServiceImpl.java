@@ -21,8 +21,12 @@ import com.dataplatform.masterdata.connector.mapper.VendorConnectorVersionMapper
 import com.dataplatform.masterdata.connector.mapper.VendorConnectorTestFactMapper;
 import com.dataplatform.masterdata.connector.service.ConnectorConflictException;
 import com.dataplatform.masterdata.connector.service.ConnectorPluginCatalogService;
+import com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator;
 import com.dataplatform.masterdata.connector.service.PluginArtifactVerifier;
 import com.dataplatform.masterdata.connector.service.VerifiedPluginArtifact;
+import com.dataplatform.masterdata.vendor.entity.VendorConfig;
+import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
+import com.dataplatform.common.enums.CommonStatus;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
@@ -48,25 +52,31 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
     private final ConnectorPluginMapper pluginMapper;
     private final ConnectorPluginVersionMapper versionMapper;
     private final VendorConnectorVersionMapper connectorVersionMapper;
+    private final VendorConfigMapper vendorConfigMapper;
     private final PluginArtifactVerifier artifactVerifier;
     private final VendorConnectorTestFactMapper testFactMapper;
     private final ConnectorPluginActivationInternalFeignClient activationClient;
+    private final ConnectorPluginReleaseCoordinator releaseCoordinator;
     private final ObjectMapper objectMapper;
 
     public ConnectorPluginCatalogServiceImpl(
             ConnectorPluginMapper pluginMapper,
             ConnectorPluginVersionMapper versionMapper,
             VendorConnectorVersionMapper connectorVersionMapper,
+            VendorConfigMapper vendorConfigMapper,
             VendorConnectorTestFactMapper testFactMapper,
             PluginArtifactVerifier artifactVerifier,
             ConnectorPluginActivationInternalFeignClient activationClient,
+            ConnectorPluginReleaseCoordinator releaseCoordinator,
             ObjectMapper objectMapper) {
         this.pluginMapper = pluginMapper;
         this.versionMapper = versionMapper;
         this.connectorVersionMapper = connectorVersionMapper;
+        this.vendorConfigMapper = vendorConfigMapper;
         this.testFactMapper = testFactMapper;
         this.artifactVerifier = artifactVerifier;
         this.activationClient = activationClient;
+        this.releaseCoordinator = releaseCoordinator;
         this.objectMapper = objectMapper;
     }
 
@@ -198,6 +208,7 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
                 .set(ConnectorPluginVersion::getUpdatedBy, actorId)
                 .set(ConnectorPluginVersion::getUpdatedAt, LocalDateTime.now()));
         persistSuccessfulState(current, ACTIVE, actorId, null);
+        releaseCoordinator.reconcileAfterCommit();
         return toVersionDto(current);
     }
 
@@ -214,6 +225,7 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
         current.setStatus(DISABLED);
         current.setUpdatedBy(actorId);
         versionMapper.updateById(current);
+        releaseCoordinator.reconcileAfterCommit();
         return toVersionDto(current);
     }
 
@@ -222,8 +234,7 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
                 new LambdaQueryWrapper<VendorConnectorVersion>()
                         .eq(VendorConnectorVersion::getStatus, ACTIVE));
         return activeVersions.stream().flatMap(item -> readPipeline(item.getPipelineSnapshot()).stream())
-                .anyMatch(step -> !Boolean.FALSE.equals(step.enabled())
-                        && pluginId.equals(step.pluginId()) && version.equals(step.pluginVersion()));
+                .anyMatch(step -> pluginId.equals(step.pluginId()) && version.equals(step.pluginVersion()));
     }
 
     private boolean successfulDraftTestExists(String pluginId, String version) {
@@ -245,9 +256,23 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
     @Override
     public List<PluginArtifactDescriptorDTO> requiredArtifacts() {
         Map<String, PluginArtifactDescriptorDTO> result = new LinkedHashMap<>();
-        List<VendorConnectorVersion> activeVersions = connectorVersionMapper.selectList(
-                new LambdaQueryWrapper<VendorConnectorVersion>()
-                        .eq(VendorConnectorVersion::getStatus, ACTIVE));
+        List<VendorConnectorVersion> activeVersions = new ArrayList<>();
+        List<VendorConfig> activeConfigs = vendorConfigMapper.selectList(
+                new LambdaQueryWrapper<VendorConfig>()
+                        .eq(VendorConfig::getStatus, CommonStatus.ACTIVE.getCode())
+                        .eq(VendorConfig::getDeleted, false));
+        for (VendorConfig config : activeConfigs) {
+            if (!"PLUGIN".equals(config.getRuntimeMode()) || config.getActiveConnectorVersionId() == null) {
+                throw new IllegalStateException("ACTIVE_CONNECTOR_BINDING_INVALID");
+            }
+            VendorConnectorVersion version = connectorVersionMapper.selectById(
+                    config.getActiveConnectorVersionId());
+            if (version == null || !ACTIVE.equals(version.getStatus())
+                    || !config.getId().equals(version.getVendorConfigId())) {
+                throw new IllegalStateException("ACTIVE_CONNECTOR_BINDING_INVALID");
+            }
+            activeVersions.add(version);
+        }
         for (VendorConnectorVersion connectorVersion : activeVersions) {
             for (ConnectorPipelineStepDTO step : readPipeline(connectorVersion.getPipelineSnapshot())) {
                 if (Boolean.FALSE.equals(step.enabled())) {

@@ -142,6 +142,12 @@ public class BillingChargeService {
         target.setResponseContractValid(source.getResponseContractValid());
         target.setLatencyMs(source.getLatencyMs());
         target.setHttpStatus(source.getHttpStatus());
+        target.setPluginId(source.getPluginId());
+        target.setPluginVersion(source.getPluginVersion());
+        target.setPipelineVersion(source.getPipelineVersion());
+        target.setSnapshotHash(source.getSnapshotHash());
+        target.setHashAlgorithm(source.getHashAlgorithm());
+        target.setIntegrityHash(source.getIntegrityHash());
         target.setMeteringFacts(additional.getMeteringFacts());
         return target;
     }
@@ -154,6 +160,24 @@ public class BillingChargeService {
         if (request.getPlanId() == null || request.getPlanVersion() == null) {
             throw new IllegalArgumentException("必须提交已解析的planId和planVersion");
         }
+        validateConnectorIntegrity(request);
+    }
+
+    private void validateConnectorIntegrity(BillingChargeReqDTO request) {
+        String algorithm = request.getHashAlgorithm();
+        if (!StringUtils.hasText(algorithm)) return; // V1 callers created before integrity tracing.
+        if (!Set.of("V1_DERIVED", "V2_EMBEDDED").contains(algorithm)
+                || !isSha256(request.getSnapshotHash()) || !isSha256(request.getIntegrityHash())) {
+            throw new IllegalArgumentException("连接器完整性事实不完整或算法不受支持");
+        }
+        if ("V2_EMBEDDED".equals(algorithm)
+                && !request.getSnapshotHash().equalsIgnoreCase(request.getIntegrityHash())) {
+            throw new IllegalArgumentException("V2连接器完整性事实不一致");
+        }
+    }
+
+    private boolean isSha256(String value) {
+        return value != null && value.matches("(?i)[0-9a-f]{64}");
     }
 
     private void verifyPinnedPlan(BillingPlan plan, BillingChargeReqDTO request) {
@@ -216,6 +240,12 @@ public class BillingChargeService {
         event.setInterfaceId(plan.getInterfaceId());
         event.setInterfaceCode(plan.getInterfaceCode());
         event.setDataType(request.getDataType());
+        event.setPluginId(request.getPluginId());
+        event.setPluginVersion(request.getPluginVersion());
+        event.setPipelineVersion(request.getPipelineVersion());
+        event.setSnapshotHash(request.getSnapshotHash());
+        event.setHashAlgorithm(request.getHashAlgorithm());
+        event.setIntegrityHash(request.getIntegrityHash());
         event.setBillable(evaluation.billable());
         event.setQuantity(pricing.quantity());
         event.setUnit(model.getMetering().getQuantity().getUnit());

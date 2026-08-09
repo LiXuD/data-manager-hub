@@ -50,6 +50,7 @@ class ConnectorPluginActivationServiceTest {
     private DiscoveryClient discoveryClient;
     private ConnectorRuntimeProperties properties;
     private ObjectProvider<Registration> registrationProvider;
+    private ObjectProvider<ConnectorPipelineRetirement> pipelineRetirementProvider;
 
     @BeforeEach
     void setUp() {
@@ -65,6 +66,8 @@ class ConnectorPluginActivationServiceTest {
         properties.setHostVersion("test-host");
 
         registrationProvider = mock(ObjectProvider.class);
+        pipelineRetirementProvider = mock(ObjectProvider.class);
+        when(pipelineRetirementProvider.orderedStream()).thenAnswer(invocation -> Stream.empty());
         Registration registration = mock(Registration.class);
         when(registration.getHost()).thenReturn("10.0.0.1");
         when(registration.getPort()).thenReturn(8080);
@@ -90,7 +93,8 @@ class ConnectorPluginActivationServiceTest {
         when(pluginClient.getArtifact("demo", "1.0.0")).thenReturn(Result.success(artifact));
         service = new ConnectorPluginActivationService(
                 mapper, pluginClient, runtime, discoveryClient, properties,
-                new SimpleMeterRegistry(), registrationProvider, new MockEnvironment());
+                new SimpleMeterRegistry(), registrationProvider, pipelineRetirementProvider,
+                new MockEnvironment());
     }
 
     @Test
@@ -219,6 +223,19 @@ class ConnectorPluginActivationServiceTest {
     }
 
     @Test
+    void invalidActiveConnectorBindingKeepsReadinessClosedWithStableErrorCode() {
+        when(pluginClient.getRequiredArtifacts())
+                .thenReturn(Result.error(500, "ACTIVE_CONNECTOR_BINDING_INVALID"));
+
+        IllegalStateException error = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, service::synchronizeRequiredArtifacts);
+
+        assertEquals("ACTIVE_CONNECTOR_BINDING_INVALID", error.getMessage());
+        assertFalse(service.isReady());
+        assertEquals("ACTIVE_CONNECTOR_BINDING_INVALID", service.readinessErrorCode());
+    }
+
+    @Test
     void optionalStagingFailureDoesNotCloseReadiness() {
         when(pluginClient.getRequiredArtifacts()).thenReturn(Result.success(List.of()));
         service.synchronizeRequiredArtifacts();
@@ -247,6 +264,27 @@ class ConnectorPluginActivationServiceTest {
 
         assertEquals("a".repeat(64), stored.get().getArtifactSha256());
         assertEquals("RELEASED", stored.get().getState());
+    }
+
+    @Test
+    void releaseFailureRemainsRetryableUntilTheNextPollSucceeds() {
+        ConnectorPluginActivation activation = pendingActivation();
+        activation.setState("RELEASING");
+        stored.set(activation);
+        AtomicInteger attempts = new AtomicInteger();
+        when(runtime.release("demo", "1.0.0")).thenAnswer(invocation -> {
+            if (attempts.getAndIncrement() == 0) throw new IllegalStateException("access instance failed");
+            return true;
+        });
+
+        service.processPendingActivations();
+        assertEquals("RELEASING", stored.get().getState());
+        assertNotNull(stored.get().getSafeErrorCode());
+
+        service.processPendingActivations();
+        assertEquals("RELEASED", stored.get().getState());
+        assertNull(stored.get().getSafeErrorCode());
+        verify(runtime, times(2)).release("demo", "1.0.0");
     }
 
     private PluginArtifactDescriptorDTO artifact() {

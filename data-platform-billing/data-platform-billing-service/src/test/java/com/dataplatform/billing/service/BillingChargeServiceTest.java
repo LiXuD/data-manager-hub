@@ -1,7 +1,9 @@
 package com.dataplatform.billing.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -70,6 +72,12 @@ class BillingChargeServiceTest {
                 .thenReturn(new BigDecimal("10"));
         BillingChargeService service = service(planService, eventMapper, usageMapper, dailyMapper, recurring);
         BillingChargeReqDTO request = request(codec.sha256(plan.getMeteringConfig()));
+        request.setPluginId("vendor-http");
+        request.setPluginVersion("1.2.0");
+        request.setPipelineVersion(7);
+        request.setSnapshotHash("a".repeat(64));
+        request.setHashAlgorithm("V2_EMBEDDED");
+        request.setIntegrityHash("a".repeat(64));
 
         BillingChargeRespDTO response = service.charge(request);
 
@@ -81,6 +89,12 @@ class BillingChargeServiceTest {
         assertEquals("VENDOR_PAYABLE", event.getAccountingPurpose());
         assertEquals(0, new BigDecimal("10").compareTo(event.getUsageBefore()));
         assertEquals("POSTED", event.getStatus());
+        assertEquals("vendor-http", event.getPluginId());
+        assertEquals("1.2.0", event.getPluginVersion());
+        assertEquals(7, event.getPipelineVersion());
+        assertEquals("a".repeat(64), event.getSnapshotHash());
+        assertEquals("V2_EMBEDDED", event.getHashAlgorithm());
+        assertEquals("a".repeat(64), event.getIntegrityHash());
     }
 
     @Test
@@ -125,8 +139,26 @@ class BillingChargeServiceTest {
         assertEquals("req-new:CHARGEBACK:2", events.getAllValues().get(1).getRequestId());
         assertEquals(0, new BigDecimal("0.80000000")
                 .compareTo(events.getAllValues().get(1).getFinalAmount()));
+        assertNull(events.getAllValues().get(0).getPluginId());
+        assertNull(events.getAllValues().get(0).getPipelineVersion());
+        assertNull(events.getAllValues().get(0).getSnapshotHash());
         verify(dailyMapper).upsertDailyFromCallRecord(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsMismatchedV2ConnectorIntegrityBeforeWritingBillingFacts() {
+        BillingEventMapper eventMapper = mock(BillingEventMapper.class);
+        BillingChargeService service = service(mock(BillingPlanService.class), eventMapper,
+                mock(BillingUsageBalanceMapper.class), mock(BillingDailyMapper.class),
+                mock(BillingRecurringChargeService.class));
+        BillingChargeReqDTO request = request("policy");
+        request.setSnapshotHash("a".repeat(64));
+        request.setHashAlgorithm("V2_EMBEDDED");
+        request.setIntegrityHash("b".repeat(64));
+
+        assertThrows(IllegalArgumentException.class, () -> service.charge(request));
+        verifyNoInteractions(eventMapper);
     }
 
     private BillingChargeService service(BillingPlanService planService,

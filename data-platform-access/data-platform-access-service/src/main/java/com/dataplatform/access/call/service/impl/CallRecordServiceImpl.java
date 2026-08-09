@@ -131,6 +131,8 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
                 .eq(CallRecord::getSuccess, true)
                 .eq(CallRecord::getUseCache, true)
                 .eq(CallRecord::getCacheHit, false)
+                .and(nested -> nested.isNull(CallRecord::getResponseContractValid)
+                        .or().eq(CallRecord::getResponseContractValid, true))
                 .ge(CallRecord::getCallTime, since);
         if ("CALLER".equalsIgnoreCase(cacheScope)) {
             wrapper.eq(CallRecord::getCallerId, callerId);

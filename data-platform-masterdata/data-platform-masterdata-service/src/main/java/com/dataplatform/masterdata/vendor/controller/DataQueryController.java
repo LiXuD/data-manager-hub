@@ -1,9 +1,8 @@
 package com.dataplatform.masterdata.vendor.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.dataplatform.common.adapter.VendorAdapterConfig;
-import com.dataplatform.common.adapter.VendorAdapterFactory;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.masterdata.connector.service.ActiveVendorConnectorRuntimeService;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.dataplatform.masterdata.vendor.entity.DataType;
@@ -12,20 +11,18 @@ import com.dataplatform.masterdata.vendor.entity.VendorInfo;
 import com.dataplatform.masterdata.vendor.mapper.DataTypeMapper;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import com.dataplatform.masterdata.vendor.mapper.VendorInfoMapper;
-import com.dataplatform.masterdata.vendor.service.VendorAdapterConfigAssembler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
  * 数据查询控制器
  * <p>
  * 接收前端数据查询测试页面的请求，根据配置将请求转发到外部厂商 API。
- * 复用 common 模块的 HttpVendorAdapter 进行 HTTP 调用。
+ * 通过 Access 的版本化连接器运行时执行厂商调用。
  * </p>
  */
 @RestController
@@ -45,7 +42,7 @@ public class DataQueryController {
     private ApiInterfaceService apiInterfaceService;
 
     @Autowired
-    private VendorAdapterConfigAssembler adapterConfigAssembler;
+    private ActiveVendorConnectorRuntimeService connectorRuntimeService;
 
     @PostMapping("/query")
     public Map<String, Object> query(@RequestBody Map<String, Object> request) {
@@ -101,16 +98,12 @@ public class DataQueryController {
             return errorResult("CONFIG_NOT_FOUND", "未找到匹配的接口配置");
         }
 
-        // 4. 映射为 VendorAdapterConfig
-        VendorAdapterConfig adapterConfig;
+        // 4. 固定活动连接器快照，并由 Access 运行时执行
         try {
-            adapterConfig = adapterConfigAssembler.build(config, vendor);
-        } catch (IllegalArgumentException e) {
-            return errorResult("INVALID_CONFIG", e.getMessage());
+            return connectorRuntimeService.execute(config.getId(), params);
+        } catch (RuntimeException e) {
+            return errorResult("CONNECTOR_RUNTIME_ERROR", "连接器执行失败");
         }
-
-        // 5. 调用适配器
-        return VendorAdapterFactory.getAdapter(vendorCode).execute(adapterConfig, params);
     }
 
     private Map<String, Object> errorResult(String errorCode, String errorMsg) {

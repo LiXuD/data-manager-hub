@@ -42,4 +42,9 @@ public class DefaultConnectorPluginRuntimeOperations implements ConnectorPluginR
     public int loadedVersionCount() {
         return runtimeManager.registry().states().size();
     }
+
+    @Override
+    public int isolatedClassLoaderCount() {
+        return runtimeManager.isolatedClassLoaderCount();
+    }
 }

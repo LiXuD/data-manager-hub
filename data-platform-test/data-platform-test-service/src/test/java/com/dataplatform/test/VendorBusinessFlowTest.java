@@ -33,6 +33,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     /** 测试中创建的 ID，用于清理 */
     private static Long testVendorId;
     private static Long testDataTypeId;
+    private static String testDataTypeCode;
     private static Long testVendorConfigId;
     private static Long testExtendedConfigId;
 
@@ -57,6 +58,7 @@ public class VendorBusinessFlowTest extends BaseTest {
     @DisplayName("链路1-2: 创建数据类型 → 提取ID")
     void testCreateDataType() {
         String code = "DT_" + System.currentTimeMillis();
+        testDataTypeCode = code;
 
         Map<String, Object> data = new HashMap<>();
         data.put("dataTypeCode", code);
@@ -304,15 +306,12 @@ public class VendorBusinessFlowTest extends BaseTest {
 
         Map<String, Object> data = new HashMap<>();
         data.put("vendorId", testVendorId);
-        data.put("dataTypeId", testDataTypeId);
+        data.put("dataTypeCode", testDataTypeCode);
         data.put("interfaceId", 1L); // 前端要求必须传 interfaceId
-        data.put("apiUrl", "https://api.test.example.com/data");
-        data.put("method", "POST");
         data.put("timeout", 30000);
         data.put("retryCount", 3);
         data.put("circuitThreshold", 5);
         data.put("circuitTimeout", 60);
-        data.put("status", "active");
 
         Response response = getAuthRequest()
             .body(data)
@@ -323,6 +322,10 @@ public class VendorBusinessFlowTest extends BaseTest {
         {
             testVendorConfigId = extractId(response);
             Assertions.assertNotNull(testVendorConfigId, "厂商配置创建成功后应返回ID");
+            response.then()
+                .body("data.runtimeMode", equalTo("PLUGIN"))
+                .body("data.status", equalTo("inactive"))
+                .body("data.activeConnectorVersionId", nullValue());
             registerDeleteById("/vendor/config/{id}", testVendorConfigId);
             log.info("厂商配置创建成功, ID: {}", testVendorConfigId);
         }
@@ -353,7 +356,6 @@ public class VendorBusinessFlowTest extends BaseTest {
         org.junit.jupiter.api.Assertions.assertTrue(testVendorConfigId != null, "需要测试厂商配置ID");
 
         Map<String, Object> data = new HashMap<>();
-        data.put("apiUrl", "https://api.test.example.com/updated");
         data.put("timeout", 50000);
 
         Response response = getAuthRequest()
@@ -375,27 +377,21 @@ public class VendorBusinessFlowTest extends BaseTest {
 
     @Test
     @Order(23)
-    @DisplayName("链路3-4: 厂商配置状态切换 → active/inactive")
+    @DisplayName("链路3-4: 未发布连接器的厂商配置禁止启用")
     void testVendorConfigStatusToggle() {
         org.junit.jupiter.api.Assertions.assertTrue(testVendorConfigId != null, "需要测试厂商配置ID");
 
-        // 切换为 inactive
-        Response inactiveResp = getAuthRequest()
-            .body(Map.of("status", "inactive"))
-            .when()
-            .patch("/vendor/config/" + testVendorConfigId + "/status");
-
-        inactiveResp.then().statusCode(anyOf(is(200), is(204)));
-
-        // 切回 active
         Response activeResp = getAuthRequest()
             .body(Map.of("status", "active"))
             .when()
             .patch("/vendor/config/" + testVendorConfigId + "/status");
 
-        activeResp.then().statusCode(anyOf(is(200), is(204)));
+        activeResp.then().statusCode(anyOf(is(200), is(409)));
+        if (activeResp.statusCode() == 200) {
+            activeResp.then().body("code", equalTo(409));
+        }
 
-        log.info("厂商配置状态切换验证通过");
+        log.info("未发布连接器禁止启用验证通过");
     }
 
     // ==================== 链路4：扩展配置 ====================

@@ -5,6 +5,7 @@ import com.dataplatform.access.connector.runtime.ConfiguredTrustedSigningKeyProv
 import com.dataplatform.access.connector.runtime.DefaultConnectorPluginRuntimeOperations;
 import com.dataplatform.access.connector.runtime.MicrometerPluginMetricRecorder;
 import com.dataplatform.access.connector.runtime.ManifestScopedPluginContextFactory;
+import com.dataplatform.access.connector.runtime.MasterdataConnectorPluginMetadataResolver;
 import com.dataplatform.access.connector.runtime.ScopedConnectorSecretResolver;
 import com.dataplatform.access.connector.service.ConnectorPluginRuntimeOperations;
 import com.dataplatform.common.plugin.artifact.PluginArtifactVerifier;
@@ -77,6 +78,18 @@ public class ConnectorRuntimeConfiguration {
                 new ArrayBlockingQueue<>(256), runnable -> {
                     Thread thread = new Thread(runnable,
                             "connector-plugin-task-" + sequence.incrementAndGet());
+                    thread.setDaemon(true);
+                    return thread;
+                }, new ThreadPoolExecutor.AbortPolicy());
+    }
+
+    @Bean(destroyMethod = "shutdownNow")
+    public ExecutorService connectorDraftTestExecutorService() {
+        AtomicInteger sequence = new AtomicInteger();
+        return new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(16), runnable -> {
+                    Thread thread = new Thread(runnable,
+                            "connector-draft-test-" + sequence.incrementAndGet());
                     thread.setDaemon(true);
                     return thread;
                 }, new ThreadPoolExecutor.AbortPolicy());
@@ -186,18 +199,19 @@ public class ConnectorRuntimeConfiguration {
     @Bean
     public PluginValidationContext connectorPluginValidationContext(
             Clock connectorClock,
-            ConnectorRuntimeProperties properties,
-            ScopedConnectorSecretResolver secretResolver) {
+            ConnectorRuntimeProperties properties) {
         return new DefaultPluginValidationContext(
-                connectorClock, properties.getHostVersion(), secretResolver::contains);
+                connectorClock, properties.getHostVersion(),
+                ref -> ref != null && !ref.isBlank() && ref.length() <= 256);
     }
 
     @Bean
     public PipelineCompiler connectorPipelineCompiler(
             ConnectorPluginRegistry registry,
             PluginValidationContext validationContext,
-            ObjectMapper objectMapper) {
-        return new PipelineCompiler(registry, validationContext, objectMapper);
+            ObjectMapper objectMapper,
+            MasterdataConnectorPluginMetadataResolver metadataResolver) {
+        return new PipelineCompiler(registry, validationContext, objectMapper, metadataResolver);
     }
 
     @Bean

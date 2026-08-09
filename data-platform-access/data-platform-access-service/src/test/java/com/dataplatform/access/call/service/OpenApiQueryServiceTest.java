@@ -11,6 +11,8 @@ import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
+import com.dataplatform.plugin.spi.StageCapability;
+import com.dataplatform.plugin.spi.StageTiming;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -67,6 +69,12 @@ class OpenApiQueryServiceTest {
         CallRecord cachedRecord = new CallRecord();
         cachedRecord.setId(100L);
         cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":99}}");
+        cachedRecord.setPluginId("vendor-http");
+        cachedRecord.setPluginVersion("1.2.0");
+        cachedRecord.setPipelineVersion(7);
+        cachedRecord.setSnapshotHash("a".repeat(64));
+        cachedRecord.setHashAlgorithm("V2_EMBEDDED");
+        cachedRecord.setIntegrityHash("a".repeat(64));
         when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
                 any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
         OpenApiQueryRespVO response = service.query(buildContext(true, 3));
@@ -92,15 +100,117 @@ class OpenApiQueryServiceTest {
         assertEquals("vendor-a", billingCaptor.getValue().getVendorCode());
         assertEquals("PERSONAL_QUERY", billingCaptor.getValue().getInterfaceCode());
         assertEquals("personal", billingCaptor.getValue().getDataType());
+        assertEquals("vendor-http", billingCaptor.getValue().getPluginId());
+        assertEquals("1.2.0", billingCaptor.getValue().getPluginVersion());
+        assertEquals(7, billingCaptor.getValue().getPipelineVersion());
+        assertEquals("a".repeat(64), billingCaptor.getValue().getSnapshotHash());
+        assertEquals("V2_EMBEDDED", billingCaptor.getValue().getHashAlgorithm());
+        assertEquals("a".repeat(64), billingCaptor.getValue().getIntegrityHash());
     }
 
     @Test
-    void shouldRecordResponseContractWarningWithoutFailingCall() {
+    void shouldPersistCacheableResultContainingDurationStageTimings() {
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+                .thenReturn(new java.util.LinkedHashMap<>(Map.of(
+                        "success", true,
+                        "data", Map.of("score", 99),
+                        "billingSignal", "ELIGIBLE",
+                        "cacheSignal", "CACHEABLE",
+                        "deliveryState", "SENT",
+                        "actualVendorCode", "vendor-a",
+                        "stageTimings", java.util.List.of(new StageTiming(
+                                "transport", StageCapability.TRANSPORT, "legacy-http", "1.0.0",
+                                Duration.ofMillis(12), true)))));
+
+        OpenApiQueryRespVO response = service.query(buildContext(true, 3));
+
+        assertTrue(response.getSuccess());
+        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
+        verify(callRecordEventPublisher).publish(recordCaptor.capture());
+        assertFalse("{}".equals(recordCaptor.getValue().getResponseData()));
+        assertTrue(recordCaptor.getValue().getResponseData().contains("stageTimings"));
+        assertTrue(recordCaptor.getValue().getResponseData().contains("transport"));
+    }
+
+    @Test
+    void shouldTurnInvalidResponseContractIntoNonBillableFailure() {
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+                .thenReturn(new java.util.LinkedHashMap<>(Map.of(
+                        "success", true,
+                        "data", Map.of("score", "invalid"),
+                        "actualVendorId", 40L,
+                        "actualVendorCode", "vendor-a",
+                        "billingSignal", "ELIGIBLE",
+                        "cacheSignal", "CACHEABLE",
+                        "deliveryState", "SENT")));
+        InterfaceParamDTO score = new InterfaceParamDTO();
+        score.setParamName("score");
+        score.setParamType("integer");
+        score.setRequired(true);
+        InterfaceContractDTO contract = new InterfaceContractDTO();
+        contract.setResponseFields(java.util.List.of(score));
+        OpenApiCallContext context = buildContext(false, 3);
+        context.setInterfaceContract(contract);
+
+        OpenApiQueryRespVO response = service.query(context);
+
+        assertFalse(response.getSuccess());
+        assertEquals("CONTRACT_VIOLATION", response.getErrorCode());
+        assertEquals(BigDecimal.ZERO, response.getCost());
+        verify(billingFeignClient, never()).charge(any());
+        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
+        verify(callRecordEventPublisher).publish(recordCaptor.capture());
+        assertFalse(recordCaptor.getValue().getResponseContractValid());
+        assertFalse(recordCaptor.getValue().getSuccess());
+        assertFalse(recordCaptor.getValue().getUseCache());
+        assertNotNull(recordCaptor.getValue().getResponseContractErrors());
+        assertTrue(recordCaptor.getValue().getResponseContractErrors().contains("score"));
+    }
+
+    @Test
+    void shouldRejectNonObjectResponseRootEvenWhenAllConfiguredFieldsAreOptional() {
+        Map<String, Object> vendorResult = new java.util.LinkedHashMap<>();
+        vendorResult.put("success", true);
+        vendorResult.put("data", "unexpected-root");
+        vendorResult.put("billingSignal", "ELIGIBLE");
+        vendorResult.put("cacheSignal", "CACHEABLE");
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any())).thenReturn(vendorResult);
+        InterfaceParamDTO optionalScore = new InterfaceParamDTO();
+        optionalScore.setParamName("score");
+        optionalScore.setParamType("integer");
+        optionalScore.setRequired(false);
+        InterfaceContractDTO contract = new InterfaceContractDTO();
+        contract.setResponseFields(java.util.List.of(optionalScore));
+        OpenApiCallContext context = buildContext(false, 3);
+        context.setInterfaceContract(contract);
+
+        OpenApiQueryRespVO response = service.query(context);
+
+        assertFalse(response.getSuccess());
+        assertEquals("CONTRACT_VIOLATION", response.getErrorCode());
+        verify(billingFeignClient, never()).charge(any());
+        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
+        verify(callRecordEventPublisher).publish(recordCaptor.capture());
+        assertFalse(recordCaptor.getValue().getResponseContractValid());
+        assertTrue(recordCaptor.getValue().getResponseContractErrors().contains("data类型必须为object"));
+    }
+
+    @Test
+    void cachedResponseThatViolatesCurrentContractIsTreatedAsMiss() {
         CallRecord cachedRecord = new CallRecord();
-        cachedRecord.setId(101L);
-        cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":\"invalid\"}}");
+        cachedRecord.setId(102L);
+        cachedRecord.setResponseContractValid(true);
+        cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":\"stale\"}}");
         when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
                 any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+                .thenReturn(new java.util.LinkedHashMap<>(Map.of(
+                        "success", true,
+                        "data", Map.of("score", 88),
+                        "actualVendorId", 40L,
+                        "actualVendorCode", "vendor-a",
+                        "billingSignal", "ELIGIBLE",
+                        "cacheSignal", "CACHEABLE")));
         InterfaceParamDTO score = new InterfaceParamDTO();
         score.setParamName("score");
         score.setParamType("integer");
@@ -113,36 +223,9 @@ class OpenApiQueryServiceTest {
         OpenApiQueryRespVO response = service.query(context);
 
         assertTrue(response.getSuccess());
-        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
-        verify(callRecordEventPublisher).publish(recordCaptor.capture());
-        assertFalse(recordCaptor.getValue().getResponseContractValid());
-        assertNotNull(recordCaptor.getValue().getResponseContractErrors());
-        assertTrue(recordCaptor.getValue().getResponseContractErrors().contains("score"));
-    }
-
-    @Test
-    void shouldRejectNonObjectResponseRootEvenWhenAllConfiguredFieldsAreOptional() {
-        CallRecord cachedRecord = new CallRecord();
-        cachedRecord.setId(102L);
-        cachedRecord.setResponseData("{\"success\":true,\"data\":\"unexpected-root\"}");
-        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
-                any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
-        InterfaceParamDTO optionalScore = new InterfaceParamDTO();
-        optionalScore.setParamName("score");
-        optionalScore.setParamType("integer");
-        optionalScore.setRequired(false);
-        InterfaceContractDTO contract = new InterfaceContractDTO();
-        contract.setResponseFields(java.util.List.of(optionalScore));
-        OpenApiCallContext context = buildContext(true, 3);
-        context.setInterfaceContract(contract);
-
-        OpenApiQueryRespVO response = service.query(context);
-
-        assertTrue(response.getSuccess());
-        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
-        verify(callRecordEventPublisher).publish(recordCaptor.capture());
-        assertFalse(recordCaptor.getValue().getResponseContractValid());
-        assertTrue(recordCaptor.getValue().getResponseContractErrors().contains("data类型必须为object"));
+        assertFalse(response.getCached());
+        assertEquals(88, response.getData().get("score"));
+        verify(vendorProxyService).callVendor(anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -186,7 +269,9 @@ class OpenApiQueryServiceTest {
         pluginResult.put("pluginVersion", "1.2.0");
         pluginResult.put("pipelineVersion", "7");
         pluginResult.put("snapshotHash", "a".repeat(64));
-        pluginResult.put("billingSignal", "INELIGIBLE");
+        pluginResult.put("hashAlgorithm", "V2_EMBEDDED");
+        pluginResult.put("integrityHash", "a".repeat(64));
+        pluginResult.put("billingSignal", "ELIGIBLE");
         pluginResult.put("cacheSignal", "NOT_CACHEABLE");
         when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
                 .thenReturn(pluginResult);
@@ -203,11 +288,67 @@ class OpenApiQueryServiceTest {
         assertEquals("1.2.0", record.getPluginVersion());
         assertEquals(7, record.getPipelineVersion());
         assertEquals("a".repeat(64), record.getSnapshotHash());
+        assertEquals("V2_EMBEDDED", record.getHashAlgorithm());
+        assertEquals("a".repeat(64), record.getIntegrityHash());
         assertFalse(record.getUseCache());
         ArgumentCaptor<BillingChargeReqDTO> billingCaptor =
                 ArgumentCaptor.forClass(BillingChargeReqDTO.class);
         verify(billingFeignClient).charge(billingCaptor.capture());
+        assertTrue(billingCaptor.getValue().getSuccess());
+        assertEquals(41L, billingCaptor.getValue().getVendorId());
+        assertEquals("vendor-b", billingCaptor.getValue().getVendorCode());
+        assertEquals("vendor-http", billingCaptor.getValue().getPluginId());
+        assertEquals("1.2.0", billingCaptor.getValue().getPluginVersion());
+        assertEquals(7, billingCaptor.getValue().getPipelineVersion());
+        assertEquals("a".repeat(64), billingCaptor.getValue().getSnapshotHash());
+        assertEquals("V2_EMBEDDED", billingCaptor.getValue().getHashAlgorithm());
+        assertEquals("a".repeat(64), billingCaptor.getValue().getIntegrityHash());
+        verify(billingFeignClient).getMeteringPolicy(eq("vendor-b"), eq("PERSONAL_QUERY"), any(LocalDateTime.class));
+    }
+
+    @Test
+    void successWithoutExplicitBillingOrCacheEligibilityFailsClosed() {
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+                .thenReturn(new java.util.LinkedHashMap<>(Map.of(
+                        "success", true,
+                        "data", Map.of("score", 88),
+                        "billingSignal", "UNKNOWN",
+                        "cacheSignal", "UNKNOWN")));
+
+        OpenApiQueryRespVO response = service.query(buildContext(true, 3));
+
+        assertTrue(response.getSuccess());
+        assertEquals(BigDecimal.ZERO, response.getCost());
+        verify(billingFeignClient, never()).charge(any());
+        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
+        verify(callRecordEventPublisher).publish(recordCaptor.capture());
+        assertFalse(recordCaptor.getValue().getUseCache());
+    }
+
+    @Test
+    void explicitFailureBillingEvidenceUsesActualVendorButKeepsFailureFact() {
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+                .thenReturn(new java.util.LinkedHashMap<>(Map.of(
+                        "success", false,
+                        "data", Map.of("decision", "rejected"),
+                        "errorCode", "BUSINESS_REJECTED",
+                        "actualVendorId", 41L,
+                        "actualVendorCode", "vendor-b",
+                        "billingSignal", "ELIGIBLE",
+                        "cacheSignal", "NOT_CACHEABLE")));
+
+        OpenApiQueryRespVO response = service.query(buildContext(true, 3));
+
+        assertFalse(response.getSuccess());
+        ArgumentCaptor<BillingChargeReqDTO> billingCaptor =
+                ArgumentCaptor.forClass(BillingChargeReqDTO.class);
+        verify(billingFeignClient).charge(billingCaptor.capture());
         assertFalse(billingCaptor.getValue().getSuccess());
+        assertEquals(41L, billingCaptor.getValue().getVendorId());
+        assertEquals("vendor-b", billingCaptor.getValue().getVendorCode());
+        assertFalse(billingCaptor.getValue().getResponseContractValid());
+        verify(billingFeignClient).getMeteringPolicy(
+                eq("vendor-b"), eq("PERSONAL_QUERY"), any(LocalDateTime.class));
     }
 
     @Test

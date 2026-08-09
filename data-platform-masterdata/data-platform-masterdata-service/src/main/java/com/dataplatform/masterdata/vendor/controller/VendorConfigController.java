@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 
 /**
  * 主数据域厂商的 Vendor Config Controller。
@@ -113,11 +112,11 @@ public class VendorConfigController {
             return Result.error(400, "数据类型不存在或未启用");
         }
         config.setDataTypeId(dataTypeId);
-        if (config.getApiUrl() == null || config.getApiUrl().trim().isEmpty()) {
-            return Result.error(400, "API地址不能为空");
-        }
-
         applyDefaults(config);
+        config.setRuntimeMode("PLUGIN");
+        config.setActiveConnectorVersionId(null);
+        config.setConnectorVersion(0);
+        config.setStatus(CommonStatus.INACTIVE);
         vendorConfigService.save(config);
         return Result.success(toDTO(config));
     }
@@ -129,6 +128,7 @@ public class VendorConfigController {
         if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
         VendorConfig config = toEntity(dto);
         config.setId(id);
+        config.setStatus(null);
         boolean success = vendorConfigService.updateById(config);
         if (!success) {
             return Result.error(404, "配置不存在");
@@ -156,6 +156,9 @@ public class VendorConfigController {
         if (statusEnum == null) {
             return Result.error(400, "无效的状态值，有效值: active, inactive");
         }
+        if (CommonStatus.ACTIVE.equals(statusEnum) && !vendorConfigService.canActivate(id)) {
+            return Result.error(409, "厂商配置必须先发布活动连接器版本才能启用");
+        }
 
         LambdaUpdateWrapper<VendorConfig> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(VendorConfig::getId, id).set(VendorConfig::getStatus, statusEnum.getCode());
@@ -177,36 +180,6 @@ public class VendorConfigController {
         return Result.success(vendorHealthService.testConnection(id));
     }
 
-    @GetMapping("/{id}/mapping")
-    public Result<Map<String, Object>> getParamMapping(@PathVariable Long id) {
-        if (!canView()) return Result.error(403, "没有厂商配置查看权限");
-        VendorConfig config = vendorConfigService.getById(id);
-        if (config == null) {
-            return Result.error(404, "配置不存在");
-        }
-        Map<String, Object> result = new HashMap<>();
-        result.put("vendorConfigId", id);
-        result.put("interfaceId", config.getInterfaceId());
-        result.put("paramMapping", config.getParamMapping());
-        return Result.success(result);
-    }
-
-    @OperationLog(module = "厂商配置管理", operation = "更新参数映射")
-    @PutMapping("/{id}/mapping")
-    public Result<Void> updateParamMapping(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
-        VendorConfig config = vendorConfigService.getById(id);
-        if (config == null) {
-            return Result.error(404, "配置不存在");
-        }
-
-        VendorConfig update = new VendorConfig();
-        update.setId(id);
-        update.setParamMapping(body.get("paramMapping"));
-        vendorConfigService.updateById(update);
-        return Result.success(null);
-    }
-
     private boolean canView() {
         return UserContext.hasPermission("vendor:view");
     }
@@ -224,7 +197,7 @@ public class VendorConfigController {
 
     private void applyDefaults(VendorConfig config) {
         if (config.getStatus() == null) {
-            config.setStatus(CommonStatus.ACTIVE);
+            config.setStatus(CommonStatus.INACTIVE);
         }
         if (config.getTimeout() == null) {
             config.setTimeout(30000);
@@ -238,9 +211,6 @@ public class VendorConfigController {
         if (config.getCircuitTimeout() == null) {
             config.setCircuitTimeout(60);
         }
-        if (config.getMethod() == null) {
-            config.setMethod("POST");
-        }
     }
 
     private VendorConfigDTO toDTO(VendorConfig entity) {
@@ -249,7 +219,6 @@ public class VendorConfigController {
         }
         VendorConfigDTO dto = new VendorConfigDTO();
         BeanUtils.copyProperties(entity, dto);
-        dto.setAuthConfig(null);
         if (entity.getStatus() != null) {
             dto.setStatus(entity.getStatus().getCode());
         }
@@ -259,18 +228,12 @@ public class VendorConfigController {
     private VendorConfig toEntity(VendorConfigCreateReqDTO dto) {
         VendorConfig entity = new VendorConfig();
         BeanUtils.copyProperties(dto, entity);
-        if (dto.getStatus() != null) {
-            entity.setStatus(CommonStatus.fromCode(dto.getStatus()));
-        }
         return entity;
     }
 
     private VendorConfig toEntity(VendorConfigUpdateReqDTO dto) {
         VendorConfig entity = new VendorConfig();
         BeanUtils.copyProperties(dto, entity);
-        if (dto.getStatus() != null) {
-            entity.setStatus(CommonStatus.fromCode(dto.getStatus()));
-        }
         return entity;
     }
 }

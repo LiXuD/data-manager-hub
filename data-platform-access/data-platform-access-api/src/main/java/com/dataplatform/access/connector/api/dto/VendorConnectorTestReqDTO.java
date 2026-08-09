@@ -14,6 +14,9 @@ public class VendorConnectorTestReqDTO implements Serializable {
     private Long vendorConfigId;
     private List<ConnectorTestPipelineStepDTO> pipelineSnapshot = new ArrayList<>();
     private Map<String, Object> params = new LinkedHashMap<>();
+    private String snapshotHash;
+    private String hashAlgorithm;
+    private String integrityHash;
 
     public Long getVendorConfigId() { return vendorConfigId; }
     public void setVendorConfigId(Long vendorConfigId) { this.vendorConfigId = vendorConfigId; }
@@ -25,4 +28,10 @@ public class VendorConnectorTestReqDTO implements Serializable {
     public void setParams(Map<String, Object> params) {
         this.params = params != null ? params : new LinkedHashMap<>();
     }
+    public String getSnapshotHash() { return snapshotHash; }
+    public void setSnapshotHash(String snapshotHash) { this.snapshotHash = snapshotHash; }
+    public String getHashAlgorithm() { return hashAlgorithm; }
+    public void setHashAlgorithm(String hashAlgorithm) { this.hashAlgorithm = hashAlgorithm; }
+    public String getIntegrityHash() { return integrityHash; }
+    public void setIntegrityHash(String integrityHash) { this.integrityHash = integrityHash; }
 }

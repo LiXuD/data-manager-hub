@@ -19,6 +19,8 @@ import com.dataplatform.masterdata.connector.mapper.VendorConnectorVersionMapper
 import com.dataplatform.masterdata.connector.mapper.VendorConnectorTestFactMapper;
 import com.dataplatform.masterdata.connector.service.ConnectorConfigSchemaValidator;
 import com.dataplatform.masterdata.connector.service.ConnectorConflictException;
+import com.dataplatform.masterdata.connector.service.ConnectorSecretReferenceService;
+import com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator;
 import com.dataplatform.masterdata.connector.service.VendorConnectorService;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
@@ -30,6 +32,10 @@ import com.dataplatform.access.connector.api.dto.VendorConnectorTestRespDTO;
 import com.dataplatform.access.connector.api.feign.VendorConnectorRuntimeInternalFeignClient;
 import com.dataplatform.access.connector.api.feign.ConnectorPluginActivationInternalFeignClient;
 import com.dataplatform.api.Result;
+import com.dataplatform.common.plugin.runtime.ConnectorPipelineDefinition;
+import com.dataplatform.common.plugin.runtime.ConnectorSnapshotIntegrity;
+import com.dataplatform.common.plugin.runtime.ConnectorStageDefinition;
+import com.dataplatform.plugin.spi.StageCapability;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MapperFeature;
@@ -63,6 +69,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     private final ConnectorPluginVersionMapper pluginVersionMapper;
     private final VendorConfigMapper vendorConfigMapper;
     private final ConnectorConfigSchemaValidator schemaValidator;
+    private final ConnectorSecretReferenceService secretReferenceService;
+    private final ConnectorPluginReleaseCoordinator releaseCoordinator;
     private final VendorConnectorRuntimeInternalFeignClient runtimeClient;
     private final ConnectorPluginActivationInternalFeignClient activationClient;
     private final VendorConnectorTestFactMapper testFactMapper;
@@ -73,6 +81,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
             ConnectorPluginVersionMapper pluginVersionMapper,
             VendorConfigMapper vendorConfigMapper,
             ConnectorConfigSchemaValidator schemaValidator,
+            ConnectorSecretReferenceService secretReferenceService,
+            ConnectorPluginReleaseCoordinator releaseCoordinator,
             VendorConnectorRuntimeInternalFeignClient runtimeClient,
             ConnectorPluginActivationInternalFeignClient activationClient,
             VendorConnectorTestFactMapper testFactMapper,
@@ -81,6 +91,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         this.pluginVersionMapper = pluginVersionMapper;
         this.vendorConfigMapper = vendorConfigMapper;
         this.schemaValidator = schemaValidator;
+        this.secretReferenceService = secretReferenceService;
+        this.releaseCoordinator = releaseCoordinator;
         this.runtimeClient = runtimeClient;
         this.activationClient = activationClient;
         this.testFactMapper = testFactMapper;
@@ -117,7 +129,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
                                               Long actorId) {
         VendorConfig config = requireConfig(vendorConfigId);
         List<ConnectorPipelineStepDTO> normalized = normalize(request.pipelineSnapshot());
-        ConnectorValidationResultDTO validation = validatePipeline(normalized, PluginBindingMode.DRAFT);
+        ConnectorValidationResultDTO validation = validatePipeline(
+                vendorConfigId, normalized, PluginBindingMode.DRAFT);
         if (!validation.valid()) {
             throw new IllegalArgumentException(String.join("; ", validation.errors()));
         }
@@ -159,7 +172,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         if (draft == null) {
             return new ConnectorValidationResultDTO(false, List.of("连接器草稿不存在"), List.of(), null);
         }
-        return validatePipeline(readPipeline(draft.getPipelineSnapshot()), PluginBindingMode.PUBLISH);
+        return validatePipeline(vendorConfigId, normalize(readPipeline(draft.getPipelineSnapshot())),
+                PluginBindingMode.PUBLISH);
     }
 
     @Override
@@ -168,7 +182,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         requireConfig(vendorConfigId);
         VendorConnectorVersion draft = requireDraft(vendorConfigId);
         List<ConnectorPipelineStepDTO> pipeline = normalize(readPipeline(draft.getPipelineSnapshot()));
-        ConnectorValidationResultDTO validation = validatePipeline(pipeline, PluginBindingMode.TEST);
+        ConnectorValidationResultDTO validation = validatePipeline(vendorConfigId, pipeline, PluginBindingMode.TEST);
         if (!validation.valid()) {
             throw new IllegalArgumentException(String.join("; ", validation.errors()));
         }
@@ -176,6 +190,9 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         accessRequest.setVendorConfigId(vendorConfigId);
         accessRequest.setParams(request == null || request.params() == null ? Map.of() : request.params());
         accessRequest.setPipelineSnapshot(pipeline.stream().map(this::toAccessTestStep).toList());
+        accessRequest.setSnapshotHash(validation.snapshotHash());
+        accessRequest.setHashAlgorithm(validation.hashAlgorithm());
+        accessRequest.setIntegrityHash(validation.integrityHash());
         Result<VendorConnectorTestRespDTO> result = runtimeClient.test(accessRequest);
         if (result == null || !Integer.valueOf(200).equals(result.getCode()) || result.getData() == null) {
             throw new IllegalStateException(result == null ? "Access连接器测试服务无响应" : result.getMsg());
@@ -200,7 +217,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
             throw new ConnectorConflictException("连接器草稿版本冲突");
         }
         List<ConnectorPipelineStepDTO> pipeline = normalize(readPipeline(draft.getPipelineSnapshot()));
-        ConnectorValidationResultDTO validation = validatePipeline(pipeline, PluginBindingMode.PUBLISH);
+        ConnectorValidationResultDTO validation = validatePipeline(
+                vendorConfigId, pipeline, PluginBindingMode.PUBLISH);
         if (!validation.valid()) {
             throw new IllegalArgumentException(String.join("; ", validation.errors()));
         }
@@ -219,7 +237,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         }
         int nextVersion = nextVersion(vendorConfigId);
         VendorConnectorVersion published = immutableVersion(vendorConfigId, nextVersion, pipeline,
-                validation.snapshotHash(), draft.getSecurityVersion(), current == null ? null : current.getId(), actorId);
+                validation.snapshotHash(), validation.hashAlgorithm(), validation.integrityHash(),
+                draft.getSecurityVersion(), current == null ? null : current.getId(), actorId);
         connectorMapper.insert(published);
         if (current != null) {
             current.setStatus("SUPERSEDED");
@@ -227,6 +246,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
             connectorMapper.updateById(current);
         }
         updateActivePointer(config, published, actorId);
+        releaseCoordinator.reconcileAfterCommit();
         return toVersionDto(published);
     }
 
@@ -253,15 +273,17 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
                         .eq(VendorConnectorVersion::getVendorConfigId, vendorConfigId)
                         .eq(VendorConnectorVersion::getVersionNo, targetVersion));
         if (target == null) throw new IllegalArgumentException("连接器历史版本不存在");
-        List<ConnectorPipelineStepDTO> pipeline = readPipeline(target.getPipelineSnapshot());
-        ConnectorValidationResultDTO validation = validatePipeline(pipeline, PluginBindingMode.ROLLBACK);
+        List<ConnectorPipelineStepDTO> pipeline = normalize(readPipeline(target.getPipelineSnapshot()));
+        ConnectorValidationResultDTO validation = validatePipeline(
+                vendorConfigId, pipeline, PluginBindingMode.ROLLBACK);
         if (!validation.valid()) {
             throw new IllegalArgumentException("目标连接器版本当前不可运行: " + String.join("; ", validation.errors()));
         }
         ensureRollbackPluginsReady(pipeline);
         VendorConnectorVersion current = findActive(vendorConfigId);
         VendorConnectorVersion rollback = immutableVersion(vendorConfigId, nextVersion(vendorConfigId), pipeline,
-                validation.snapshotHash(), target.getSecurityVersion(), current == null ? null : current.getId(), actorId);
+                validation.snapshotHash(), validation.hashAlgorithm(), validation.integrityHash(),
+                target.getSecurityVersion(), current == null ? null : current.getId(), actorId);
         connectorMapper.insert(rollback);
         if (current != null) {
             current.setStatus("SUPERSEDED");
@@ -269,6 +291,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
             connectorMapper.updateById(current);
         }
         updateActivePointer(config, rollback, actorId);
+        releaseCoordinator.reconcileAfterCommit();
         return toVersionDto(rollback);
     }
 
@@ -284,11 +307,13 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
             throw new IllegalStateException("活动连接器运行快照不存在或状态无效");
         }
         return new VendorConnectorRuntimeSnapshotDTO(vendorConfigId, version.getId(), version.getVersionNo(),
-                version.getSnapshotHash(), version.getSecurityVersion(), version.getStatus(),
+                version.getSnapshotHash(), version.getHashAlgorithm(), version.getIntegrityHash(),
+                version.getSecurityVersion(), version.getStatus(),
                 readPipeline(version.getPipelineSnapshot()), version.getPublishedAt());
     }
 
-    private ConnectorValidationResultDTO validatePipeline(List<ConnectorPipelineStepDTO> pipeline,
+    private ConnectorValidationResultDTO validatePipeline(Long vendorConfigId,
+                                                           List<ConnectorPipelineStepDTO> pipeline,
                                                            PluginBindingMode bindingMode) {
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
@@ -308,24 +333,27 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
                 if (step.order() == null || step.order() < 0 || !orders.add(step.order())) {
                     errors.add(path + ".order为空、负数或重复");
                 }
-                if (Boolean.FALSE.equals(step.enabled())) continue;
-                if ("TRANSPORT".equals(step.capability())) transportCount++;
+                boolean enabled = !Boolean.FALSE.equals(step.enabled());
+                if (enabled && "TRANSPORT".equals(step.capability())) transportCount++;
                 ConnectorPluginVersion plugin = findPluginVersion(step.pluginId(), step.pluginVersion());
                 if (plugin == null) {
                     errors.add(path + "引用的插件版本不存在");
                     continue;
                 }
-                if ("DISABLED".equals(plugin.getStatus()) || "IMPORTED".equals(plugin.getStatus())) {
+                validateIntegrityBinding(step, plugin, path, errors);
+                if (enabled && ("DISABLED".equals(plugin.getStatus()) || "IMPORTED".equals(plugin.getStatus()))) {
                     errors.add(path + "引用的插件版本不可用于新绑定: " + plugin.getStatus());
-                } else if (bindingMode == PluginBindingMode.PUBLISH && !"ACTIVE".equals(plugin.getStatus())) {
+                } else if (enabled && bindingMode == PluginBindingMode.PUBLISH
+                        && !"ACTIVE".equals(plugin.getStatus())) {
                     errors.add(path + "引用的插件版本尚未激活");
-                } else if (bindingMode == PluginBindingMode.TEST
+                } else if (enabled && bindingMode == PluginBindingMode.TEST
                         && !Set.of("STAGING", "ACTIVE").contains(plugin.getStatus())) {
                     errors.add(path + "引用的插件版本尚未预加载，不能执行受控测试");
-                } else if (bindingMode == PluginBindingMode.ROLLBACK
+                } else if (enabled && bindingMode == PluginBindingMode.ROLLBACK
                         && !Set.of("ACTIVE", "VERIFIED").contains(plugin.getStatus())) {
                     errors.add(path + "引用的历史插件版本不可回滚: " + plugin.getStatus());
-                } else if (bindingMode == PluginBindingMode.DRAFT && !"ACTIVE".equals(plugin.getStatus())) {
+                } else if (enabled && bindingMode == PluginBindingMode.DRAFT
+                        && !"ACTIVE".equals(plugin.getStatus())) {
                     warnings.add(path + "引用的插件版本尚未激活，发布前必须激活");
                 }
                 List<String> capabilities = readStrings(plugin.getCapabilities());
@@ -335,7 +363,9 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
                 if (configBytes.length > MAX_STEP_CONFIG_BYTES) errors.add(path + ".config超过64KiB");
                 try {
                     JsonNode schema = objectMapper.readTree(plugin.getConfigSchemaJson());
-                    schemaValidator.validate(schema, step.config()).forEach(error -> errors.add(path + ": " + error));
+                    schemaValidator.validate(schema, step.config(),
+                                    ref -> secretReferenceService.exists(vendorConfigId, ref))
+                            .forEach(error -> errors.add(path + ": " + error));
                 } catch (Exception exception) {
                     errors.add(path + "对应插件Schema损坏");
                 }
@@ -344,7 +374,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         if (transportCount != 1) errors.add("启用的流水线必须恰好包含一个TRANSPORT步骤");
         String hash = errors.isEmpty() ? snapshotHash(normalize(pipeline)) : null;
         return new ConnectorValidationResultDTO(errors.isEmpty(), List.copyOf(errors),
-                List.copyOf(warnings), hash);
+                List.copyOf(warnings), hash, ConnectorPipelineDefinition.V2_EMBEDDED, hash);
     }
 
     private List<ConnectorPipelineStepDTO> normalize(List<ConnectorPipelineStepDTO> pipeline) {
@@ -352,10 +382,14 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         List<ConnectorPipelineStepDTO> result = new ArrayList<>();
         for (ConnectorPipelineStepDTO step : pipeline) {
             Map<String, Object> config = step.config() == null ? Map.of() : new LinkedHashMap<>(step.config());
+            ConnectorPluginVersion plugin = findPluginVersion(step.pluginId(), step.pluginVersion());
             String configHash = sha256(writeJson(config));
             result.add(new ConnectorPipelineStepDTO(step.stageKey(), step.capability(), step.pluginId(),
                     step.pluginVersion(), step.order(), step.enabled() == null || step.enabled(),
-                    Collections.unmodifiableMap(config), configHash));
+                    Collections.unmodifiableMap(config), configHash,
+                    plugin == null ? null : normalizeDigest(plugin.getArtifactSha256()),
+                    plugin == null ? null : jsonHash(plugin.getManifestJson()),
+                    plugin == null ? null : jsonHash(plugin.getConfigSchemaJson())));
         }
         result.sort(Comparator.comparing(ConnectorPipelineStepDTO::order,
                 Comparator.nullsLast(Comparator.naturalOrder())));
@@ -376,6 +410,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
 
     private VendorConnectorVersion immutableVersion(Long vendorConfigId, int versionNo,
                                                      List<ConnectorPipelineStepDTO> pipeline, String hash,
+                                                     String hashAlgorithm, String integrityHash,
                                                      Integer securityVersion, Long previousId, Long actorId) {
         VendorConnectorVersion entity = new VendorConnectorVersion();
         entity.setVendorConfigId(vendorConfigId);
@@ -383,6 +418,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         entity.setDraftVersion(0);
         entity.setPipelineSnapshot(writeJson(pipeline));
         entity.setSnapshotHash(hash);
+        entity.setHashAlgorithm(hashAlgorithm);
+        entity.setIntegrityHash(integrityHash);
         entity.setSecurityVersion(securityVersion == null ? 0 : securityVersion);
         entity.setStatus("ACTIVE");
         entity.setPreviousVersionId(previousId);
@@ -403,6 +440,9 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         dto.setEnabled(step.enabled());
         dto.setConfig(step.config());
         dto.setConfigHash(step.configHash());
+        dto.setArtifactSha256(step.artifactSha256());
+        dto.setManifestHash(step.manifestHash());
+        dto.setSchemaHash(step.schemaHash());
         return dto;
     }
 
@@ -452,7 +492,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
 
     private VendorConnectorVersionDTO toVersionDto(VendorConnectorVersion entity) {
         return new VendorConnectorVersionDTO(entity.getId(), entity.getVendorConfigId(), entity.getVersionNo(),
-                entity.getSnapshotHash(), entity.getSecurityVersion(), entity.getStatus(),
+                entity.getSnapshotHash(), entity.getHashAlgorithm(), entity.getIntegrityHash(),
+                entity.getSecurityVersion(), entity.getStatus(),
                 entity.getPreviousVersionId(), entity.getPublishedAt(), entity.getPublishedBy(),
                 readPipeline(entity.getPipelineSnapshot()));
     }
@@ -474,7 +515,43 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     }
 
     private String snapshotHash(List<ConnectorPipelineStepDTO> pipeline) {
-        return sha256(writeJson(pipeline));
+        return ConnectorSnapshotIntegrity.v2SnapshotHash(objectMapper,
+                pipeline.stream().map(this::stageDefinition).toList());
+    }
+
+    private ConnectorStageDefinition stageDefinition(ConnectorPipelineStepDTO step) {
+        return new ConnectorStageDefinition(step.stageKey(), StageCapability.valueOf(step.capability()),
+                step.pluginId(), step.pluginVersion(), step.order(), !Boolean.FALSE.equals(step.enabled()),
+                objectMapper.valueToTree(step.config()), step.configHash(), step.artifactSha256(),
+                step.manifestHash(), step.schemaHash());
+    }
+
+    private void validateIntegrityBinding(ConnectorPipelineStepDTO step, ConnectorPluginVersion plugin,
+                                          String path, List<String> errors) {
+        requireDigest(step.artifactSha256(), normalizeDigest(plugin.getArtifactSha256()),
+                path + ".artifactSha256", errors);
+        requireDigest(step.manifestHash(), jsonHash(plugin.getManifestJson()),
+                path + ".manifestHash", errors);
+        requireDigest(step.schemaHash(), jsonHash(plugin.getConfigSchemaJson()),
+                path + ".schemaHash", errors);
+    }
+
+    private void requireDigest(String snapshot, String actual, String path, List<String> errors) {
+        if (!StringUtils.hasText(snapshot) || !snapshot.equalsIgnoreCase(actual)) {
+            errors.add(path + "与固定插件制品不一致");
+        }
+    }
+
+    private String jsonHash(String json) {
+        try {
+            return ConnectorSnapshotIntegrity.sha256(objectMapper, objectMapper.readTree(json));
+        } catch (Exception exception) {
+            throw new IllegalStateException("插件完整性元数据损坏", exception);
+        }
+    }
+
+    private String normalizeDigest(String digest) {
+        return StringUtils.hasText(digest) ? digest.trim().toLowerCase(java.util.Locale.ROOT) : null;
     }
 
     private String sha256(String value) {

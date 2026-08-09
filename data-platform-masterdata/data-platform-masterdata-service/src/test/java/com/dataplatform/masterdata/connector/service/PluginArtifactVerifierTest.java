@@ -171,7 +171,11 @@ class PluginArtifactVerifierTest {
             jar.write(manifest.getBytes(StandardCharsets.UTF_8));
             jar.closeEntry();
             jar.putNextEntry(new JarEntry(classEntry));
-            jar.write(new byte[]{0, 1, 2, 3});
+            try (var classBytes = PluginArtifactVerifierTest.class.getResourceAsStream(
+                    "PluginArtifactVerifierTest$LegalFixture.class")) {
+                if (classBytes == null) throw new IllegalStateException("Legal fixture class is unavailable");
+                jar.write(classBytes.readAllBytes());
+            }
             jar.closeEntry();
         }
         return output.toByteArray();
@@ -206,5 +210,8 @@ class PluginArtifactVerifierTest {
     }
 
     private record SignedArtifact(byte[] artifact, KeyPair keyPair) {
+    }
+
+    private static final class LegalFixture {
     }
 }

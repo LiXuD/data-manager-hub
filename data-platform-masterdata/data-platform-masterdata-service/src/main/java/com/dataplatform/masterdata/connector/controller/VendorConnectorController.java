@@ -100,6 +100,11 @@ public class VendorConnectorController {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Result.error(409, exception.getMessage()));
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Result<Void>> invalidRequest(IllegalArgumentException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Result.error(400, exception.getMessage()));
+    }
+
     private boolean allowed(String permission) { return UserContext.hasPermission(permission); }
     private <T> Result<T> forbidden() { return Result.error(403, "没有厂商连接器操作权限"); }
 }

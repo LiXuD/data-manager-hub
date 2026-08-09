@@ -22,6 +22,8 @@ public class VendorConnectorVersion {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String pipelineSnapshot;
     private String snapshotHash;
+    private String hashAlgorithm;
+    private String integrityHash;
     private Integer securityVersion;
     private String status;
     private Long previousVersionId;

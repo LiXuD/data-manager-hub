@@ -17,6 +17,9 @@ public class ConnectorTestPipelineStepDTO implements Serializable {
     private Boolean enabled;
     private Map<String, Object> config = new LinkedHashMap<>();
     private String configHash;
+    private String artifactSha256;
+    private String manifestHash;
+    private String schemaHash;
 
     public String getStageKey() { return stageKey; }
     public void setStageKey(String stageKey) { this.stageKey = stageKey; }
@@ -36,4 +39,10 @@ public class ConnectorTestPipelineStepDTO implements Serializable {
     }
     public String getConfigHash() { return configHash; }
     public void setConfigHash(String configHash) { this.configHash = configHash; }
+    public String getArtifactSha256() { return artifactSha256; }
+    public void setArtifactSha256(String artifactSha256) { this.artifactSha256 = artifactSha256; }
+    public String getManifestHash() { return manifestHash; }
+    public void setManifestHash(String manifestHash) { this.manifestHash = manifestHash; }
+    public String getSchemaHash() { return schemaHash; }
+    public void setSchemaHash(String schemaHash) { this.schemaHash = schemaHash; }
 }

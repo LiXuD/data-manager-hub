@@ -2,24 +2,15 @@ package com.dataplatform.access.call.service;
 
 import com.dataplatform.api.Result;
 import com.dataplatform.access.connector.service.ConnectorVendorExecutor;
-import com.dataplatform.common.adapter.VendorAdapter;
-import com.dataplatform.common.adapter.VendorAdapterConfig;
-import com.dataplatform.common.adapter.VendorAdapterFactory;
 import com.dataplatform.common.circuitbreaker.CircuitBreakerManager;
 import com.dataplatform.common.constant.StatusConstants;
-import com.dataplatform.common.security.pipeline.SecurityDirection;
-import com.dataplatform.common.security.pipeline.SecurityStepConfig;
-import com.dataplatform.common.security.pipeline.SecurityStepType;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
-import com.dataplatform.masterdata.vendor.api.dto.VendorRuntimeSecurityDTO;
-import com.dataplatform.masterdata.vendor.api.dto.VendorSecurityStepDTO;
 import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
 import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
-import com.dataplatform.masterdata.vendor.api.feign.VendorSecurityInternalFeignClient;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.dataplatform.plugin.spi.ConnectorExecutionResult;
+import com.dataplatform.plugin.spi.ConnectorErrorPolicy;
+import com.dataplatform.plugin.spi.ErrorCategory;
 import com.dataplatform.plugin.spi.RequestDeliveryState;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.slf4j.Logger;
@@ -49,15 +40,10 @@ public class VendorProxyService {
     private VendorInternalFeignClient vendorFeignClient;
 
     @Autowired
-    private VendorSecurityInternalFeignClient vendorSecurityFeignClient;
-
-    @Autowired
     private CircuitBreakerManager circuitBreakerManager;
 
-    @Autowired(required = false)
+    @Autowired
     private ConnectorVendorExecutor connectorVendorExecutor;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 调用厂商API (支持多厂商路由)
@@ -86,7 +72,8 @@ public class VendorProxyService {
                                                         VendorConfigDTO preFetchedConfig) {
         if (triedVendors.contains(vendorCode)) {
             log.warn("检测到厂商循环调用，终止: vendor={}", vendorCode);
-            return errorResult("CIRCULAR_ROUTING", "厂商路由配置存在循环");
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "CIRCULAR_ROUTING", "厂商路由配置存在循环", null);
         }
         triedVendors.add(vendorCode);
 
@@ -96,17 +83,20 @@ public class VendorProxyService {
             config = configResult != null ? configResult.getData() : null;
         }
         if (config == null) {
-            return errorResult("CONFIG_NOT_FOUND", "厂商配置不存在: " + vendorCode + "/" + dataTypeCode);
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "CONFIG_NOT_FOUND", "厂商配置不存在: " + vendorCode + "/" + dataTypeCode, null);
         }
 
         if (!StatusConstants.ACTIVE.equals(config.getStatus())) {
-            return errorResult("VENDOR_INACTIVE", "厂商已禁用: " + vendorCode);
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "VENDOR_INACTIVE", "厂商已禁用: " + vendorCode, null);
         }
 
         VendorConfigDTO runtimeConfig = config;
         try {
             Map<String, Object> result = circuitBreakerManager.executeWithProtection(vendorCode,
-                () -> executeConfiguredRuntime(runtimeConfig, vendorCode, dataTypeCode, params));
+                () -> executeConfiguredRuntime(runtimeConfig, vendorCode, dataTypeCode, params),
+                this::isCircuitFailure);
             result.putIfAbsent("actualVendorId", config.getVendorId());
 
             if (!Boolean.TRUE.equals(result.get("success"))) {
@@ -119,18 +109,18 @@ public class VendorProxyService {
 
         } catch (CallNotPermittedException e) {
             log.warn("熔断器打开，尝试备用厂商: vendor={}", vendorCode);
-            if (config.getFallbackVendorId() != null) {
+            Map<String, Object> rejected = pluginErrorResult(
+                    ErrorCategory.TRANSPORT_CONNECTION_ERROR,
+                    "CIRCUIT_BREAKER_OPEN", "厂商服务暂时不可用，请稍后重试",
+                    RequestDeliveryState.NOT_SENT);
+            if (shouldFallback(rejected) && config.getFallbackVendorId() != null) {
                 return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params, triedVendors, vendorCode);
             }
-            return errorResult("CIRCUIT_BREAKER_OPEN", "厂商服务暂时不可用，请稍后重试");
+            return rejected;
         } catch (Exception e) {
             log.error("厂商调用失败: vendor={}, error={}", vendorCode, e.getMessage());
-            if (!isPluginMode(config) && config.getFallbackVendorId() != null) {
-                return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params, triedVendors, vendorCode);
-            }
-            return isPluginMode(config)
-                    ? pluginErrorResult("PLUGIN_INTERNAL_ERROR", "连接器执行失败", RequestDeliveryState.MAYBE_SENT)
-                    : errorResult("VENDOR_ERROR", e.getMessage());
+            return pluginErrorResult(ErrorCategory.PLUGIN_INTERNAL_ERROR,
+                    "PLUGIN_INTERNAL_ERROR", "连接器执行失败", RequestDeliveryState.MAYBE_SENT);
         }
     }
 
@@ -145,7 +135,8 @@ public class VendorProxyService {
         VendorInfoDTO fallbackVendor = vendorResult != null ? vendorResult.getData() : null;
         if (fallbackVendor == null || !StatusConstants.ACTIVE.equals(fallbackVendor.getStatus())) {
             log.warn("备用厂商不可用: vendorId={}", fallbackVendorId);
-            return errorResult("FALLBACK_UNAVAILABLE", "主厂商和备用厂商均不可用");
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "FALLBACK_UNAVAILABLE", "主厂商和备用厂商均不可用", null);
         }
 
         String fallbackVendorCode = fallbackVendor.getVendorCode();
@@ -163,23 +154,27 @@ public class VendorProxyService {
                                                             String originalVendorCode) {
         if (triedVendors.contains(vendorCode)) {
             log.warn("检测到厂商循环调用，终止: vendor={}", vendorCode);
-            return errorResult("CIRCULAR_ROUTING", "厂商路由配置存在循环");
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "CIRCULAR_ROUTING", "厂商路由配置存在循环", null);
         }
         triedVendors.add(vendorCode);
 
         Result<VendorConfigDTO> configResult = vendorConfigFeignClient.getByVendorIdAndDataTypeCode(vendorId, dataTypeCode);
         VendorConfigDTO config = configResult != null ? configResult.getData() : null;
         if (config == null) {
-            return errorResult("CONFIG_NOT_FOUND", "厂商配置不存在: " + vendorCode + "/" + dataTypeCode);
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "CONFIG_NOT_FOUND", "厂商配置不存在: " + vendorCode + "/" + dataTypeCode, null);
         }
 
         if (!StatusConstants.ACTIVE.equals(config.getStatus())) {
-            return errorResult("VENDOR_INACTIVE", "厂商已禁用: " + vendorCode);
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "VENDOR_INACTIVE", "厂商已禁用: " + vendorCode, null);
         }
 
         try {
             Map<String, Object> result = circuitBreakerManager.executeWithProtection(vendorCode,
-                () -> executeConfiguredRuntime(config, vendorCode, dataTypeCode, params));
+                () -> executeConfiguredRuntime(config, vendorCode, dataTypeCode, params),
+                this::isCircuitFailure);
             result.putIfAbsent("actualVendorId", vendorId);
 
             if (!Boolean.TRUE.equals(result.get("success"))) {
@@ -195,18 +190,18 @@ public class VendorProxyService {
 
         } catch (CallNotPermittedException e) {
             log.warn("熔断器打开，尝试备用厂商: vendor={}", vendorCode);
-            if (config.getFallbackVendorId() != null) {
+            Map<String, Object> rejected = pluginErrorResult(
+                    ErrorCategory.TRANSPORT_CONNECTION_ERROR,
+                    "CIRCUIT_BREAKER_OPEN", "厂商服务暂时不可用，请稍后重试",
+                    RequestDeliveryState.NOT_SENT);
+            if (shouldFallback(rejected) && config.getFallbackVendorId() != null) {
                 return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params, triedVendors, vendorCode);
             }
-            return errorResult("CIRCUIT_BREAKER_OPEN", "厂商服务暂时不可用，请稍后重试");
+            return rejected;
         } catch (Exception e) {
             log.error("厂商调用失败: vendor={}, error={}", vendorCode, e.getMessage());
-            if (!isPluginMode(config) && config.getFallbackVendorId() != null) {
-                return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params, triedVendors, vendorCode);
-            }
-            return isPluginMode(config)
-                    ? pluginErrorResult("PLUGIN_INTERNAL_ERROR", "连接器执行失败", RequestDeliveryState.MAYBE_SENT)
-                    : errorResult("VENDOR_ERROR", e.getMessage());
+            return pluginErrorResult(ErrorCategory.PLUGIN_INTERNAL_ERROR,
+                    "PLUGIN_INTERNAL_ERROR", "连接器执行失败", RequestDeliveryState.MAYBE_SENT);
         }
     }
 
@@ -214,20 +209,17 @@ public class VendorProxyService {
      * 判断是否应该切换到备用厂商
      */
     private boolean shouldFallback(Map<String, Object> result) {
-        String deliveryState = result.get("deliveryState") != null
-                ? String.valueOf(result.get("deliveryState")) : null;
-        if (deliveryState != null && !RequestDeliveryState.NOT_SENT.name().equals(deliveryState)) {
+        ErrorCategory category = errorCategory(result);
+        if (category == null) {
             return false;
         }
-        String errorCode = result.get("errorCode") != null ? String.valueOf(result.get("errorCode")) : null;
-        if (errorCode == null) {
-            return false;
-        }
-        return errorCode.startsWith("HTTP_5") ||
-               errorCode.equals("VENDOR_ERROR") ||
-               errorCode.equals("TIMEOUT") ||
-               errorCode.equals("CONNECTION_ERROR") ||
-               errorCode.equals("CIRCUIT_BREAKER_OPEN");
+        RequestDeliveryState delivery = deliveryState(result.get("deliveryState"));
+        return ConnectorErrorPolicy.forCategory(category).canFallback(delivery);
+    }
+
+    private boolean isCircuitFailure(Map<String, Object> result) {
+        ErrorCategory category = errorCategory(result);
+        return category != null && ConnectorErrorPolicy.forCategory(category).circuitFailure();
     }
 
     private Map<String, Object> executeConfiguredRuntime(
@@ -236,37 +228,19 @@ public class VendorProxyService {
             String dataTypeCode,
             Map<String, Object> params) {
         if (!isPluginMode(config)) {
-            return executeLegacy(config, vendorCode, dataTypeCode, params);
-        }
-        if (connectorVendorExecutor == null) {
-            return pluginErrorResult("PLUGIN_NOT_READY", "连接器运行时未就绪", RequestDeliveryState.NOT_SENT);
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "PLUGIN_RUNTIME_REQUIRED", "厂商配置尚未发布连接器版本",
+                    RequestDeliveryState.NOT_SENT);
         }
         ConnectorExecutionResult execution = connectorVendorExecutor.execute(
                 config, vendorCode, dataTypeCode, params);
-        Map<String, Object> pluginResult = toLegacyResult(execution, vendorCode);
-        if (!execution.successful() && execution.deliveryState() == RequestDeliveryState.NOT_SENT) {
-            Map<String, Object> legacyResult = executeLegacy(config, vendorCode, dataTypeCode, params);
-            legacyResult.put("runtimeFallbackFrom", "PLUGIN");
-            legacyResult.put("runtimeFallbackErrorCode", execution.errorCode());
-            return legacyResult;
-        }
-        return pluginResult;
+        return toCallResult(execution, vendorCode);
     }
 
-    private Map<String, Object> executeLegacy(
-            VendorConfigDTO config,
-            String vendorCode,
-            String dataTypeCode,
-            Map<String, Object> params) {
-        VendorAdapterConfig adapterConfig = buildAdapterConfig(config, vendorCode, dataTypeCode);
-        VendorAdapter adapter = VendorAdapterFactory.getAdapter(vendorCode);
-        Map<String, Object> result = adapter.execute(adapterConfig, params);
-        result.putIfAbsent("actualVendorCode", vendorCode);
-        return result;
-    }
-
-    private Map<String, Object> toLegacyResult(ConnectorExecutionResult execution, String vendorCode) {
+    private Map<String, Object> toCallResult(ConnectorExecutionResult execution, String vendorCode) {
         Map<String, Object> result = new LinkedHashMap<>();
+        ConnectorErrorPolicy errorPolicy = execution.errorCategory() != null
+                ? ConnectorErrorPolicy.forCategory(execution.errorCategory()) : null;
         result.put("success", execution.successful());
         result.put("data", execution.normalizedData());
         result.put("transportStatus", execution.transportStatus() != null
@@ -275,18 +249,26 @@ public class VendorProxyService {
                 ? execution.businessStatus().name() : null);
         result.put("errorCategory", execution.errorCategory() != null
                 ? execution.errorCategory().name() : null);
-        result.put("errorCode", execution.errorCode());
+        result.put("connectorErrorCode", execution.errorCode());
+        result.put("errorCode", errorPolicy != null ? errorPolicy.externalCode() : null);
         result.put("errorMsg", execution.safeMessage());
-        result.put("billingSignal", execution.billingSignal() != null
-                ? execution.billingSignal().name() : null);
-        result.put("cacheSignal", execution.cacheSignal() != null
-                ? execution.cacheSignal().name() : null);
-        result.put("deliveryState", execution.deliveryState() != null
-                ? execution.deliveryState().name() : RequestDeliveryState.MAYBE_SENT.name());
+        RequestDeliveryState delivery = errorPolicy != null
+                ? errorPolicy.deliveryState(execution.deliveryState())
+                : execution.deliveryState() != null ? execution.deliveryState()
+                : execution.successful() ? RequestDeliveryState.SENT : RequestDeliveryState.MAYBE_SENT;
+        result.put("billingSignal", errorPolicy != null
+                ? errorPolicy.billingSignal(execution.billingSignal(), delivery).name()
+                : execution.billingSignal() != null ? execution.billingSignal().name() : null);
+        result.put("cacheSignal", errorPolicy != null
+                ? errorPolicy.cacheSignal(execution.cacheSignal()).name()
+                : execution.cacheSignal() != null ? execution.cacheSignal().name() : null);
+        result.put("deliveryState", delivery.name());
         result.put("pluginId", execution.pluginId());
         result.put("pluginVersion", execution.pluginVersion());
         result.put("pipelineVersion", execution.pipelineVersion());
         result.put("snapshotHash", execution.snapshotHash());
+        result.put("hashAlgorithm", execution.hashAlgorithm());
+        result.put("integrityHash", execution.integrityHash());
         result.put("stageTimings", execution.stageTimings());
         result.put("actualVendorCode", vendorCode);
         return result;
@@ -297,88 +279,39 @@ public class VendorProxyService {
     }
 
     private Map<String, Object> pluginErrorResult(
-            String errorCode, String safeMessage, RequestDeliveryState deliveryState) {
-        Map<String, Object> result = errorResult(errorCode, safeMessage);
-        result.put("errorCategory", errorCode);
-        result.put("deliveryState", deliveryState.name());
-        return result;
-    }
-
-    /**
-     * 构建适配器配置
-     */
-    private VendorAdapterConfig buildAdapterConfig(VendorConfigDTO config, String vendorCode, String dataTypeCode) {
-        VendorAdapterConfig adapterConfig = new VendorAdapterConfig();
-        adapterConfig.setVendorCode(vendorCode);
-        adapterConfig.setDataTypeCode(dataTypeCode);
-        adapterConfig.setApiUrl(config.getApiUrl());
-        adapterConfig.setMethod(config.getMethod());
-        adapterConfig.setTimeout(config.getTimeout());
-        adapterConfig.setRetryCount(config.getRetryCount());
-        adapterConfig.setRequestTemplate(config.getRequestTemplate());
-        adapterConfig.setResponseMapping(config.getResponseMapping());
-        adapterConfig.setAuthType(config.getAuthType());
-
-        Result<String> secretKeyResult = vendorConfigFeignClient.getSecretKey(vendorCode);
-        adapterConfig.setSecretKey(secretKeyResult != null ? secretKeyResult.getData() : null);
-
-        if (config.getHeaderConfig() != null && !config.getHeaderConfig().isEmpty()) {
-            try {
-                Map<String, String> headers = objectMapper.readValue(config.getHeaderConfig(),
-                    new TypeReference<Map<String, String>>() {});
-                adapterConfig.setHeaders(headers);
-            } catch (Exception e) {
-                log.warn("解析请求头配置失败: {}", e.getMessage());
-            }
-        }
-
-        if (config.getAuthConfig() != null && !config.getAuthConfig().isEmpty()) {
-            try {
-                Map<String, Object> authConfig = objectMapper.readValue(config.getAuthConfig(),
-                        new TypeReference<Map<String, Object>>() {});
-                adapterConfig.setAuthConfig(authConfig);
-            } catch (Exception e) {
-                throw new IllegalArgumentException("解析认证配置失败", e);
-            }
-        }
-
-        if (config.getId() != null) {
-            try {
-                Result<VendorRuntimeSecurityDTO> runtimeResult = vendorSecurityFeignClient.getRuntimeSecurity(config.getId());
-                VendorRuntimeSecurityDTO runtime = runtimeResult != null ? runtimeResult.getData() : null;
-                if (runtime != null) {
-                    adapterConfig.setSecuritySteps(runtime.getSteps().stream().map(this::toRuntimeStep).toList());
-                    Map<String, String> secrets = new LinkedHashMap<>(runtime.getResolvedSecrets());
-                    if (adapterConfig.getSecretKey() != null) {
-                        secrets.putIfAbsent("vendor.secretKey", adapterConfig.getSecretKey());
-                    }
-                    adapterConfig.setResolvedSecrets(secrets);
-                }
-            } catch (Exception e) {
-                throw new IllegalStateException("加载厂商安全流水线失败，已阻止厂商调用: vendor=" + vendorCode, e);
-            }
-        }
-
-        return adapterConfig;
-    }
-
-    private SecurityStepConfig toRuntimeStep(VendorSecurityStepDTO dto) {
-        SecurityStepConfig step = new SecurityStepConfig();
-        step.setId(dto.getStepKey());
-        step.setDirection(SecurityDirection.valueOf(dto.getDirection()));
-        step.setStepType(SecurityStepType.valueOf(dto.getStepType()));
-        step.setStepName(dto.getStepName());
-        step.setSortNo(dto.getSortNo());
-        step.setEnabled(dto.getEnabled());
-        step.setConfig(dto.getConfig());
-        return step;
-    }
-
-    private Map<String, Object> errorResult(String errorCode, String errorMsg) {
+            ErrorCategory category, String errorCode, String safeMessage,
+            RequestDeliveryState deliveryState) {
+        ConnectorErrorPolicy policy = ConnectorErrorPolicy.forCategory(category);
         Map<String, Object> result = new HashMap<>();
         result.put("success", false);
-        result.put("errorCode", errorCode);
-        result.put("errorMsg", errorMsg);
+        result.put("errorCode", policy.externalCode());
+        result.put("errorMsg", safeMessage);
+        result.put("connectorErrorCode", errorCode);
+        result.put("errorCategory", category.name());
+        RequestDeliveryState effectiveDelivery = policy.deliveryState(deliveryState);
+        result.put("deliveryState", effectiveDelivery.name());
+        result.put("billingSignal", policy.billingSignal(null, effectiveDelivery).name());
+        result.put("cacheSignal", policy.cacheSignal(null).name());
         return result;
     }
+
+    private ErrorCategory errorCategory(Map<String, Object> result) {
+        Object raw = result != null ? result.get("errorCategory") : null;
+        if (raw == null) return null;
+        try {
+            return ErrorCategory.valueOf(String.valueOf(raw));
+        } catch (IllegalArgumentException ignored) {
+            return ErrorCategory.PLUGIN_INTERNAL_ERROR;
+        }
+    }
+
+    private RequestDeliveryState deliveryState(Object raw) {
+        if (raw == null) return null;
+        try {
+            return RequestDeliveryState.valueOf(String.valueOf(raw));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
 }

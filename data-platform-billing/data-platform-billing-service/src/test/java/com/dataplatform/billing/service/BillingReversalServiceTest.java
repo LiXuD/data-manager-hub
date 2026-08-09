@@ -43,6 +43,12 @@ class BillingReversalServiceTest {
         assertEquals(9L, result.getOriginalEventId());
         assertEquals(0, new BigDecimal("-2.5").compareTo(result.getFinalAmount()));
         assertEquals(0, new BigDecimal("-5").compareTo(result.getQuantity()));
+        assertEquals("vendor-http", result.getPluginId());
+        assertEquals("1.2.0", result.getPluginVersion());
+        assertEquals(7, result.getPipelineVersion());
+        assertEquals("a".repeat(64), result.getSnapshotHash());
+        assertEquals("V2_EMBEDDED", result.getHashAlgorithm());
+        assertEquals("a".repeat(64), result.getIntegrityHash());
         verify(usageMapper).decrement(3L, LocalDate.of(2026, 7, 1), "CALLER:22", new BigDecimal("5"));
     }
 
@@ -76,6 +82,12 @@ class BillingReversalServiceTest {
         event.setVendorCode("V");
         event.setInterfaceId(5L);
         event.setInterfaceCode("I");
+        event.setPluginId("vendor-http");
+        event.setPluginVersion("1.2.0");
+        event.setPipelineVersion(7);
+        event.setSnapshotHash("a".repeat(64));
+        event.setHashAlgorithm("V2_EMBEDDED");
+        event.setIntegrityHash("a".repeat(64));
         event.setBillable(true);
         event.setQuantity(new BigDecimal("5"));
         event.setUnit("ITEM");

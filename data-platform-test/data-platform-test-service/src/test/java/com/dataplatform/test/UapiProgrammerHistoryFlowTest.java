@@ -79,10 +79,9 @@ class UapiProgrammerHistoryFlowTest extends BaseTest {
         List<Map<String, Object>> configRows = configs.jsonPath().getList("data");
         assertTrue(configRows != null && configRows.size() == 1, "UAPI 应只有一条启用配置");
         Long configId = longValue(configRows.getFirst().get("id"));
-        assertEquals("GET", configRows.getFirst().get("method"));
         assertEquals(dataTypeId, longValue(configRows.getFirst().get("dataTypeId")));
-        assertEquals("https://uapis.cn/api/v1/history/programmer/today",
-                configRows.getFirst().get("apiUrl"));
+        assertEquals("PLUGIN", configRows.getFirst().get("runtimeMode"));
+        assertNotNull(longValue(configRows.getFirst().get("activeConnectorVersionId")));
 
         Response health = getAuthRequest().post("/vendor/config/" + configId + "/test");
         verifySuccess(health);
