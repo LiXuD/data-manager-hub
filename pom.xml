@@ -70,6 +70,59 @@
                 <profiles.active>prod</profiles.active>
             </properties>
         </profile>
+        <!-- Explicit CI-only profile: normal compile/test remains offline-friendly and deterministic. -->
+        <profile>
+            <id>connector-supply-chain-scan</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <version>12.1.0</version>
+                        <configuration>
+                            <failBuildOnCVSS>7</failBuildOnCVSS>
+                            <formats>HTML,JSON,SARIF</formats>
+                            <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>connector-dependency-vulnerability-scan</id>
+                                <phase>verify</phase>
+                                <goals><goal>aggregate</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.cyclonedx</groupId>
+                        <artifactId>cyclonedx-maven-plugin</artifactId>
+                        <version>2.9.1</version>
+                        <executions>
+                            <execution>
+                                <id>connector-license-sbom</id>
+                                <phase>verify</phase>
+                                <goals><goal>makeAggregateBom</goal></goals>
+                                <configuration>
+                                    <outputFormat>json</outputFormat>
+                                    <includeLicenseText>false</includeLicenseText>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>license-maven-plugin</artifactId>
+                        <version>2.4.0</version>
+                        <executions>
+                            <execution>
+                                <id>connector-third-party-license-report</id>
+                                <phase>verify</phase>
+                                <goals><goal>aggregate-third-party-report</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 
     <dependencyManagement>
