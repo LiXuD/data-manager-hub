@@ -2,7 +2,7 @@
 
 > 版本：V2.0（阶段 0—5 落地与隔离验收收口稿）
 >
-> 最后核对：2026-08-10
+> 最后核对：2026-08-11
 >
 > 适用项目：data-manager-hub
 >
@@ -10,61 +10,67 @@
 >
 > 参考入口：`/datainner/integrated/encryptExecuteByID`
 >
-> 状态：**阶段 0—5 已实现并通过双 Access 隔离验收；未声称生产部署**
+> 状态：**阶段 0—5 已实现；组件测试、V048 迁移验证、隔离运行时和浏览器验收均已通过；未声称生产部署**
+
+> 面向配置人员的页面操作、字段解释、示例和后端解析说明见
+> [接口连接器配置与后端解析指南](./CONNECTOR_CONFIGURATION_GUIDE.md)。
 
 ## 0. 实施状态与证据口径
 
-截至 2026-08-10，本设计的 SPI、控制面、运行时、管理端、迁移、旧链退役和隔离 E2E 已全部落入
-当前工作树。本文保留 Bumblebee 参考与“实施前基线”作为决策依据；除这些明确标注的历史章节外，
+截至 2026-08-11，本设计的 SPI、控制面、运行时、管理端、迁移和旧链退役已落入当前工作树；
+后端/前端测试、V048 隔离迁移、真实运行时链路和浏览器复验均已完成。
+本文保留 Bumblebee 参考与“实施前基线”作为决策依据；除这些明确标注的历史章节外，
 “必须”“首期”均表示现有实现持续满足的约束，而不是未来计划。
 
 | 能力 | 当前状态 | 主要代码落点 | 已有验证 |
 |---|---|---|---|
 | 六阶段轻量 SPI 与强类型结果 | 已实现 | `data-platform-plugin-spi` | SPI/Common Runtime 单元测试 |
 | `legacy-http`、流水线编译执行和安全传输 | 已实现 | `data-platform-common-runtime/.../common/plugin` | Common Runtime 相关单元测试通过 |
-| 插件目录、签名导入和连接器不可变版本 | 已实现 | `data-platform-masterdata/.../connector`、V042/V046/V047 | Schema/密钥/完整性/不可变回归与实库迁移通过 |
-| Access 制品缓存、隔离加载、租约、卸载和多实例激活 | 已实现 | `data-platform-access/.../connector` | 双 Access、离线仓库、readiness、切换和 gauge 均通过 |
+| 插件目录、签名导入和连接器不可变版本 | 已实现 | `data-platform-masterdata/.../connector`、V042/V046/V047/V048 | Schema/密钥/完整性/不可变回归与 V048 实库迁移通过 |
+| Access 制品缓存、隔离加载、租约、卸载和多实例激活 | **已实现并有既有 V047 级验收证据** | `data-platform-access/.../connector` | 独立的双 Access 环境已验证离线仓库、readiness、切换、租约和 ClassLoader gauge；该证据不属于本次 V048 路由环境 |
 | PLUGIN-only 调用、错误策略和调用/计费事实追踪 | 已实现 | `VendorProxyService`、`ConnectorErrorPolicy`、`call_record`、`billing_event` | NOT_SENT/SENT/MAYBE_SENT、缓存、契约、计费和主备均通过 |
 | 插件中心与厂商连接器工作台 | 已实现 | `data-platform-web/src/views/connector-plugin`、`VendorConnectorWorkspace.vue` | 前端 lint、单元测试和 build 通过 |
-| 签名外部插件/HTTPS 仓库/隔离数据库夹具 | 已实现 | `data-platform-test/test-fixtures/connector-e2e` | JAR、Ed25519、HTTPS、厂商端点和 V001—V047 迁移已验证 |
-| 双 Access、五域、Gateway 和 OpenAPI 插件全链路 | **隔离运行环境已验收** | Identity、Masterdata、Access×2、Billing、Governance、Gateway | 健康/readiness、真实签名插件、HTTPS、数据库、指标和日志均已核对 |
-| 真实管理页面 | **隔离浏览器已验收** | 插件中心、厂商连接器工作台 | 登录、插件/实例状态、动态表单、差异和版本历史均已核对 |
+| 签名外部插件/HTTPS 仓库/隔离数据库夹具 | 已实现 | `data-platform-test/test-fixtures/connector-e2e` | JAR、Ed25519、HTTPS、厂商端点和 V001—V048 迁移已验证 |
+| V048 接口—厂商主备运行时链路 | **单 Access 隔离环境已验收** | Identity、Masterdata、Access、Billing、Gateway | 创建接口→绑定两个厂商→保存主备→草稿校验/测试/发布→启用→主调用→connection-refused/NOT_SENT 安全回退均通过；本次未启动 Governance |
+| 真实管理页面 | **隔离浏览器已验收** | 插件中心、厂商连接器工作台 | 固定入口、真实厂商名、PRIMARY/FALLBACK、连接器 V1、READY 和未绑定厂商过滤均已核对 |
 | 存量配置迁移、PLUGIN-only 和旧静态适配器删除 | **已实现并验收** | V043—V045、删除的 adapter/UI/DTO | 迁移失败关闭、历史只读、旧写端点 404/405 和全仓引用扫描通过 |
 | 完整性与历史不可变冻结 | **已实现并验收** | V046—V047 | V1/V2 兼容、fresh/upgrade/HALT/非法更新/删除/恢复矩阵通过 |
 
-证据口径：代码和组件测试证明实现；隔离 E2E 证明一次性环境中的真实 HTTP、数据库、双实例和浏览器
-行为；两者均不等同生产部署。最终工作树执行 `mvn test -q` 为 152 个 suite、459 tests、0 failure/
-error/skipped；Web lint、11 个 Vitest 文件/49 tests 和生产 build 通过；架构扫描与 `git diff --check`
-通过。Common Runtime + Access clean test 另有 242 tests 全绿，包含 10,000 次编排 P95=5,875ns 和
+证据口径：代码和组件测试证明实现；隔离验证证明一次性环境中的真实 HTTP/数据库/浏览器行为，
+两者均不等同生产部署。最终工作树执行 `mvn -DskipTests=false test` 为 27 个 Maven 模块、516 tests、
+0 failure/error/skipped；Masterdata 88 tests，后端总计 516 tests；Node 24 下 Web lint、13 个 Vitest 文件/
+59 tests 和生产 build 通过，仅有 523.45 kB chunk warning；架构扫描与 `git diff --check` 通过。Common Runtime + Access clean test 另有 242 tests 全绿，包含 10,000 次编排 P95=5,875ns 和
 100 次 ClassLoader 生命周期专测（`aliveClassLoaders=0`）。
 
 ### 0.1 隔离运行环境与浏览器验收记录
 
-2026-08-10 在唯一 PostgreSQL 数据库、Redis DB、Nacos namespace、Access 缓存、TrustStore、HTTPS
-制品库和厂商 fixture 中启动五域、Access-1/Access-2、Gateway 与 Web，完成并保留下列脱敏证据：
+本节汇总两组彼此独立的隔离验收证据，不能视为同一次运行环境：既有 V047 级证据使用双 Access，
+验证签名制品、多实例激活和完整生命周期；2026-08-11 的 V048 路由验收使用单 Access，并启动
+Identity、Masterdata、Billing 和 Gateway，未启动 Governance。两组证据均不等同生产部署、生产权限配置或生产计费配置：
 
-- 签名供应链：错误哈希、错误签名和非白名单地址均返回 400；合法 Ed25519 制品完成 import/verify/
+- **既有 V047 级双 Access 证据—签名供应链**：错误哈希、错误签名和非白名单地址均返回 400；合法 Ed25519 制品完成 import/verify/
   stage。两个活动 Access 全部 READY 后才能激活；令 Access-2 加载失败时新版本 activate 返回 409，
   旧 ACTIVE 继续服务，恢复后双 READY 才允许切换。
-- 控制面：插件逐实例状态、PLUGIN-only 厂商、动态 Schema/secret selector、草稿 CAS、validate、受控
-  test、publish、V1/V2/V3 不可变历史和 rollback 均通过真实 API 与浏览器核对；明文敏感配置、missing
-  secretRef 和跨 vendor secretRef 均被 400 拒绝，迁移写端点为 404/405，历史 GET 保持只读。
-- OpenAPI：真实 Gateway 单条与 batch、API Key 401、授权 403、限流/配额 429 均通过；缓存首次 fixture
-  增量 1、命中增量 0；响应契约失败形成 `CONTRACT_VIOLATION`，不缓存、不计费。
-- 错误与治理：主厂商 `NOT_SENT` 时只调用一次备用；`SENT` 与 `MAYBE_SENT` 均不降级。CallRecord 与
+- **本次 V048 单 Access 证据—控制面与浏览器**：通过真实 API 完成接口创建、两个厂商绑定、主备路由保存、草稿 validate/test/publish 和主备配置启用；
+  浏览器显示固定入口、真实厂商名、`PRIMARY`/`FALLBACK`、连接器 V1 和 `READY`，绑定下拉只剩未绑定的 UAPI。
+- **本次 V048 单 Access 证据—OpenAPI 主备路由**：主端点在线调用记录实际厂商 `routing-primary-70001`；停止主端点形成
+  connection-refused 后，主请求交付状态为 `NOT_SENT`，安全回退成功，
+  调用记录及 `Billing` `POSTED` 事实中的实际厂商为 `routing-fallback-70001`。调用权限和零元计费均来自隔离库支持数据，
+  用于打通验收链路，不代表生产授权或生产价格配置。
+- **既有 V047 级错误与治理证据**：主厂商 `NOT_SENT` 时只调用一次备用；`SENT` 与 `MAYBE_SENT` 均不降级。CallRecord 与
   BillingEvent 保存实际 vendor/plugin/pipeline/hashAlgorithm/integrityHash；Billing 幂等仅一条事件，
   失败不误收费。
-- 生命周期：仓库离线且存在验证缓存时 Access 恢复；空缓存时 readiness DOWN；仓库恢复后新实例
+- **既有 V047 级双 Access 证据—生命周期**：仓库离线且存在验证缓存时 Access 恢复；空缓存时 readiness DOWN；仓库恢复后新实例
   `DOWN → UP`；下线实例不永久阻塞。阻塞旧请求时发布新版本，旧请求固定旧流水线、新请求使用新
   流水线，最后 lease release 后 ClassLoader gauge 从 2 降至 1。
-- 安全与性能：危险字节码门禁、日志秘密字面量扫描、低基数指标、P95<5ms 和 100 次装卸专测均通过。
-- 数据库：V001—V047 fresh、V046→V047 upgrade、合法状态转换、非法内容更新/DELETE、坏历史 HALT、
-  repeat、拒绝 U047 和备份恢复均在独立 PostgreSQL 验证。
+- **既有 V047 级安全与性能证据**：危险字节码门禁、日志秘密字面量扫描、低基数指标、P95<5ms 和 100 次装卸专测均通过。
+- **本次 V048 数据库证据**：V048 全新安装、V047 存量升级、重复 update、重复绑定歧义中止、旧主厂商歧义中止，
+  以及回滚拒绝且快照不变，均在独立 PostgreSQL 验证。
+- **既有 V047 级数据库证据**：V001—V047 fresh、V047 前历史保护和备份恢复证据仍按原记录保留。
 
-浏览器复验完成后已停止全部测试服务，删除隔离数据库、Nacos、Redis 数据、插件缓存和全部一次性
-凭据，并核对相关进程、端口、容器和秘密文件均无残留，最终清理结果为 `RESULT residual=0`。
-本节已固化可交付的关键验收结论；更细的本地原始脱敏报告只保留在本次验收工作区，不受 Git 管理，
-不作为仓库文档依赖。该证据证明当前工作树可在隔离环境落地，不宣称生产流量或生产容量已验证。
+上述两组隔离验收环境及各自一次性凭据均在对应验收后分别清理；更细的本地原始脱敏报告不受 Git 管理，不作为仓库文档依赖。
+该证据支持当前工作树在隔离环境完成“创建接口→绑定厂商→配置主备→启用→调用→安全回退”，不宣称生产流量、
+生产容量、生产调用权限或生产计费价格已验证。
 
 ## 1. 目标与结论
 
@@ -90,6 +96,20 @@ bumblebee-merge2.0 的 Fetcher/Parse 插件模型，但不会复制其系统类�
 
 本文档最初是未来态设计，目前已同步到实现。阶段 0—5 已实现并通过隔离验收；这不等同生产部署，
 生产 TrustStore/制品库接入、容量基线和分批放量仍按第 17 节门禁执行。
+
+本次同步只补充当前“接口→厂商绑定→主/备用路由→连接器版本”的使用契约，不把尚未完成的真实生产运行时验收标记为已通过；隔离测试、组件测试和生产验收仍须按各自证据口径区分。
+
+### 1.1 接口、厂商绑定与显式主备路由
+
+接口管理的配置顺序固定为：创建接口 → 绑定厂商 → 选择主/备用 → 配置并发布连接器 → 启用厂商配置 → 启用接口 → 调用固定入口 `POST /openapi/v1/query`。接口创建只维护 `apiCode`、接口名称、数据类型、排序和描述；前端不再选择厂商、业务 `path` 或手工状态，新接口默认 `inactive`。
+
+厂商绑定以 `interfaceId + vendorId` 为事实源，数据类型由接口服务端推导；同一接口重复绑定同一厂商返回 HTTP 409。第一个有效绑定通过 CAS 自动成为主配置。每个接口最多一个 `PRIMARY` 和一个 `FALLBACK`，备用可为空且不能与主相同，路由通过 `PUT /interface/{id}/vendor-routing` 显式保存 `primaryVendorConfigId` 与 `fallbackVendorConfigId`。
+
+Access 收到 `apiCode` 后先解析接口，再按这两个 ID 精确读取 `vendor_config`，继而读取厂商、活动连接器版本、流水线配置和当前厂商的 credential/SecretRef；不按列表顺序、创建时间或灰度规则猜测厂商。路由不是 `READY`、主配置不存在/非 active、名称或数据类型无法解析时失败关闭。
+
+主请求失败后，仅当 `ConnectorErrorPolicy` 判定可安全回退且交付状态为 `NOT_SENT` 时，调用精确备用配置一次；`SENT`、`MAYBE_SENT` 不回退，备用配置自身的 fallback 字段也不会形成链式回退。备用成功时，实际厂商、插件追踪、`fallbackFrom`、调用记录和计费事实都来自备用配置。
+
+`path`、`api_interface.vendor_id` 和 `vendor_config.fallback_vendor_id` 仍可能出现在兼容 DTO/数据库中，但新流程不依赖这些字段。
 
 ## 2. Bumblebee 参考实现
 
@@ -306,6 +326,8 @@ Access 负责：
 - 汇总各 Access 实例加载状态；
 - 记录实际插件版本、步骤耗时和错误分类；
 - 保持现有缓存、熔断、厂商降级、计费和调用记录编排。
+
+连接器控制面表由 `V042__create_connector_plugin_control_plane.sql` 创建，后续迁移必须按版本顺序完成后再放行 Access。`ConnectorRuntimeStartupSynchronizer`、待处理激活调度和 heartbeat 在调用 `connector_plugin_activation` Mapper 前执行轻量 schema guard；表不存在时 readiness 保持 false，并记录稳定安全错误码 `CONNECTOR_SCHEMA_NOT_READY`，不吞掉其他 SQL 错误。表恢复后调度可自动继续同步。部署顺序应为“先迁移、确认迁移历史和表存在，再启动/放行 Access”；缺表期间不得把服务标记为 READY。
 
 ### 5.4 Common Runtime
 
@@ -609,7 +631,7 @@ Access 下载和执行阶段使用 `connector.runtime`：
 传输数据漂移后被运行。HTTPS 制品库/厂商端点的 CA 信任由 JVM TLS TrustStore 提供，不等同插件
 签名公钥。生产键值和证书挂载方式见 `docs/DEPLOYMENT.md`。
 
-## 9. 数据模型与数据库保护（V042—V047 已实现）
+## 9. 数据模型与数据库保护（V042—V048 已实现）
 
 ### 9.1 Masterdata 所有表
 
@@ -751,8 +773,9 @@ param_mapping` 列。`legacy-http` 从不可变连接器快照读取配置，不
 | V045 | 删除旧适配器配置列和旧写契约依赖 |
 | V046 | 新增 `V1_DERIVED/V2_EMBEDDED` 完整性事实并保持旧历史不变 |
 | V047 | 插件制品、发布版本和历史事实不可变/不可删保护及升级前一致性 HALT |
+| V048 | 校验存量接口/厂商绑定后，建立接口主/备用配置引用、有效绑定唯一性和删除保护 |
 
-V043—V047 的破坏性历史冻结采用 forward recovery/备份恢复；对应 `U0xx` 不允许在已有受保护事实时
+V043—V048 的破坏性历史冻结采用 forward recovery/备份恢复；对应 `U0xx` 不允许在已有受保护事实时
 破坏性回退。操作说明见 `sql/MIGRATIONS.md` 和 `docs/DEPLOYMENT.md`。
 
 ## 10. API（已实现）
@@ -1060,7 +1083,7 @@ JCS，必须新增 `manifestVersion` 或显式 canonicalization 版本，不能�
 
 ### 14.3 阶段 2：版本化控制面
 
-**当前状态：已实现并通过隔离验收（未声称生产部署）。** V042/V046/V047、Masterdata 目录/版本服务、
+**当前状态：已实现并通过组件测试和 V048 迁移验证（未声称生产部署）。** V042/V046/V047/V048、Masterdata 目录/版本服务、
 管理 API、权限、动态 Schema/secret selector、草稿 CAS、不可变受控测试事实、V1/V2 完整性和发布
 门禁均已落地；浏览器核对插件目录、逐实例状态、动态配置、差异和历史版本。
 
@@ -1121,7 +1144,7 @@ after-commit 触发加定时对账释放。
 对非 PLUGIN 配置失败关闭。`legacy-http` 只作为插件内部 bridge 保留。V046/V047 冻结完整性和历史
 删除保护，保证退役后调用记录和 BillingEvent 仍可解释。
 
-完成条件：全仓无旧适配器生产入口、旧写端点为 404/405、所有当前配置 PLUGIN-only、V001—V047
+完成条件：全仓无旧适配器生产入口、旧写端点为 404/405、所有当前配置 PLUGIN-only、V001—V048
 fresh/upgrade/HALT/不可变矩阵和真实 OpenAPI E2E 通过。
 
 回滚点：不恢复删除的双运行时；使用不可变连接器历史版本回滚，数据库结构问题使用升级前备份恢复
@@ -1130,7 +1153,7 @@ fresh/upgrade/HALT/不可变矩阵和真实 OpenAPI E2E 通过。
 ## 15. 测试与验收矩阵
 
 以下矩阵均已由当前工作树自动化测试覆盖；真实 HTTP/数据库/双实例/浏览器项见第 0.1 节的隔离环境
-复验。最终后端为 152 suites/459 tests，前端为 11 files/49 tests；没有用生产部署或生产
+验收记录。最终后端为 27 个 Maven 模块/516 tests，前端为 13 files/59 tests；没有用生产部署或生产
 流量替代证据。
 
 ### 15.1 SPI 和配置
@@ -1286,7 +1309,7 @@ fresh/upgrade/HALT/不可变矩阵和真实 OpenAPI E2E 通过。
 - OpenAPI 调用契约保持不变。
 - 当前为 PLUGIN-only；`legacy-http` 只在插件运行时内部承接原协议能力。
 - 新 SPI 模块是公共库，不形成第六个业务服务。
-- 当前实现结论以直接源码、V042—V047、Nacos 配置和测试证据复核为准；GitNexus 用于影响分析和变更检测。
+- 当前实现结论以直接源码、V042—V048、Nacos 配置和测试证据复核为准；GitNexus 用于影响分析和变更检测。
 - 管理与 Internal API 的当前契约由 `docs/API.md` 维护。
 - 制品仓库白名单、双端信任密钥、缓存目录和激活/readiness 运维由 `docs/DEPLOYMENT.md` 维护。
 
@@ -1323,7 +1346,7 @@ fresh/upgrade/HALT/不可变矩阵和真实 OpenAPI E2E 通过。
 | Masterdata 跨域轻量契约 | `data-platform-masterdata/data-platform-masterdata-api/src/main/java/com/dataplatform/masterdata/connector/` |
 | Access 制品缓存、激活、readiness 和执行器 | `data-platform-access/data-platform-access-service/src/main/java/com/dataplatform/access/connector/` |
 | Access 跨域轻量契约 | `data-platform-access/data-platform-access-api/src/main/java/com/dataplatform/access/connector/` |
-| 控制面、PLUGIN-only、完整性和不可变迁移 | `sql/migrations/V042__create_connector_plugin_control_plane.sql` 至 `V047__enforce_connector_history_immutability.sql` |
+| 控制面、PLUGIN-only、完整性和接口主备路由迁移 | `sql/migrations/V042__create_connector_plugin_control_plane.sql` 至 `V048__enforce_interface_vendor_routing.sql` |
 | 插件中心和版本化连接器工作台 | `data-platform-web/src/views/connector-plugin/`、`data-platform-web/src/views/interface/components/config/VendorConnectorWorkspace.vue` |
 | 外部签名插件和隔离 E2E 夹具 | `data-platform-test/test-fixtures/external-connector-plugin/`、`data-platform-test/test-fixtures/connector-e2e/` |
 
