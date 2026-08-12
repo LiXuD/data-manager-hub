@@ -140,7 +140,12 @@ public class AuthController {
         data.put("tenantName", tenant == null ? null : tenant.getTenantName());
         data.put("lastLoginTime", user.getLastLoginTime());
         data.put("roles", getUserRoles(user.getId()));
-        data.put("permissions", getUserPermissions(user.getId()));
+        List<String> permissions = getUserPermissions(user.getId());
+        // Permissions are cached in the shared Sa-Token session at login time. Refresh the
+        // snapshot here as well so permissions added by a migration or role update are visible
+        // to downstream services without requiring a new token.
+        StpUtil.getSession().set(UserContext.PERMISSIONS_KEY, permissions);
+        data.put("permissions", permissions);
 
         return Result.success(data);
     }
