@@ -505,4 +505,29 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="enforce-interface-vendor-routing-2026-08-11"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="api_interface"/>
+            <tableExists schemaName="public" tableName="vendor_config"/>
+            <tableExists schemaName="public" tableName="vendor_info"/>
+            <tableExists schemaName="public" tableName="data_type"/>
+            <columnExists schemaName="public" tableName="api_interface" columnName="vendor_id"/>
+            <columnExists schemaName="public" tableName="vendor_config" columnName="interface_id"/>
+            <columnExists schemaName="public" tableName="vendor_config" columnName="fallback_vendor_id"/>
+        </preConditions>
+        <sqlFile path="../migrations/V048__enforce_interface_vendor_routing.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U048__refuse_interface_vendor_routing_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>
