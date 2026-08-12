@@ -1,6 +1,6 @@
 # 数据管理平台 HTTP API
 
-> 当前契约索引，最后核对日期：2026-08-10。第 1—9 节描述经 Gateway 暴露的 HTTP API；第 10 节单独记录不经 Gateway 的跨域 Internal API。Feign 契约只位于目标域 `*-api` 模块。
+> 当前契约索引，最后核对日期：2026-08-11。第 1—9 节描述经 Gateway 暴露的 HTTP API；第 10 节单独记录不经 Gateway 的跨域 Internal API。Feign 契约只位于目标域 `*-api` 模块。
 
 ## 1. 入口与认证
 
@@ -108,8 +108,12 @@
 
 `signType`、`encryptType` 和简单签名回退已移除；运行时只执行已启用的安全流水线。敏感扩展配置必须以平台 `v1:<keyVersion>:<ciphertext>` 格式存储，否则读取失败关闭。
 新厂商配置固定创建为 `runtimeMode=PLUGIN` 且 `inactive`；必须发布活动连接器版本后才能启用。
+创建厂商配置时正文只需提供 `interfaceId`、`vendorId` 和执行策略；数据类型由接口服务端推导。同一接口重复绑定同一厂商返回 HTTP 409。
 
 ### 3.3 连接器插件与版本化厂商流水线
+
+页面配置步骤、`legacy-http` 每个选项、映射/认证/安全流水线示例以及后端解析流程，见
+[接口连接器配置与后端解析指南](./CONNECTOR_CONFIGURATION_GUIDE.md)。
 
 插件目录管理需要对应 `connector-plugin:*` 权限。插件导入只接受受信 HTTPS 制品坐标，不接受本地
 JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入口类静态验证，成功后直接保存
@@ -220,12 +224,31 @@ missing secretRef 和跨 vendor secretRef；测试和运行只解析当前阶段
 | GET | `/interface/by-data-type/{dataTypeId}` | 按数据类型查询 |
 | POST | `/interface` | 创建接口 |
 | PUT/DELETE | `/interface/{id}` | 更新、删除接口 |
+| PUT | `/interface/{id}/vendor-routing` | 显式保存主、备用 `vendor_config` 引用 |
 | PATCH | `/interface/{id}/status` | 更新状态 |
 | GET | `/interface/{id}/contract` | 获取完整请求/响应字段树及生成快照 |
 | PUT | `/interface/{id}/contract` | 原子替换完整契约 |
 | GET | `/interface/{id}/stats`、`/stats/daily` | 调用统计 |
 
 `interface_param` 字段树是唯一契约数据源。`requestSchema` 和 `responseSchema` 由字段树生成，不能通过普通接口或独立 Schema API 写入；旧 `/schema`、`/params` 和 `import-schema` 端点已删除。约束只使用 JSON `constraintConfig`。
+
+接口创建页面只提交 `apiCode`、名称、数据类型、排序和描述；不再以厂商、旧 `path` 或手工状态作为调用配置，新接口默认 `inactive`。接口详情通过 `/interface/{id}/vendor-routing` 最多保存一个主配置和一个备用配置（备用可为空且不能与主相同）；第一个有效绑定自动成为主配置。接口只有在主配置、活动连接器版本和必要配置就绪后才允许启用。旧 `api_interface.vendor_id`、`path` 和 `vendor_config.fallback_vendor_id` 仅为兼容字段，新 OpenAPI 路由不依赖它们。
+
+示例：
+
+```http
+POST /interface
+Content-Type: application/json
+
+{"interfaceCode":"company-query","interfaceName":"企业查询","dataTypeId":7,"sort":10,"description":"企业基础信息"}
+```
+
+```http
+PUT /interface/42/vendor-routing
+Content-Type: application/json
+
+{"primaryVendorConfigId":101,"fallbackVendorConfigId":102}
+```
 
 ### 3.6 灰度与管理端调用测试
 
@@ -329,6 +352,10 @@ missing secretRef 和跨 vendor secretRef；测试和运行只解析当前阶段
 ```
 
 调用链依次执行 API Key 认证、接口/产品授权与缓存策略校验、请求契约校验、限流、配额、缓存查询/厂商代理、响应契约校验、调用记录和版本化计费。任何 Billing 空响应或安全流水线加载失败均失败关闭。
+
+调用者只提交 `apiCode`，不选择厂商。Access 按 `apiCode → 接口 → primaryVendorConfigId/fallbackVendorConfigId → 精确厂商配置 → 活动连接器版本、流水线、配置和 credential/SecretRef` 解析；路由未 `READY` 或主配置不可用时失败关闭，不按列表顺序或灰度规则改选。主调用只有在 `ConnectorErrorPolicy` 判定安全且 delivery 为 `NOT_SENT` 时才调用一次精确备用配置，`SENT`/`MAYBE_SENT` 不回退，备用配置不会继续链式回退。
+
+备用成功时，调用记录和计费事实中的实际厂商、插件版本和 `fallbackFrom` 均来自备用配置。
 
 `cacheDays` 是从原始厂商成功响应时间开始计算的绝对窗口，不会因缓存命中而续期。可复用记录同时匹配租户、接口代码、接口版本和请求参数；产品默认使用 `CALLER` 作用域隔离不同内部系统，显式配置 `GLOBAL` 时也只允许同租户复用。缓存命中记录只用于审计和计费，不能成为下一次缓存来源。
 
