@@ -5,7 +5,7 @@
 ## 编号规则
 
 - 迁移文件命名为 `V<编号>__<描述>.sql`，**编号必须唯一**，不得与已有文件重号。
-- 当前最新迁移为 **V047**；新迁移一律从 **V048** 起顺延编号。
+- 当前最新迁移为 **V048**；新迁移一律从 **V049** 起顺延编号。
 - **禁止重命名已执行的迁移文件**：文件路径参与 Liquibase changeset 的执行记录与校验（checksum），重命名会破坏已部署环境的校验。
 - 历史事实说明：`V007__add_permission_tables.sql` 与 `V007__create_interface_param.sql` 重号是既成历史，保持原样，不再新增任何重号。
 - 编号唯一性由 `migrate-db.sh` 在 `update`/`dry-run`/`validate`/`baseline` 时自动校验：除历史 V007 外若存在重号，迁移直接失败。
@@ -16,7 +16,7 @@
 - 每个新变更必须是 `db.changelog-master.xml` 中的**独立 changeset**，并带**显式 `<rollback>` 块**（与 changelog 文件头注释一致），rollback 脚本放在 `sql/rollbacks/U<编号>__<描述>.sql`。
 - 实际执行顺序以 **`db.changelog-master.xml` 中的声明顺序为准**，与文件编号或目录列表顺序无关。
 
-## 连接器迁移 V042—V047
+## 连接器迁移 V042—V048
 
 | 版本 | 事实与失败关闭边界 | 回退策略 |
 |---|---|---|
@@ -26,11 +26,18 @@
 | V045 | 删除旧请求、认证、映射配置列 | U045 始终拒绝伪造旧列数据 |
 | V046 | 保留旧快照的 `V1_DERIVED` 与新发布的 `V2_EMBEDDED` 完整性 | U046 拒绝删除历史完整性事实 |
 | V047 | 升级前验证目录/步骤/调用/计费一致性，冻结制品、发布版本和物理删除 | U047 拒绝原地解除保护 |
+| V048 | 校验存量接口/厂商绑定后，建立接口主/备用配置引用、有效绑定唯一性和删除保护 | U048 拒绝原地恢复旧路由约束 |
 
 V046 不改写既有 `pipeline_snapshot/snapshot_hash/call_record/billing_event`；V1 通过新增
 `hash_algorithm/integrity_hash` 派生解释，新发布 V2 在每个步骤固化 Artifact/Manifest/Schema 摘要。
 V047 要求 `plugin_id/plugin_version` 成对为空或存在，`hash_algorithm/integrity_hash` 同样成对；非空
 插件对在迁移前必须能对应目录。检查失败时整个 changeset 原子 HALT，禁止手工“修好”历史后标记执行。
+
+V048 先校验 `vendor_config.interface_id`、同接口同厂商重复绑定、旧 `api_interface.vendor_id` 唯一解析、
+旧 `fallback_vendor_id` 唯一解析及接口内回退一致性；任一歧义都 HALT。通过后回填
+`primary_vendor_config_id`/`fallback_vendor_config_id`，并用复合外键、检查约束和触发器保证配置存在、
+未删除、属于当前接口且主备不同。新绑定的唯一性只约束未删除记录；接口状态默认值改为 `inactive`。
+V048 rollback 始终拒绝原地逆迁移，必须恢复经验证的 V048 前备份或新增前向修复迁移。
 
 连接器数据库发布最少执行：
 
@@ -43,7 +50,7 @@ V047 要求 `plugin_id/plugin_version` 成对为空或存在，`hash_algorithm/i
 ./migrate-db.sh status
 ```
 
-发布流水线还必须在独立 PostgreSQL 分别验证 V001—V047 fresh、V046→V047 upgrade、重复 update、
+发布流水线还必须在独立 PostgreSQL 分别验证 V001—V048 fresh、V047→V048 upgrade、重复 update、
 坏目录/坏完整性 HALT 且无部分写入、合法状态变化、非法 UPDATE/DELETE、DRAFT 可编辑和应用查询兼容。
 
 ## 恢复边界
