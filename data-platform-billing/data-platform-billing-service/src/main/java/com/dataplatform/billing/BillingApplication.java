@@ -4,6 +4,7 @@ import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
 import com.dataplatform.governance.api.feign.GovernanceInternalFeignClient;
 import com.dataplatform.governance.log.api.LogClient;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
+import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
 import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
@@ -21,6 +22,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
         GovernanceInternalFeignClient.class,
         LogClient.class,
         ApiInterfaceFeignClient.class,
+        VendorConfigInternalFeignClient.class,
         VendorInternalFeignClient.class
 })
 @EnableDiscoveryClient

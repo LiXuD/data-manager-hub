@@ -14,7 +14,9 @@ import com.dataplatform.billing.model.BillingPlanModel;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
+import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
+import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
 import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -32,6 +34,7 @@ public class BillingPlanService {
     private final BillingPlanTierMapper tierMapper;
     private final BillingTemplateMapper templateMapper;
     private final VendorInternalFeignClient vendorClient;
+    private final VendorConfigInternalFeignClient vendorConfigClient;
     private final ApiInterfaceFeignClient interfaceClient;
     private final BillingConfigCodec codec;
     private final BillingPlanValidator validator;
@@ -40,6 +43,7 @@ public class BillingPlanService {
                               BillingPlanTierMapper tierMapper,
                               BillingTemplateMapper templateMapper,
                               VendorInternalFeignClient vendorClient,
+                              VendorConfigInternalFeignClient vendorConfigClient,
                               ApiInterfaceFeignClient interfaceClient,
                               BillingConfigCodec codec,
                               BillingPlanValidator validator) {
@@ -47,6 +51,7 @@ public class BillingPlanService {
         this.tierMapper = tierMapper;
         this.templateMapper = templateMapper;
         this.vendorClient = vendorClient;
+        this.vendorConfigClient = vendorConfigClient;
         this.interfaceClient = interfaceClient;
         this.codec = codec;
         this.validator = validator;
@@ -257,8 +262,10 @@ public class BillingPlanService {
         if (template == null) throw new IllegalArgumentException("计费模板不存在或未启用");
         VendorInfoDTO vendor = requireData(vendorClient.getById(command.getVendorId()), "厂商不存在");
         ApiInterfaceDTO apiInterface = requireData(interfaceClient.getById(command.getInterfaceId()), "接口不存在");
-        if (!command.getVendorId().equals(apiInterface.getVendorId())) {
-            throw new IllegalArgumentException("所选接口不属于指定厂商");
+        Result<List<VendorConfigDTO>> bindings =
+                vendorConfigClient.list(command.getVendorId(), null, command.getInterfaceId(), null);
+        if (bindings == null || bindings.getData() == null || bindings.getData().isEmpty()) {
+            throw new IllegalArgumentException("所选厂商未绑定到该接口");
         }
         InterfaceContractDTO contract = requireData(interfaceClient.getContract(command.getInterfaceId()),
                 "接口响应契约不存在");
