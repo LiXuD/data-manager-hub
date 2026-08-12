@@ -57,7 +57,6 @@ const loadContract = async () => {
     responseFields.value = toLocal(data.responseFields)
   } catch (error) {
     console.error('加载接口契约失败:', error)
-    ElMessage.error('加载接口契约失败')
   } finally {
     loading.value = false
   }

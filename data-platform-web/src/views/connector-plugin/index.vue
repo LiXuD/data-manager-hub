@@ -41,8 +41,7 @@ const detailVisible = ref(false)
 const importVisible = ref(false)
 const importForm = reactive<ConnectorPluginImportRequest>({ artifactUri: '', expectedSha256: '', detachedSignature: '', signingKeyId: '' })
 
-const isAdmin = computed(() => userStore.userInfo?.roles?.some(role => role.trim().toLowerCase() === 'admin'))
-const allowed = (permission: string) => Boolean(isAdmin.value || userStore.hasPermission(permission))
+const allowed = (permission: string) => userStore.hasPermission(permission)
 const selectedPlugin = computed(() => plugins.value.find(item => item.pluginId === selectedPluginId.value))
 
 function statusType(status: string) {
@@ -59,6 +58,8 @@ async function loadPlugins(preferred?: string) {
     plugins.value = response.data || []
     selectedPluginId.value = preferred || selectedPluginId.value || plugins.value[0]?.pluginId || ''
     await loadVersions()
+  } catch (error) {
+    console.warn('加载连接器插件失败', error)
   } finally {
     loading.value = false
   }

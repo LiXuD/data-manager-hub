@@ -29,6 +29,7 @@ import type {
   VendorConfigSummary
 } from '@/types'
 import { diffConnectorPipelines, mergeSchemaDefaults, normalizePipelineOrder, parseJsonDocument } from '@/utils/connector'
+import { dataTypeDisplayName, vendorDisplayName } from '../../interface-flow'
 
 const props = defineProps<{ modelValue: boolean; config: VendorConfigSummary | null }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; changed: [] }>()
@@ -48,8 +49,7 @@ const testParams = ref('{}')
 const historyVisible = ref(false)
 const comparedVersion = ref<VendorConnectorVersion | null>(null)
 
-const isAdmin = computed(() => userStore.userInfo?.roles?.some(role => role.trim().toLowerCase() === 'admin'))
-const allowed = (permission: string) => Boolean(isAdmin.value || userStore.hasPermission(permission))
+const allowed = (permission: string) => userStore.hasPermission(permission)
 const steps = computed(() => draft.value?.pipelineSnapshot || [])
 const diff = computed(() => diffConnectorPipelines(active.value?.pipelineSnapshot || [], comparedVersion.value?.pipelineSnapshot || steps.value).filter(item => item.change !== 'UNCHANGED'))
 const transportCount = computed(() => steps.value.filter(step => step.enabled && step.capability === 'TRANSPORT').length)
@@ -190,7 +190,7 @@ watch(() => props.modelValue, visible => { if (visible) void load() })
   <el-drawer :model-value="modelValue" direction="rtl" size="min(1100px, 94vw)" append-to-body @close="emit('update:modelValue', false)">
     <template #header>
       <div class="workspace-header">
-        <div><div class="eyebrow">VERSIONED CONNECTOR</div><h3>{{ config?.vendorName || `厂商 #${config?.vendorId}` }}</h3><p>{{ config?.dataTypeCode || `配置 #${config?.id}` }}</p></div>
+        <div><div class="eyebrow">VERSIONED CONNECTOR</div><h3>{{ vendorDisplayName(config?.vendorName) }}</h3><p>{{ dataTypeDisplayName(config?.dataTypeName) }}</p></div>
         <div class="runtime-state"><el-tag type="success">PLUGIN</el-tag><span>配置版本 {{ config?.connectorVersion || 0 }}</span><span>活动流水线 V{{ active?.versionNo || '—' }}</span></div>
       </div>
     </template>

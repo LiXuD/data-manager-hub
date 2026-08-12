@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { getProfile } from '@/api/auth'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
 
@@ -53,13 +54,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/connector-plugin/index.vue'),
         meta: {
           title: '连接器插件',
-          permissions: [
-            'connector-plugin:view',
-            'connector-plugin:import',
-            'connector-plugin:verify',
-            'connector-plugin:activate',
-            'connector-plugin:disable'
-          ]
+          permissions: ['connector-plugin:view']
         }
       },
       {
@@ -68,13 +63,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/connector-migration/index.vue'),
         meta: {
           title: '厂商连接器迁移',
-          permissions: [
-            'connector-plugin:view',
-            'connector-plugin:migrate',
-            'connector-plugin:test',
-            'connector-plugin:publish',
-            'connector-plugin:rollback'
-          ]
+          permissions: ['connector-plugin:view']
         }
       },
       {
@@ -197,8 +186,34 @@ const router = createRouter({
   routes
 })
 
+let syncedToken = ''
+
+const syncCurrentUser = async (userStore: ReturnType<typeof useUserStore>) => {
+  if (!userStore.isLoggedIn || !userStore.token || userStore.token === syncedToken) return
+
+  try {
+    const response = await getProfile()
+    const data = response.data
+    userStore.setUserInfo({
+      id: String(data.userId),
+      username: data.username,
+      nickname: data.nickname || data.username,
+      email: data.email,
+      phone: data.phone,
+      roles: data.roles || [],
+      tenantId: data.tenantId,
+      tenantName: data.tenantName,
+      lastLoginTime: data.lastLoginTime,
+      permissions: data.permissions || []
+    })
+    syncedToken = userStore.token
+  } catch (error) {
+    console.warn('刷新用户权限失败', error)
+  }
+}
+
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   NProgress.start()
   const userStore = useUserStore()
 
@@ -215,6 +230,7 @@ router.beforeEach((to, _from, next) => {
       next('/login')
       return
     }
+    await syncCurrentUser(userStore)
     const requiredPermissions = to.meta.permissions as string[] | undefined
     if (requiredPermissions?.length
       && !requiredPermissions.some(permission => userStore.hasPermission(permission))) {

@@ -1,5 +1,11 @@
 import { request } from '@/utils/request'
-import type { ApiInterface, InterfaceContract, InterfaceParam, ListResponse } from '@/types'
+import type {
+  ApiInterface,
+  InterfaceContract,
+  InterfaceParam,
+  ListResponse,
+  VendorRoutingUpdateRequest
+} from '@/types'
 
 export const getInterfaceList = (params: {
   page: number
@@ -57,6 +63,10 @@ export const deleteInterface = (id: number) => {
 
 export const updateInterfaceStatus = (id: number, status: 'active' | 'inactive') => {
   return request.patch<void>(`/interface/${id}/status`, { status })
+}
+
+export const updateVendorRouting = (id: number, payload: VendorRoutingUpdateRequest) => {
+  return request.put<{ data: ApiInterface }>(`/interface/${id}/vendor-routing`, payload)
 }
 
 // 获取接口调用统计

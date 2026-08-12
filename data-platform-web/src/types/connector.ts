@@ -24,8 +24,8 @@ export interface VendorConfigSummary {
   retryCount: number
   circuitThreshold: number
   circuitTimeout: number
-  fallbackVendorId?: number
   fallbackVendorName?: string
+  routingRole?: 'PRIMARY' | 'FALLBACK' | 'UNASSIGNED' | string
   runtimeMode: 'PLUGIN'
   activeConnectorVersionId?: number
   connectorVersion: number
@@ -36,17 +36,15 @@ export interface VendorConfigSummary {
 
 export interface VendorConfigCreateRequest {
   vendorId: number
-  dataTypeCode: string
   interfaceId: number
   timeout?: number
   retryCount?: number
   circuitThreshold?: number
   circuitTimeout?: number
-  fallbackVendorId?: number
 }
 
 export type VendorConfigUpdateRequest = Partial<Pick<VendorConfigSummary,
-  'timeout' | 'retryCount' | 'circuitThreshold' | 'circuitTimeout' | 'fallbackVendorId'>>
+  'timeout' | 'retryCount' | 'circuitThreshold' | 'circuitTimeout'>>
 
 /** Response envelope used by the lightweight cross-domain contract module. */
 export interface ConnectorApiResponse<T> {
