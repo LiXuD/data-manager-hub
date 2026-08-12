@@ -10,6 +10,7 @@ import com.dataplatform.masterdata.vendor.entity.VendorExtendedConfig;
 import com.dataplatform.masterdata.vendor.service.VendorExtendedConfigService;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import com.dataplatform.masterdata.vendor.service.VendorHealthService;
+import com.dataplatform.masterdata.vendor.service.VendorConfigDTOAssembler;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -54,7 +55,9 @@ class VendorExtendedConfigControllerAuthorizationTest {
     void vendorConfigControllerRejectsReadWithoutVendorPermission() {
         VendorConfigService vendorConfigService = mock(VendorConfigService.class);
         VendorHealthService healthService = mock(VendorHealthService.class);
-        VendorConfigController controller = new VendorConfigController(vendorConfigService, healthService);
+        VendorConfigController controller = new VendorConfigController(
+                vendorConfigService, healthService, mock(com.dataplatform.masterdata.interface_.service.ApiInterfaceService.class),
+                mock(VendorConfigDTOAssembler.class));
 
         try (var userContext = mockStatic(UserContext.class)) {
             userContext.when(() -> UserContext.hasPermission("vendor:view")).thenReturn(false);

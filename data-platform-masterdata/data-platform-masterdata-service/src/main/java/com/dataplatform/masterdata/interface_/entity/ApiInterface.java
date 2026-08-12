@@ -19,6 +19,8 @@ public class ApiInterface {
     private String interfaceName;
     private Long dataTypeId;
     private Long vendorId;
+    private Long primaryVendorConfigId;
+    private Long fallbackVendorConfigId;
     private String path;
     private String description;
     private String requestSchema;
@@ -53,6 +55,10 @@ public class ApiInterface {
     public void setDataTypeId(Long dataTypeId) { this.dataTypeId = dataTypeId; }
     public Long getVendorId() { return vendorId; }
     public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
+    public Long getPrimaryVendorConfigId() { return primaryVendorConfigId; }
+    public void setPrimaryVendorConfigId(Long primaryVendorConfigId) { this.primaryVendorConfigId = primaryVendorConfigId; }
+    public Long getFallbackVendorConfigId() { return fallbackVendorConfigId; }
+    public void setFallbackVendorConfigId(Long fallbackVendorConfigId) { this.fallbackVendorConfigId = fallbackVendorConfigId; }
     public String getPath() { return path; }
     public void setPath(String path) { this.path = path; }
     public String getDescription() { return description; }

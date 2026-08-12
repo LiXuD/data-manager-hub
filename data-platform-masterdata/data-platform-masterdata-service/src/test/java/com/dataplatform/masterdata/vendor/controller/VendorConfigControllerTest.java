@@ -1,6 +1,7 @@
 package com.dataplatform.masterdata.vendor.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -13,9 +14,14 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.dataplatform.common.util.UserContext;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigCreateReqDTO;
+import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
+import com.dataplatform.masterdata.vendor.service.VendorConfigConflictException;
+import com.dataplatform.masterdata.vendor.service.VendorConfigDTOAssembler;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import com.dataplatform.masterdata.vendor.service.VendorHealthService;
+import com.dataplatform.masterdata.interface_.entity.ApiInterface;
+import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import java.util.Map;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
@@ -31,17 +37,32 @@ class VendorConfigControllerTest {
     }
 
     private final VendorConfigService service = mock(VendorConfigService.class);
+    private final ApiInterfaceService interfaceService = mock(ApiInterfaceService.class);
+    private final VendorConfigDTOAssembler dtoAssembler = mock(VendorConfigDTOAssembler.class);
     private final VendorConfigController controller = new VendorConfigController(
-            service, mock(VendorHealthService.class));
+            service, mock(VendorHealthService.class), interfaceService, dtoAssembler);
 
     @Test
     void resolvesDataTypeCodeBeforePersistingVendorConfig() {
         VendorConfigCreateReqDTO request = request();
+        ApiInterface apiInterface = new ApiInterface();
+        apiInterface.setId(2L);
+        apiInterface.setDataTypeId(42L);
+        when(interfaceService.getById(2L)).thenReturn(apiInterface);
         when(service.getDataTypeIdByCode("WORLD_TIME")).thenReturn(42L);
-        when(service.save(any(VendorConfig.class))).thenAnswer(invocation -> {
+        when(service.createBinding(any(VendorConfig.class))).thenAnswer(invocation -> {
             VendorConfig config = invocation.getArgument(0);
             config.setId(9L);
-            return true;
+            return config;
+        });
+        when(dtoAssembler.toDTO(any(VendorConfig.class))).thenAnswer(invocation -> {
+            VendorConfig config = invocation.getArgument(0);
+            VendorConfigDTO dto = new VendorConfigDTO();
+            dto.setDataTypeId(config.getDataTypeId());
+            dto.setRuntimeMode(config.getRuntimeMode());
+            dto.setStatus(config.getStatus().getCode());
+            dto.setActiveConnectorVersionId(config.getActiveConnectorVersionId());
+            return dto;
         });
 
         try (var userContext = mockStatic(UserContext.class)) {
@@ -54,13 +75,17 @@ class VendorConfigControllerTest {
             assertThat(result.getData().getRuntimeMode()).isEqualTo("PLUGIN");
             assertThat(result.getData().getStatus()).isEqualTo("inactive");
             assertThat(result.getData().getActiveConnectorVersionId()).isNull();
-            verify(service).save(any(VendorConfig.class));
+            verify(service).createBinding(any(VendorConfig.class));
         }
     }
 
     @Test
     void rejectsUnknownDataTypeBeforePersistence() {
         VendorConfigCreateReqDTO request = request();
+        ApiInterface apiInterface = new ApiInterface();
+        apiInterface.setId(2L);
+        apiInterface.setDataTypeId(42L);
+        when(interfaceService.getById(2L)).thenReturn(apiInterface);
         when(service.getDataTypeIdByCode("WORLD_TIME")).thenReturn(null);
 
         try (var userContext = mockStatic(UserContext.class)) {
@@ -70,7 +95,27 @@ class VendorConfigControllerTest {
 
             assertThat(result.getCode()).isEqualTo(400);
             verify(service).getDataTypeIdByCode("WORLD_TIME");
-            verify(service, never()).save(any(VendorConfig.class));
+            verify(service, never()).createBinding(any(VendorConfig.class));
+        }
+    }
+
+    @Test
+    void duplicateBindingIsHandledAsHttpConflict() {
+        ApiInterface apiInterface = new ApiInterface();
+        apiInterface.setId(2L);
+        apiInterface.setDataTypeId(42L);
+        when(interfaceService.getById(2L)).thenReturn(apiInterface);
+        when(service.getDataTypeIdByCode("WORLD_TIME")).thenReturn(42L);
+        when(service.createBinding(any(VendorConfig.class)))
+                .thenThrow(new VendorConfigConflictException("当前接口已绑定该厂商"));
+
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("vendor:edit")).thenReturn(true);
+            assertThatThrownBy(() -> controller.create(request()))
+                    .isInstanceOf(VendorConfigConflictException.class);
+            var response = controller.conflict(new VendorConfigConflictException("当前接口已绑定该厂商"));
+            assertThat(response.getStatusCode().value()).isEqualTo(409);
+            assertThat(response.getBody().getCode()).isEqualTo(409);
         }
     }
 

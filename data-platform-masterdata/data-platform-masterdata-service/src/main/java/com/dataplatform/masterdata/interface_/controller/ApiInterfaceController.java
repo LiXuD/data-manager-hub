@@ -9,9 +9,11 @@ import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceCreateReqDTO;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceUpdateReqDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
+import com.dataplatform.masterdata.interface_.api.dto.VendorRoutingUpdateReqDTO;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
+import com.dataplatform.masterdata.interface_.service.ApiInterfaceDTOAssembler;
 import com.dataplatform.masterdata.interface_.service.InterfaceContractService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -33,11 +35,14 @@ public class ApiInterfaceController {
 
     private final ApiInterfaceService apiInterfaceService;
     private final InterfaceContractService interfaceContractService;
+    private final ApiInterfaceDTOAssembler dtoAssembler;
 
     public ApiInterfaceController(ApiInterfaceService apiInterfaceService,
-                                  InterfaceContractService interfaceContractService) {
+                                  InterfaceContractService interfaceContractService,
+                                  ApiInterfaceDTOAssembler dtoAssembler) {
         this.apiInterfaceService = apiInterfaceService;
         this.interfaceContractService = interfaceContractService;
+        this.dtoAssembler = dtoAssembler;
     }
 
     @GetMapping("/list")
@@ -50,7 +55,7 @@ public class ApiInterfaceController {
         com.dataplatform.common.result.PageResult<ApiInterfaceVO> result =
                 apiInterfaceService.list(vendorId, dataTypeId, status, page, pageSize);
         return PageResult.of(
-                result.getData().stream().map(this::toDTO).toList(),
+                dtoAssembler.toDTOs(result.getData()),
                 result.getTotal(),
                 result.getPage(),
                 result.getPageSize());
@@ -62,14 +67,12 @@ public class ApiInterfaceController {
         if (apiInterface == null) {
             return Result.error(404, "接口不存在");
         }
-        return Result.success(toDTO(apiInterface));
+        return Result.success(dtoAssembler.toDTO(apiInterface));
     }
 
     @GetMapping("/by-data-type/{dataTypeId}")
     public Result<List<ApiInterfaceDTO>> listByDataType(@PathVariable("dataTypeId") Long dataTypeId) {
-        return Result.success(apiInterfaceService.listByDataTypeId(dataTypeId).stream()
-                .map(this::toDTO)
-                .toList());
+        return Result.success(dtoAssembler.toDTOs(apiInterfaceService.listByDataTypeId(dataTypeId)));
     }
 
     @GetMapping("/options")
@@ -77,9 +80,7 @@ public class ApiInterfaceController {
             @RequestParam(name = "vendorId", required = false) Long vendorId,
             @RequestParam(name = "dataTypeId", required = false) Long dataTypeId,
             @RequestParam(name = "status", required = false) String status) {
-        return Result.success(apiInterfaceService.listOptions(vendorId, dataTypeId, status).stream()
-                .map(this::toDTO)
-                .toList());
+        return Result.success(dtoAssembler.toDTOs(apiInterfaceService.listOptions(vendorId, dataTypeId, status)));
     }
 
     @OperationLog(module = "接口管理", operation = "新增接口")
@@ -102,14 +103,15 @@ public class ApiInterfaceController {
         }
 
         apiInterface.setId(null);
-        if (apiInterface.getStatus() == null) {
-            apiInterface.setStatus(CommonStatus.ACTIVE);
+        if (CommonStatus.ACTIVE.equals(apiInterface.getStatus())) {
+            return Result.error(409, "接口创建后需先绑定并发布主厂商连接器");
         }
+        apiInterface.setStatus(CommonStatus.INACTIVE);
         if (apiInterface.getSort() == null) {
             apiInterface.setSort(0);
         }
         apiInterfaceService.save(apiInterface);
-        return Result.success(toDTO(apiInterface));
+        return Result.success(dtoAssembler.toDTO(apiInterface));
     }
 
     @OperationLog(module = "接口管理", operation = "更新接口")
@@ -124,8 +126,18 @@ public class ApiInterfaceController {
         }
         ApiInterface apiInterface = toEntity(dto);
         apiInterface.setId(id);
+        if (CommonStatus.ACTIVE.equals(apiInterface.getStatus()) && !apiInterfaceService.canActivate(id)) {
+            return Result.error(409, "接口启用前必须配置可用的主厂商连接器");
+        }
         apiInterfaceService.updateById(apiInterface);
-        return Result.success(toDTO(apiInterfaceService.getById(id)));
+        return Result.success(dtoAssembler.toDTO(apiInterfaceService.getById(id)));
+    }
+
+    @OperationLog(module = "接口管理", operation = "更新接口厂商路由")
+    @PutMapping("/{id}/vendor-routing")
+    public Result<ApiInterfaceDTO> updateVendorRouting(@PathVariable("id") Long id,
+                                                       @RequestBody VendorRoutingUpdateReqDTO request) {
+        return Result.success(dtoAssembler.toDTO(apiInterfaceService.updateVendorRouting(id, request)));
     }
 
     @OperationLog(module = "接口管理", operation = "删除接口")
@@ -150,6 +162,10 @@ public class ApiInterfaceController {
         ApiInterface existing = apiInterfaceService.getById(id);
         if (existing == null) {
             return Result.error(404, "接口不存在");
+        }
+
+        if (CommonStatus.ACTIVE.equals(status) && !apiInterfaceService.canActivate(id)) {
+            return Result.error(409, "接口启用前必须配置可用的主厂商连接器");
         }
 
         ApiInterface apiInterface = new ApiInterface();
@@ -206,18 +222,6 @@ public class ApiInterfaceController {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Result<Void>> handleContractValidation(IllegalArgumentException exception) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Result.error(400, exception.getMessage()));
-    }
-
-    private ApiInterfaceDTO toDTO(ApiInterface entity) {
-        if (entity == null) {
-            return null;
-        }
-        ApiInterfaceDTO dto = new ApiInterfaceDTO();
-        BeanUtils.copyProperties(entity, dto);
-        if (entity.getStatus() != null) {
-            dto.setStatus(entity.getStatus().getCode());
-        }
-        return dto;
     }
 
     private ApiInterface toEntity(ApiInterfaceCreateReqDTO dto) {

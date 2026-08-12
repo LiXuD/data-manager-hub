@@ -1,6 +1,7 @@
 package com.dataplatform.masterdata.interface_.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -9,13 +10,18 @@ import com.dataplatform.access.call.api.dto.DailyCallStatsDTO;
 import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.constant.StatusConstants;
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
+import com.dataplatform.masterdata.interface_.api.dto.VendorRoutingUpdateReqDTO;
 import com.dataplatform.masterdata.interface_.mapper.ApiInterfaceMapper;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.dataplatform.masterdata.vendor.service.VendorConfigService;
+import com.dataplatform.masterdata.connector.entity.VendorConnectorVersion;
+import com.dataplatform.masterdata.connector.mapper.VendorConnectorVersionMapper;
+import com.dataplatform.masterdata.vendor.entity.VendorConfig;
+import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -49,7 +55,10 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
     private StringRedisTemplate redisTemplate;
 
     @Autowired
-    private VendorConfigService vendorConfigService;
+    private VendorConfigMapper vendorConfigMapper;
+
+    @Autowired
+    private VendorConnectorVersionMapper connectorVersionMapper;
 
     @Override
     public PageResult<ApiInterfaceVO> list(Long vendorId, Long dataTypeId, String status, int page, int pageSize) {
@@ -120,8 +129,96 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
     }
 
     @Override
+    public ApiInterface updateVendorRouting(Long interfaceId, VendorRoutingUpdateReqDTO request) {
+        if (interfaceId == null || request == null) {
+            throw new IllegalArgumentException("接口和厂商路由不能为空");
+        }
+        ApiInterface apiInterface = getById(interfaceId);
+        if (apiInterface == null) {
+            throw new IllegalArgumentException("接口不存在");
+        }
+        Long primaryId = request.getPrimaryVendorConfigId();
+        Long fallbackId = request.getFallbackVendorConfigId();
+        if (primaryId != null && primaryId.equals(fallbackId)) {
+            throw new IllegalArgumentException("主厂商和备用厂商不能相同");
+        }
+        validateRoutingConfig(interfaceId, primaryId, "主厂商配置");
+        validateRoutingConfig(interfaceId, fallbackId, "备用厂商配置");
+
+        LambdaUpdateWrapper<ApiInterface> update = new LambdaUpdateWrapper<>();
+        update.eq(ApiInterface::getId, interfaceId)
+                .set(ApiInterface::getPrimaryVendorConfigId, primaryId)
+                .set(ApiInterface::getFallbackVendorConfigId, fallbackId);
+        if (baseMapper.update(null, update) != 1) {
+            throw new IllegalArgumentException("接口路由更新失败");
+        }
+        redisTemplate.delete(INTERFACE_CACHE_PREFIX + apiInterface.getInterfaceCode());
+        return getById(interfaceId);
+    }
+
+    @Override
+    public boolean assignPrimaryIfAbsent(Long interfaceId, Long vendorConfigId) {
+        LambdaUpdateWrapper<ApiInterface> update = new LambdaUpdateWrapper<>();
+        update.eq(ApiInterface::getId, interfaceId)
+                .isNull(ApiInterface::getPrimaryVendorConfigId)
+                .set(ApiInterface::getPrimaryVendorConfigId, vendorConfigId);
+        return baseMapper.update(null, update) == 1;
+    }
+
+    @Override
+    public ApiInterface getByRoutingConfigId(Long vendorConfigId) {
+        if (vendorConfigId == null) {
+            return null;
+        }
+        LambdaQueryWrapper<ApiInterface> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ApiInterface::getDeleted, false)
+                .and(condition -> condition.eq(ApiInterface::getPrimaryVendorConfigId, vendorConfigId)
+                        .or().eq(ApiInterface::getFallbackVendorConfigId, vendorConfigId));
+        return getOne(wrapper, false);
+    }
+
+    @Override
+    public boolean canActivate(Long interfaceId) {
+        ApiInterface apiInterface = getById(interfaceId);
+        if (apiInterface == null || apiInterface.getPrimaryVendorConfigId() == null
+                || !canActivateConfig(apiInterface.getPrimaryVendorConfigId())) {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean canActivateConfig(Long vendorConfigId) {
+        VendorConfig config = vendorConfigMapper.selectById(vendorConfigId);
+        if (config == null || !CommonStatus.ACTIVE.equals(config.getStatus())
+                || !"PLUGIN".equals(config.getRuntimeMode())
+                || config.getActiveConnectorVersionId() == null) {
+            return false;
+        }
+        VendorConnectorVersion version = connectorVersionMapper.selectById(config.getActiveConnectorVersionId());
+        return version != null
+                && vendorConfigId.equals(version.getVendorConfigId())
+                && "ACTIVE".equals(version.getStatus());
+    }
+
+    private void validateRoutingConfig(Long interfaceId, Long configId, String role) {
+        if (configId == null) {
+            return;
+        }
+        VendorConfig config = vendorConfigMapper.selectById(configId);
+        if (config == null || !interfaceId.equals(config.getInterfaceId())
+                || Boolean.TRUE.equals(config.getDeleted())) {
+            throw new IllegalArgumentException(role + "不存在、已删除或不属于当前接口");
+        }
+    }
+
+    @Override
     public boolean hasApiConfig(Long interfaceId) {
-        return interfaceId != null && vendorConfigService.getByInterfaceId(interfaceId) != null;
+        if (interfaceId == null) {
+            return false;
+        }
+        return vendorConfigMapper.selectCount(new LambdaQueryWrapper<VendorConfig>()
+                .eq(VendorConfig::getInterfaceId, interfaceId)
+                .eq(VendorConfig::getStatus, StatusConstants.ACTIVE)) > 0;
     }
 
     @Override

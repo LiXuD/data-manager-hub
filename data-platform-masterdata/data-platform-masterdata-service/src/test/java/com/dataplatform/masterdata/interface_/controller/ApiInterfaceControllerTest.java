@@ -4,6 +4,7 @@ import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceCreateReqDTO;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceUpdateReqDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
+import com.dataplatform.masterdata.interface_.service.ApiInterfaceDTOAssembler;
 import com.dataplatform.masterdata.interface_.service.InterfaceContractService;
 import com.dataplatform.common.util.UserContext;
 import org.junit.jupiter.api.Test;
@@ -17,8 +18,9 @@ class ApiInterfaceControllerTest {
 
     private final ApiInterfaceService apiInterfaceService = mock(ApiInterfaceService.class);
     private final InterfaceContractService interfaceContractService = mock(InterfaceContractService.class);
+    private final ApiInterfaceDTOAssembler dtoAssembler = mock(ApiInterfaceDTOAssembler.class);
     private final ApiInterfaceController controller = new ApiInterfaceController(
-            apiInterfaceService, interfaceContractService);
+            apiInterfaceService, interfaceContractService, dtoAssembler);
 
     @Test
     void rejectsSchemaSnapshotDuringCreate() {

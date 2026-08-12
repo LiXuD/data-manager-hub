@@ -11,9 +11,17 @@ import com.dataplatform.masterdata.vendor.api.dto.VendorConfigCreateReqDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigUpdateReqDTO;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
+import com.dataplatform.masterdata.interface_.entity.ApiInterface;
+import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
+import com.dataplatform.masterdata.vendor.service.VendorConfigConflictException;
+import com.dataplatform.masterdata.vendor.service.VendorConfigDTOAssembler;
 import com.dataplatform.masterdata.vendor.service.VendorHealthService;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,11 +37,18 @@ public class VendorConfigController {
 
     private final VendorConfigService vendorConfigService;
     private final VendorHealthService vendorHealthService;
+    private final ApiInterfaceService apiInterfaceService;
+    private final VendorConfigDTOAssembler dtoAssembler;
 
+    @Autowired
     public VendorConfigController(VendorConfigService vendorConfigService,
-                                  VendorHealthService vendorHealthService) {
+                                  VendorHealthService vendorHealthService,
+                                  ApiInterfaceService apiInterfaceService,
+                                  VendorConfigDTOAssembler dtoAssembler) {
         this.vendorConfigService = vendorConfigService;
         this.vendorHealthService = vendorHealthService;
+        this.apiInterfaceService = apiInterfaceService;
+        this.dtoAssembler = dtoAssembler;
     }
 
     @GetMapping("/list")
@@ -63,15 +78,13 @@ public class VendorConfigController {
             wrapper.eq(VendorConfig::getStatus, parsedStatus.getCode());
         }
         wrapper.orderByDesc(VendorConfig::getCreatedAt);
-        return Result.success(vendorConfigService.list(wrapper).stream()
-                .map(this::toDTO)
-                .toList());
+        return Result.success(dtoAssembler.toDTOs(vendorConfigService.list(wrapper)));
     }
 
     @GetMapping("/{id}")
     public Result<VendorConfigDTO> getById(@PathVariable("id") Long id) {
         if (!canView()) return Result.error(403, "没有厂商配置查看权限");
-        return Result.success(toDTO(vendorConfigService.getById(id)));
+        return Result.success(dtoAssembler.toDTO(vendorConfigService.getById(id)));
     }
 
     @GetMapping("/vendor/{vendorId}")
@@ -80,9 +93,7 @@ public class VendorConfigController {
         LambdaQueryWrapper<VendorConfig> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(VendorConfig::getVendorId, vendorId)
                 .orderByDesc(VendorConfig::getCreatedAt);
-        return Result.success(vendorConfigService.list(wrapper).stream()
-                .map(this::toDTO)
-                .toList());
+        return Result.success(dtoAssembler.toDTOs(vendorConfigService.list(wrapper)));
     }
 
     @GetMapping("/interface/{interfaceId}")
@@ -91,9 +102,7 @@ public class VendorConfigController {
         LambdaQueryWrapper<VendorConfig> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(VendorConfig::getInterfaceId, interfaceId)
                 .orderByDesc(VendorConfig::getCreatedAt);
-        return Result.success(vendorConfigService.list(wrapper).stream()
-                .map(this::toDTO)
-                .toList());
+        return Result.success(dtoAssembler.toDTOs(vendorConfigService.list(wrapper)));
     }
 
     @OperationLog(module = "厂商配置管理", operation = "新增厂商配置")
@@ -107,18 +116,29 @@ public class VendorConfigController {
         if (config.getInterfaceId() == null) {
             return Result.error(400, "接口ID不能为空");
         }
-        Long dataTypeId = vendorConfigService.getDataTypeIdByCode(dto.getDataTypeCode());
-        if (dataTypeId == null) {
-            return Result.error(400, "数据类型不存在或未启用");
+        ApiInterface apiInterface = apiInterfaceService.getById(dto.getInterfaceId());
+        if (apiInterface == null) {
+            return Result.error(404, "接口不存在");
         }
-        config.setDataTypeId(dataTypeId);
+        if (dto.getDataTypeId() != null && !dto.getDataTypeId().equals(apiInterface.getDataTypeId())) {
+            return Result.error(400, "数据类型ID必须与接口数据类型一致");
+        }
+        if (dto.getDataTypeCode() != null && !dto.getDataTypeCode().isBlank()) {
+            Long requestedDataTypeId = vendorConfigService.getDataTypeIdByCode(dto.getDataTypeCode());
+            if (requestedDataTypeId == null) {
+                return Result.error(400, "数据类型不存在或未启用");
+            }
+            if (!requestedDataTypeId.equals(apiInterface.getDataTypeId())) {
+                return Result.error(400, "数据类型编码必须与接口数据类型一致");
+            }
+        }
+        config.setDataTypeId(apiInterface.getDataTypeId());
         applyDefaults(config);
         config.setRuntimeMode("PLUGIN");
         config.setActiveConnectorVersionId(null);
         config.setConnectorVersion(0);
         config.setStatus(CommonStatus.INACTIVE);
-        vendorConfigService.save(config);
-        return Result.success(toDTO(config));
+        return Result.success(dtoAssembler.toDTO(vendorConfigService.createBinding(config)));
     }
 
     @OperationLog(module = "厂商配置管理", operation = "更新厂商配置")
@@ -133,13 +153,19 @@ public class VendorConfigController {
         if (!success) {
             return Result.error(404, "配置不存在");
         }
-        return Result.success(toDTO(vendorConfigService.getById(id)));
+        return Result.success(dtoAssembler.toDTO(vendorConfigService.getById(id)));
     }
 
     @OperationLog(module = "厂商配置管理", operation = "删除厂商配置")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
         if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
+        if (vendorConfigService.getById(id) == null) {
+            return Result.error(404, "配置不存在");
+        }
+        if (apiInterfaceService.getByRoutingConfigId(id) != null) {
+            return Result.error(409, "主/备用路由正在引用该配置，不能删除");
+        }
         boolean success = vendorConfigService.removeById(id);
         if (!success) {
             return Result.error(404, "配置不存在");
@@ -180,6 +206,18 @@ public class VendorConfigController {
         return Result.success(vendorHealthService.testConnection(id));
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Result<Void>> invalidRequest(IllegalArgumentException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Result.error(400, exception.getMessage()));
+    }
+
+    @ExceptionHandler({VendorConfigConflictException.class, DuplicateKeyException.class})
+    public ResponseEntity<Result<Void>> conflict(RuntimeException exception) {
+        String message = exception instanceof VendorConfigConflictException
+                ? exception.getMessage() : "当前接口已绑定该厂商";
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Result.error(409, message));
+    }
+
     private boolean canView() {
         return UserContext.hasPermission("vendor:view");
     }
@@ -211,18 +249,6 @@ public class VendorConfigController {
         if (config.getCircuitTimeout() == null) {
             config.setCircuitTimeout(60);
         }
-    }
-
-    private VendorConfigDTO toDTO(VendorConfig entity) {
-        if (entity == null) {
-            return null;
-        }
-        VendorConfigDTO dto = new VendorConfigDTO();
-        BeanUtils.copyProperties(entity, dto);
-        if (entity.getStatus() != null) {
-            dto.setStatus(entity.getStatus().getCode());
-        }
-        return dto;
     }
 
     private VendorConfig toEntity(VendorConfigCreateReqDTO dto) {
