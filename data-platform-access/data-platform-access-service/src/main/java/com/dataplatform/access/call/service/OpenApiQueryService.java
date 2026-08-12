@@ -102,11 +102,22 @@ public class OpenApiQueryService {
             }
         }
 
-        Map<String, Object> vendorResult = vendorProxyService.callVendor(
-                context.getVendorCode(),
-                context.getDataTypeCode(),
-                context.getParams(),
-                context.getVendorConfig());
+        Map<String, Object> vendorResult;
+        if (context.getPrimaryVendorConfig() != null) {
+            vendorResult = vendorProxyService.callVendor(
+                    context.getVendorCode(),
+                    context.getFallbackVendorCode(),
+                    context.getDataTypeCode(),
+                    context.getParams(),
+                    context.getPrimaryVendorConfig(),
+                    context.getFallbackVendorConfig());
+        } else {
+            vendorResult = vendorProxyService.callVendor(
+                    context.getVendorCode(),
+                    context.getDataTypeCode(),
+                    context.getParams(),
+                    context.getVendorConfig());
+        }
 
         LocalDateTime responseTime = LocalDateTime.now();
         long duration = System.currentTimeMillis() - startTime;
@@ -540,8 +551,11 @@ public class OpenApiQueryService {
         private Long apiKeyId;
         private Long vendorId;
         private String vendorCode;
+        private String fallbackVendorCode;
         private String dataTypeCode;
         private VendorConfigDTO vendorConfig;
+        private VendorConfigDTO primaryVendorConfig;
+        private VendorConfigDTO fallbackVendorConfig;
         private Long productId;
         private String productCode;
         private String productName;
@@ -571,10 +585,20 @@ public class OpenApiQueryService {
         public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
         public String getVendorCode() { return vendorCode; }
         public void setVendorCode(String vendorCode) { this.vendorCode = vendorCode; }
+        public String getFallbackVendorCode() { return fallbackVendorCode; }
+        public void setFallbackVendorCode(String fallbackVendorCode) { this.fallbackVendorCode = fallbackVendorCode; }
         public String getDataTypeCode() { return dataTypeCode; }
         public void setDataTypeCode(String dataTypeCode) { this.dataTypeCode = dataTypeCode; }
         public VendorConfigDTO getVendorConfig() { return vendorConfig; }
         public void setVendorConfig(VendorConfigDTO vendorConfig) { this.vendorConfig = vendorConfig; }
+        public VendorConfigDTO getPrimaryVendorConfig() { return primaryVendorConfig; }
+        public void setPrimaryVendorConfig(VendorConfigDTO primaryVendorConfig) {
+            this.primaryVendorConfig = primaryVendorConfig;
+        }
+        public VendorConfigDTO getFallbackVendorConfig() { return fallbackVendorConfig; }
+        public void setFallbackVendorConfig(VendorConfigDTO fallbackVendorConfig) {
+            this.fallbackVendorConfig = fallbackVendorConfig;
+        }
         public Long getProductId() { return productId; }
         public void setProductId(Long productId) { this.productId = productId; }
         public String getProductCode() { return productCode; }

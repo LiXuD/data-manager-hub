@@ -64,6 +64,78 @@ public class VendorProxyService {
     }
 
     /**
+     * Explicit OpenAPI route. The fallback is a single exact configuration and
+     * its own fallbackVendorId is deliberately ignored.
+     */
+    public Map<String, Object> callVendor(String primaryVendorCode, String fallbackVendorCode,
+                                           String dataTypeCode, Map<String, Object> params,
+                                           VendorConfigDTO primaryConfig, VendorConfigDTO fallbackConfig) {
+        Map<String, Object> primaryResult = executeExplicitConfig(
+                primaryConfig, primaryVendorCode, dataTypeCode, params);
+        if (Boolean.TRUE.equals(primaryResult.get("success"))
+                || !shouldFallback(primaryResult)
+                || fallbackConfig == null) {
+            return primaryResult;
+        }
+
+        String resolvedFallbackCode = normalize(fallbackVendorCode);
+        if (resolvedFallbackCode == null) {
+            resolvedFallbackCode = resolveVendorCode(fallbackConfig.getVendorId());
+        }
+        if (resolvedFallbackCode == null) {
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "FALLBACK_UNAVAILABLE", "主厂商和备用厂商均不可用", null);
+        }
+
+        Map<String, Object> fallbackResult = executeExplicitConfig(
+                fallbackConfig, resolvedFallbackCode, dataTypeCode, params);
+        fallbackResult.put("fallbackFrom", primaryVendorCode);
+        return fallbackResult;
+    }
+
+    private Map<String, Object> executeExplicitConfig(VendorConfigDTO config, String vendorCode,
+                                                      String dataTypeCode, Map<String, Object> params) {
+        if (config == null || config.getVendorId() == null
+                || !StatusConstants.ACTIVE.equals(config.getStatus())
+                || normalize(vendorCode) == null) {
+            return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
+                    "CONFIG_NOT_READY", "显式厂商路由配置不可用", RequestDeliveryState.NOT_SENT);
+        }
+        try {
+            Map<String, Object> result = circuitBreakerManager.executeWithProtection(vendorCode,
+                    () -> executeConfiguredRuntime(config, vendorCode, dataTypeCode, params),
+                    this::isCircuitFailure);
+            result.putIfAbsent("actualVendorId", config.getVendorId());
+            result.putIfAbsent("actualVendorCode", vendorCode);
+            return result;
+        } catch (CallNotPermittedException exception) {
+            return pluginErrorResult(ErrorCategory.TRANSPORT_CONNECTION_ERROR,
+                    "CIRCUIT_BREAKER_OPEN", "厂商服务暂时不可用，请稍后重试",
+                    RequestDeliveryState.NOT_SENT);
+        } catch (Exception exception) {
+            log.error("显式厂商调用失败: vendor={}, error={}", vendorCode, exception.getMessage());
+            return pluginErrorResult(ErrorCategory.PLUGIN_INTERNAL_ERROR,
+                    "PLUGIN_INTERNAL_ERROR", "连接器执行失败", RequestDeliveryState.MAYBE_SENT);
+        }
+    }
+
+    private String resolveVendorCode(Long vendorId) {
+        if (vendorId == null) {
+            return null;
+        }
+        Result<VendorInfoDTO> result = vendorFeignClient.getById(vendorId);
+        VendorInfoDTO vendor = result != null ? result.getData() : null;
+        if (vendor == null || !StatusConstants.ACTIVE.equals(vendor.getStatus())) {
+            return null;
+        }
+        return normalize(vendor.getVendorCode());
+    }
+
+    private String normalize(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    /**
      * 递归调用厂商API，支持主备切换
      */
     private Map<String, Object> callVendorWithFallback(String vendorCode, String dataTypeCode,

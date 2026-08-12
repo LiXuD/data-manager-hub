@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.dataplatform.api.Result;
@@ -120,6 +121,48 @@ class VendorProxyServicePluginModeTest {
         assertEquals("PRIMARY", result.get("fallbackFrom"));
         verify(connectorExecutor, times(1)).execute(primary, "PRIMARY", "PERSON", params);
         verify(connectorExecutor, times(1)).execute(backup, "BACKUP", "PERSON", params);
+    }
+
+    @Test
+    void explicitRouteUsesExactFallbackWithoutFollowingFallbackConfigChain() {
+        VendorConfigDTO primary = activePluginConfig(1L, 99L);
+        VendorConfigDTO fallback = activePluginConfig(2L, 3L);
+        Map<String, Object> params = Map.of("id", "1");
+        when(connectorExecutor.execute(primary, "PRIMARY", "PERSON", params))
+                .thenReturn(failure(ErrorCategory.TRANSPORT_CONNECTION_ERROR, RequestDeliveryState.NOT_SENT));
+        when(connectorExecutor.execute(fallback, "BACKUP", "PERSON", params))
+                .thenReturn(success("backup-plugin", "2.1.0"));
+
+        Map<String, Object> result = service.callVendor(
+                "PRIMARY", "BACKUP", "PERSON", params, primary, fallback);
+
+        assertTrue(Boolean.TRUE.equals(result.get("success")));
+        assertEquals(2L, result.get("actualVendorId"));
+        assertEquals("BACKUP", result.get("actualVendorCode"));
+        assertEquals("PRIMARY", result.get("fallbackFrom"));
+        verify(connectorExecutor, times(1)).execute(primary, "PRIMARY", "PERSON", params);
+        verify(connectorExecutor, times(1)).execute(fallback, "BACKUP", "PERSON", params);
+        verifyNoInteractions(vendorClient, configClient);
+    }
+
+    @Test
+    void explicitRouteNeverFallsBackAfterMaybeSentOrSentFailure() {
+        for (RequestDeliveryState deliveryState : new RequestDeliveryState[]{
+                RequestDeliveryState.MAYBE_SENT, RequestDeliveryState.SENT}) {
+            setUp();
+            VendorConfigDTO primary = activePluginConfig(1L, 2L);
+            VendorConfigDTO fallback = activePluginConfig(2L, null);
+            Map<String, Object> params = Map.of("delivery", deliveryState.name());
+            when(connectorExecutor.execute(primary, "PRIMARY", "PERSON", params))
+                    .thenReturn(failure(ErrorCategory.TRANSPORT_TIMEOUT, deliveryState));
+
+            Map<String, Object> result = service.callVendor(
+                    "PRIMARY", "BACKUP", "PERSON", params, primary, fallback);
+
+            assertFalse(Boolean.TRUE.equals(result.get("success")));
+            verify(connectorExecutor, times(1)).execute(primary, "PRIMARY", "PERSON", params);
+            verify(connectorExecutor, never()).execute(fallback, "BACKUP", "PERSON", params);
+        }
     }
 
     @Test

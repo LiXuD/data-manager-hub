@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,6 +52,7 @@ class ConnectorPluginActivationServiceTest {
     private ConnectorRuntimeProperties properties;
     private ObjectProvider<Registration> registrationProvider;
     private ObjectProvider<ConnectorPipelineRetirement> pipelineRetirementProvider;
+    private ConnectorActivationSchemaGuard schemaGuard;
 
     @BeforeEach
     void setUp() {
@@ -67,6 +69,8 @@ class ConnectorPluginActivationServiceTest {
 
         registrationProvider = mock(ObjectProvider.class);
         pipelineRetirementProvider = mock(ObjectProvider.class);
+        schemaGuard = mock(ConnectorActivationSchemaGuard.class);
+        when(schemaGuard.isReady()).thenReturn(true);
         when(pipelineRetirementProvider.orderedStream()).thenAnswer(invocation -> Stream.empty());
         Registration registration = mock(Registration.class);
         when(registration.getHost()).thenReturn("10.0.0.1");
@@ -93,8 +97,34 @@ class ConnectorPluginActivationServiceTest {
         when(pluginClient.getArtifact("demo", "1.0.0")).thenReturn(Result.success(artifact));
         service = new ConnectorPluginActivationService(
                 mapper, pluginClient, runtime, discoveryClient, properties,
-                new SimpleMeterRegistry(), registrationProvider, pipelineRetirementProvider,
+                new SimpleMeterRegistry(), registrationProvider, pipelineRetirementProvider, schemaGuard,
                 new MockEnvironment());
+    }
+
+    @Test
+    void missingActivationSchemaSkipsMapperAndClosesReadiness() {
+        when(schemaGuard.isReady()).thenReturn(false);
+
+        service.processPendingActivations();
+        service.heartbeat();
+        service.synchronizeRequiredArtifacts();
+
+        assertFalse(service.isReady());
+        assertEquals("CONNECTOR_SCHEMA_NOT_READY", service.readinessErrorCode());
+        verifyNoMapperCalls();
+    }
+
+    @Test
+    void activationContinuesAfterSchemaRecovery() {
+        when(schemaGuard.isReady()).thenReturn(false, true, true, true, true);
+
+        service.processPendingActivations();
+        verifyNoMapperCalls();
+
+        var summary = service.requestStage("demo", "1.0.0");
+
+        verify(runtime).preload(artifact());
+        assertTrue(summary.getReady());
     }
 
     @Test
@@ -307,5 +337,13 @@ class ConnectorPluginActivationServiceTest {
         activation.setCreatedAt(LocalDateTime.now());
         activation.setUpdatedAt(LocalDateTime.now());
         return activation;
+    }
+
+    private void verifyNoMapperCalls() {
+        verify(mapper, never()).selectOne(any());
+        verify(mapper, never()).selectList(any());
+        verify(mapper, never()).insert(any(ConnectorPluginActivation.class));
+        verify(mapper, never()).update(any(), any());
+        verify(mapper, never()).updateById(any(ConnectorPluginActivation.class));
     }
 }

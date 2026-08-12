@@ -22,6 +22,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
@@ -35,6 +37,9 @@ import org.springframework.util.StringUtils;
 @Service
 public class ConnectorPluginActivationService {
 
+    static final String CONNECTOR_SCHEMA_NOT_READY = "CONNECTOR_SCHEMA_NOT_READY";
+
+    private static final Logger log = LoggerFactory.getLogger(ConnectorPluginActivationService.class);
     private static final String ACCESS_SERVICE = "data-platform-access";
     private static final String CONNECTOR_INSTANCE_ID_METADATA = "connectorInstanceId";
 
@@ -46,6 +51,7 @@ public class ConnectorPluginActivationService {
     private final MeterRegistry meterRegistry;
     private final ObjectProvider<Registration> localRegistrationProvider;
     private final ObjectProvider<ConnectorPipelineRetirement> pipelineRetirementProvider;
+    private final ConnectorActivationSchemaGuard schemaGuard;
     private final String localInstanceId;
     private final String localDiscoveryAddress;
     private final ConcurrentMap<String, Object> versionMonitors = new ConcurrentHashMap<>();
@@ -62,6 +68,7 @@ public class ConnectorPluginActivationService {
             MeterRegistry meterRegistry,
             ObjectProvider<Registration> localRegistrationProvider,
             ObjectProvider<ConnectorPipelineRetirement> pipelineRetirementProvider,
+            ConnectorActivationSchemaGuard schemaGuard,
             Environment environment) {
         this.mapper = mapper;
         this.pluginClient = pluginClient;
@@ -71,6 +78,7 @@ public class ConnectorPluginActivationService {
         this.meterRegistry = meterRegistry;
         this.localRegistrationProvider = localRegistrationProvider;
         this.pipelineRetirementProvider = pipelineRetirementProvider;
+        this.schemaGuard = schemaGuard;
         this.localInstanceId = resolveLocalInstanceId(properties, environment);
         this.localDiscoveryAddress = resolveLocalDiscoveryAddress(environment);
         meterRegistry.gauge("connector_plugin_active_versions", runtime,
@@ -81,6 +89,9 @@ public class ConnectorPluginActivationService {
 
     public ConnectorPluginActivationSummaryDTO requestStage(String pluginId, String pluginVersion) {
         validateCoordinates(pluginId, pluginVersion);
+        if (!ensureSchemaReady()) {
+            return unavailableSummary(pluginId, pluginVersion);
+        }
         PluginArtifactDescriptorDTO artifact = requireArtifact(pluginId, pluginVersion);
         LocalDateTime now = LocalDateTime.now();
         for (String instanceId : activeInstanceIds()) {
@@ -110,6 +121,9 @@ public class ConnectorPluginActivationService {
 
     public ConnectorPluginActivationSummaryDTO requestRelease(String pluginId, String pluginVersion) {
         validateCoordinates(pluginId, pluginVersion);
+        if (!ensureSchemaReady()) {
+            return unavailableSummary(pluginId, pluginVersion);
+        }
         PluginArtifactDescriptorDTO artifact = requireArtifact(pluginId, pluginVersion);
         LocalDateTime now = LocalDateTime.now();
         for (String instanceId : activeInstanceIds()) {
@@ -134,6 +148,9 @@ public class ConnectorPluginActivationService {
 
     public ConnectorPluginActivationSummaryDTO summary(String pluginId, String pluginVersion) {
         validateCoordinates(pluginId, pluginVersion);
+        if (!ensureSchemaReady()) {
+            return unavailableSummary(pluginId, pluginVersion);
+        }
         List<ConnectorPluginActivation> records = mapper.selectList(new LambdaQueryWrapper<ConnectorPluginActivation>()
                 .eq(ConnectorPluginActivation::getPluginId, pluginId)
                 .eq(ConnectorPluginActivation::getPluginVersion, pluginVersion));
@@ -167,6 +184,9 @@ public class ConnectorPluginActivationService {
 
     /** Preloads all plugin versions referenced by active published connector bindings. */
     public void synchronizeRequiredArtifacts() {
+        if (!ensureSchemaReady()) {
+            return;
+        }
         try {
             Result<List<PluginArtifactDescriptorDTO>> response = pluginClient.getRequiredArtifacts();
             if (response == null || response.getData() == null) {
@@ -193,6 +213,9 @@ public class ConnectorPluginActivationService {
 
     @Scheduled(fixedDelayString = "${connector.runtime.activation-poll-interval-ms:2000}")
     public void processPendingActivations() {
+        if (!ensureSchemaReady()) {
+            return;
+        }
         List<ConnectorPluginActivation> pending = mapper.selectList(
                 new LambdaQueryWrapper<ConnectorPluginActivation>()
                         .in(ConnectorPluginActivation::getServiceInstanceId, localInstanceAliases())
@@ -210,6 +233,9 @@ public class ConnectorPluginActivationService {
 
     @Scheduled(fixedDelayString = "${connector.runtime.heartbeat-interval-ms:30000}")
     public void heartbeat() {
+        if (!ensureSchemaReady()) {
+            return;
+        }
         mapper.update(null, new LambdaUpdateWrapper<ConnectorPluginActivation>()
                 .in(ConnectorPluginActivation::getServiceInstanceId, localInstanceAliases())
                 .ne(ConnectorPluginActivation::getState, ConnectorActivationState.RELEASED.name())
@@ -218,6 +244,9 @@ public class ConnectorPluginActivationService {
     }
 
     public boolean isReady() {
+        if (!ensureSchemaReady()) {
+            return false;
+        }
         if (!initialSyncCompleted) {
             return false;
         }
@@ -234,6 +263,35 @@ public class ConnectorPluginActivationService {
 
     public String readinessErrorCode() {
         return initialSyncErrorCode;
+    }
+
+    private boolean ensureSchemaReady() {
+        if (schemaGuard.isReady()) {
+            return true;
+        }
+        initialSyncCompleted = false;
+        initialSyncErrorCode = CONNECTOR_SCHEMA_NOT_READY;
+        log.warn("连接器激活表不存在，readiness保持关闭: errorCode={}", CONNECTOR_SCHEMA_NOT_READY);
+        return false;
+    }
+
+    private ConnectorPluginActivationSummaryDTO unavailableSummary(String pluginId, String pluginVersion) {
+        ConnectorPluginActivationSummaryDTO result = new ConnectorPluginActivationSummaryDTO();
+        result.setPluginId(pluginId);
+        result.setPluginVersion(pluginVersion);
+        result.setReady(false);
+        List<ConnectorPluginActivationDTO> instances = new ArrayList<>();
+        for (String instanceId : activeInstanceIds()) {
+            ConnectorPluginActivationDTO missing = new ConnectorPluginActivationDTO();
+            missing.setServiceInstanceId(instanceId);
+            missing.setPluginId(pluginId);
+            missing.setPluginVersion(pluginVersion);
+            missing.setState(CONNECTOR_SCHEMA_NOT_READY);
+            missing.setSafeErrorCode(CONNECTOR_SCHEMA_NOT_READY);
+            instances.add(missing);
+        }
+        result.setInstances(instances);
+        return result;
     }
 
     public String localInstanceId() {
