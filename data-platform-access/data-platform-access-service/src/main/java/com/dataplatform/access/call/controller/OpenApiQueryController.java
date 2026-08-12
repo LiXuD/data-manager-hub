@@ -2,7 +2,6 @@ package com.dataplatform.access.call.controller;
 
 import com.dataplatform.access.call.entity.CallScene;
 import com.dataplatform.access.call.service.CallSceneService;
-import com.dataplatform.access.call.service.GrayVendorResolver;
 import com.dataplatform.access.call.service.OpenApiQueryService;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
@@ -26,6 +25,7 @@ import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
+import com.dataplatform.masterdata.interface_.api.dto.RoutingReadiness;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
@@ -68,7 +68,6 @@ public class OpenApiQueryController {
     private final ApiInterfaceFeignClient apiInterfaceFeignClient;
     private final VendorConfigInternalFeignClient vendorConfigFeignClient;
     private final VendorInternalFeignClient vendorFeignClient;
-    private final GrayVendorResolver grayVendorResolver;
 
     public OpenApiQueryController(OpenApiQueryService openApiQueryService,
                                   RateLimitService rateLimitService,
@@ -80,8 +79,7 @@ public class OpenApiQueryController {
                                   CallSceneService callSceneService,
                                   ApiInterfaceFeignClient apiInterfaceFeignClient,
                                   VendorConfigInternalFeignClient vendorConfigFeignClient,
-                                  VendorInternalFeignClient vendorFeignClient,
-                                  GrayVendorResolver grayVendorResolver) {
+                                  VendorInternalFeignClient vendorFeignClient) {
         this.openApiQueryService = openApiQueryService;
         this.rateLimitService = rateLimitService;
         this.apiKeyService = apiKeyService;
@@ -93,7 +91,6 @@ public class OpenApiQueryController {
         this.apiInterfaceFeignClient = apiInterfaceFeignClient;
         this.vendorConfigFeignClient = vendorConfigFeignClient;
         this.vendorFeignClient = vendorFeignClient;
-        this.grayVendorResolver = grayVendorResolver;
     }
 
     @PostMapping("/query")
@@ -140,9 +137,7 @@ public class OpenApiQueryController {
             return error(403, "调用场景不存在或未启用");
         }
 
-        GrayVendorResolver.GrayRequestContext grayCtx = GrayVendorResolver.fromRequest(httpRequest,
-                apiKeyEntity.getCallerId(), caller.getCallerCode());
-        ApiRoute route = resolveApiRoute(apiCode, grayCtx);
+        ApiRoute route = resolveApiRoute(apiCode);
         if (route == null) {
             return error(404, "接口配置不存在");
         }
@@ -229,9 +224,7 @@ public class OpenApiQueryController {
             return error(403, "调用场景不存在或未启用");
         }
 
-        GrayVendorResolver.GrayRequestContext batchGrayCtx = GrayVendorResolver.fromRequest(httpRequest,
-                apiKeyEntity.getCallerId(), caller.getCallerCode());
-        ApiRoute route = resolveApiRoute(apiCode, batchGrayCtx);
+        ApiRoute route = resolveApiRoute(apiCode);
         if (route == null) {
             return error(404, "接口配置不存在");
         }
@@ -331,38 +324,43 @@ public class OpenApiQueryController {
         return rateLimitService.checkRateLimit(apiKeyEntity.getApiKey(), rateLimit);
     }
 
-    private ApiRoute resolveApiRoute(String apiCode, GrayVendorResolver.GrayRequestContext grayCtx) {
+    private ApiRoute resolveApiRoute(String apiCode) {
         Result<ApiInterfaceDTO> interfaceResult = apiInterfaceFeignClient.getByInterfaceCode(apiCode);
         ApiInterfaceDTO apiInterface = interfaceResult != null ? interfaceResult.getData() : null;
-        if (apiInterface == null || apiInterface.getId() == null) {
+        if (apiInterface == null || apiInterface.getId() == null
+                || apiInterface.getPrimaryVendorConfigId() == null
+                || !(RoutingReadiness.READY.equals(apiInterface.getRoutingReadiness())
+                || RoutingReadiness.FALLBACK_NOT_READY.equals(apiInterface.getRoutingReadiness()))) {
             return null;
         }
 
-        Result<List<VendorConfigDTO>> configResult = vendorConfigFeignClient.list(
-                null,
-                null,
-                apiInterface.getId(),
-                StatusConstants.ACTIVE);
-        List<VendorConfigDTO> configs = configResult != null ? configResult.getData() : Collections.emptyList();
-        if (configs == null || configs.isEmpty()) {
+        VendorConfigDTO primary = getActiveConfig(apiInterface.getPrimaryVendorConfigId(), apiInterface.getId());
+        if (primary == null) {
             return null;
         }
-
-        VendorConfigDTO config = configs.get(0);
-        if (configs.size() >= 2) {
-            VendorConfigDTO graySelected = grayVendorResolver.resolve(apiCode, configs, grayCtx);
-            if (graySelected != null) {
-                config = graySelected;
-            }
+        VendorConfigDTO fallback = null;
+        if (RoutingReadiness.READY.equals(apiInterface.getRoutingReadiness())
+                && apiInterface.getFallbackVendorConfigId() != null) {
+            fallback = getActiveConfig(apiInterface.getFallbackVendorConfigId(), apiInterface.getId());
         }
 
-        VendorInfoDTO vendor = getVendor(config.getVendorId());
-        if (vendor == null || normalize(vendor.getVendorCode()) == null || normalize(config.getDataTypeCode()) == null) {
+        VendorInfoDTO primaryVendor = getActiveVendor(primary.getVendorId());
+        VendorInfoDTO fallbackVendor = fallback == null ? null : getActiveVendor(fallback.getVendorId());
+        String primaryDataTypeCode = normalize(primary.getDataTypeCode());
+        String fallbackDataTypeCode = fallback == null ? null : normalize(fallback.getDataTypeCode());
+        if (primaryVendor == null || normalize(primaryVendor.getVendorCode()) == null
+                || primaryDataTypeCode == null) {
             return null;
+        }
+        if (fallback != null && (fallbackVendor == null || normalize(fallbackVendor.getVendorCode()) == null
+                || !primaryDataTypeCode.equals(fallbackDataTypeCode))) {
+            fallback = null;
+            fallbackVendor = null;
         }
         InterfaceContractDTO contract = loadContract(apiInterface.getId());
-        return new ApiRoute(apiInterface.getId(), config.getVendorId(), vendor.getVendorCode(),
-                config.getDataTypeCode(), config, contract);
+        return new ApiRoute(apiInterface.getId(), primary.getVendorId(), primaryVendor.getVendorCode(),
+                fallback == null ? null : fallbackVendor.getVendorCode(), primaryDataTypeCode,
+                primary, fallback, contract);
     }
 
     private InterfaceContractDTO loadContract(Long interfaceId) {
@@ -379,6 +377,22 @@ public class OpenApiQueryController {
         }
         Result<VendorInfoDTO> vendorResult = vendorFeignClient.getById(vendorId);
         return vendorResult != null ? vendorResult.getData() : null;
+    }
+
+    private VendorConfigDTO getActiveConfig(Long configId, Long interfaceId) {
+        Result<VendorConfigDTO> result = vendorConfigFeignClient.getById(configId);
+        VendorConfigDTO config = result != null ? result.getData() : null;
+        if (config == null || !configId.equals(config.getId())
+                || !interfaceId.equals(config.getInterfaceId())
+                || !StatusConstants.ACTIVE.equals(config.getStatus())) {
+            return null;
+        }
+        return config;
+    }
+
+    private VendorInfoDTO getActiveVendor(Long vendorId) {
+        VendorInfoDTO vendor = getVendor(vendorId);
+        return vendor != null && StatusConstants.ACTIVE.equals(vendor.getStatus()) ? vendor : null;
     }
 
     private OpenApiBatchQueryRespVO buildBatchResp(OpenApiBatchQueryReqVO request, ApiKey apiKey,
@@ -438,8 +452,11 @@ public class OpenApiQueryController {
         context.setApiKeyId(apiKey.getId());
         context.setVendorId(route.vendorId());
         context.setVendorCode(route.vendorCode());
+        context.setFallbackVendorCode(route.fallbackVendorCode());
         context.setDataTypeCode(route.dataTypeCode());
-        context.setVendorConfig(route.config());
+        context.setVendorConfig(route.primaryConfig());
+        context.setPrimaryVendorConfig(route.primaryConfig());
+        context.setFallbackVendorConfig(route.fallbackConfig());
         context.setProductId(product.getId());
         context.setProductCode(product.getProductCode());
         context.setProductName(product.getProductName());
@@ -474,7 +491,8 @@ public class OpenApiQueryController {
         return value.trim();
     }
 
-    private record ApiRoute(Long interfaceId, Long vendorId, String vendorCode, String dataTypeCode,
-                            VendorConfigDTO config, InterfaceContractDTO contract) {
+    private record ApiRoute(Long interfaceId, Long vendorId, String vendorCode, String fallbackVendorCode,
+                            String dataTypeCode, VendorConfigDTO primaryConfig,
+                            VendorConfigDTO fallbackConfig, InterfaceContractDTO contract) {
     }
 }

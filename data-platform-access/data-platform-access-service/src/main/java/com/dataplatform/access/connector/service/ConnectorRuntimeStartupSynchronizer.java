@@ -28,6 +28,10 @@ public class ConnectorRuntimeStartupSynchronizer {
     public void synchronize() {
         try {
             activationService.synchronizeRequiredArtifacts();
+            if (activationService.readinessErrorCode() != null) {
+                log.warn("连接器活动版本同步未完成，readiness保持关闭: errorCode={}",
+                        activationService.readinessErrorCode());
+            }
         } catch (RuntimeException ex) {
             log.warn("连接器活动版本同步失败，readiness保持关闭: errorCode={}",
                     activationService.readinessErrorCode());

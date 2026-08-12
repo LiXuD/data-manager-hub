@@ -2,7 +2,6 @@ package com.dataplatform.access.call.controller;
 
 import com.dataplatform.access.call.entity.CallScene;
 import com.dataplatform.access.call.service.CallSceneService;
-import com.dataplatform.access.call.service.GrayVendorResolver;
 import com.dataplatform.access.call.service.OpenApiQueryService;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
@@ -23,6 +22,7 @@ import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
+import com.dataplatform.masterdata.interface_.api.dto.RoutingReadiness;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
@@ -39,9 +39,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -59,7 +61,6 @@ class OpenApiQueryControllerTest {
     private ApiInterfaceFeignClient apiInterfaceFeignClient;
     private VendorConfigInternalFeignClient vendorConfigFeignClient;
     private VendorInternalFeignClient vendorFeignClient;
-    private GrayVendorResolver grayVendorResolver;
     private OpenApiQueryController controller;
 
     @BeforeEach
@@ -75,7 +76,6 @@ class OpenApiQueryControllerTest {
         apiInterfaceFeignClient = mock(ApiInterfaceFeignClient.class);
         vendorConfigFeignClient = mock(VendorConfigInternalFeignClient.class);
         vendorFeignClient = mock(VendorInternalFeignClient.class);
-        grayVendorResolver = mock(GrayVendorResolver.class);
         controller = new OpenApiQueryController(
                 openApiQueryService,
                 rateLimitService,
@@ -87,8 +87,7 @@ class OpenApiQueryControllerTest {
                 callSceneService,
                 apiInterfaceFeignClient,
                 vendorConfigFeignClient,
-                vendorFeignClient,
-                grayVendorResolver);
+                vendorFeignClient);
     }
 
     @Test
@@ -125,6 +124,8 @@ class OpenApiQueryControllerTest {
         ApiInterfaceDTO apiInterface = new ApiInterfaceDTO();
         apiInterface.setId(30L);
         apiInterface.setInterfaceCode("PERSONAL_QUERY");
+        apiInterface.setRoutingReadiness(RoutingReadiness.READY);
+        apiInterface.setPrimaryVendorConfigId(100L);
         when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY")).thenReturn(Result.success(apiInterface));
         ApiKeyInterface interfaceGrant = new ApiKeyInterface();
         interfaceGrant.setApiKeyId(10L);
@@ -139,14 +140,17 @@ class OpenApiQueryControllerTest {
         when(apiKeyService.validateAndConsumeQuota("test-key", 1)).thenReturn(true);
 
         VendorConfigDTO config = new VendorConfigDTO();
+        config.setId(100L);
         config.setVendorId(40L);
+        config.setInterfaceId(30L);
+        config.setStatus(StatusConstants.ACTIVE);
         config.setDataTypeCode("personal");
-        when(vendorConfigFeignClient.list(null, null, 30L, StatusConstants.ACTIVE))
-                .thenReturn(Result.success(List.of(config)));
+        when(vendorConfigFeignClient.getById(100L)).thenReturn(Result.success(config));
 
         VendorInfoDTO vendor = new VendorInfoDTO();
         vendor.setId(40L);
         vendor.setVendorCode("vendor-a");
+        vendor.setStatus(StatusConstants.ACTIVE);
         when(vendorFeignClient.getById(40L)).thenReturn(Result.success(vendor));
 
         Map<String, Object> params = Map.of("name", "zhangsan");
@@ -182,6 +186,8 @@ class OpenApiQueryControllerTest {
         assertTrue(result.getData().getSuccess());
         assertEquals(99, result.getData().getData().get("score"));
         assertEquals(12L, result.getData().getLatency());
+        verify(vendorConfigFeignClient).getById(100L);
+        verify(vendorConfigFeignClient, never()).list(null, null, 30L, StatusConstants.ACTIVE);
         ArgumentCaptor<OpenApiCallContext> contextCaptor = ArgumentCaptor.forClass(OpenApiCallContext.class);
         verify(openApiQueryService).query(contextCaptor.capture());
         assertEquals("trace-1", contextCaptor.getValue().getTraceId());
@@ -209,6 +215,76 @@ class OpenApiQueryControllerTest {
         assertEquals(400, response.getStatusCode().value());
         assertNotNull(result);
         assertEquals(400, result.getCode());
+    }
+
+    @Test
+    void shouldFailClosedWhenInterfaceHasNoExplicitPrimaryRoute() {
+        ApiInterfaceDTO apiInterface = new ApiInterfaceDTO();
+        apiInterface.setId(30L);
+        apiInterface.setRoutingReadiness(RoutingReadiness.UNBOUND);
+        when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY"))
+                .thenReturn(Result.success(apiInterface));
+
+        Object route = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                controller, "resolveApiRoute", "PERSONAL_QUERY");
+
+        assertNull(route);
+        verifyNoInteractions(vendorConfigFeignClient, vendorFeignClient);
+    }
+
+    @Test
+    void shouldKeepPrimaryRouteWhenFallbackIsNotReady() {
+        when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY"))
+                .thenReturn(Result.success(routeInterface(RoutingReadiness.FALLBACK_NOT_READY, 200L)));
+        when(vendorConfigFeignClient.getById(100L))
+                .thenReturn(Result.success(routeConfig(100L, 40L, "personal")));
+        when(vendorFeignClient.getById(40L)).thenReturn(Result.success(routeVendor(40L, "vendor-a")));
+        when(apiInterfaceFeignClient.getContract(30L)).thenReturn(Result.success(new InterfaceContractDTO()));
+
+        Object route = ReflectionTestUtils.invokeMethod(controller, "resolveApiRoute", "PERSONAL_QUERY");
+
+        assertNotNull(route);
+        assertNull(ReflectionTestUtils.invokeMethod(route, "fallbackConfig"));
+        verify(vendorConfigFeignClient, never()).getById(200L);
+    }
+
+    @Test
+    void shouldDisableInvalidFallbackWithoutBlockingPrimaryRoute() {
+        when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY"))
+                .thenReturn(Result.success(routeInterface(RoutingReadiness.READY, 200L)));
+        when(vendorConfigFeignClient.getById(100L))
+                .thenReturn(Result.success(routeConfig(100L, 40L, "personal")));
+        when(vendorConfigFeignClient.getById(200L))
+                .thenReturn(Result.success(routeConfig(200L, 50L, "other")));
+        when(vendorFeignClient.getById(40L)).thenReturn(Result.success(routeVendor(40L, "vendor-a")));
+        when(vendorFeignClient.getById(50L)).thenReturn(Result.success(routeVendor(50L, "vendor-b")));
+        when(apiInterfaceFeignClient.getContract(30L)).thenReturn(Result.success(new InterfaceContractDTO()));
+
+        Object route = ReflectionTestUtils.invokeMethod(controller, "resolveApiRoute", "PERSONAL_QUERY");
+
+        assertNotNull(route);
+        assertNull(ReflectionTestUtils.invokeMethod(route, "fallbackConfig"));
+    }
+
+    @Test
+    void shouldKeepExplicitValidFallbackRoute() {
+        when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY"))
+                .thenReturn(Result.success(routeInterface(RoutingReadiness.READY, 200L)));
+        when(vendorConfigFeignClient.getById(100L))
+                .thenReturn(Result.success(routeConfig(100L, 40L, "personal")));
+        when(vendorConfigFeignClient.getById(200L))
+                .thenReturn(Result.success(routeConfig(200L, 50L, "personal")));
+        when(vendorFeignClient.getById(40L)).thenReturn(Result.success(routeVendor(40L, "vendor-a")));
+        when(vendorFeignClient.getById(50L)).thenReturn(Result.success(routeVendor(50L, "vendor-b")));
+        when(apiInterfaceFeignClient.getContract(30L)).thenReturn(Result.success(new InterfaceContractDTO()));
+
+        Object route = ReflectionTestUtils.invokeMethod(controller, "resolveApiRoute", "PERSONAL_QUERY");
+
+        assertNotNull(route);
+        Object fallback = ReflectionTestUtils.invokeMethod(route, "fallbackConfig");
+        assertNotNull(fallback);
+        assertEquals(Long.valueOf(200L), ReflectionTestUtils.invokeMethod(fallback, "getId"));
+        assertEquals("vendor-b", ReflectionTestUtils.invokeMethod(route, "fallbackVendorCode"));
     }
 
     @Test
@@ -314,5 +390,32 @@ class OpenApiQueryControllerTest {
         request.setSceneCode("pre-loan-review");
         request.setParams(Map.of());
         return request;
+    }
+
+    private ApiInterfaceDTO routeInterface(RoutingReadiness readiness, Long fallbackConfigId) {
+        ApiInterfaceDTO apiInterface = new ApiInterfaceDTO();
+        apiInterface.setId(30L);
+        apiInterface.setRoutingReadiness(readiness);
+        apiInterface.setPrimaryVendorConfigId(100L);
+        apiInterface.setFallbackVendorConfigId(fallbackConfigId);
+        return apiInterface;
+    }
+
+    private VendorConfigDTO routeConfig(Long id, Long vendorId, String dataTypeCode) {
+        VendorConfigDTO config = new VendorConfigDTO();
+        config.setId(id);
+        config.setVendorId(vendorId);
+        config.setInterfaceId(30L);
+        config.setStatus(StatusConstants.ACTIVE);
+        config.setDataTypeCode(dataTypeCode);
+        return config;
+    }
+
+    private VendorInfoDTO routeVendor(Long id, String vendorCode) {
+        VendorInfoDTO vendor = new VendorInfoDTO();
+        vendor.setId(id);
+        vendor.setVendorCode(vendorCode);
+        vendor.setStatus(StatusConstants.ACTIVE);
+        return vendor;
     }
 }
