@@ -1,6 +1,5 @@
 package com.dataplatform.masterdata.vendor.api.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.io.Serializable;
 
@@ -8,8 +7,8 @@ import java.io.Serializable;
 public class VendorConfigCreateReqDTO implements Serializable {
     @NotNull(message = "厂商ID不能为空")
     private Long vendorId;
-    @NotBlank(message = "数据类型不能为空")
     private String dataTypeCode;
+    private Long dataTypeId;
     @NotNull(message = "接口ID不能为空")
     private Long interfaceId;
     private Integer timeout;
@@ -22,6 +21,8 @@ public class VendorConfigCreateReqDTO implements Serializable {
     public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
     public String getDataTypeCode() { return dataTypeCode; }
     public void setDataTypeCode(String dataTypeCode) { this.dataTypeCode = dataTypeCode; }
+    public Long getDataTypeId() { return dataTypeId; }
+    public void setDataTypeId(Long dataTypeId) { this.dataTypeId = dataTypeId; }
     public Long getInterfaceId() { return interfaceId; }
     public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
     public Integer getTimeout() { return timeout; }

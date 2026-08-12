@@ -7,8 +7,8 @@ import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.service.InterfaceContractService;
+import com.dataplatform.masterdata.interface_.service.ApiInterfaceDTOAssembler;
 import com.dataplatform.common.security.InternalScope;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,6 +35,9 @@ public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {
 
     @Autowired
     private InterfaceContractService interfaceContractService;
+
+    @Autowired
+    private ApiInterfaceDTOAssembler dtoAssembler;
 
     @GetMapping("/by-code/{code}")
     @Override
@@ -71,9 +74,7 @@ public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {
         if (ids == null || ids.isEmpty()) {
             return Result.success(List.of());
         }
-        return Result.success(apiInterfaceService.listByIds(ids).stream()
-                .map(this::toDTO)
-                .toList());
+        return Result.success(dtoAssembler.toDTOs(apiInterfaceService.listByIds(ids)));
     }
 
     @Override
@@ -88,15 +89,10 @@ public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {
                                 .like(ApiInterface::getInterfaceName, keyword.trim()))
                 .orderByAsc(ApiInterface::getInterfaceCode)
                 .last("LIMIT 200");
-        return Result.success(apiInterfaceService.list(query).stream()
-                .map(this::toDTO)
-                .toList());
+        return Result.success(dtoAssembler.toDTOs(apiInterfaceService.list(query)));
     }
 
     private ApiInterfaceDTO toDTO(ApiInterface entity) {
-        ApiInterfaceDTO dto = new ApiInterfaceDTO();
-        BeanUtils.copyProperties(entity, dto);
-        dto.setStatus(entity.getStatus() != null ? entity.getStatus().getCode() : null);
-        return dto;
+        return dtoAssembler.toDTO(entity);
     }
 }

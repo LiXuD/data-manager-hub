@@ -10,12 +10,16 @@ public class VendorConfigDTO implements Serializable {
     private String vendorName;
     private Long dataTypeId;
     private String dataTypeCode;
+    private String dataTypeName;
     private Long interfaceId;
+    private String interfaceName;
     private Integer timeout;
     private Integer retryCount;
     private Integer circuitThreshold;
     private Integer circuitTimeout;
     private Long fallbackVendorId;
+    private String fallbackVendorName;
+    private String routingRole;
     private String status;
     private String runtimeMode;
     private Long activeConnectorVersionId;
@@ -33,8 +37,12 @@ public class VendorConfigDTO implements Serializable {
     public void setDataTypeId(Long dataTypeId) { this.dataTypeId = dataTypeId; }
     public String getDataTypeCode() { return dataTypeCode; }
     public void setDataTypeCode(String dataTypeCode) { this.dataTypeCode = dataTypeCode; }
+    public String getDataTypeName() { return dataTypeName; }
+    public void setDataTypeName(String dataTypeName) { this.dataTypeName = dataTypeName; }
     public Long getInterfaceId() { return interfaceId; }
     public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
+    public String getInterfaceName() { return interfaceName; }
+    public void setInterfaceName(String interfaceName) { this.interfaceName = interfaceName; }
     public Integer getTimeout() { return timeout; }
     public void setTimeout(Integer timeout) { this.timeout = timeout; }
     public Integer getRetryCount() { return retryCount; }
@@ -45,6 +53,10 @@ public class VendorConfigDTO implements Serializable {
     public void setCircuitTimeout(Integer circuitTimeout) { this.circuitTimeout = circuitTimeout; }
     public Long getFallbackVendorId() { return fallbackVendorId; }
     public void setFallbackVendorId(Long fallbackVendorId) { this.fallbackVendorId = fallbackVendorId; }
+    public String getFallbackVendorName() { return fallbackVendorName; }
+    public void setFallbackVendorName(String fallbackVendorName) { this.fallbackVendorName = fallbackVendorName; }
+    public String getRoutingRole() { return routingRole; }
+    public void setRoutingRole(String routingRole) { this.routingRole = routingRole; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getRuntimeMode() { return runtimeMode; }

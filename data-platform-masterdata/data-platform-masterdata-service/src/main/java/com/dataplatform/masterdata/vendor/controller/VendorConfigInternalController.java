@@ -7,10 +7,8 @@ import com.dataplatform.common.security.InternalScope;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.feign.VendorConfigInternalFeignClient;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
-import com.dataplatform.masterdata.vendor.entity.DataType;
-import com.dataplatform.masterdata.vendor.mapper.DataTypeMapper;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
-import org.springframework.beans.BeanUtils;
+import com.dataplatform.masterdata.vendor.service.VendorConfigDTOAssembler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -28,7 +26,7 @@ public class VendorConfigInternalController implements VendorConfigInternalFeign
     private VendorConfigService vendorConfigService;
 
     @Autowired
-    private DataTypeMapper dataTypeMapper;
+    private VendorConfigDTOAssembler dtoAssembler;
 
     @Override
     @GetMapping
@@ -44,7 +42,7 @@ public class VendorConfigInternalController implements VendorConfigInternalFeign
                 .eq(parsedStatus != null, VendorConfig::getStatus,
                         parsedStatus != null ? parsedStatus.getCode() : null)
                 .orderByDesc(VendorConfig::getCreatedAt);
-        return Result.success(vendorConfigService.list(wrapper).stream().map(this::toDTO).toList());
+        return Result.success(dtoAssembler.toDTOs(vendorConfigService.list(wrapper)));
     }
 
     @Override
@@ -56,7 +54,7 @@ public class VendorConfigInternalController implements VendorConfigInternalFeign
         if (config == null) {
             return Result.success(null);
         }
-        return Result.success(toDTO(config));
+        return Result.success(dtoAssembler.toDTO(config));
     }
 
     @Override
@@ -68,7 +66,7 @@ public class VendorConfigInternalController implements VendorConfigInternalFeign
         if (config == null) {
             return Result.success(null);
         }
-        return Result.success(toDTO(config));
+        return Result.success(dtoAssembler.toDTO(config));
     }
 
     @Override
@@ -80,7 +78,7 @@ public class VendorConfigInternalController implements VendorConfigInternalFeign
         if (config == null) {
             return Result.success(null);
         }
-        return Result.success(toDTO(config));
+        return Result.success(dtoAssembler.toDTO(config));
     }
 
     @Override
@@ -98,21 +96,7 @@ public class VendorConfigInternalController implements VendorConfigInternalFeign
         if (config == null) {
             return Result.success(null);
         }
-        return Result.success(toDTO(config));
+        return Result.success(dtoAssembler.toDTO(config));
     }
 
-    private VendorConfigDTO toDTO(VendorConfig entity) {
-        VendorConfigDTO dto = new VendorConfigDTO();
-        BeanUtils.copyProperties(entity, dto);
-        if (entity.getStatus() != null) {
-            dto.setStatus(entity.getStatus().getCode());
-        }
-        if (entity.getDataTypeId() != null) {
-            DataType dataType = dataTypeMapper.selectById(entity.getDataTypeId());
-            if (dataType != null) {
-                dto.setDataTypeCode(dataType.getDataTypeCode());
-            }
-        }
-        return dto;
-    }
 }

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
+import com.dataplatform.masterdata.interface_.api.dto.VendorRoutingUpdateReqDTO;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +23,14 @@ public interface ApiInterfaceService extends IService<ApiInterface> {
     List<ApiInterface> listOptions(Long vendorId, Long dataTypeId, String status);
 
     ApiInterface getByInterfaceCode(String interfaceCode);
+
+    ApiInterface updateVendorRouting(Long interfaceId, VendorRoutingUpdateReqDTO request);
+
+    boolean assignPrimaryIfAbsent(Long interfaceId, Long vendorConfigId);
+
+    ApiInterface getByRoutingConfigId(Long vendorConfigId);
+
+    boolean canActivate(Long interfaceId);
 
     boolean hasApiConfig(Long interfaceId);
 

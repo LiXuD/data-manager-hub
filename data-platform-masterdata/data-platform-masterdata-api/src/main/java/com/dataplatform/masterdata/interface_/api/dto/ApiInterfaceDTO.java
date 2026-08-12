@@ -15,6 +15,12 @@ public class ApiInterfaceDTO implements Serializable {
     private Long vendorId;
     private String vendorName;
     private String dataTypeName;
+    private Long primaryVendorConfigId;
+    private Long fallbackVendorConfigId;
+    private String primaryVendorName;
+    private String fallbackVendorName;
+    private Integer bindingCount;
+    private RoutingReadiness routingReadiness;
     private String path;
     private String description;
     private String requestSchema;
@@ -38,6 +44,18 @@ public class ApiInterfaceDTO implements Serializable {
     public void setVendorName(String vendorName) { this.vendorName = vendorName; }
     public String getDataTypeName() { return dataTypeName; }
     public void setDataTypeName(String dataTypeName) { this.dataTypeName = dataTypeName; }
+    public Long getPrimaryVendorConfigId() { return primaryVendorConfigId; }
+    public void setPrimaryVendorConfigId(Long primaryVendorConfigId) { this.primaryVendorConfigId = primaryVendorConfigId; }
+    public Long getFallbackVendorConfigId() { return fallbackVendorConfigId; }
+    public void setFallbackVendorConfigId(Long fallbackVendorConfigId) { this.fallbackVendorConfigId = fallbackVendorConfigId; }
+    public String getPrimaryVendorName() { return primaryVendorName; }
+    public void setPrimaryVendorName(String primaryVendorName) { this.primaryVendorName = primaryVendorName; }
+    public String getFallbackVendorName() { return fallbackVendorName; }
+    public void setFallbackVendorName(String fallbackVendorName) { this.fallbackVendorName = fallbackVendorName; }
+    public Integer getBindingCount() { return bindingCount; }
+    public void setBindingCount(Integer bindingCount) { this.bindingCount = bindingCount; }
+    public RoutingReadiness getRoutingReadiness() { return routingReadiness; }
+    public void setRoutingReadiness(RoutingReadiness routingReadiness) { this.routingReadiness = routingReadiness; }
     public String getPath() { return path; }
     public void setPath(String path) { this.path = path; }
     public String getDescription() { return description; }
