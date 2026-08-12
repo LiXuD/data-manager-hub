@@ -19,6 +19,8 @@ async function load() {
   loading.value = true
   try {
     rows.value = (await getConnectorMigrations(state.value || undefined)).data || []
+  } catch (error) {
+    console.warn('加载厂商连接器迁移历史失败', error)
   } finally {
     loading.value = false
   }

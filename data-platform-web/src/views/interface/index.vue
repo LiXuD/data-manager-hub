@@ -17,21 +17,6 @@
     <el-card class="search-card">
       <div class="search-bar">
         <div class="search-inputs">
-          <el-select
-            v-model="searchForm.vendorId"
-            placeholder="厂商"
-            clearable
-            class="search-select"
-            @change="handleVendorSearchChange"
-          >
-            <el-option
-              v-for="vendor in vendorOptions"
-              :key="vendor.id"
-              :label="vendor.vendorName"
-              :value="vendor.id"
-            />
-          </el-select>
-
           <el-select v-model="searchForm.dataTypeId" placeholder="数据类型" clearable class="search-select">
             <el-option
               v-for="dt in dataTypeOptions"
@@ -74,19 +59,29 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="path" label="接口路径" min-width="200">
+        <el-table-column label="调用入口" min-width="250">
           <template #default="{ row }">
-            <span class="path-cell">{{ row.path }}</span>
+            <div class="route-cell">
+              <code>{{ OPENAPI_QUERY_ENTRY }}</code>
+              <small>apiCode: {{ row.interfaceCode }}</small>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="vendorName" label="所属厂商" width="120">
+        <el-table-column label="主厂商 → 备用厂商" min-width="180">
           <template #default="{ row }">
-            <span>{{ row.vendorName || '-' }}</span>
+            <span>{{ interfaceRoutingSummary(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="dataTypeName" label="数据类型" width="120">
           <template #default="{ row }">
             <span>{{ row.dataTypeName || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="路由状态" width="140">
+          <template #default="{ row }">
+            <el-tag :type="row.routingReadiness === 'READY' ? 'success' : 'warning'" effect="plain">
+              {{ row.routingReadiness || 'UNBOUND' }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="sort" label="排序" width="80" />
@@ -106,7 +101,7 @@
               <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
               <el-button type="warning" link @click="handleStats(row)">统计</el-button>
               <el-button type="primary" link @click="handleContract(row)">契约</el-button>
-              <el-button type="success" link @click="handleConfig(row)">厂商</el-button>
+              <el-button type="success" link @click="handleConfig(row)">厂商连接器</el-button>
               <el-button type="info" link @click="handleDocs(row)">文档</el-button>
               <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
             </div>
@@ -133,7 +128,6 @@
       v-model="formVisible"
       :form-data="currentRow"
       :mode="formMode"
-      :vendor-options="vendorOptions"
       :datatype-options="dataTypeOptions"
       @success="handleFormSuccess"
     />
@@ -165,7 +159,6 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getInterfaceList,
-  getInterfaceOptions,
   deleteInterface,
   updateInterfaceStatus
 } from '@/api/interface'
@@ -177,13 +170,13 @@ import InterfaceContractConfig from './components/InterfaceContractConfig.vue'
 import InterfaceStats from './components/InterfaceStats.vue'
 import { COMMON_STATUS } from '@/constants'
 import { extractPageData } from '@/utils/pagination'
+import { interfaceRoutingSummary, OPENAPI_QUERY_ENTRY } from './interface-flow'
 
 const cacheStore = useCacheStore()
 const router = useRouter()
 
 // 搜索表单
 const searchForm = reactive({
-  vendorId: undefined as number | string | undefined,
   dataTypeId: undefined as number | string | undefined,
   status: ''
 })
@@ -191,7 +184,6 @@ const searchForm = reactive({
 // 表格数据
 const tableData = ref<ApiInterface[]>([])
 const loading = ref(false)
-const vendorInterfaceOptions = ref<ApiInterface[]>([])
 
 // 分页
 const pagination = reactive({
@@ -201,15 +193,8 @@ const pagination = reactive({
 })
 
 // 从缓存获取下拉选项（使用computed确保响应式更新）
-const vendorOptions = computed(() => {
-  return cacheStore.vendorOptions
-})
 const dataTypeOptions = computed(() => {
-  if (!searchForm.vendorId) {
-    return cacheStore.dataTypeOptions
-  }
-  const ids = new Set(vendorInterfaceOptions.value.map(item => item.dataTypeId))
-  return cacheStore.dataTypeOptions.filter(item => item.id && ids.has(item.id))
+  return cacheStore.dataTypeOptions
 })
 
 // 表单
@@ -231,7 +216,6 @@ const loadData = async () => {
     const params = {
       page: pagination.page,
       pageSize: pagination.pageSize,
-      vendorId: searchForm.vendorId != null ? Number(searchForm.vendorId) : undefined,
       dataTypeId: searchForm.dataTypeId != null ? Number(searchForm.dataTypeId) : undefined,
       status: searchForm.status as typeof COMMON_STATUS.ACTIVE | typeof COMMON_STATUS.INACTIVE | undefined
     }
@@ -241,7 +225,6 @@ const loadData = async () => {
     pagination.total = page.total
   } catch (error) {
     console.error('加载失败:', error)
-    ElMessage.error('加载数据失败，请稍后重试')
   } finally {
     loading.value = false
   }
@@ -253,26 +236,8 @@ const handleSearch = () => {
   loadData()
 }
 
-const handleVendorSearchChange = async () => {
-  searchForm.dataTypeId = undefined
-  vendorInterfaceOptions.value = []
-  if (!searchForm.vendorId) {
-    return
-  }
-  try {
-    const res = await getInterfaceOptions({
-      vendorId: Number(searchForm.vendorId),
-      status: COMMON_STATUS.ACTIVE
-    })
-    vendorInterfaceOptions.value = res.data || []
-  } catch (error) {
-    console.error('加载厂商接口选项失败:', error)
-  }
-}
-
 // 重置
 const handleReset = () => {
-  searchForm.vendorId = undefined
   searchForm.dataTypeId = undefined
   searchForm.status = ''
   pagination.page = 1
@@ -328,7 +293,6 @@ const handleDelete = async (row: ApiInterface) => {
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除失败:', error)
-      ElMessage.error('删除失败，请稍后重试')
     }
   }
 }
@@ -340,7 +304,7 @@ const handleStatusChange = async (row: ApiInterface) => {
     ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
   } catch (error) {
     row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
-    ElMessage.error('状态更新失败，请稍后重试')
+    console.error('状态更新失败:', error)
   }
 }
 

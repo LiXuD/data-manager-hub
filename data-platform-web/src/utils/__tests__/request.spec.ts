@@ -102,6 +102,14 @@ describe('utils/request 冒烟', () => {
     expect(elMessageError).toHaveBeenCalledWith('数据已被其他用户修改，请刷新后重试')
   })
 
+  it('请求异常只由拦截器提示一次', async () => {
+    stubHttpError({}, 500)
+
+    await expect(request.get('/interface/42/vendor-routing')).rejects.toBeInstanceOf(AxiosError)
+
+    expect(elMessageError).toHaveBeenCalledTimes(1)
+  })
+
   it('业务 401 清理登录态并跳转登录页', async () => {
     localStorage.setItem('token', 'expired-token')
     stubAdapter({ code: 401, msg: '登录已过期' })

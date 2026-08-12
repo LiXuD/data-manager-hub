@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import schemaField from '../JsonSchemaField.vue?raw'
 import pluginCenter from '../../../views/connector-plugin/index.vue?raw'
+import migrationHistory from '../../../views/connector-migration/index.vue?raw'
 import connectorWorkspace from '../../../views/interface/components/config/VendorConnectorWorkspace.vue?raw'
+import router from '../../../router/index.ts?raw'
 
 describe('connector frontend acceptance matrix', () => {
   it('renders every supported schema shape with a dedicated control', () => {
@@ -39,6 +41,15 @@ describe('connector frontend acceptance matrix', () => {
     expect(pluginCenter).toContain("row.state === 'READY'")
     expect(pluginCenter).toContain("row.safeErrorCode || '—'")
     expect(pluginCenter).toContain('row.safeErrorDigest')
+  })
+
+  it('does not bypass backend permissions by role name and handles expected load failures', () => {
+    expect(pluginCenter).toContain('const allowed = (permission: string) => userStore.hasPermission(permission)')
+    expect(pluginCenter).not.toContain("role.trim().toLowerCase() === 'admin'")
+    expect(pluginCenter).toContain("console.warn('加载连接器插件失败', error)")
+    expect(migrationHistory).toContain("console.warn('加载厂商连接器迁移历史失败', error)")
+    expect(router).toContain("import { getProfile } from '@/api/auth'")
+    expect(router).toContain('const syncCurrentUser = async')
   })
 
   it('guards every mutating plugin and connector action by permission', () => {

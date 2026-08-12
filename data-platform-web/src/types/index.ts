@@ -144,7 +144,14 @@ export interface ApiInterface {
   dataTypeName?: string
   vendorId?: number
   vendorName?: string
-  path: string
+  /** Legacy storage field; OpenAPI callers use the fixed query entry instead. */
+  path?: string
+  primaryVendorConfigId?: number
+  fallbackVendorConfigId?: number
+  primaryVendorName?: string
+  fallbackVendorName?: string
+  bindingCount?: number
+  routingReadiness?: 'UNBOUND' | 'PRIMARY_NOT_READY' | 'FALLBACK_NOT_READY' | 'READY'
   description?: string
   requestSchema?: string
   responseSchema?: string
@@ -153,6 +160,11 @@ export interface ApiInterface {
   hasConfig?: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface VendorRoutingUpdateRequest {
+  primaryVendorConfigId: number
+  fallbackVendorConfigId?: number | null
 }
 
 export interface InterfaceParam {
