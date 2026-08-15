@@ -1,0 +1,25 @@
+name: Auto-merge agent PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  check_suite:
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  checks: read
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    # 仅对 agent 创建的 PR（bot 身份或带 automerge label）自动合入；尊重分支保护
+    if: >-
+      github.event.pull_request.user.login == 'gitnexus[bot]' ||
+      contains(github.event.pull_request.labels.*.name, 'automerge')
+    steps:
+      - uses: pascalgn/automerge-action@v0.15.6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_METHOD: squash
+          MERGE_REQUIRED_APPROVALS: '0'

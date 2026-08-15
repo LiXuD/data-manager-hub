@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Code Review Gate 本地拦截（辅助，仅对本地 clone 提交的 agent 生效）
+# 真正硬门禁：pr-review-gate.yml + 分支保护 + auto-merge.yml（见 CODE_REVIEW_GATE.md）
+# 启用：git config core.hooksPath .githooks
+set -euo pipefail
+
+echo "[pre-commit] Code Review Gate 本地自检..."
+
+STAGED=$(git diff --cached --name-only)
+
+# 前端：data-platform-web 下有改动则跑 lint
+if echo "$STAGED" | grep -q '^data-platform-web/'; then
+  echo "[pre-commit] 检测到前端改动，运行 npm run lint ..."
+  (cd data-platform-web && npm run lint)
+fi
+
+# 后端：data-platform-* 下有 .java 改动则编译对应模块（含依赖）
+BACKEND_CHANGED=$(echo "$STAGED" | grep -E '^data-platform-[^/]+/.*\.java$' | sed -E 's#^(data-platform-[^/]+)/.*#\1#' | sort -u)
+if [ -n "$BACKEND_CHANGED" ]; then
+  MODULES=$(echo "$BACKEND_CHANGED" | paste -sd, -)
+  echo "[pre-commit] 检测到后端改动，编译模块: $MODULES ..."
+  if ! mvn -q -pl "$MODULES" -am compile test-compile; then
+    echo "[pre-commit] ❌ 编译失败，提交被拒。请本地修复后再提交。"
+    exit 1
+  fi
+fi
+
+echo "[pre-commit] ✅ 本地自检通过。"
