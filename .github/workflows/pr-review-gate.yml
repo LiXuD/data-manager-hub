@@ -36,6 +36,14 @@ jobs:
         with:
           name: jacoco-report
           path: '**/target/site/jacoco/'
+      - name: Upload Checkstyle & SpotBugs reports (phase 1, report only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-analysis-reports
+          path: |
+            **/target/checkstyle-result.xml
+            **/target/spotbugsXml.xml
 
   frontend:
     runs-on: ubuntu-latest
