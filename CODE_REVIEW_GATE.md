@@ -26,3 +26,11 @@ git config core.hooksPath .githooks
 ```
 
 > 仅对本地提交生效；云端 / CI 直推的 agent 由 C 端硬门禁兜底，不可依赖 hook。
+
+## 阶段 2 量化约束（agent 必守）
+
+仓库已在根 `pom.xml` 接入 **JaCoCo / Checkstyle / SpotBugs 报告模式**（当前不阻断，仅出报告；2.4 再转强制）。agent 须遵守：
+
+6. **配套测试**：改动含核心业务逻辑的，必须补单元测试（Mockito，参考各 `*-service/src/test` 下的 `*ServiceTest`）；CI review 对"无测试的核心逻辑改动"判 🔴。
+7. **薄弱域补测（由 agent 执行）**：`governance` / `identity` / `billing` 关键 Service 须各有 ≥3 单测。补的是业务模块**单元测试**（Mockito），不是 `data-platform-test` 集成测试；**禁止刷覆盖率**（空断言 / 只测 getter 判 🔴）。
+8. **尊重静态分析报告**：Checkstyle / SpotBugs 报告中的 🔴 级（未用导入、空 catch、`@SuppressWarnings` 无原因等）须在提交前修复；🟡 级可留作后续。待 2.4 转强制后，🔴 将直接 fail 构建。

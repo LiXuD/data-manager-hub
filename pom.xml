@@ -365,6 +365,63 @@
                     </dependency>
                 </dependencies>
             </plugin>
+
+            <!-- ===== 代码审查阶段 2：静态分析与覆盖率（报告模式，先不 fail；2.4 再转强制） ===== -->
+            <!-- JaCoCo：生成覆盖率报告（不阻断）。CI 已上传 jacoco-report artifact。 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Checkstyle：仅生成报告，failOnViolation=false（不阻断）。
+                 转强制(2.4)：将 goal 改为 check 并设 failOnViolation=true。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.6.0</version>
+                <configuration>
+                    <failOnViolation>false</failOnViolation>
+                    <includeTestSourceDirectory>false</includeTestSourceDirectory>
+                    <consoleOutput>false</consoleOutput>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>checkstyle-report</id>
+                        <phase>verify</phase>
+                        <goals><goal>checkstyle</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- SpotBugs：仅生成报告（不阻断）。
+                 转强制(2.4)：将 goal 改为 check。 -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>4.8.6</version>
+                <configuration>
+                    <failOnError>false</failOnError>
+                    <effort>Max</effort>
+                    <threshold>Low</threshold>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotbugs-report</id>
+                        <phase>verify</phase>
+                        <goals><goal>spotbugs</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
