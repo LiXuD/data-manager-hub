@@ -84,6 +84,37 @@ export function orderedSchemaProperties(schema: JsonSchemaNode): Array<[string, 
   )
 }
 
+/** Evaluates only a small declarative visibility whitelist; it never executes schema content. */
+export function schemaFieldVisible(schema: JsonSchemaNode, parentValue: unknown): boolean {
+  const condition = schema['x-ui-visible-if']
+  if (!condition) return true
+  if (!parentValue || typeof parentValue !== 'object' || Array.isArray(parentValue)) return false
+  const parent = parentValue as Record<string, unknown>
+  const keys = Object.keys(condition)
+  const structured = keys.some(key => ['field', 'equals', 'notEquals', 'in', 'present'].includes(key))
+  if (!structured) {
+    if (keys.length !== 1 || !safeVisibilityField(keys[0])) return false
+    return Object.is(parent[keys[0]], condition[keys[0]])
+  }
+  if (keys.some(key => !['field', 'equals', 'notEquals', 'in', 'present'].includes(key))) return false
+  const field = condition.field
+  if (typeof field !== 'string' || !safeVisibilityField(field)) return false
+  const actual = parent[field]
+  if ('present' in condition && typeof condition.present !== 'boolean') return false
+  if (condition.present === true && (actual === undefined || actual === null)) return false
+  if (condition.present === false && actual !== undefined && actual !== null) return false
+  if ('equals' in condition && !Object.is(actual, condition.equals)) return false
+  if ('notEquals' in condition && Object.is(actual, condition.notEquals)) return false
+  if ('in' in condition) {
+    if (!Array.isArray(condition.in) || !condition.in.some(value => Object.is(value, actual))) return false
+  }
+  return true
+}
+
+function safeVisibilityField(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_-]{0,127}$/.test(value)
+}
+
 export function diffConnectorPipelines(before: ConnectorPipelineStep[], after: ConnectorPipelineStep[]): ConnectorDiffItem[] {
   const beforeByKey = new Map(before.map(step => [step.stageKey, step]))
   const afterByKey = new Map(after.map(step => [step.stageKey, step]))

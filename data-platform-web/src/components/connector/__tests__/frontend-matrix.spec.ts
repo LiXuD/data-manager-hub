@@ -13,6 +13,10 @@ describe('connector frontend acceptance matrix', () => {
     expect(schemaField).toContain("schema.type === 'boolean'")
     expect(schemaField).toContain("schema.type === 'integer' || schema.type === 'number'")
     expect(schemaField).toContain("schema['x-ui-widget'] === 'textarea'")
+    expect(schemaField).toContain('schemaFieldVisible(child, props.modelValue)')
+    expect(schemaField).toContain("child['x-ui-advanced']")
+    expect(schemaField).toContain("props.schema['x-platform-managed']")
+    expect(schemaField).toContain("groupLabel(group.name)")
   })
 
   it('only permits selecting an existing secret reference', () => {
@@ -28,11 +32,13 @@ describe('connector frontend acceptance matrix', () => {
     expect(schemaField).toContain('writeSecretReference(secretRepresentation.value, value)')
   })
 
-  it('pins draft CAS and exposes an exact activity-to-draft diff', () => {
+  it('pins product draft CAS and confines engine facts to a read-only advanced plan', () => {
     expect(connectorWorkspace).toContain('draft.value.draftVersion')
-    expect(connectorWorkspace).toContain('saveVendorConnectorDraft')
-    expect(connectorWorkspace).toContain('diffConnectorPipelines(active.value?.pipelineSnapshot')
-    expect(connectorWorkspace).toContain('活动版本 → 当前草稿差异')
+    expect(connectorWorkspace).toContain('saveConnectorSpecDraft')
+    expect(connectorWorkspace).toContain('getConnectorExecutionPlan')
+    expect(connectorWorkspace).toContain('高级执行计划（只读）')
+    expect(connectorWorkspace).toContain('不返回阶段配置或密钥引用')
+    expect(connectorWorkspace).not.toContain('normalizePipelineOrder')
   })
 
   it('renders readiness and safe errors for every Access instance', () => {
