@@ -84,7 +84,7 @@ class OpenApiQueryServiceTest {
         assertEquals(100L, response.getCacheSourceRecordId());
         assertEquals(BigDecimal.ZERO, response.getCost());
         assertEquals(99, response.getData().get("score"));
-        verify(vendorProxyService, never()).callVendor(anyString(), anyString(), any(), any());
+        verify(vendorProxyService, never()).callVendor(anyString(), anyString(), any(), any(), anyString());
 
         ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
         verify(callRecordEventPublisher).publish(recordCaptor.capture());
@@ -110,7 +110,7 @@ class OpenApiQueryServiceTest {
 
     @Test
     void shouldPersistCacheableResultContainingDurationStageTimings() {
-        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
                 .thenReturn(new java.util.LinkedHashMap<>(Map.of(
                         "success", true,
                         "data", Map.of("score", 99),
@@ -134,7 +134,7 @@ class OpenApiQueryServiceTest {
 
     @Test
     void shouldTurnInvalidResponseContractIntoNonBillableFailure() {
-        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
                 .thenReturn(new java.util.LinkedHashMap<>(Map.of(
                         "success", true,
                         "data", Map.of("score", "invalid"),
@@ -174,7 +174,7 @@ class OpenApiQueryServiceTest {
         vendorResult.put("data", "unexpected-root");
         vendorResult.put("billingSignal", "ELIGIBLE");
         vendorResult.put("cacheSignal", "CACHEABLE");
-        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any())).thenReturn(vendorResult);
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString())).thenReturn(vendorResult);
         InterfaceParamDTO optionalScore = new InterfaceParamDTO();
         optionalScore.setParamName("score");
         optionalScore.setParamType("integer");
@@ -203,7 +203,7 @@ class OpenApiQueryServiceTest {
         cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":\"stale\"}}");
         when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
                 any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
-        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
                 .thenReturn(new java.util.LinkedHashMap<>(Map.of(
                         "success", true,
                         "data", Map.of("score", 88),
@@ -225,7 +225,7 @@ class OpenApiQueryServiceTest {
         assertTrue(response.getSuccess());
         assertFalse(response.getCached());
         assertEquals(88, response.getData().get("score"));
-        verify(vendorProxyService).callVendor(anyString(), anyString(), any(), any());
+        verify(vendorProxyService).callVendor(anyString(), anyString(), any(), any(), anyString());
     }
 
     @Test
@@ -255,7 +255,7 @@ class OpenApiQueryServiceTest {
         long windowDifferenceHours = Duration.between(
                 sinceCaptor.getAllValues().get(1), sinceCaptor.getAllValues().get(0)).toHours();
         assertTrue(windowDifferenceHours >= 191 && windowDifferenceHours <= 193);
-        verify(vendorProxyService, never()).callVendor(anyString(), anyString(), any(), any());
+        verify(vendorProxyService, never()).callVendor(anyString(), anyString(), any(), any(), anyString());
     }
 
     @Test
@@ -273,7 +273,7 @@ class OpenApiQueryServiceTest {
         pluginResult.put("integrityHash", "a".repeat(64));
         pluginResult.put("billingSignal", "ELIGIBLE");
         pluginResult.put("cacheSignal", "NOT_CACHEABLE");
-        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
                 .thenReturn(pluginResult);
 
         OpenApiQueryRespVO response = service.query(buildContext(true, 3));
@@ -291,6 +291,11 @@ class OpenApiQueryServiceTest {
         assertEquals("V2_EMBEDDED", record.getHashAlgorithm());
         assertEquals("a".repeat(64), record.getIntegrityHash());
         assertFalse(record.getUseCache());
+        ArgumentCaptor<String> pluginRequestId = ArgumentCaptor.forClass(String.class);
+        verify(vendorProxyService).callVendor(anyString(), anyString(), any(), any(),
+                pluginRequestId.capture());
+        assertEquals(response.getPlatformRequestId(), pluginRequestId.getValue());
+        assertEquals(response.getPlatformRequestId(), record.getRequestId());
         ArgumentCaptor<BillingChargeReqDTO> billingCaptor =
                 ArgumentCaptor.forClass(BillingChargeReqDTO.class);
         verify(billingFeignClient).charge(billingCaptor.capture());
@@ -303,12 +308,13 @@ class OpenApiQueryServiceTest {
         assertEquals("a".repeat(64), billingCaptor.getValue().getSnapshotHash());
         assertEquals("V2_EMBEDDED", billingCaptor.getValue().getHashAlgorithm());
         assertEquals("a".repeat(64), billingCaptor.getValue().getIntegrityHash());
+        assertEquals(response.getPlatformRequestId(), billingCaptor.getValue().getRequestId());
         verify(billingFeignClient).getMeteringPolicy(eq("vendor-b"), eq("PERSONAL_QUERY"), any(LocalDateTime.class));
     }
 
     @Test
     void successWithoutExplicitBillingOrCacheEligibilityFailsClosed() {
-        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
                 .thenReturn(new java.util.LinkedHashMap<>(Map.of(
                         "success", true,
                         "data", Map.of("score", 88),
@@ -327,7 +333,7 @@ class OpenApiQueryServiceTest {
 
     @Test
     void explicitFailureBillingEvidenceUsesActualVendorButKeepsFailureFact() {
-        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any()))
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
                 .thenReturn(new java.util.LinkedHashMap<>(Map.of(
                         "success", false,
                         "data", Map.of("decision", "rejected"),

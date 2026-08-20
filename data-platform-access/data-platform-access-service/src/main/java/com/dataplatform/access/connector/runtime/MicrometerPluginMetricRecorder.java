@@ -12,7 +12,8 @@ import java.util.Set;
 public class MicrometerPluginMetricRecorder implements PluginMetricRecorder {
 
     private static final Set<String> ALLOWED_TAGS = Set.of(
-            "pluginId", "pluginVersion", "capability", "errorCategory", "instanceId");
+            "pluginId", "pluginVersion", "capability", "transportMode",
+            "errorCategory", "instanceId");
 
     private final MeterRegistry registry;
 

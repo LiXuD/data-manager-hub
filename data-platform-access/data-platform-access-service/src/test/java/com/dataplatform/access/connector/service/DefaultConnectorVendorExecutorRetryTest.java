@@ -2,6 +2,7 @@ package com.dataplatform.access.connector.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -61,34 +62,43 @@ class DefaultConnectorVendorExecutorRetryTest {
 
     @Test
     void keyedIdempotentPostCanRetryWithinPlatformLimit() {
-        when(pipelineExecutor.executeWithOutcome(pipelineLease, request))
+        when(pipelineExecutor.executeWithOutcome(same(pipelineLease), any(ConnectorExecutionRequest.class)))
                 .thenReturn(outcome(timeout(), true), outcome(success(), true));
 
         ConnectorExecutionResult result = invokeRetry(1);
 
         assertEquals(TransportStatus.SUCCESS, result.transportStatus());
-        verify(pipelineExecutor, times(2)).executeWithOutcome(pipelineLease, request);
+        org.mockito.ArgumentCaptor<ConnectorExecutionRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(ConnectorExecutionRequest.class);
+        verify(pipelineExecutor, times(2)).executeWithOutcome(same(pipelineLease), captor.capture());
+        assertEquals(List.of(1, 2), captor.getAllValues().stream()
+                .map(ConnectorExecutionRequest::attemptNo).toList());
+        assertEquals(1, captor.getAllValues().stream()
+                .map(ConnectorExecutionRequest::requestId).distinct().count());
+        assertEquals(1, captor.getAllValues().stream()
+                .map(ConnectorExecutionRequest::deadline).distinct().count());
     }
 
     @Test
     void nonIdempotentPostNeverRetries() {
-        when(pipelineExecutor.executeWithOutcome(pipelineLease, request))
+        when(pipelineExecutor.executeWithOutcome(same(pipelineLease), any(ConnectorExecutionRequest.class)))
                 .thenReturn(outcome(timeout(), false));
 
         ConnectorExecutionResult result = invokeRetry(5);
 
         assertEquals(ErrorCategory.TRANSPORT_TIMEOUT, result.errorCategory());
-        verify(pipelineExecutor).executeWithOutcome(pipelineLease, request);
+        verify(pipelineExecutor).executeWithOutcome(same(pipelineLease), any(ConnectorExecutionRequest.class));
     }
 
     @Test
     void pluginCannotRaiseRetryCountAbovePlatformCap() {
-        when(pipelineExecutor.executeWithOutcome(pipelineLease, request))
+        when(pipelineExecutor.executeWithOutcome(same(pipelineLease), any(ConnectorExecutionRequest.class)))
                 .thenReturn(outcome(timeout(), true));
 
         invokeRetry(1000);
 
-        verify(pipelineExecutor, times(11)).executeWithOutcome(pipelineLease, request);
+        verify(pipelineExecutor, times(11)).executeWithOutcome(
+                same(pipelineLease), any(ConnectorExecutionRequest.class));
     }
 
     private ConnectorExecutionResult invokeRetry(int retryCount) {

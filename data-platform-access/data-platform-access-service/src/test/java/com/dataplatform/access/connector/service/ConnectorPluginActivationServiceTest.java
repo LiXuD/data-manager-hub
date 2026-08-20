@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -17,6 +18,7 @@ import com.dataplatform.access.connector.config.ConnectorRuntimeProperties;
 import com.dataplatform.access.connector.entity.ConnectorPluginActivation;
 import com.dataplatform.access.connector.mapper.ConnectorPluginActivationMapper;
 import com.dataplatform.api.Result;
+import com.dataplatform.common.plugin.runtime.GenericHttpConnectorMetadata;
 import com.dataplatform.masterdata.connector.api.dto.PluginArtifactDescriptorDTO;
 import com.dataplatform.masterdata.connector.api.feign.ConnectorPluginInternalFeignClient;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -136,6 +138,45 @@ class ConnectorPluginActivationServiceTest {
         assertEquals("READY", summary.getInstances().get(0).getState());
         assertEquals("test-host", summary.getInstances().get(0).getHostVersion());
         assertNotNull(summary.getInstances().get(0).getLoadedAt());
+    }
+
+    @Test
+    void loadedReadyFastPathRevalidatesDescriptorBeforeTrustingReady() {
+        ConnectorPluginActivation ready = pendingActivation();
+        ready.setServiceInstanceId("10.0.0.1:8080");
+        ready.setPluginId(GenericHttpConnectorMetadata.PLUGIN_ID);
+        ready.setPluginVersion(GenericHttpConnectorMetadata.VERSION);
+        ready.setArtifactSha256(GenericHttpConnectorMetadata.artifactSha256());
+        ready.setState("READY");
+        stored.set(ready);
+        PluginArtifactDescriptorDTO generic = genericArtifact();
+        when(pluginClient.getArtifact(GenericHttpConnectorMetadata.PLUGIN_ID,
+                GenericHttpConnectorMetadata.VERSION)).thenReturn(Result.success(generic));
+        when(runtime.isLoaded(GenericHttpConnectorMetadata.PLUGIN_ID,
+                GenericHttpConnectorMetadata.VERSION)).thenReturn(true);
+        doThrow(new IllegalStateException("static metadata drift"))
+                .when(runtime).preload(generic);
+
+        assertThrows(IllegalStateException.class, () -> service.requestStage(
+                GenericHttpConnectorMetadata.PLUGIN_ID, GenericHttpConnectorMetadata.VERSION));
+
+        verify(mapper, never()).updateById(any(ConnectorPluginActivation.class));
+        verify(mapper, never()).insert(any(ConnectorPluginActivation.class));
+    }
+
+    @Test
+    void loadedExternalReadyFastPathKeepsItsOriginalNoPreloadBehavior() {
+        ConnectorPluginActivation ready = pendingActivation();
+        ready.setServiceInstanceId("10.0.0.1:8080");
+        ready.setState("READY");
+        ready.setArtifactSha256(artifact().artifactSha256());
+        stored.set(ready);
+        when(runtime.isLoaded("demo", "1.0.0")).thenReturn(true);
+
+        var summary = service.requestStage("demo", "1.0.0");
+
+        assertTrue(summary.getReady());
+        verify(runtime, never()).preload(any());
     }
 
     @Test
@@ -323,6 +364,19 @@ class ConnectorPluginActivationServiceTest {
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "signature", "key-1", "{}", "{}", List.of("TRANSPORT"),
                 "{}", "1.0.0", "VERIFIED");
+    }
+
+    private PluginArtifactDescriptorDTO genericArtifact() {
+        return new PluginArtifactDescriptorDTO(
+                GenericHttpConnectorMetadata.PLUGIN_ID, GenericHttpConnectorMetadata.VERSION,
+                GenericHttpConnectorMetadata.SPI_VERSION, GenericHttpConnectorMetadata.ENTRY_CLASS,
+                GenericHttpConnectorMetadata.ARTIFACT_URI, GenericHttpConnectorMetadata.artifactSha256(),
+                "builtin", "builtin", GenericHttpConnectorMetadata.canonicalManifestJson(),
+                GenericHttpConnectorMetadata.canonicalSchemaJson(),
+                GenericHttpConnectorMetadata.CAPABILITY_NAMES,
+                GenericHttpConnectorMetadata.canonicalPermissionsJson(), "1.0.0", "ACTIVE",
+                "2", "SIMPLE_CONNECTOR", "GENERIC_HTTP", "HOST_SINGLE_HTTP", "HOST_MAPPING",
+                GenericHttpConnectorMetadata.canonicalCompatibilityJson());
     }
 
     private ConnectorPluginActivation pendingActivation() {

@@ -59,8 +59,17 @@ public class VendorProxyService {
     public Map<String, Object> callVendor(String vendorCode, String dataTypeCode,
                                            Map<String, Object> params,
                                            VendorConfigDTO preFetchedConfig) {
+        return callVendor(vendorCode, dataTypeCode, params, preFetchedConfig,
+                null);
+    }
+
+    public Map<String, Object> callVendor(String vendorCode, String dataTypeCode,
+                                           Map<String, Object> params,
+                                           VendorConfigDTO preFetchedConfig,
+                                           String platformRequestId) {
         Set<String> triedVendors = new HashSet<>();
-        return callVendorWithFallback(vendorCode, dataTypeCode, params, triedVendors, preFetchedConfig);
+        return callVendorWithFallback(vendorCode, dataTypeCode, params, triedVendors,
+                preFetchedConfig, platformRequestId);
     }
 
     /**
@@ -70,8 +79,16 @@ public class VendorProxyService {
     public Map<String, Object> callVendor(String primaryVendorCode, String fallbackVendorCode,
                                            String dataTypeCode, Map<String, Object> params,
                                            VendorConfigDTO primaryConfig, VendorConfigDTO fallbackConfig) {
+        return callVendor(primaryVendorCode, fallbackVendorCode, dataTypeCode, params,
+                primaryConfig, fallbackConfig, null);
+    }
+
+    public Map<String, Object> callVendor(String primaryVendorCode, String fallbackVendorCode,
+                                           String dataTypeCode, Map<String, Object> params,
+                                           VendorConfigDTO primaryConfig, VendorConfigDTO fallbackConfig,
+                                           String platformRequestId) {
         Map<String, Object> primaryResult = executeExplicitConfig(
-                primaryConfig, primaryVendorCode, dataTypeCode, params);
+                primaryConfig, primaryVendorCode, dataTypeCode, params, platformRequestId);
         if (Boolean.TRUE.equals(primaryResult.get("success"))
                 || !shouldFallback(primaryResult)
                 || fallbackConfig == null) {
@@ -88,13 +105,14 @@ public class VendorProxyService {
         }
 
         Map<String, Object> fallbackResult = executeExplicitConfig(
-                fallbackConfig, resolvedFallbackCode, dataTypeCode, params);
+                fallbackConfig, resolvedFallbackCode, dataTypeCode, params, platformRequestId);
         fallbackResult.put("fallbackFrom", primaryVendorCode);
         return fallbackResult;
     }
 
     private Map<String, Object> executeExplicitConfig(VendorConfigDTO config, String vendorCode,
-                                                      String dataTypeCode, Map<String, Object> params) {
+                                                      String dataTypeCode, Map<String, Object> params,
+                                                      String platformRequestId) {
         if (config == null || config.getVendorId() == null
                 || !StatusConstants.ACTIVE.equals(config.getStatus())
                 || normalize(vendorCode) == null) {
@@ -103,7 +121,8 @@ public class VendorProxyService {
         }
         try {
             Map<String, Object> result = circuitBreakerManager.executeWithProtection(vendorCode,
-                    () -> executeConfiguredRuntime(config, vendorCode, dataTypeCode, params),
+                    () -> executeConfiguredRuntime(config, vendorCode, dataTypeCode, params,
+                            platformRequestId),
                     this::isCircuitFailure);
             result.putIfAbsent("actualVendorId", config.getVendorId());
             result.putIfAbsent("actualVendorCode", vendorCode);
@@ -141,7 +160,8 @@ public class VendorProxyService {
     private Map<String, Object> callVendorWithFallback(String vendorCode, String dataTypeCode,
                                                         Map<String, Object> params,
                                                         Set<String> triedVendors,
-                                                        VendorConfigDTO preFetchedConfig) {
+                                                        VendorConfigDTO preFetchedConfig,
+                                                        String platformRequestId) {
         if (triedVendors.contains(vendorCode)) {
             log.warn("检测到厂商循环调用，终止: vendor={}", vendorCode);
             return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
@@ -167,13 +187,15 @@ public class VendorProxyService {
         VendorConfigDTO runtimeConfig = config;
         try {
             Map<String, Object> result = circuitBreakerManager.executeWithProtection(vendorCode,
-                () -> executeConfiguredRuntime(runtimeConfig, vendorCode, dataTypeCode, params),
+                () -> executeConfiguredRuntime(runtimeConfig, vendorCode, dataTypeCode, params,
+                        platformRequestId),
                 this::isCircuitFailure);
             result.putIfAbsent("actualVendorId", config.getVendorId());
 
             if (!Boolean.TRUE.equals(result.get("success"))) {
                 if (shouldFallback(result) && config.getFallbackVendorId() != null) {
-                    return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params, triedVendors, vendorCode);
+                    return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params,
+                            triedVendors, vendorCode, platformRequestId);
                 }
             }
 
@@ -186,7 +208,8 @@ public class VendorProxyService {
                     "CIRCUIT_BREAKER_OPEN", "厂商服务暂时不可用，请稍后重试",
                     RequestDeliveryState.NOT_SENT);
             if (shouldFallback(rejected) && config.getFallbackVendorId() != null) {
-                return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params, triedVendors, vendorCode);
+                return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params,
+                        triedVendors, vendorCode, platformRequestId);
             }
             return rejected;
         } catch (Exception e) {
@@ -202,7 +225,8 @@ public class VendorProxyService {
     private Map<String, Object> tryFallbackVendor(Long fallbackVendorId, String dataTypeCode,
                                                    Map<String, Object> params,
                                                    Set<String> triedVendors,
-                                                   String originalVendorCode) {
+                                                   String originalVendorCode,
+                                                   String platformRequestId) {
         Result<VendorInfoDTO> vendorResult = vendorFeignClient.getById(fallbackVendorId);
         VendorInfoDTO fallbackVendor = vendorResult != null ? vendorResult.getData() : null;
         if (fallbackVendor == null || !StatusConstants.ACTIVE.equals(fallbackVendor.getStatus())) {
@@ -214,7 +238,8 @@ public class VendorProxyService {
         String fallbackVendorCode = fallbackVendor.getVendorCode();
         log.info("切换到备用厂商: {} -> {}", originalVendorCode, fallbackVendorCode);
 
-        return callVendorWithFallbackById(fallbackVendorId, fallbackVendorCode, dataTypeCode, params, triedVendors, originalVendorCode);
+        return callVendorWithFallbackById(fallbackVendorId, fallbackVendorCode, dataTypeCode,
+                params, triedVendors, originalVendorCode, platformRequestId);
     }
 
     /**
@@ -223,7 +248,8 @@ public class VendorProxyService {
     private Map<String, Object> callVendorWithFallbackById(Long vendorId, String vendorCode, String dataTypeCode,
                                                             Map<String, Object> params,
                                                             Set<String> triedVendors,
-                                                            String originalVendorCode) {
+                                                            String originalVendorCode,
+                                                            String platformRequestId) {
         if (triedVendors.contains(vendorCode)) {
             log.warn("检测到厂商循环调用，终止: vendor={}", vendorCode);
             return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
@@ -245,13 +271,15 @@ public class VendorProxyService {
 
         try {
             Map<String, Object> result = circuitBreakerManager.executeWithProtection(vendorCode,
-                () -> executeConfiguredRuntime(config, vendorCode, dataTypeCode, params),
+                () -> executeConfiguredRuntime(config, vendorCode, dataTypeCode, params,
+                        platformRequestId),
                 this::isCircuitFailure);
             result.putIfAbsent("actualVendorId", vendorId);
 
             if (!Boolean.TRUE.equals(result.get("success"))) {
                 if (shouldFallback(result) && config.getFallbackVendorId() != null) {
-                    return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params, triedVendors, vendorCode);
+                    return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params,
+                            triedVendors, vendorCode, platformRequestId);
                 }
             }
 
@@ -267,7 +295,8 @@ public class VendorProxyService {
                     "CIRCUIT_BREAKER_OPEN", "厂商服务暂时不可用，请稍后重试",
                     RequestDeliveryState.NOT_SENT);
             if (shouldFallback(rejected) && config.getFallbackVendorId() != null) {
-                return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params, triedVendors, vendorCode);
+                return tryFallbackVendor(config.getFallbackVendorId(), dataTypeCode, params,
+                        triedVendors, vendorCode, platformRequestId);
             }
             return rejected;
         } catch (Exception e) {
@@ -299,13 +328,24 @@ public class VendorProxyService {
             String vendorCode,
             String dataTypeCode,
             Map<String, Object> params) {
+        return executeConfiguredRuntime(config, vendorCode, dataTypeCode, params, null);
+    }
+
+    private Map<String, Object> executeConfiguredRuntime(
+            VendorConfigDTO config,
+            String vendorCode,
+            String dataTypeCode,
+            Map<String, Object> params,
+            String platformRequestId) {
         if (!isPluginMode(config)) {
             return pluginErrorResult(ErrorCategory.CONFIGURATION_ERROR,
                     "PLUGIN_RUNTIME_REQUIRED", "厂商配置尚未发布连接器版本",
                     RequestDeliveryState.NOT_SENT);
         }
-        ConnectorExecutionResult execution = connectorVendorExecutor.execute(
-                config, vendorCode, dataTypeCode, params);
+        ConnectorExecutionResult execution = platformRequestId == null
+                ? connectorVendorExecutor.execute(config, vendorCode, dataTypeCode, params)
+                : connectorVendorExecutor.execute(
+                config, vendorCode, dataTypeCode, params, platformRequestId);
         return toCallResult(execution, vendorCode);
     }
 
