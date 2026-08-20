@@ -50,6 +50,7 @@ data-platform/
 ├── data-platform-common-persistence/ # 持久化公共能力：MyBatis配置、审计字段
 ├── data-platform-common-runtime/     # 连接器加载、注册表、流水线、HTTP Transport 与内置 bridge
 ├── data-platform-plugin-spi/         # 六阶段连接器插件轻量 SPI Jar，不独立部署
+├── data-platform-plugin-testkit/     # 高层连接器 SDK 的真实 runtime 契约测试工具与示例
 ├── data-platform-gateway/       # API网关 (端口 8888)
 ├── data-platform-masterdata/    # 主数据服务 (端口 8081)：vendor/datatype/interface/config/graylog
 │   ├── data-platform-masterdata-api/
@@ -77,6 +78,11 @@ data-platform/
 不可变厂商流水线，Access 负责 HTTPS 制品缓存、隔离加载、双实例激活/readiness、租约执行和卸载。
 V044/V045 已完成存量配置迁移与旧字段/静态适配器退役；内置 `legacy-http` 只是插件内部 bridge，
 不会增加第六个业务服务，也不会形成第二套执行入口。
+
+普通连接器配置现已使用 `connectorSpec` 产品模型：配置人员只选择一个插件、固定一个版本并填写
+一份 Schema 表单，Masterdata 通过 `ConnectorSpecCompiler` 确定性生成隐藏的六阶段快照，Access
+仍只执行不可变 `pipelineSnapshot`。`generic-http:2.0.0` 覆盖标准单次 HTTPS，非标准协议使用
+`AbstractVendorConnectorPlugin` 高层 SDK；Legacy 流水线只读可解释并可通过预检后 CAS 转换。
 
 同步跨域调用只依赖目标域 `*-api` 中的 Internal Feign 契约，统一使用 `/internal/v1/**` 和 Identity 签发的短期 Service JWT；每个客户端按 audience 获取最小 scope，Gateway 不暴露内部路径。领域表由所属域独占访问，跨域统计通过 Access 内部契约查询。
 
@@ -106,7 +112,9 @@ V044/V045 已完成存量配置迁移与旧字段/静态适配器退役；内置
 | 范围 | 入口 |
 |---|---|
 | 厂商、数据类型与配置 | `/api/v1/vendor/**`、`/api/v1/datatype/**`、`/api/v1/config/**` |
-| 连接器插件与厂商流水线 | `/api/v1/connector-plugin/**`、`/api/v1/vendor/config/{id}/connector/**` |
+| 连接器插件与产品配置 | `/api/v1/connector-plugin/**`、`/api/v1/vendor/config/{id}/connector-spec/**` |
+| Legacy 迁移清点 | `GET /api/v1/vendor/config/connector-spec/inventory` |
+| Legacy 高级流水线兼容 | `/api/v1/vendor/config/{id}/connector/**`（SIMPLE 只读校验；变更接口拒绝） |
 | 已完成迁移历史（只读） | `GET /api/v1/vendor/connector-migration` |
 | 接口契约 | `GET/PUT /api/v1/interface/{id}/contract` |
 | 调用方与 API Key | `/api/v1/caller/**`、`/api/v1/caller/apikey/**` |
@@ -179,10 +187,11 @@ MIGRATION_CONFIRM_ROLLBACK=dataplatform ./migrate-db.sh rollback-count 1
 MIGRATION_CONFIRM_RESTORE=dataplatform ./migrate-db.sh restore path/to/backup.sql
 ```
 
-当前历史 SQL 被固化为 `baseline-2026-07-22` 单一基线，根变更日志最新为 V047。V042—V047 依次
-落地插件控制面、迁移观察/PLUGIN-only/旧字段删除、V1/V2 完整性和历史不可变保护。后续变更必须
-追加独立 Liquibase changeset；对已有受保护事实的 V043—V047 不执行破坏性 U 脚本，使用升级前备份
-恢复或 forward recovery。完整规则见 [数据库迁移说明](sql/MIGRATIONS.md)。
+当前历史 SQL 被固化为 `baseline-2026-07-22` 单一基线，根变更日志最新为 V050。V042—V048 依次
+落地插件控制面、PLUGIN-only、完整性冻结和显式主备路由；V049 增加 Manifest v2、SIMPLE Spec 和
+编译事实；V050 以不可覆盖的静态事实种入 `generic-http:2.0.0`。后续变更必须追加独立 Liquibase
+changeset；U049/U050 仅在没有 SIMPLE/v2/Generic 引用时允许，其他情况 HALT 并使用前向恢复或备份。
+完整规则见 [数据库迁移说明](sql/MIGRATIONS.md)。
 
 已有数据库如果过去通过手工 SQL 初始化，不要直接运行 `update`。`baseline` 会先自动备份，再在单个事务中幂等补齐历史迁移；只有结构校验通过后才登记基线：
 
@@ -310,6 +319,7 @@ data-platform/
 | 跨域调用最小权限与领域数据边界整改 | ✅ 100% | 2026-07-14 |
 | 深度清理、契约收敛与知识库刷新 | ✅ 100% | 2026-07-23 |
 | 外部请求连接器插件化阶段 0—5 | ✅ 已实现并通过双 Access 隔离 OpenAPI/浏览器验收（未声称生产部署） | 2026-08-10 |
+| 粗粒度连接器产品模型阶段 0—4 | ✅ 代码与隔离自动化验收完成；逐厂商生产迁移和旧入口退役未完成 | 2026-08-20 |
 
 ---
 
@@ -320,6 +330,7 @@ data-platform/
 - [部署文档](docs/DEPLOYMENT.md)
 - [2026-07-23 深度清理审查](docs/2026-07-23-deep-cleanup-review.md)
 - [外部请求连接器插件化升级设计（已实现并通过隔离验收）](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)
+- [连接器粗粒度插件与配置简化设计（阶段 0—4 已实现，阶段 5—6 待生产门禁）](docs/2026-08-12-connector-product-model-simplification-design.md)
 - [当前任务清单](PENDING_TASKS.md)
 
 ---
@@ -343,6 +354,8 @@ cd ..
 # 3. 数据库变更校验与预演
 ./migrate-db.sh validate
 ./migrate-db.sh dry-run
+./verify-v049-connector-product-spec.sh
+./verify-v050-generic-http.sh
 
 # 4. 架构边界扫描
 bash arch-scan.sh

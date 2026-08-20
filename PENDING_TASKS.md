@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-08-10
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现：V043—V045 完成存量配置迁移、PLUGIN-only 约束和旧静态适配器退役，V046—V047 固化完整性与历史不可变约束；双 Access 隔离环境、真实 Gateway/OpenAPI、管理 API、浏览器页面和数据库副作用均已验收。该结论不表示已经部署到生产环境。
+**最后更新**: 2026-08-20
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现；连接器“一个粗粒度插件 + 一份配置”的产品模型阶段 0—4 也已完成代码实现和隔离自动化验收，包括 Manifest v2/高层 SDK、V049/V050、`connectorSpec` 控制面、`generic-http:2.0.0`、Legacy 转换/清点和简化前端工作区。设计阶段 5 的逐厂商生产迁移、容量/滚动升级观察以及阶段 6 的旧高级入口最终退役仍未执行。上述结论不表示已经部署到生产环境。
 
 ---
 
@@ -15,6 +15,9 @@
 - 接口契约只保留 `/contract` 读写；旧 Schema/params/import 端点、访问域旧 `/data/**` 链路和重复 API Key 路由已删除。
 - 厂商安全只执行版本化安全流水线；简单 `signType`/`encryptType`、签名构建器和失败回退已删除。
 - 厂商外部请求只走发布后的连接器插件流水线；`VendorAdapterFactory`、`HttpVendorAdapter`、旧请求列和 LEGACY 写路径已删除，`legacy-http` 仅作为宿主内置阶段桥接现有 HTTP/映射/安全能力。
+- 普通连接器配置通过 `connectorSpec` 选择一个固定插件版本并填写一份 Schema 表单；Masterdata 确定性编译隐藏的六阶段 `pipelineSnapshot`，Access 仍只消费不可变快照。
+- `generic-http:2.0.0` 是宿主内置的标准单次 HTTPS 产品插件；`platform-core:1.0.0` 承担平台 Transport、安全和响应映射，二者均受签名目录事实、SecretRef 所有权和 Access 网络策略约束。
+- `ADVANCED_LEGACY` 草稿和历史继续只读可解释；旧 raw 变更、测试、发布和回滚接口不能覆盖 SIMPLE 事实，Legacy 可通过只读预检和 CAS 转换进入 SIMPLE。
 
 ## 已完成里程碑
 
@@ -30,6 +33,7 @@
 | 分系统、分接口缓存策略审批与绝对时效 | 已完成 | 2026-07-24 |
 | UAPI 指定日期程序员历史接口与前后端真实链路 | 已完成 | 2026-07-24 |
 | 外部请求连接器插件化阶段 0—5 与旧链退役 | 已完成并通过隔离验收 | 2026-08-10 |
+| 连接器粗粒度产品模型阶段 0—4 | 已实现并通过隔离自动化验收；未生产发布 | 2026-08-20 |
 
 ## 当前整改进度
 
@@ -85,6 +89,23 @@
 的成功事实，插件激活也必须先有包含该固定版本的成功测试事实。隔离环境已验证成功事实、事实不可变、
 草稿版本冲突、发布/回滚和活动绑定禁用保护；管理页面的关键状态与交互已通过浏览器操作验收。
 
+## 连接器粗粒度插件与配置简化（阶段 0—4 已实现）
+
+详细实施方案见 [连接器粗粒度插件模型与配置简化优化设计](docs/2026-08-12-connector-product-model-simplification-design.md)。
+本方案保留现有六阶段运行时和治理能力，把普通产品模型收敛为“选择一个连接器插件、固定一个版本、填写一份配置”。阶段 0—4 已完成代码和隔离自动化验收；阶段 5—6 是生产迁移与退役门禁，不能因代码存在而标记完成。
+
+| 阶段 | 状态 | 验收门槛 |
+|---|---|---|
+| 0. [基线与可转换性清点](docs/2026-08-12-connector-product-model-simplification-design.md#171-阶段-0基线与可转换性清点) | 已实现并通过隔离自动化验收 | 高级 API/UI 基线、只读 converter、三类 fixture 和分页 inventory 已落地；生产库实际分类仍属于阶段 5 发布准备 |
+| 1. [Manifest v2 与插件开发 SDK](docs/2026-08-12-connector-product-model-simplification-design.md#172-阶段-1manifest-v2-与插件开发-sdk) | 已实现并通过模块测试 | v1/v2 双读、高层单入口 SDK、Managed Session、`platform-core`、TestKit 与真实 runtime 示例均通过 |
+| 2. [Masterdata Spec 控制面与 V049](docs/2026-08-12-connector-product-model-simplification-design.md#173-阶段-2masterdata-spec-控制面与-v049) | 已实现并通过隔离数据库验收 | Spec 草稿/校验/测试/发布/历史/回滚/升级预检、确定性编译及 V049/U049 fresh/upgrade/HALT 矩阵通过 |
+| 3. [Generic HTTP 2.0 与转换](docs/2026-08-12-connector-product-model-simplification-design.md#174-阶段-3generic-http-20-与转换) | 已实现并通过隔离数据库与模块测试 | `generic-http:2.0.0`、V050/U050、转换预检/CAS、Legacy inventory 和离线对等 fixture 已落地 |
+| 4. [前端简化工作区](docs/2026-08-12-connector-product-model-simplification-design.md#175-阶段-4前端简化工作区) | 已实现并通过 lint/typecheck/Vitest/build | 普通页面只展示插件、固定版本、单表单、响应映射和只读计划；真实登录态浏览器工作区仍待完整 E2E |
+| 5. [受控发布与逐厂商迁移](docs/2026-08-12-connector-product-model-simplification-design.md#176-阶段-5受控发布与逐厂商迁移) | 未实施 | 必须在目标环境先运行 inventory，再按厂商完成真实请求/响应/错误/缓存/计费/主备对等、容量和观察窗口 |
+| 6. [旧高级写入口收口](docs/2026-08-12-connector-product-model-simplification-design.md#177-阶段-6旧高级写入口收口) | 未实施 | 阶段 5、回滚窗口和真实浏览器/API E2E 全部完成后，才可删除 raw 变更入口；raw validate 保持只读例外 |
+
+迁移验收入口为 `verify-v049-connector-product-spec.sh` 和 `verify-v050-generic-http.sh`。两者只创建名称受限的临时 PostgreSQL 数据库，覆盖 fresh、前版本升级、重复执行、漂移/HALT 原子性、安全回滚与重新应用，并在退出时清理；这不是任何生产数据库的迁移记录。
+
 ## 仍需执行的生产发布门禁
 
 以下是部署环境的必做检查，不是待开发功能：
@@ -94,6 +115,9 @@
 - SkyWalking 生产环境使用持久化后端，不使用本地 compose 中的 H2 存储。
 - 在生产制品库和部署 TrustStore 中配置经审批的签名公钥、仓库前缀、证书链和 Access 持久缓存卷；隔离验收使用的一次性凭据已经销毁。
 - 按生产 Access 实例规模执行容量、滚动升级、制品库故障和告警联动演练，并依据生产变更流程决定上线窗口；这些是环境/发布工作，不是待开发功能。
+- 在目标环境运行只读 `/vendor/config/connector-spec/inventory`，逐项确认 `LOSSLESS_CONVERTIBLE/REQUIRES_DEDICATED_PLUGIN/MUST_REMAIN_LEGACY`，不得用隔离 fixture 代替生产事实清点。
+- 对目标厂商完成真实登录态工作区的选择、升级预检、保存、校验、测试、发布、历史、回滚和 Legacy 转换，并核对 CallRecord/Billing/缓存/主备副作用；当前本地浏览器验收受登录态与完整服务环境限制。
+- 阶段 5 观察窗口、生产容量和回滚演练完成前，不执行阶段 6 的 raw 入口物理删除。
 - 合入 `dev` 前执行 `mvn verify`、`npm audit`、`npm run lint`、`npm test`、`npm run build`、隔离数据库迁移回归和 `bash arch-scan.sh`。
 
 ## 文档职责
@@ -105,6 +129,7 @@
 | `docs/API.md` | 对外 HTTP API 契约 |
 | `docs/DEPLOYMENT.md` | 本地与生产部署要求 |
 | `docs/2026-07-23-deep-cleanup-review.md` | 本轮清理范围、架构决策和回归证据 |
-| `sql/MIGRATIONS.md` | V001—V047 的迁移、不可逆边界和前向恢复要求 |
+| `sql/MIGRATIONS.md` | V001—V050 的迁移、V049/U049、V050/U050 条件回滚与前向恢复要求 |
 | `docs/2026-08-03-external-request-connector-plugin-upgrade-design.md` | Bumblebee 参考、实施前基线、现已落地架构和隔离验收边界 |
+| `docs/2026-08-12-connector-product-model-simplification-design.md` | 粗粒度插件产品模型、阶段 0—4 实现证据、阶段 5—6 生产迁移与退役门禁 |
 历史实施计划、已验收报告和过期性能样本不保留在当前知识库，需要追溯时请查阅 Git 历史。

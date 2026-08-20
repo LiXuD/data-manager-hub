@@ -1,9 +1,14 @@
 # 接口连接器配置与后端解析指南
 
-> 适用范围：当前 `data-manager-hub` 的“外部请求连接器”配置，重点说明内置
-> `legacy-http:1.0.0`。本文按当前代码行为编写；架构和供应链设计见
+> 适用范围：当前 `data-manager-hub` 的“外部请求连接器”配置，普通流程重点说明
+> `connectorSpec`、`generic-http:2.0.0` 和专用粗粒度插件；`legacy-http:1.0.0` 仅作为历史兼容说明。
+> 本文按当前代码行为编写；架构和供应链设计见
 > [外部请求连接器插件化升级设计](./2026-08-03-external-request-connector-plugin-upgrade-design.md)，
 > HTTP 接口清单见 [API 文档](./API.md#33-连接器插件与版本化厂商流水线)。
+> 粗粒度产品模型阶段 0—4 已完成代码和隔离自动化验收；普通用户只选择一个固定插件版本、填写
+> 一份配置，执行计划只读。阶段 5 的逐厂商生产迁移、完整登录态 E2E、容量/滚动升级和阶段 6 的
+> raw 入口最终退役尚未完成，见
+> [连接器粗粒度插件模型与配置简化优化设计](./2026-08-12-connector-product-model-simplification-design.md)。
 
 ## 1. 先理解三个不同层次的配置
 
@@ -11,7 +16,7 @@
 
 1. **接口身份**：创建接口时只维护 `apiCode`、名称、数据类型、排序和描述。
 2. **厂商路由**：将接口绑定到一个或多个厂商配置，并显式指定一个主配置和可选备用配置。
-3. **连接器流水线**：描述如何把标准参数变成厂商 HTTP 请求、如何认证、如何发送、如何解析并转换厂商响应。
+3. **连接器产品配置**：选择一个固定插件版本并填写一份 `connectorSpec`；Masterdata 确定性编译隐藏流水线，Access 执行不可变快照。
 
 外部调用者始终使用固定入口 `POST /openapi/v1/query`，通过请求中的 `apiCode` 识别业务接口；调用者不选择厂商。
 
@@ -19,7 +24,7 @@
 
 - 一条厂商接口配置，即 `vendor_config`；
 - 一个已发布的不可变连接器版本；
-- 已发布版本中恰好一个启用的 `TRANSPORT` 步骤；
+- 一份通过确定性编译并受成功测试事实保护的 SIMPLE Spec，或仍在回滚窗口内的 Legacy 历史版本；
 - 配置引用的插件版本在平台中处于可用状态；
 - Access 服务允许访问厂商域名。
 
@@ -29,7 +34,7 @@
 flowchart LR
     A["创建接口\n默认停用"] --> B["绑定厂商"]
     B --> C["选择主/备用路由"]
-    C --> D["编辑连接器草稿"]
+    C --> D["选择插件版本\n填写一份产品配置"]
     D --> E["保存、校验、测试"]
     E --> F["发布不可变版本"]
     F --> G["启用主/备用厂商配置"]
@@ -65,12 +70,16 @@ flowchart LR
 
 ### 2.2 插件版本
 
-普通 HTTP 厂商接口优先使用内置插件：
+标准单次 HTTP 厂商接口优先使用内置产品插件：
 
-- 插件 ID：`legacy-http`
-- 版本：`1.0.0`
-- 能力：六个标准阶段全部支持
-- 制品：平台内置，不需要上传 JAR
+- 插件 ID：`generic-http`
+- 版本：`2.0.0`
+- 产品模式：`SIMPLE_CONNECTOR / GENERIC_HTTP / HOST_SINGLE_HTTP / HOST_MAPPING`
+- 制品：平台内置，不需要上传 JAR；目录行必须与宿主静态 Manifest/Schema/摘要逐字段一致
+
+需要 Token+业务请求、轮询、专用签名/解密或非标准响应的厂商使用
+`AbstractVendorConnectorPlugin` 高层 SDK 开发一个专用入口类。`legacy-http:1.0.0` 只用于解释和执行
+既有 ADVANCED_LEGACY 历史，不作为新 SIMPLE 配置的选择项。
 
 外部插件必须先经过“导入 → 验证 → Access 全实例预加载 → 激活”。草稿可以引用 `ACTIVE` 版本；受控测试要求插件版本至少为 `STAGING` 或 `ACTIVE`；正式发布要求 `ACTIVE`。
 
@@ -157,7 +166,7 @@ Content-Type: application/json
 
 每条厂商配置提供以下入口：
 
-- **连接器配置**：编辑版本化流水线；
+- **连接器配置**：选择一个插件和固定版本，填写一份产品配置；
 - **受控测试**：对当前草稿执行测试；
 - **发布连接器**：生成不可变活动版本；
 - **状态开关**：发布活动连接器版本且必要配置就绪后才允许启用；
@@ -169,55 +178,46 @@ Content-Type: application/json
 - 当前配置版本；
 - 活动连接器版本；
 - 草稿版本；
-- 启用的 `TRANSPORT` 数量。
+- 当前创作模式；高级执行计划按需只读展开，不显示可编辑 Transport 数量。
 
-### 3.4 添加六阶段流水线
+### 3.4 选择插件并填写一份产品配置
 
-推荐为普通 HTTP 接口创建以下六个步骤，并保持顺序：
+目录只展示当前 vendorCode/dataTypeCode 兼容、父目录 ACTIVE、版本处于 STAGING/ACTIVE 的 Manifest v2
+SIMPLE 插件。首次选择使用服务端推荐的最高 ACTIVE 版本；固定版本不会自动漂移。切换同一插件版本
+必须先执行 `upgrade-preview`，查看安全的 Schema/config/plan 差异并显式确认，然后重新保存、测试和发布。
 
-| 顺序 | `stageKey` 示例 | `capability` | 作用 | 主要输入 | 主要输出 |
-|---:|---|---|---|---|---|
-| 0 | `build-request` | `REQUEST_BUILDER` | 参数映射并构造 URL、方法、Header、Query、Body 和超时 | 标准请求参数 | `ConnectorRequest` |
-| 1 | `process-request` | `REQUEST_PROCESSOR` | 请求签名、加密、认证和 Header/Query 注入 | 请求、SecretRef | 处理后的请求 |
-| 2 | `transport` | `TRANSPORT` | 通过平台托管 HTTP 客户端发送请求 | 处理后的请求 | 原始响应 |
-| 3 | `process-response` | `RESPONSE_PROCESSOR` | 解密、验签或解码响应 | 原始响应、SecretRef | 处理后的响应体 |
-| 4 | `parse-response` | `RESPONSE_PARSER` | 将响应体解析为 JSON 对象 | 响应字节 | JSON 对象 |
-| 5 | `normalize-response` | `RESPONSE_NORMALIZER` | 把厂商字段映射为平台标准字段 | JSON 对象 | `normalizedData` |
+`generic-http:2.0.0` 表单主要包括：
 
-流水线的能力顺序不能倒置；可以省略不需要的处理阶段，但通常保留六阶段最容易理解。所有启用步骤中必须**恰好一个** `TRANSPORT`。
+- 绝对 HTTPS endpoint、GET/POST/PUT/PATCH/DELETE/HEAD 方法和 JSON/form content type；
+- 固定非敏感 Header 和确定性请求字段映射；
+- NONE/Bearer/Basic/API Key 认证，凭据只能从当前厂商 SecretRef 下拉框选择；
+- 成功 HTTP 状态、可选业务码和 dataPath；
+- Spec 顶层的可选响应字段映射。
 
-每个步骤的通用选项：
-
-| 选项 | 含义 | 后端处理 |
-|---|---|---|
-| 步骤标识 `stageKey` | 当前流水线内的稳定唯一标识 | 非空、不能重复；建议只用小写字母、数字和连字符 |
-| 插件 `pluginId` | 该步骤由哪个插件实现 | 必须存在于插件目录 |
-| 插件版本 `pluginVersion` | 固定执行版本 | 发布后固化，不自动漂移到新版本 |
-| 能力 `capability` | 本步骤处于六阶段中的哪一段 | 插件 Manifest 必须声明支持该能力 |
-| 启用 `enabled` | 是否参与编译和运行 | 停用步骤保留在快照中但不执行 |
-| 顺序 `order` | 执行顺序 | 前端保存时按当前列表位置重排为 0、1、2……；后端要求非负且唯一 |
-| 配置 `config` | 插件 Schema 生成的动态表单 | 后端规范化为 JSON 对象并按 Schema、插件规则校验 |
-
-以下值由服务端维护，前端不需要填写：
-
-- `configHash`：配置规范化后的 SHA-256；
-- `artifactSha256`：插件制品哈希；
-- `manifestHash`：插件 Manifest 哈希；
-- `schemaHash`：配置 Schema 哈希。
+Schema 的 `x-ui-group/x-ui-advanced/x-ui-visible-if/x-platform-managed` 只执行固定声明式白名单；不执行
+脚本。响应映射只允许安全字段路径、固定 source/transform 枚举和唯一 target，不接受秘密或任意表达式。
+`stageKey/capability/order/enabled/TRANSPORT` 以及所有摘要都由服务端编译，普通页面不可编辑。
 
 ### 3.5 保存、校验、测试和发布
 
 按以下顺序操作：
 
 1. 点击“保存草稿”。首次保存时草稿版本从 0 变为 1；后续每次保存加 1。
-2. 点击“校验”。确认拓扑、插件状态、Schema、SecretRef、哈希和 `TRANSPORT` 数量通过。
+2. 点击“校验”。服务端以当前 vendor/dataType/security/SecretRef 和已验签插件事实重新确定性编译，不写数据。
 3. 在“测试参数”中填写一个 JSON 对象，例如 `{"companyName":"示例公司"}`。
 4. 点击“受控测试”。该操作可能真实请求厂商，但不计费、不缓存、不写生产调用记录。
 5. 检查 `success`、安全错误信息、`normalizedData` 和各阶段耗时。
-6. 点击“发布”。发布要求当前草稿已经有一次与 `draftVersion + snapshotHash` 精确匹配的成功测试。
+6. 点击“发布”。发布要求当前草稿有与 `draftVersion + specHash + snapshotHash + compileHash` 精确匹配的成功测试，并且全部 Access 实例对启用外部插件 READY。
 7. 回到厂商配置列表，发布并启用需要参与路由的厂商配置；确认主配置和必要配置就绪后，在接口管理中启用接口。
 
-草稿在成功测试后只要发生任何修改，就必须重新保存、校验和测试。发布版本不可编辑；要修改生产配置，应继续编辑草稿并发布新版本。
+草稿在成功测试后只要 Spec、安全版本或编译事实发生任何修改，就必须重新保存、校验和测试。发布版本
+不可编辑；升级版本先预检，回滚通过复制历史冻结事实创建新的 ACTIVE 版本。Legacy 草稿只读显示并
+提供转换预检；仅确认与 Generic 语义无损等价时才能以 `expectedDraftVersion` CAS 转换，且不会修改活动
+版本。无法转换的草稿保持 Legacy，开发专用插件后再迁移。
+
+旧 `/vendor/config/{id}/connector/**` raw 变更、测试、发布和回滚接口遇到 SIMPLE 均返回 409
+`SIMPLE_CONNECTOR_REQUIRES_PRODUCT_API`，不得覆盖产品事实。raw `validate` 是只读兼容例外：可检查
+已有快照，但不写数据库、不调用 Access，也不产生测试或发布事实。
 
 ### 3.6 固定入口请求与响应示例
 
@@ -246,7 +246,11 @@ Content-Type: application/json
 
 未授权返回 401/403；接口未启用、主路由未就绪或主配置不可用时失败关闭。`FALLBACK_NOT_READY` 是备用未就绪警告：主配置仍可执行，但本次不会尝试备用；只有备用有效且主调用交付状态为 `NOT_SENT` 时才回退一次，`SENT` 或 `MAYBE_SENT` 均不会回退。请求契约错误、插件/配置未就绪和不安全的网络请求不会被“换一个厂商”掩盖。
 
-## 4. `legacy-http` 每个配置项的实际作用
+## 4. `legacy-http` 历史高级流水线参考
+
+本节及第 5—8 节用于解释、诊断和转换既有 `ADVANCED_LEGACY` 快照，不是普通用户的新建流程。
+前端不再提供添加、删除、排序或逐阶段插件编辑；不能无损转换的 Legacy 配置继续按不可变历史运行，
+等待专用粗粒度插件，而不是删减未知步骤或绕过产品 API。
 
 `legacy-http` 当前对六种能力公开同一份 Schema，因此每个步骤页面上可能看到所有字段。**不是每个阶段都使用所有字段**。后端只读取下表标明的字段，其他字段即使存在也会被忽略。
 
@@ -731,34 +735,31 @@ sequenceDiagram
     participant UI as 前端工作区
     participant MD as Masterdata
     participant DB as PostgreSQL
-    UI->>MD: PUT /vendor/config/{id}/connector/draft
+    UI->>MD: PUT /vendor/config/{id}/connector-spec/draft
     MD->>MD: 检查 expectedDraftVersion
-    MD->>MD: 规范化 config 和 order
-    MD->>MD: 重算 configHash
-    MD->>MD: 固化 artifact/manifest/schema 哈希
-    MD->>MD: Schema、SecretRef、拓扑和插件状态校验
-    MD->>DB: 新增或更新 DRAFT，draftVersion + 1
-    MD-->>UI: 返回规范化草稿
+    MD->>MD: 固定 vendor/dataType/security/SecretRef/已验签插件事实
+    MD->>MD: 规范化 connectorSpec 并只做一次完整 Schema 校验
+    MD->>MD: 确定性编译隐藏 pipeline 和全部摘要
+    MD->>DB: JSONB CAS 新增或更新 SIMPLE DRAFT，draftVersion + 1
+    MD-->>UI: 返回 Spec 与哈希摘要，不返回完整 pipeline
 ```
 
 第一次保存必须使用 `expectedDraftVersion=0`。后续保存必须使用页面刚读取到的版本；多人同时编辑时，较晚提交的一方会收到 HTTP 409，应刷新后重新合并。
+SIMPLE DRAFT 的 `snapshot_hash/hash_algorithm/integrity_hash` 保持 NULL，发布时才固化；页面展示的
+`compiledSnapshotHash` 是对草稿编译快照即时计算的摘要。Legacy 转换使用独立 CAS UPDATE，失败零写入。
 
 ### 9.2 校验规则
 
-发布前至少会检查：
+产品编译和发布前至少会检查：
 
-- 流水线非空且不超过 50 步；
-- `stageKey`、`order` 各自唯一；
-- `order >= 0`；
-- 启用步骤恰好一个 `TRANSPORT`；
-- 能力顺序为构建请求 → 处理请求 → 传输 → 处理响应 → 解析响应 → 标准化；
-- 插件及固定版本存在，且声明支持所选能力；
-- 插件状态满足草稿、测试、发布或回滚阶段的要求；
-- 每阶段配置不超过 64 KiB；
-- 配置符合插件签名 Schema；
+- `specVersion=1`、插件坐标固定、Manifest v2 与全部目录/签名/摘要投影一致；
+- 插件 compatibility 与当前 vendorCode/dataTypeCode 匹配，状态满足草稿、测试或发布用途；
+- connectorSpec 不超过 128 KiB，单份 vendor config 不超过 Access 的 64 KiB 运行时边界；
+- 配置符合完整插件 Schema；`generic-http:2.0.0` 还执行 endpoint/auth/header/mapping 条件校验；
 - 不允许脚本、表达式、远程 `$ref`、动态 `$ref` 或递归 `$ref`；
 - 敏感字段只使用当前厂商拥有的 SecretRef；
-- 配置哈希、制品哈希、Manifest 哈希和 Schema 哈希与目录一致。
+- 安全版本和步骤快照完整，编译拓扑恰好一个 Transport 且顺序固定；
+- canonical spec、Spec/compile/snapshot/config/artifact/Manifest/Schema 哈希与保存事实一致。
 
 ### 9.3 受控测试
 
@@ -775,7 +776,8 @@ Masterdata 将规范化后的草稿和测试参数发给 Access。Access 在隔�
 
 ### 9.4 发布和回滚
 
-发布会创建新的不可变 `ACTIVE` 版本，将旧活动版本标记为 `SUPERSEDED`，更新厂商配置的活动版本指针，并把运行模式设置为 `PLUGIN`。
+发布会在成功测试五元组和全部 Access 插件 readiness 通过后创建新的不可变 `ACTIVE` 版本，将旧活动
+版本标记为 `SUPERSEDED`，更新厂商配置的活动版本指针，并保持运行模式 `PLUGIN`。
 
 回滚不是把数据库行改回旧状态，而是复制指定历史快照，创建一个新的活动版本。因此历史事实始终保留，版本号继续递增。
 
@@ -817,7 +819,7 @@ Access 不按列表顺序、创建时间或灰度规则猜测厂商。`UNBOUND`�
 
 ### 9.6 插件控制面表与启动顺序
 
-`connector_plugin_activation` 由迁移 `V042__create_connector_plugin_control_plane.sql` 创建；当前连接器迁移链已到 V048，必须按 V042—V048 顺序执行。Access 启动同步器、待处理激活调度和心跳在访问 Mapper 前先检查该表；表不存在时 readiness 保持未就绪，并记录稳定安全错误码 `CONNECTOR_SCHEMA_NOT_READY`，不会把缺表误报成普通业务失败，也不会吞掉其他 SQL 错误。迁移完成、表恢复后，后续调度会自动继续同步。
+`connector_plugin_activation` 由迁移 `V042__create_connector_plugin_control_plane.sql` 创建；当前连接器迁移链已到 V050，必须按 V042—V050 顺序执行。V049 增加 Manifest v2/SIMPLE Spec/compile 投影并前向扩展 V047 不可变保护；V050 种入与宿主静态事实逐字段一致的 `generic-http:2.0.0`。Access 启动同步器、待处理激活调度和心跳在访问 Mapper 前先检查该表；表不存在时 readiness 保持未就绪，并记录稳定安全错误码 `CONNECTOR_SCHEMA_NOT_READY`，不会把缺表误报成普通业务失败，也不会吞掉其他 SQL 错误。迁移完成、表恢复后，后续调度会自动继续同步。
 
 部署顺序应为：先完成数据库迁移并确认迁移历史，再启动或放行 Access 的连接器运行时；若在升级窗口中先启动 Access，必须保持 readiness/流量门禁关闭，直到该表可见。
 
@@ -828,37 +830,38 @@ Access 不按列表顺序、创建时间或灰度规则猜测厂商。`UNBOUND`�
 | 页面提示“无连接器权限”或接口 403 | 当前角色缺少 `connector-plugin:*` 权限 | 给角色补齐第 2.1 节权限并重新登录 |
 | 保存草稿返回 409 | `expectedDraftVersion` 已过期 | 刷新草稿，合并后重新保存 |
 | 发布返回 409，提示需要成功测试 | 草稿保存后未测试，或测试后又改了草稿 | 对当前草稿重新执行受控测试 |
-| 校验提示 TRANSPORT 数量错误 | 没有启用传输步骤，或启用了多个 | 只保留一个启用的 `TRANSPORT` |
-| 校验提示能力顺序错误 | 步骤拖动后顺序违反六阶段拓扑 | 按第 3.4 节重新排序 |
+| 保存或发布提示 Spec/compile/snapshot 漂移 | 草稿、插件目录、安全版本或编译事实已改变 | 重新读取草稿并按“保存 → 校验 → 测试 → 发布”执行，不手工修改执行计划 |
+| 版本升级预检失败 | 目标版本状态、Schema、兼容性、SecretRef 或签名摘要不满足条件 | 保留当前固定版本，按预检安全差异修正配置后重试 |
+| Legacy 转换提示不可转换 | 旧流水线与 Generic HTTP 语义不能证明无损等价 | 保留 Legacy；按分类原因开发专用插件，不删除未知步骤 |
 | 校验提示插件状态不可发布 | 插件版本不是 `ACTIVE` | 在插件管理完成预加载和激活 |
 | 校验提示 SecretRef 不存在或越权 | 引用键未创建，或属于其他厂商 | 在当前厂商下创建扩展配置并选择正确引用 |
-| 受控测试提示 URL 或网络错误 | `apiUrl` 非法、非 HTTPS、主机不在白名单、命中私网限制 | 检查 URL 和 Access 的 `network-allowed-*` 配置 |
-| 受控测试响应不是 JSON 对象 | `legacy-http` 解析器只接受非空 JSON Object | 让厂商返回对象，或使用支持该响应格式的插件 |
-| 测试成功但字段不对 | 映射 JSON 写错后兼容实现回退到原始数据 | 检查 `normalizedData`，修正第 5 节映射 |
-| POST 等请求没有重试 | 非幂等策略或缺少 `idempotencyKey` | 明确厂商幂等语义后再配置策略和 key |
+| 受控测试提示 URL 或网络错误 | endpoint 非法、非 HTTPS、含 query/控制字符、主机不在白名单或命中私网限制 | 修正产品配置，并检查 Access 的 `network-allowed-*` 配置 |
+| 受控测试响应解析失败 | 响应为空、类型不受支持、不是 JSON Object/安全 XML，或 dataPath 不存在 | 修正厂商协议或使用专用插件；不要把原始报文放入错误信息 |
+| 测试成功但字段不对 | 产品级 `responseMapping`、dataPath 或业务码配置不匹配 | 检查脱敏的 `normalizedData` 和映射字段，保存后重新测试 |
+| POST 等请求没有重试 | Generic HTTP 将非 GET/HEAD 固定为非幂等，平台禁止不安全重试 | 不添加手工幂等 key；需要特殊幂等协议时使用专用插件 |
 | 降级没有发生 | 错误或交付状态不允许安全降级 | 降级默认只在平台判断未发送等安全状态下执行 |
 | 启用开关失败 | 尚未发布活动连接器 | 完成保存、校验、测试和发布 |
 | 绑定厂商返回 409 | 当前接口已经绑定该厂商 | 在“绑定厂商”下拉框选择尚未绑定的厂商；同一接口不能重复绑定 |
 | 配置主备返回 409 | 配置不属于当前接口、主备相同或目标配置已删除 | 只从当前接口的绑定卡片中选择；备用可以留空 |
 | 接口启用返回 409 | 主路由未配置，或主配置/连接器/必要配置未就绪 | 检查 `routingReadiness`，完成主配置的发布和启用后再启用接口 |
 | 页面显示“厂商名称未加载” | 后端返回的厂商名称缺失或详情加载失败 | 检查 Masterdata 查询权限和数据；不要用厂商 ID 代替名称 |
-| Access readiness 为 DOWN，错误码 `CONNECTOR_SCHEMA_NOT_READY` | `connector_plugin_activation` 尚未由迁移创建或当前不可见 | 先按迁移顺序执行 V042—V048，确认表存在后等待同步器恢复 |
+| Access readiness 为 DOWN，错误码 `CONNECTOR_SCHEMA_NOT_READY` | `connector_plugin_activation` 尚未由迁移创建或当前不可见 | 先按迁移顺序执行 V042—V050，确认表和 Generic 目录静态事实一致后等待同步器恢复 |
 
 ## 11. 当前实现限制
 
 以下是当前代码的真实限制，配置人员需要特别注意：
 
-### 11.1 复杂对象目前不能完整通过动态表单编辑
+### 11.1 产品表单只支持声明式 Schema 子集
 
-`legacy-http` Schema 将 `headers`、`authConfig`、`secretRefs` 定义为没有子属性声明的通用对象，将 `securitySteps` 定义为通用对象数组。当前前端 Schema 表单只能很好地编辑有明确 `properties/items.properties` 的对象，因此：
+当前 SIMPLE 工作区已支持明确 `properties/items.properties` 的对象/数组、分组、高级字段、白名单
+`x-ui-visible-if`、SecretRef 选择和独立响应映射。它不会执行脚本、远程引用或插件自定义前端代码，也不
+提供通用 JSON/流水线编辑器。因此：
 
-- 基础无认证 HTTP 连接器可以通过界面完成；
-- 新建 Header、认证、SecretRef 和安全步骤时，界面目前不能完整录入其内部字段；
-- `requestMapping/responseMapping` 在界面中可能以文本输入形式出现，可填写 JSON 文本；
-- 已存在的复杂 JSON 能随草稿加载和保存，但通用对象内部不便可视化编辑；
-- `legacySecretAlias` 因字段名包含 `secret`，前端会按敏感字段渲染成 SecretRef 选择器，而兼容插件实际需要普通别名字符串，因此当前界面无法正确新增该字段。
-
-需要复杂认证或安全处理时，现阶段应通过草稿 API 提交完整 JSON，或先完善插件的分阶段 Schema 和前端对象编辑器。不要把 Token 或密码临时写成明文绕过界面限制，后端会拒绝或造成安全问题。
+- `generic-http:2.0.0` 的 Header、认证、请求映射和响应映射可以在产品页面编辑；
+- SecretRef 只能从当前厂商已有引用中选择，页面和预检结果不显示秘密值；
+- 专用插件应提供结构化、严格且有限的 Manifest v2 Schema；任意动态对象应拆成明确字段；
+- 不能由声明式 Schema 表达的厂商协议应开发专用插件，而不是回退到 raw pipeline 或明文配置；
+- Legacy 复杂 JSON 仅在历史只读计划中解释；转换器不能证明无损时必须继续 Legacy。
 
 ### 11.2 熔断阈值和熔断时间尚未接入运行时
 
@@ -872,9 +875,12 @@ Access 不按列表顺序、创建时间或灰度规则猜测厂商。`UNBOUND`�
 
 因此修改界面上的两个熔断字段目前不会改变实际熔断行为。这是实现缺口，不是配置方式问题。
 
-### 11.3 URL 的完整校验发生在受控测试编译阶段
+### 11.3 Generic HTTP 使用跨层条件校验，网络可达性仍需受控测试
 
-通用 JSON Schema 校验器当前主要校验类型、枚举、长度、范围、正则和本地 `$ref`，不会单独执行 `format=uri`。`legacy-http` 插件会在 Access 编译/测试时检查 URL 的 scheme 和 host，托管传输层再执行网络策略检查。因此必须完成受控测试，不能只依赖“校验”按钮判断 URL 可用。
+通用 JSON Schema 校验器只执行受支持的声明式子集；`generic-http:2.0.0` 还会在 Masterdata 编译、
+Access pipeline 编译和插件执行入口重复校验 HTTPS endpoint、认证条件、Header、映射和 SecretRef。
+托管 Transport 最终执行域名 allowlist、DNS/私网和总 deadline 等网络策略。静态“校验”能够拒绝非法
+配置，但不能证明目标网络当前可达；发布前仍必须完成与当前五元组精确匹配的受控测试。
 
 ## 12. 后端源码定位
 
@@ -884,14 +890,18 @@ Access 不按列表顺序、创建时间或灰度规则猜测厂商。`UNBOUND`�
 | 前端连接器工作区 | `data-platform-web/src/views/interface/components/config/VendorConnectorWorkspace.vue` |
 | JSON Schema 动态表单 | `data-platform-web/src/components/connector/JsonSchemaField.vue` |
 | 前端 Schema 默认值和 SecretRef | `data-platform-web/src/utils/connector.ts` |
-| Masterdata HTTP 接口 | `VendorConnectorController` |
-| 草稿、校验、测试、发布、回滚 | `VendorConnectorServiceImpl` |
+| Masterdata 产品 HTTP 接口 | `ConnectorSpecController`、`ConnectorLegacyInventoryController` |
+| SIMPLE 目录、草稿、编译、测试、发布、历史、回滚、升级和转换 | `ConnectorSpecServiceImpl`、`ConnectorSpecCompiler` |
+| Legacy raw 兼容接口 | `VendorConnectorController`、`VendorConnectorServiceImpl` |
 | JSON Schema 校验 | `ConnectorJsonSchemaValidator` |
 | SecretRef 所有权检查和解析 | `ConnectorSecretReferenceService`、`ScopedConnectorSecretResolver` |
 | Access 草稿测试和生产执行 | `DefaultConnectorVendorExecutor` |
 | 流水线拓扑和插件编译 | `PipelineCompiler` |
 | 六阶段执行 | `ConnectorPipelineExecutor` |
-| 内置 HTTP 插件 | `LegacyHttpConnectorPlugin` |
+| 内置产品与平台插件 | `GenericHttpConnectorPlugin`、`PlatformCoreConnectorPlugin` |
+| 内置静态签名事实 | `GenericHttpConnectorMetadata`、`PlatformCoreConnectorMetadata` |
+| Legacy 转换与清点 | `LegacyHttpSpecConverter`、`ConnectorLegacyInventoryService` |
+| Legacy HTTP bridge | `LegacyHttpConnectorPlugin` |
 | 请求/响应映射 | `AbstractVendorAdapter`、`RequestMappingProcessor`、`ResponseMappingProcessor` |
 | 安全步骤 | `SecurityPipelineExecutor`、`DefaultSecurityStepHandlers` |
 | 托管 HTTP 网络策略 | `OkHttpManagedTransport`、`ConnectorRuntimeProperties` |
