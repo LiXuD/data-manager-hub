@@ -24,4 +24,29 @@ class MicrometerPluginMetricRecorderTest {
         assertThrows(IllegalArgumentException.class,
                 () -> recorder.increment("arbitrary_plugin_metric", Map.of()));
     }
+
+    @Test
+    void acceptsManagedTransportCounterNamesAndTheirCompleteTagSet() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        MicrometerPluginMetricRecorder recorder = new MicrometerPluginMetricRecorder(registry);
+        Map<String, String> tags = Map.of(
+                "pluginId", "token-business",
+                "pluginVersion", "1.0.0",
+                "transportMode", "HOST_MANAGED_MULTI_HTTP",
+                "errorCategory", "TRANSPORT_TIMEOUT");
+
+        recorder.increment("connector_managed_transport_subrequests_total", tags);
+        recorder.increment("connector_managed_transport_sessions_total", tags);
+
+        assertEquals(1.0, registry.get("connector_managed_transport_subrequests_total")
+                .tags("pluginId", "token-business", "pluginVersion", "1.0.0",
+                        "transportMode", "HOST_MANAGED_MULTI_HTTP",
+                        "errorCategory", "TRANSPORT_TIMEOUT")
+                .counter().count());
+        assertEquals(1.0, registry.get("connector_managed_transport_sessions_total")
+                .tags("pluginId", "token-business", "pluginVersion", "1.0.0",
+                        "transportMode", "HOST_MANAGED_MULTI_HTTP",
+                        "errorCategory", "TRANSPORT_TIMEOUT")
+                .counter().count());
+    }
 }

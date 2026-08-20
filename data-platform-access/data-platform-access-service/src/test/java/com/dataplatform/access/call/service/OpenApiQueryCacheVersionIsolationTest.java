@@ -67,7 +67,8 @@ class OpenApiQueryCacheVersionIsolationTest {
         BillingChargeRespDTO charge = new BillingChargeRespDTO();
         charge.setFinalAmount(BigDecimal.ZERO);
         when(billing.charge(any())).thenReturn(Result.success(charge));
-        when(vendorProxy.callVendor(anyString(), anyString(), any(), any())).thenReturn(new LinkedHashMap<>(Map.of(
+        when(vendorProxy.callVendor(anyString(), anyString(), any(), any(), anyString()))
+                .thenReturn(new LinkedHashMap<>(Map.of(
                 "success", true,
                 "data", Map.of("score", "not-an-integer"),
                 "pluginId", "vendor-http",

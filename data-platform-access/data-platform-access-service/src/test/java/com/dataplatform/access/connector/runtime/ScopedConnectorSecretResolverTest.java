@@ -88,4 +88,29 @@ class ScopedConnectorSecretResolverTest {
 
         assertEquals(Set.of("vendor.signing"), requested.get());
     }
+
+    @Test
+    void failsClosedWhenASecretIsResolvedOutsideItsCapabilityScope() throws Exception {
+        ScopedConnectorSecretResolver resolver = new ScopedConnectorSecretResolver();
+        var config = new ObjectMapper().readTree(
+                "{\"builderSecret\":\"vendor.builder\",\"parserSecret\":\"vendor.parser\"}");
+
+        resolver.withSecretProvider(refs -> refs.stream().collect(java.util.stream.Collectors.toMap(
+                ref -> ref, ref -> "value:" + ref)), () -> {
+            resolver.enter(config, Set.of("vendor.builder"));
+            try {
+                assertThrows(ConnectorException.class, () -> resolver.resolve("vendor.parser"));
+            } finally {
+                resolver.leave();
+            }
+            resolver.enter(config, Set.of("vendor.parser"));
+            try (var parser = resolver.resolve("vendor.parser")) {
+                assertEquals("value:vendor.parser", parser.materialize());
+                assertThrows(ConnectorException.class, () -> resolver.resolve("vendor.builder"));
+            } finally {
+                resolver.leave();
+            }
+            return null;
+        });
+    }
 }
