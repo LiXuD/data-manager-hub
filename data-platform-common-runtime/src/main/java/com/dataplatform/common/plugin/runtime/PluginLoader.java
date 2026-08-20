@@ -59,7 +59,7 @@ public final class PluginLoader {
                         + (selfTest == null ? "no result" : ConnectorSafeMessageSanitizer.sanitize(
                                 selfTest.safeMessage(), java.util.List.of())));
             }
-            return new PluginHandle(plugin, classLoader, classLoader);
+            return new PluginHandle(plugin, classLoader, classLoader, context);
         } catch (PluginArtifactException exception) {
             closeFailed(plugin, classLoader);
             throw exception;

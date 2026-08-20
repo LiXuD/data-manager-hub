@@ -58,9 +58,17 @@ public final class PipelineCompiler {
         List<CompiledPipelineStep> compiled = new ArrayList<>();
         Map<String, ConnectorPluginMetadata> resolvedMetadata = new LinkedHashMap<>();
         Map<String, Set<String>> stageSecretReferences = new LinkedHashMap<>();
+        Map<String, String> simpleConfigHashes = new LinkedHashMap<>();
+        Map<String, JsonNode> simpleConfigs = new LinkedHashMap<>();
+        Set<String> validatedSimpleConfigs = new HashSet<>();
+        Set<String> validatedGenericConfigs = new HashSet<>();
         try {
             for (ConnectorStageDefinition stage : snapshotStages) {
-                byte[] configBytes = mapper.writeValueAsBytes(stage.config());
+                boolean genericHttp = GenericHttpConnectorMetadata.PLUGIN_ID.equals(stage.pluginId())
+                        && GenericHttpConnectorMetadata.VERSION.equals(stage.pluginVersion());
+                byte[] configBytes = genericHttp
+                        ? stage.config().toString().getBytes(StandardCharsets.UTF_8)
+                        : mapper.writeValueAsBytes(stage.config());
                 if (configBytes.length > MAX_STAGE_CONFIG_BYTES) {
                     throw new IllegalArgumentException("Stage config exceeds 64 KiB: " + stage.stageKey());
                 }
@@ -69,18 +77,37 @@ public final class PipelineCompiler {
                         stage.configHash().toLowerCase().getBytes(StandardCharsets.US_ASCII))) {
                     throw new IllegalArgumentException("Stage configHash mismatch: " + stage.stageKey());
                 }
+                if (genericHttp
+                        && validatedGenericConfigs.add(stage.pluginId() + ":"
+                        + stage.pluginVersion() + ":" + actualHash)) {
+                    GenericHttpConnectorConfigValidator.validate(
+                            stage.config(), validationContext::secretReferenceExists);
+                }
                 if (metadataResolver != null) {
                     ConnectorPluginMetadata metadata = metadataResolver.resolve(
                             stage.pluginId(), stage.pluginVersion());
                     validateHostMetadata(stage, metadata, definition.hashAlgorithm());
-                    List<String> schemaErrors = schemaValidator.validate(metadata.configSchema(), stage.config());
-                    if (!schemaErrors.isEmpty()) {
-                        throw new IllegalArgumentException("Stage config violates signed Schema: "
-                                + stage.stageKey() + ": " + String.join("; ", schemaErrors));
+                    String pluginKey = stage.pluginId() + ":" + stage.pluginVersion();
+                    if (metadata.simpleV2()) {
+                        String priorHash = simpleConfigHashes.putIfAbsent(pluginKey, actualHash);
+                        JsonNode priorConfig = simpleConfigs.putIfAbsent(pluginKey, stage.config());
+                        if (priorHash != null && (!priorHash.equals(actualHash)
+                                || !priorConfig.equals(stage.config()))) {
+                            throw new IllegalArgumentException(
+                                    "Simple connector stages must share one canonical config: " + pluginKey);
+                        }
+                        String validationKey = pluginKey + ":" + actualHash;
+                        if (validatedSimpleConfigs.add(validationKey)) {
+                            validateSignedSchema(stage, metadata);
+                        }
+                        stageSecretReferences.put(stage.stageKey(), schemaValidator.secretReferences(
+                                metadata.configSchema(), stage.config(), stage.capability()));
+                    } else {
+                        validateSignedSchema(stage, metadata);
+                        stageSecretReferences.put(stage.stageKey(),
+                                schemaValidator.secretReferences(metadata.configSchema(), stage.config()));
                     }
-                    stageSecretReferences.put(stage.stageKey(),
-                            schemaValidator.secretReferences(metadata.configSchema(), stage.config()));
-                    resolvedMetadata.put(stage.pluginId() + ":" + stage.pluginVersion(), metadata);
+                    resolvedMetadata.put(pluginKey, metadata);
                 }
             }
             for (ConnectorStageDefinition stage : stages) {
@@ -135,6 +162,16 @@ public final class PipelineCompiler {
             requireDigest(stage.artifactSha256(), metadata.artifactSha256(), "artifact", stage.stageKey());
             requireDigest(stage.manifestHash(), metadata.manifestHash(), "manifest", stage.stageKey());
             requireDigest(stage.schemaHash(), metadata.schemaHash(), "schema", stage.stageKey());
+        }
+    }
+
+    private void validateSignedSchema(
+            ConnectorStageDefinition stage,
+            ConnectorPluginMetadata metadata) {
+        List<String> schemaErrors = schemaValidator.validate(metadata.configSchema(), stage.config());
+        if (!schemaErrors.isEmpty()) {
+            throw new IllegalArgumentException("Stage config violates signed Schema: "
+                    + stage.stageKey() + ": " + String.join("; ", schemaErrors));
         }
     }
 

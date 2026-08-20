@@ -1,6 +1,8 @@
 package com.dataplatform.common.plugin.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.dataplatform.plugin.spi.ConnectorPlugin;
 import com.dataplatform.plugin.spi.ConnectorStageFactory;
@@ -36,6 +38,24 @@ class PluginHandleClassLoaderGaugeTest {
         registry.release("external", "1.0.0");
         assertEquals(baseline, PluginHandle.isolatedClassLoaderCount());
         registry.close();
+    }
+
+    @Test
+    void keepsLegacyConstructorContextFreeAndExposesOnlyExplicitlyBoundContext() {
+        EmptyPlugin legacyPlugin = new EmptyPlugin("legacy");
+        PluginHandle legacy = new PluginHandle(
+                legacyPlugin, legacyPlugin.getClass().getClassLoader(), null);
+        assertTrue(legacy.pluginContext().isEmpty());
+
+        EmptyPlugin initializedPlugin = new EmptyPlugin("initialized");
+        PluginContext context = com.dataplatform.common.plugin.TestPluginContexts.context();
+        PluginHandle bound = PluginHandle.builtIn(initializedPlugin, context);
+        assertSame(context, bound.pluginContext().orElseThrow());
+
+        legacy.retire();
+        bound.retire();
+        assertEquals(PluginHandleState.CLOSED, legacy.state());
+        assertEquals(PluginHandleState.CLOSED, bound.state());
     }
 
     private static final class CloseableLoader extends ClassLoader implements Closeable {

@@ -2,11 +2,13 @@ package com.dataplatform.common.plugin.runtime;
 
 import com.dataplatform.plugin.spi.ConnectorPlugin;
 import com.dataplatform.plugin.spi.ConnectorStageFactory;
+import com.dataplatform.plugin.spi.PluginContext;
 import com.dataplatform.plugin.spi.StageCapability;
 import java.io.Closeable;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -17,15 +19,29 @@ public final class PluginHandle {
     private final ConnectorPlugin plugin;
     private final ClassLoader classLoader;
     private final Closeable closeableClassLoader;
+    private final Optional<PluginContext> pluginContext;
     private final Map<StageCapability, ConnectorStageFactory> factories;
     private final AtomicInteger references = new AtomicInteger();
     private final AtomicReference<PluginHandleState> state = new AtomicReference<>(PluginHandleState.READY);
 
     public PluginHandle(ConnectorPlugin plugin, ClassLoader classLoader, Closeable closeableClassLoader) {
+        this(plugin, classLoader, closeableClassLoader, Optional.empty());
+    }
+
+    /** Creates a handle whose successfully initialized host context is available at execution time. */
+    public PluginHandle(ConnectorPlugin plugin, ClassLoader classLoader,
+                        Closeable closeableClassLoader, PluginContext pluginContext) {
+        this(plugin, classLoader, closeableClassLoader,
+                Optional.of(Objects.requireNonNull(pluginContext, "pluginContext")));
+    }
+
+    private PluginHandle(ConnectorPlugin plugin, ClassLoader classLoader,
+                         Closeable closeableClassLoader, Optional<PluginContext> pluginContext) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.key = new PluginKey(plugin.descriptor().pluginId(), plugin.descriptor().version());
         this.classLoader = Objects.requireNonNull(classLoader, "classLoader");
         this.closeableClassLoader = closeableClassLoader;
+        this.pluginContext = Objects.requireNonNull(pluginContext, "pluginContext");
         EnumMap<StageCapability, ConnectorStageFactory> discovered = new EnumMap<>(StageCapability.class);
         for (ConnectorStageFactory factory : plugin.stageFactories()) {
             if (factory == null || discovered.putIfAbsent(factory.capability(), factory) != null) {
@@ -43,9 +59,14 @@ public final class PluginHandle {
         return new PluginHandle(plugin, plugin.getClass().getClassLoader(), null);
     }
 
+    public static PluginHandle builtIn(ConnectorPlugin plugin, PluginContext pluginContext) {
+        return new PluginHandle(plugin, plugin.getClass().getClassLoader(), null, pluginContext);
+    }
+
     public PluginKey key() { return key; }
     public ConnectorPlugin plugin() { return plugin; }
     public ClassLoader classLoader() { return classLoader; }
+    public Optional<PluginContext> pluginContext() { return pluginContext; }
     public PluginHandleState state() { return state.get(); }
     public int referenceCount() { return references.get(); }
     public static int isolatedClassLoaderCount() { return ISOLATED_CLASSLOADERS.get(); }
