@@ -30,7 +30,9 @@ public final class PluginRuntimeManager implements AutoCloseable {
     }
 
     public void registerBuiltIn(ConnectorPluginRegistration registration) {
-        registry.register(PluginHandle.builtIn(registration.plugin()));
+        registry.register(registration.pluginContext() == null
+                ? PluginHandle.builtIn(registration.plugin())
+                : PluginHandle.builtIn(registration.plugin(), registration.pluginContext()));
     }
 
     public boolean isLoaded(String pluginId, String version) {
@@ -59,7 +61,14 @@ public final class PluginRuntimeManager implements AutoCloseable {
         registry.close();
     }
 
-    public record ConnectorPluginRegistration(com.dataplatform.plugin.spi.ConnectorPlugin plugin) {
+    public record ConnectorPluginRegistration(
+            com.dataplatform.plugin.spi.ConnectorPlugin plugin,
+            com.dataplatform.plugin.spi.PluginContext pluginContext) {
+
+        public ConnectorPluginRegistration(com.dataplatform.plugin.spi.ConnectorPlugin plugin) {
+            this(plugin, null);
+        }
+
         public ConnectorPluginRegistration {
             Objects.requireNonNull(plugin, "plugin");
         }
