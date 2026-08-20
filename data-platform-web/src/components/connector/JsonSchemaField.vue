@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { JsonSchemaNode } from '@/types'
 import {
   orderedSchemaProperties,
   readSecretReference,
+  schemaFieldVisible,
   schemaDefault,
   secretFieldRepresentation,
   writeSecretReference
@@ -29,6 +30,21 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{ 'update:modelValue': [value: unknown] }>()
 const properties = computed(() => orderedSchemaProperties(props.schema))
+const showAdvanced = ref(false)
+const managedFields = computed(() => new Set(props.schema['x-platform-managed'] || []))
+const visibleProperties = computed(() => properties.value.filter(([key, child]) =>
+  !managedFields.value.has(key) && schemaFieldVisible(child, props.modelValue)
+))
+const advancedProperties = computed(() => visibleProperties.value.filter(([, child]) => child['x-ui-advanced']))
+const displayedGroups = computed(() => {
+  const fields = visibleProperties.value.filter(([, child]) => showAdvanced.value || !child['x-ui-advanced'])
+  const groups = new Map<string, Array<[string, JsonSchemaNode]>>()
+  for (const field of fields) {
+    const group = field[1]['x-ui-group'] || ''
+    groups.set(group, [...(groups.get(group) || []), field])
+  }
+  return [...groups.entries()].map(([name, entries]) => ({ name, entries }))
+})
 const requiredKeys = computed(() => new Set(props.schema.required || []))
 const secretRepresentation = computed(() => secretFieldRepresentation(props.schema, props.fieldName))
 const secretSelector = computed(() => Boolean(secretRepresentation.value))
@@ -77,23 +93,33 @@ function primitiveValue(value: unknown): string | number | boolean | undefined {
 function enumValue(value: unknown): string | number | boolean {
   return primitiveValue(value) ?? String(value)
 }
+
+function groupLabel(value: string) {
+  return ({ request: '请求配置', authentication: '认证配置', response: '响应处理' } as Record<string, string>)[value] || value
+}
 </script>
 
 <template>
   <div v-if="schema.type === 'object' || schema.properties" class="schema-object">
     <div v-if="label" class="schema-group-title">{{ label }}</div>
-    <JsonSchemaField
-      v-for="[key, child] in properties"
-      :key="key"
-      :model-value="(modelValue as Record<string, unknown> | undefined)?.[key]"
-      :schema="child"
-      :field-name="key"
-      :label="child.title || key"
-      :required="requiredKeys.has(key)"
-      :secret-options="secretOptions"
-      :disabled="disabled"
-      @update:model-value="value => updateObject(key, value)"
-    />
+    <section v-for="group in displayedGroups" :key="group.name || 'default'" class="schema-ui-group">
+      <div v-if="group.name" class="schema-ui-group-label">{{ groupLabel(group.name) }}</div>
+      <JsonSchemaField
+        v-for="[key, child] in group.entries"
+        :key="key"
+        :model-value="(modelValue as Record<string, unknown> | undefined)?.[key]"
+        :schema="child"
+        :field-name="key"
+        :label="child.title || key"
+        :required="requiredKeys.has(key)"
+        :secret-options="secretOptions"
+        :disabled="disabled"
+        @update:model-value="value => updateObject(key, value)"
+      />
+    </section>
+    <el-button v-if="advancedProperties.length" link :disabled="disabled" @click="showAdvanced = !showAdvanced">
+      {{ showAdvanced ? '收起高级字段' : `显示高级字段（${advancedProperties.length}）` }}
+    </el-button>
   </div>
 
   <el-form-item v-else-if="schema.type === 'array'" :label="label" :required="required" class="schema-field schema-array">
@@ -173,6 +199,8 @@ function enumValue(value: unknown): string | number | boolean {
 <style scoped>
 .schema-object { border-left: 2px solid var(--color-border); padding-left: 16px; margin-bottom: 14px; }
 .schema-group-title { color: var(--color-text-primary); font-weight: 600; margin: 8px 0 14px; }
+.schema-ui-group + .schema-ui-group { margin-top: 16px; }
+.schema-ui-group-label { color: var(--color-text-secondary); font-size: 12px; font-weight: 600; margin: 4px 0 12px; }
 .schema-field { margin-bottom: 16px; }
 .field-help { width: 100%; color: var(--color-text-secondary); font-size: 12px; line-height: 1.5; margin-top: 4px; }
 .array-list { width: 100%; display: grid; gap: 10px; }
