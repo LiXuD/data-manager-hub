@@ -18,6 +18,7 @@
         <module>data-platform-common-persistence</module>
         <module>data-platform-plugin-spi</module>
         <module>data-platform-common-runtime</module>
+        <module>data-platform-plugin-testkit</module>
 
         <!-- Five business domains -->
         <module>data-platform-masterdata</module>
@@ -247,6 +248,11 @@
             <dependency>
                 <groupId>com.dataplatform</groupId>
                 <artifactId>data-platform-common-runtime</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.dataplatform</groupId>
+                <artifactId>data-platform-plugin-testkit</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

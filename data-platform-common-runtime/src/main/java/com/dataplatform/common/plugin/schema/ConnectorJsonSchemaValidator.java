@@ -1,6 +1,7 @@
 package com.dataplatform.common.plugin.schema;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.dataplatform.plugin.spi.StageCapability;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,20 +43,38 @@ public final class ConnectorJsonSchemaValidator {
     /** Collects only references selected by signed Schema fields after successful validation. */
     public Set<String> secretReferences(JsonNode schema, JsonNode config) {
         Set<String> result = new java.util.LinkedHashSet<>();
-        collectSecretReferences(schema, schema, config, null, result);
+        collectSecretReferences(schema, schema, config, null, null, result);
+        return Set.copyOf(result);
+    }
+
+    /** Collects only v2 secret references explicitly scoped to one capability. */
+    public Set<String> secretReferences(
+            JsonNode schema,
+            JsonNode config,
+            StageCapability capability) {
+        Set<String> result = new java.util.LinkedHashSet<>();
+        collectSecretReferences(schema, schema, config, null,
+                java.util.Objects.requireNonNull(capability, "capability"), result);
         return Set.copyOf(result);
     }
 
     private void collectSecretReferences(JsonNode root, JsonNode schema, JsonNode value,
-                                         String fieldName, Set<String> result) {
+                                         String fieldName, StageCapability scopedCapability,
+                                         Set<String> result) {
         if (schema == null || !schema.isObject() || value == null || value.isMissingNode() || value.isNull()) return;
         JsonNode reference = schema.get("$ref");
         if (reference != null && reference.isTextual() && isLocalPointer(reference.asText())) {
-            collectSecretReferences(root, resolve(root, reference.asText()), value, fieldName, result);
+            collectSecretReferences(root, resolve(root, reference.asText()), value, fieldName,
+                    scopedCapability, result);
             return;
         }
-        if (schema.path("x-secret-ref").asBoolean(false)
-                || schema.path("x-sensitive").asBoolean(false) || isSensitiveName(fieldName)) {
+        boolean explicitSecretReference = schema.path("x-secret-ref").asBoolean(false);
+        boolean legacySensitiveReference = schema.path("x-sensitive").asBoolean(false)
+                || isSensitiveName(fieldName);
+        if (explicitSecretReference || scopedCapability == null && legacySensitiveReference) {
+            if (scopedCapability != null && !scopeContains(schema.path("x-stage-scope"), scopedCapability)) {
+                return;
+            }
             String secretReference = textualSecretReference(value);
             if (secretReference != null) result.add(secretReference);
             return;
@@ -65,12 +84,22 @@ public final class ConnectorJsonSchemaValidator {
             value.fields().forEachRemaining(entry -> {
                 JsonNode childSchema = properties.get(entry.getKey());
                 if (childSchema != null) {
-                    collectSecretReferences(root, childSchema, entry.getValue(), entry.getKey(), result);
+                    collectSecretReferences(root, childSchema, entry.getValue(), entry.getKey(),
+                            scopedCapability, result);
                 }
             });
         } else if (value.isArray() && schema.has("items")) {
-            value.forEach(item -> collectSecretReferences(root, schema.get("items"), item, fieldName, result));
+            value.forEach(item -> collectSecretReferences(root, schema.get("items"), item, fieldName,
+                    scopedCapability, result));
         }
+    }
+
+    private boolean scopeContains(JsonNode scope, StageCapability capability) {
+        if (!scope.isArray()) return false;
+        for (JsonNode item : scope) {
+            if (item.isTextual() && capability.name().equals(item.asText())) return true;
+        }
+        return false;
     }
 
     private void validateSchemaShape(JsonNode schema, String path, List<String> errors, Set<JsonNode> visited) {
