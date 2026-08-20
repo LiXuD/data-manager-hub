@@ -530,4 +530,54 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="add-connector-product-spec-2026-08-12"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="connector_plugin_version"/>
+            <tableExists schemaName="public" tableName="vendor_connector_version"/>
+            <tableExists schemaName="public" tableName="vendor_connector_test_fact"/>
+            <columnExists schemaName="public" tableName="vendor_connector_version" columnName="integrity_hash"/>
+            <columnExists schemaName="public" tableName="api_interface" columnName="primary_vendor_config_id"/>
+        </preConditions>
+        <sqlFile path="../migrations/V049__add_connector_product_spec.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U049__add_connector_product_spec.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="seed-generic-http-connector-2026-08-20"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="connector_plugin"/>
+            <tableExists schemaName="public" tableName="connector_plugin_version"/>
+            <tableExists schemaName="public" tableName="vendor_connector_version"/>
+            <tableExists schemaName="public" tableName="vendor_connector_test_fact"/>
+            <tableExists schemaName="public" tableName="connector_plugin_activation"/>
+            <tableExists schemaName="public" tableName="call_record"/>
+            <tableExists schemaName="public" tableName="billing_event"/>
+            <columnExists schemaName="public" tableName="connector_plugin_version" columnName="manifest_version"/>
+            <columnExists schemaName="public" tableName="connector_plugin_version" columnName="compatibility_manifest"/>
+        </preConditions>
+        <sqlFile path="../migrations/V050__seed_generic_http_connector_v2.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U050__seed_generic_http_connector_v2.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>
