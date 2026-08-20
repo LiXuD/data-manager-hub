@@ -19,6 +19,9 @@ public class VendorConnectorTestFact {
     private Long vendorConfigId;
     private Integer draftVersion;
     private String snapshotHash;
+    private String authoringMode;
+    private String specHash;
+    private String compileHash;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String pluginBindings;
     private Boolean testSucceeded;

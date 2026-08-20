@@ -24,6 +24,12 @@ public class VendorConnectorVersion {
     private String snapshotHash;
     private String hashAlgorithm;
     private String integrityHash;
+    private String authoringMode;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String connectorSpec;
+    private String specHash;
+    private String compilerVersion;
+    private String compileHash;
     private Integer securityVersion;
     private String status;
     private Long previousVersionId;

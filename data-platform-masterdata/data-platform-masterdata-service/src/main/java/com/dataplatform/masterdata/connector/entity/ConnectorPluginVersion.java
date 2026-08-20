@@ -33,6 +33,13 @@ public class ConnectorPluginVersion {
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String permissionManifest;
     private String minHostVersion;
+    private String manifestVersion;
+    private String authoringModel;
+    private String connectorKind;
+    private String transportMode;
+    private String outputMode;
+    @TableField(typeHandler = JsonbTypeHandler.class)
+    private String compatibilityManifest;
     private String status;
     private String safeErrorCode;
     private String safeErrorDigest;
