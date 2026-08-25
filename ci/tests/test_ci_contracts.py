@@ -131,8 +131,8 @@ class CiContractTests(unittest.TestCase):
             capture_output=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("6 files", result.stdout)
-        self.assertIn("84 run blocks", result.stdout)
+        self.assertIn("7 files", result.stdout)
+        self.assertIn("85 run blocks", result.stdout)
 
     def test_ci_and_release_matrices_match_runtime_contract(self) -> None:
         result = subprocess.run(
