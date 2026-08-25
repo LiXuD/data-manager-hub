@@ -308,10 +308,18 @@ jobs:
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: bash ci/scripts/verify-nvd-api.sh
-      - name: Dependency, SBOM and license reports
+      - id: dependency_scan
+        name: Dependency, SBOM and license reports
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: ./mvnw -B -ntp -Pconnector-supply-chain-scan -DnvdMaxRetryCount=3 -DskipTests verify
+      - name: Save OWASP Dependency-Check NVD database
+        if: steps.dependency_scan.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: dependency-check-nvd-${{ runner.os }}
       - name: Upload supply-chain reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -328,7 +336,7 @@ jobs:
         with:
           languages: java,javascript-typescript
       - name: CodeQL autobuild
-        uses: github/codeql-action/autobuild@60168efe1c415ce0f5521ea06d5c2062adbeed1b
+        run: ./mvnw -B -V -DskipTests package
       - name: CodeQL analyze
         uses: github/codeql-action/analyze@60168efe1c415ce0f5521ea06d5c2062adbeed1b
         with:

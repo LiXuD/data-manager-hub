@@ -83,12 +83,20 @@ jobs:
           bash verify-v048-routing.sh
           bash verify-v049-connector-product-spec.sh
           bash verify-v050-generic-http.sh
-      - name: Dependency and SBOM scan
+      - id: dependency_scan
+        name: Dependency and SBOM scan
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           bash ci/scripts/verify-nvd-api.sh
           ./mvnw -B -ntp -Pconnector-supply-chain-scan -DnvdMaxRetryCount=3 -DskipTests verify
+      - name: Save OWASP Dependency-Check NVD database
+        if: steps.dependency_scan.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: dependency-check-nvd-${{ runner.os }}
       - name: Install locked Web dependencies for CodeQL extraction
         working-directory: data-platform-web
         run: npm ci --ignore-scripts
@@ -97,7 +105,7 @@ jobs:
         with:
           languages: java,javascript-typescript
       - name: CodeQL autobuild (nightly full scan)
-        uses: github/codeql-action/autobuild@60168efe1c415ce0f5521ea06d5c2062adbeed1b
+        run: ./mvnw -B -V -DskipTests package
       - name: CodeQL analyze (nightly full scan)
         uses: github/codeql-action/analyze@60168efe1c415ce0f5521ea06d5c2062adbeed1b
         with:
