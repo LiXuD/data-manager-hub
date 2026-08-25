@@ -1,0 +1,99 @@
+name: Scheduled security and recovery checks
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+    - cron: '31 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nightly:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+        env:
+          POSTGRES_DB: dataplatform_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dataplatform_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+          cache: npm
+          cache-dependency-path: data-platform-web/package-lock.json
+      - name: Full strict migration repeatability
+        env:
+          MAVEN_BIN: ./mvnw
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: dataplatform_ci
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+        run: |
+          bash ci/scripts/strict-migration.sh update
+          bash ci/scripts/strict-migration.sh update
+          bash ci/scripts/strict-migration.sh status
+      - name: Architecture and contracts
+        run: |
+          bash arch-scan.sh
+          python3 -m pip install --requirement ci/requirements.txt
+          python3 ci/scripts/verify-contracts.py
+          python3 ci/scripts/verify-admission-policy.py
+          python3 ci/scripts/verify-observability-rules.py
+          python3 ci/scripts/verify-release-gates-policy.py
+          python3 ci/scripts/check-workflows.py
+          python3 ci/scripts/verify-policy-files.py \
+            --base-ref HEAD^ \
+            --waiver ci/policy/coverage-waivers.yaml \
+            --waiver ci/policy/security-waivers.yaml
+      - name: Full connector migration matrices
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          PGPASSWORD: postgres
+        run: |
+          bash verify-v048-routing.sh
+          bash verify-v049-connector-product-spec.sh
+          bash verify-v050-generic-http.sh
+      - name: Dependency and SBOM scan
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: ./mvnw -B -ntp -Pconnector-supply-chain-scan -DskipTests verify
+      - name: Install locked Web dependencies for CodeQL extraction
+        working-directory: data-platform-web
+        run: npm ci --ignore-scripts
+      - name: CodeQL initialize (nightly full scan)
+        uses: github/codeql-action/init@60168efe1c415ce0f5521ea06d5c2062adbeed1b
+        with:
+          languages: java,javascript-typescript
+      - name: CodeQL autobuild (nightly full scan)
+        uses: github/codeql-action/autobuild@60168efe1c415ce0f5521ea06d5c2062adbeed1b
+      - name: CodeQL analyze (nightly full scan)
+        uses: github/codeql-action/analyze@60168efe1c415ce0f5521ea06d5c2062adbeed1b
+        with:
+          category: /language:all
+      - name: Audit GHCR retention contract
+        run: python3 ci/scripts/verify-ghcr-retention.py

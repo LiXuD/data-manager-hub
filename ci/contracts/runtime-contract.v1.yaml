@@ -1,0 +1,152 @@
+schemaVersion: 1
+kind: RuntimeContract
+repository: LiXuD/data-manager-hub
+namespace:
+  dev: dmh-dev
+  staging: dmh-staging
+  production: dmh-prod
+springProfile:
+  dev: dev
+  staging: staging
+  production: prod
+secretContracts:
+  dmh-runtime:
+    requiredEnvKeys:
+      - NACOS_SERVER_ADDR
+  dmh-internal-auth:
+    envKeys:
+      - INTERNAL_AUTH_TOKEN_URI
+      - INTERNAL_AUTH_ACCESS_SECRET
+      - INTERNAL_AUTH_BILLING_SECRET
+      - INTERNAL_AUTH_MASTERDATA_SECRET
+      - INTERNAL_AUTH_IDENTITY_SECRET
+      - INTERNAL_AUTH_GOVERNANCE_SECRET
+      - PLATFORM_ENCRYPTION_MASTER_KEY
+    volumeKeys: [public.pem, private.pem]
+    mountPath: /run/secrets/dmh/internal-auth
+    mode: "0440"
+components:
+  gateway:
+    workload: Deployment
+    module: data-platform-gateway
+    artifactGlob: data-platform-gateway/target/data-platform-gateway-*.jar
+    image: data-platform-gateway
+    port: 8888
+    probePort: 8888
+    servicePort: 8888
+    nacosDataId: data-platform-gateway-{profile}.yml
+    secretRefs: [dmh-runtime, dmh-internal-auth]
+    replicas:
+      dev: 1
+      staging: 2
+      production: 2
+  masterdata:
+    workload: Deployment
+    module: data-platform-masterdata/data-platform-masterdata-service
+    artifactGlob: data-platform-masterdata/data-platform-masterdata-service/target/data-platform-masterdata-service-*.jar
+    image: data-platform-masterdata
+    port: 8081
+    probePort: 8081
+    servicePort: 8081
+    nacosDataId: data-platform-masterdata-{profile}.yml
+    secretRefs: [dmh-runtime, dmh-internal-auth]
+    replicas:
+      dev: 1
+      staging: 2
+      production: 2
+  access:
+    workload: StatefulSet
+    module: data-platform-access/data-platform-access-service
+    artifactGlob: data-platform-access/data-platform-access-service/target/data-platform-access-service-*.jar
+    image: data-platform-access
+    port: 8082
+    probePort: 8082
+    servicePort: 8082
+    nacosDataId: data-platform-access-{profile}.yml
+    secretRefs: [dmh-runtime, dmh-internal-auth, dmh-connector-truststore]
+    cacheVolume: connector-plugin-cache
+    readinessIndicator: connectorRuntimeReadiness
+    replicas:
+      dev: 1
+      staging: 2
+      production: 2
+  billing:
+    workload: Deployment
+    module: data-platform-billing/data-platform-billing-service
+    artifactGlob: data-platform-billing/data-platform-billing-service/target/data-platform-billing-service-*.jar
+    image: data-platform-billing
+    port: 8084
+    probePort: 8084
+    servicePort: 8084
+    nacosDataId: data-platform-billing-{profile}.yml
+    secretRefs: [dmh-runtime, dmh-internal-auth]
+    replicas:
+      dev: 1
+      staging: 2
+      production: 2
+  identity:
+    workload: Deployment
+    module: data-platform-identity/data-platform-identity-service
+    artifactGlob: data-platform-identity/data-platform-identity-service/target/data-platform-identity-service-*.jar
+    image: data-platform-identity
+    port: 8086
+    probePort: 8086
+    servicePort: 8086
+    nacosDataId: data-platform-identity-{profile}.yml
+    secretRefs: [dmh-runtime, dmh-internal-auth]
+    replicas:
+      dev: 1
+      staging: 2
+      production: 2
+  governance:
+    workload: Deployment
+    module: data-platform-governance/data-platform-governance-service
+    artifactGlob: data-platform-governance/data-platform-governance-service/target/data-platform-governance-service-*.jar
+    image: data-platform-governance
+    port: 8085
+    probePort: 8085
+    servicePort: 8085
+    nacosDataId: data-platform-governance-{profile}.yml
+    secretRefs: [dmh-runtime, dmh-internal-auth]
+    replicas:
+      dev: 1
+      staging: 2
+      production: 2
+  web:
+    workload: Deployment
+    module: data-platform-web
+    artifactGlob: data-platform-web/dist/index.html
+    image: data-platform-web
+    port: 8080
+    probePort: 8080
+    servicePort: 8080
+    secretRefs: []
+    replicas:
+      dev: 1
+      staging: 2
+      production: 2
+  dbops:
+    workload: Job
+    module: ci/scripts
+    image: data-platform-dbops
+    port: 0
+    nacosDataId: data-platform-database-{profile}.properties
+    # The Job itself receives only dmh-runtime. The snapshot verifier is a
+    # protected deployment-runner secret and is never injected into dbops.
+    secretRefs: [dmh-runtime]
+    runnerSecretRefs: [dmh-snapshot-verifier]
+  acceptance:
+    workload: Job
+    module: data-platform-test/data-platform-test-service
+    image: data-platform-acceptance
+    port: 0
+    secretRefs: [dmh-runtime, dmh-acceptance]
+policies:
+  imagePullPolicy: IfNotPresent
+  platforms: [linux/amd64, linux/arm64]
+  productionRequires:
+    - sbom
+    - provenance
+    - attestation
+    - snapshotReceipt
+    - releaseGates

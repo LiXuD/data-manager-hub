@@ -1,0 +1,18 @@
+{{- range $name, $cfg := .Values.components }}
+{{- if and $cfg.service (gt (int $cfg.replicas) 1) }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "dmh.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "dmh.labels" $ | nindent 4 }}
+    dmh.io/component: {{ $name }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmh.name" $ }}
+      dmh.io/component: {{ $name }}
+{{- end }}
+{{- end }}

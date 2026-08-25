@@ -1,0 +1,31 @@
+schemaVersion: 1
+kind: MigrationPolicy
+authoritativeChangelog: sql/changelog/db.changelog-master.xml
+enforcedFrom: V051
+database:
+  engine: postgresql
+  majorVersion: 16
+  transactionDefault: true
+  maxAutomaticRetries: 3
+  retryOnlyBeforeLock: true
+  productionRecovery: external-snapshot-plus-pitr
+  restoreMode: new-instance-cutover
+migrations:
+  V048:
+    mode: ONLINE_COMPATIBLE
+    transactional: true
+    rollback: FORWARD_RECOVERY
+  V049:
+    mode: ONLINE_COMPATIBLE
+    transactional: true
+    rollback: FORWARD_RECOVERY
+  V050:
+    mode: ONLINE_COMPATIBLE
+    transactional: true
+    rollback: FORWARD_RECOVERY
+rules:
+  - publishedSqlIsImmutable
+  - newMigrationMustBeIndexed
+  - destructiveChangeRequiresMaintenance
+  - contractChangeRequiresSeparateRelease
+  - restoreNeverRunsInCICD

@@ -1,0 +1,159 @@
+{{- range $name, $cfg := .Values.components }}
+{{- if eq $cfg.workload "Deployment" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dmh.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "dmh.labels" $ | nindent 4 }}
+    dmh.io/component: {{ $name }}
+spec:
+  replicas: {{ $cfg.replicas }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  minReadySeconds: 60
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmh.name" $ }}
+      dmh.io/component: {{ $name }}
+  template:
+    metadata:
+      labels:
+        {{- include "dmh.labels" $ | nindent 8 }}
+        dmh.io/component: {{ $name }}
+    spec:
+      serviceAccountName: {{ $.Values.global.workloadServiceAccount }}
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: {{ $.Values.existingSecrets.ghcrPull }}
+      terminationGracePeriodSeconds: {{ $.Values.global.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: {{ $name }}
+          image: {{ (index $.Values.images.components $name).repository }}@{{ (index $.Values.images.components $name).digest }}
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          ports:
+            - name: http
+              containerPort: {{ $cfg.port }}
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ $.Values.global.springProfile | quote }}
+            - name: NACOS_NAMESPACE
+              value: {{ $.Values.global.nacosNamespace | quote }}
+            - name: NACOS_GROUP
+              value: {{ $.Values.global.nacosGroup | quote }}
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+          {{- if ne $name "web" }}
+            - name: INTERNAL_AUTH_ENABLED
+              value: "true"
+            - name: INTERNAL_AUTH_PUBLIC_KEY_PATH
+              value: /run/secrets/dmh/internal-auth/public.pem
+          {{- if eq $name "identity" }}
+            - name: INTERNAL_AUTH_PRIVATE_KEY_PATH
+              value: /run/secrets/dmh/internal-auth/private.pem
+          {{- end }}
+            - name: INTERNAL_AUTH_TOKEN_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_TOKEN_URI
+            - name: INTERNAL_AUTH_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_ACCESS_SECRET
+            - name: INTERNAL_AUTH_BILLING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_BILLING_SECRET
+            - name: INTERNAL_AUTH_MASTERDATA_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_MASTERDATA_SECRET
+            - name: INTERNAL_AUTH_IDENTITY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_IDENTITY_SECRET
+            - name: INTERNAL_AUTH_GOVERNANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_GOVERNANCE_SECRET
+            - name: PLATFORM_ENCRYPTION_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecrets.internalAuth }}
+                  key: PLATFORM_ENCRYPTION_MASTER_KEY
+          {{- end }}
+          {{- if ne $name "web" }}
+          envFrom:
+            - secretRef: {name: {{ $.Values.existingSecrets.runtime }}}
+          {{- end }}
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          startupProbe:
+            httpGet: {path: /actuator/health, port: http}
+            failureThreshold: 60
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          readinessProbe:
+            httpGet: {path: {{ $cfg.readinessPath }}, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if ne $name "web" }}
+            - name: internal-auth
+              mountPath: /run/secrets/dmh/internal-auth
+              readOnly: true
+            {{- end }}
+            {{- if eq $name "web" }}
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if ne $name "web" }}
+        - name: internal-auth
+          secret:
+            secretName: {{ $.Values.existingSecrets.internalAuth }}
+            defaultMode: 0440
+            items:
+              - key: public.pem
+                path: public.pem
+              {{- if eq $name "identity" }}
+              - key: private.pem
+                path: private.pem
+              {{- end }}
+        {{- end }}
+        {{- if eq $name "web" }}
+        - name: nginx-cache
+          emptyDir: {}
+        {{- end }}
+{{- end }}
+{{- end }}

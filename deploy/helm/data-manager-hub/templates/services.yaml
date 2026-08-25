@@ -1,0 +1,40 @@
+{{- range $name, $cfg := .Values.components }}
+{{- if $cfg.service }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmh.fullname" $ }}-{{ $name }}
+  labels:
+    {{- include "dmh.labels" $ | nindent 4 }}
+    dmh.io/component: {{ $name }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ include "dmh.name" $ }}
+    dmh.io/component: {{ $name }}
+  ports:
+    - name: http
+      port: {{ $cfg.port }}
+      targetPort: http
+{{- if eq $cfg.workload "StatefulSet" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dmh.fullname" $ }}-{{ $name }}-headless
+  labels:
+    {{- include "dmh.labels" $ | nindent 4 }}
+    dmh.io/component: {{ $name }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: false
+  selector:
+    app.kubernetes.io/name: {{ include "dmh.name" $ }}
+    dmh.io/component: {{ $name }}
+  ports:
+    - name: http
+      port: {{ $cfg.port }}
+      targetPort: http
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,13 @@
+global:
+  environment: dev
+  springProfile: dev
+  nacosNamespace: dev
+  nacosGroup: DMH_DEV_LOCAL
+components:
+  gateway: {replicas: 1}
+  masterdata: {replicas: 1}
+  access: {replicas: 1}
+  billing: {replicas: 1}
+  identity: {replicas: 1}
+  governance: {replicas: 1}
+  web: {replicas: 1}

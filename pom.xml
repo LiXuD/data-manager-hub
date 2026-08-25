@@ -37,10 +37,24 @@
         <java.version>21</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.4.13</spring-boot.version>
-        <spring-cloud.version>2024.0.3</spring-cloud.version>
+        <spring-boot.version>3.5.16</spring-boot.version>
+        <spring-cloud.version>2025.0.3</spring-cloud.version>
+        <!-- Security patch levels kept independent from the framework BOM so a
+             CVE fix does not wait for a platform train release. -->
+        <spring-framework.version>6.2.19</spring-framework.version>
+        <spring-security.version>6.5.11</spring-security.version>
+        <netty.version>4.1.136.Final</netty.version>
+        <jackson.version>2.18.9</jackson.version>
+        <tomcat.version>10.1.57</tomcat.version>
+        <httpclient5.version>5.6.4</httpclient5.version>
+        <httpcore5.version>5.4.3</httpcore5.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
+        <kafka.clients.version>3.9.2</kafka.clients.version>
+        <log4j.version>2.25.5</log4j.version>
+        <commons-fileupload.version>1.6.0</commons-fileupload.version>
+        <nacos.logback-adapter.version>1.1.5</nacos.logback-adapter.version>
         <mybatis-plus.version>3.5.8</mybatis-plus.version>
-        <nacos.version>2023.0.3.4</nacos.version>
+        <nacos.version>2025.0.0.0</nacos.version>
         <sa-token.version>1.37.0</sa-token.version>
         <redisson.version>3.27.2</redisson.version>
         <hutool.version>5.8.47</hutool.version>
@@ -49,6 +63,7 @@
         <nimbus-jose-jwt.version>9.47</nimbus-jose-jwt.version>
         <byte-buddy.version>1.17.8</byte-buddy.version>
         <maven.enforcer.version>3.5.0</maven.enforcer.version>
+        <jacoco.version>0.8.13</jacoco.version>
         <liquibase.version>4.29.2</liquibase.version>
         <postgresql.driver.version>42.7.13</postgresql.driver.version>
         <flowable.version>7.1.0</flowable.version>
@@ -71,6 +86,30 @@
                 <profiles.active>prod</profiles.active>
             </properties>
         </profile>
+        <!-- The acceptance image runs Failsafe against deployed services. Keep
+             repository-only Surefire tests out of that job without changing
+             the standard -DskipTests behavior used by normal builds. -->
+        <profile>
+            <id>acceptance-skip-unit-tests</id>
+            <activation>
+                <property>
+                    <name>acceptance.skip.unit.tests</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.5.4</version>
+                        <configuration>
+                            <skipTests>true</skipTests>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <!-- Explicit CI-only profile: normal compile/test remains offline-friendly and deterministic. -->
         <profile>
             <id>connector-supply-chain-scan</id>
@@ -83,7 +122,17 @@
                         <configuration>
                             <failBuildOnCVSS>7</failBuildOnCVSS>
                             <formats>HTML,JSON,SARIF</formats>
-                            <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                            <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+                            <skipProvidedScope>true</skipProvidedScope>
+                            <suppressionFiles>ci/policy/dependency-check-suppressions.xml</suppressionFiles>
+                            <!-- This repository ships Java/JavaScript only; do not invoke the
+                                 optional .NET analyzer on transitive archives when dotnet is
+                                 absent from the protected CI runner. -->
+                            <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
+                            <!-- OSS Index now requires a separate authenticated token. NVD is the
+                                 authoritative Java gate here; CodeQL/npm audit cover the other
+                                 source families without turning an unauthenticated 401 into noise. -->
+                            <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
                         </configuration>
                         <executions>
                             <execution>
@@ -128,6 +177,37 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Security patch BOMs come first so the platform BOM below cannot
+                 silently reintroduce an older transitive version. -->
+            <dependency>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-framework-bom</artifactId>
+                <version>${spring-framework.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-bom</artifactId>
+                <version>${spring-security.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- Spring Boot -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>
@@ -135,6 +215,75 @@
                 <version>${spring-boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+
+            <!-- Keep application runtime and Liquibase's JDBC driver on the same
+                 explicitly reviewed PostgreSQL patch level. -->
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.driver.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>${kafka.clients.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-api</artifactId>
+                <version>${log4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-to-slf4j</artifactId>
+                <version>${log4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-fileupload</groupId>
+                <artifactId>commons-fileupload</artifactId>
+                <version>${commons-fileupload.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.nacos</groupId>
+                <artifactId>logback-adapter</artifactId>
+                <version>${nacos.logback-adapter.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.client5</groupId>
+                <artifactId>httpclient5</artifactId>
+                <version>${httpclient5.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.core5</groupId>
+                <artifactId>httpcore5</artifactId>
+                <version>${httpcore5.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.httpcomponents.core5</groupId>
+                <artifactId>httpcore5-h2</artifactId>
+                <version>${httpcore5.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>${commons-lang3.version}</version>
             </dependency>
 
             <!-- Override the Boot BOM so builds also work when Maven runs on JDK 25. -->
@@ -341,6 +490,26 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>coverage-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>coverage-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.liquibase</groupId>

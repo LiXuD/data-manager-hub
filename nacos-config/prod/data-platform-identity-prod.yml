@@ -29,6 +29,8 @@ logging:
   level:
     com.dataplatform.identity: INFO
 
+platform.encryption.master-key: ${PLATFORM_ENCRYPTION_MASTER_KEY}
+
 platform:
   security:
     internal:
@@ -37,8 +39,8 @@ platform:
       service-name: data-platform-identity
       token-uri: ${INTERNAL_AUTH_TOKEN_URI}
       client-secret: ${INTERNAL_AUTH_IDENTITY_SECRET}
-      public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH}
-      private-key-location: file:${INTERNAL_AUTH_PRIVATE_KEY_PATH}
+      public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH:/run/secrets/dmh/internal-auth/public.pem}
+      private-key-location: file:${INTERNAL_AUTH_PRIVATE_KEY_PATH:/run/secrets/dmh/internal-auth/private.pem}
       token-ttl: 5m
       clients:
         data-platform-access:
@@ -67,5 +69,9 @@ platform:
             data-platform-governance: [governance:log]
 
 server.port: 8086
+management.endpoint.health.probes.enabled: true
+management.endpoint.health.show-details: never
+management.endpoint.health.group.liveness.include: livenessState,ping
+management.endpoint.health.group.readiness.include: readinessState,ping
 management.endpoints.web.exposure.include: health,info,prometheus
 logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"
