@@ -123,6 +123,7 @@
                             <failBuildOnCVSS>7</failBuildOnCVSS>
                             <formats>HTML,JSON,SARIF</formats>
                             <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+                            <nvdMaxRetryCount>3</nvdMaxRetryCount>
                             <skipProvidedScope>true</skipProvidedScope>
                             <suppressionFiles>ci/policy/dependency-check-suppressions.xml</suppressionFiles>
                             <!-- This repository ships Java/JavaScript only; do not invoke the
