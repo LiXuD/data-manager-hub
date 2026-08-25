@@ -48,12 +48,12 @@ public class CallerOpenApiDocumentController {
     }
 
     @GetMapping("/interfaces")
-    public Result<List<Map<String, Object>>> list(
+    public ResponseEntity<Result<List<Map<String, Object>>>> list(
             @RequestHeader(value = "X-Api-Key", required = false) String keyHeader,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         ApiKey apiKey = authenticate(keyHeader, authorization);
         if (apiKey == null) {
-            return Result.error(401, "无效的API Key");
+            return ResponseEntity.status(401).body(Result.error(401, "无效的API Key"));
         }
         List<Map<String, Object>> result = new ArrayList<>();
         for (Long interfaceId : apiKeyInterfaceService.getInterfaceIdsByApiKeyId(apiKey.getId())) {
@@ -69,19 +69,21 @@ public class CallerOpenApiDocumentController {
             row.put("description", item.getDescription());
             result.add(row);
         }
-        return Result.success(result);
+        return ResponseEntity.ok(Result.success(result));
     }
 
     @GetMapping("/interfaces/{apiCode}")
-    public Result<Map<String, Object>> detail(
+    public ResponseEntity<Result<Map<String, Object>>> detail(
             @PathVariable("apiCode") String apiCode,
             @RequestHeader(value = "X-Api-Key", required = false) String keyHeader,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         AuthorizedContract authorized = authorizedContract(apiCode, keyHeader, authorization);
         if (authorized.errorCode() != null) {
-            return Result.error(authorized.errorCode(), authorized.errorMessage());
+            return ResponseEntity.status(authorized.errorCode())
+                    .body(Result.error(authorized.errorCode(), authorized.errorMessage()));
         }
-        return Result.success(documentService.describe(authorized.contract(), baseUrlResolver.resolve()));
+        return ResponseEntity.ok(Result.success(
+                documentService.describe(authorized.contract(), baseUrlResolver.resolve())));
     }
 
     @GetMapping("/interfaces/{apiCode}/openapi")

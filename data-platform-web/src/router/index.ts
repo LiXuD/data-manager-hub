@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { getProfile } from '@/api/auth'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
 
@@ -21,97 +22,136 @@ const routes: RouteRecordRaw[] = [
         path: '/dashboard',
         name: 'Dashboard',
         component: () => import('@/views/dashboard/index.vue'),
-        meta: { title: '数据概览' }
+        meta: { title: '数据概览', permissions: ['dashboard:view'] }
       },
       {
         path: '/tenant',
         name: 'Tenant',
         component: () => import('@/views/tenant/index.vue'),
-        meta: { title: '租户管理' }
+        meta: { title: '租户管理', permissions: ['tenant:view'] }
       },
       {
         path: '/user',
         name: 'User',
         component: () => import('@/views/user/index.vue'),
-        meta: { title: '用户管理' }
+        meta: { title: '用户管理', permissions: ['user:view'] }
       },
       {
         path: '/role',
         name: 'Role',
         component: () => import('@/views/role/index.vue'),
-        meta: { title: '角色管理' }
+        meta: { title: '角色管理', permissions: ['role:view'] }
       },
       {
         path: '/vendor',
         name: 'Vendor',
         component: () => import('@/views/vendor/index.vue'),
-        meta: { title: '厂商管理' }
+        meta: { title: '厂商管理', permissions: ['vendor:view'] }
+      },
+      {
+        path: '/connector-plugin',
+        name: 'ConnectorPlugin',
+        component: () => import('@/views/connector-plugin/index.vue'),
+        meta: {
+          title: '连接器插件',
+          permissions: ['connector-plugin:view']
+        }
+      },
+      {
+        path: '/connector-migration',
+        name: 'ConnectorMigration',
+        component: () => import('@/views/connector-migration/index.vue'),
+        meta: {
+          title: '厂商连接器迁移',
+          permissions: ['connector-plugin:view']
+        }
       },
       {
         path: '/caller',
         name: 'Caller',
         component: () => import('@/views/caller/index.vue'),
-        meta: { title: '调用方管理' }
+        meta: { title: '内部系统管理', permissions: ['caller:view'] }
+      },
+      {
+        path: '/caller/:callerId/products',
+        name: 'CallerProducts',
+        component: () => import('@/views/caller/products.vue'),
+        meta: { title: '内部系统产品管理', permissions: ['caller:view'] }
+      },
+      {
+        path: '/api-permission',
+        name: 'ApiPermission',
+        component: () => import('@/views/api-permission/index.vue'),
+        meta: {
+          title: '接口权限审批',
+          permissions: [
+            'api-permission:view',
+            'api-permission:approve',
+            'api-permission:grant-view',
+            'api-permission:process-view',
+            'api-permission:emergency-grant'
+          ]
+        }
       },
       {
         path: '/datatype',
         name: 'DataType',
         component: () => import('@/views/datatype/index.vue'),
-        meta: { title: '数据类型' }
+        meta: { title: '数据类型', permissions: ['datatype:view'] }
       },
       {
         path: '/interface',
         name: 'Interface',
         component: () => import('@/views/interface/index.vue'),
-        meta: { title: '接口管理' }
+        meta: { title: '接口管理', permissions: ['interface:view'] }
       },
       {
         path: '/interface/:id/docs',
         name: 'InterfaceDocs',
         component: () => import('@/views/interface/docs.vue'),
-        meta: { title: '接口文档' }
+        meta: { title: '接口文档', permissions: ['interface:view'] }
       },
       {
         path: '/call',
         name: 'Call',
         component: () => import('@/views/call/index.vue'),
-        meta: { title: '调用记录' }
+        meta: { title: '调用记录', permissions: ['call:view'] }
       },
       {
         path: '/call-scene',
         name: 'CallScene',
         component: () => import('@/views/call-scene/index.vue'),
-        meta: { title: '场景字典' }
+        meta: { title: '场景管理', permissions: ['call-scene:view'] }
       },
       {
         path: '/billing',
         name: 'Billing',
         component: () => import('@/views/billing/index.vue'),
-        meta: { title: '计费管理' }
+        meta: { title: '计费管理', permissions: ['billing:view'] }
       },
       {
         path: '/monitor',
         name: 'Monitor',
         component: () => import('@/views/monitor/index.vue'),
-        meta: { title: '监控告警' }
+        meta: { title: '监控告警', permissions: ['monitor:view'] }
       },
       {
         path: '/config',
         name: 'Config',
         component: () => import('@/views/config/index.vue'),
-        meta: { title: '配置中心' }
+        meta: { title: '配置中心', permissions: ['config:view'] }
       },
       {
         path: '/graylog',
         name: 'Graylog',
         component: () => import('@/views/graylog/index.vue'),
-        meta: { title: '灰度发布' }
+        meta: { title: '灰度发布', permissions: ['graylog:view'] }
       },
       {
         path: '/audit',
         name: 'Audit',
         component: () => import('@/views/audit/index.vue'),
-        meta: { title: '操作日志' }
+        meta: { title: '操作日志', permissions: ['audit:view'] }
       },
       {
         path: '/data-test',
@@ -146,8 +186,34 @@ const router = createRouter({
   routes
 })
 
+let syncedToken = ''
+
+const syncCurrentUser = async (userStore: ReturnType<typeof useUserStore>) => {
+  if (!userStore.isLoggedIn || !userStore.token || userStore.token === syncedToken) return
+
+  try {
+    const response = await getProfile()
+    const data = response.data
+    userStore.setUserInfo({
+      id: String(data.userId),
+      username: data.username,
+      nickname: data.nickname || data.username,
+      email: data.email,
+      phone: data.phone,
+      roles: data.roles || [],
+      tenantId: data.tenantId,
+      tenantName: data.tenantName,
+      lastLoginTime: data.lastLoginTime,
+      permissions: data.permissions || []
+    })
+    syncedToken = userStore.token
+  } catch (error) {
+    console.warn('刷新用户权限失败', error)
+  }
+}
+
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   NProgress.start()
   const userStore = useUserStore()
 
@@ -160,10 +226,17 @@ router.beforeEach((to, _from, next) => {
   } else if (to.meta.public) {
     next()
   } else {
-    if (userStore.isLoggedIn) {
-      next()
-    } else {
+    if (!userStore.isLoggedIn) {
       next('/login')
+      return
+    }
+    await syncCurrentUser(userStore)
+    const requiredPermissions = to.meta.permissions as string[] | undefined
+    if (requiredPermissions?.length
+      && !requiredPermissions.some(permission => userStore.hasPermission(permission))) {
+      next({ path: '/profile', query: { forbidden: '1' } })
+    } else {
+      next()
     }
   }
 })

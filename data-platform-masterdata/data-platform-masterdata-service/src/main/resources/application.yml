@@ -1,22 +1,22 @@
-server:
-  port: 8081
-
 spring:
   profiles:
     active: @profiles.active@
   application:
     name: data-platform-masterdata
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-
-masterdata:
-  vendor-config:
-    cache-ttl-seconds: 300
-
-logging:
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"
+  config:
+    import:
+      - nacos:data-platform-database-${spring.profiles.active}.properties?group=${NACOS_GROUP:DEFAULT_GROUP}&refreshEnabled=true
+      - nacos:data-platform-masterdata-${spring.profiles.active}.yml?group=${NACOS_GROUP:DEFAULT_GROUP}&refreshEnabled=true
+  cloud:
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      config:
+        server-addr: ${spring.cloud.nacos.server-addr}
+        namespace: ${NACOS_NAMESPACE:${spring.profiles.active}}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        enabled: true
+      discovery:
+        server-addr: ${spring.cloud.nacos.server-addr}
+        namespace: ${NACOS_NAMESPACE:${spring.profiles.active}}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        enabled: true

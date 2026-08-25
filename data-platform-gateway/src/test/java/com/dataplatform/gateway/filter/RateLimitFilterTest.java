@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
@@ -108,6 +109,29 @@ class RateLimitFilterTest {
         filter.filter(exchange, chain).block();
 
         verify(chain).filter(exchange);
+    }
+
+    @Test
+    void shouldPassConfiguredWindowAndLimitToAtomicAcquireScript() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:rate_limit:1")).thenReturn(Mono.just(Map.of("windowSec", 17, "maxReqs", 37)));
+        when(redisTemplate.execute(any(), anyList(), any(Object[].class)))
+                .thenReturn(Flux.just(1L));
+        ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test").build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        exchange.getAttributes().put("keyId", 1L);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        when(chain.filter(exchange)).thenReturn(Mono.empty());
+
+        filter.filter(exchange, chain).block();
+
+        verify(redisTemplate).execute(any(), anyList(), arguments.capture());
+        Object[] values = arguments.getValue();
+        assertEquals(4, values.length);
+        assertEquals(17000L, values[0]);
+        assertEquals(37L, values[3]);
     }
 
     @Test

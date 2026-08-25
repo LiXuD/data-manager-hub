@@ -3,6 +3,7 @@ package com.dataplatform.masterdata.interface_.controller;
 import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
+import com.dataplatform.masterdata.interface_.service.ApiInterfaceDTOAssembler;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -23,6 +24,12 @@ class ApiInterfaceInternalControllerTest {
 
         ApiInterfaceInternalController controller = new ApiInterfaceInternalController();
         ReflectionTestUtils.setField(controller, "apiInterfaceService", service);
+        ApiInterfaceDTOAssembler assembler = mock(ApiInterfaceDTOAssembler.class);
+        com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO dto =
+                new com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO();
+        dto.setStatus("active");
+        when(assembler.toDTO(entity)).thenReturn(dto);
+        ReflectionTestUtils.setField(controller, "dtoAssembler", assembler);
 
         var result = controller.getById(1L);
 

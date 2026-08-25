@@ -1,15 +1,11 @@
 package com.dataplatform.masterdata.vendor.service.impl;
 
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
-import com.dataplatform.masterdata.vendor.entity.VendorInfo;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
-import com.dataplatform.masterdata.vendor.mapper.VendorInfoMapper;
-import com.dataplatform.masterdata.vendor.service.VendorAdapterConfigAssembler;
 import com.dataplatform.masterdata.vendor.service.VendorHealthService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.dataplatform.common.adapter.VendorAdapterConfig;
-import com.dataplatform.common.adapter.VendorAdapterFactory;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.masterdata.connector.service.ActiveVendorConnectorRuntimeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,10 +37,7 @@ public class VendorHealthServiceImpl implements VendorHealthService {
     private StringRedisTemplate redisTemplate;
 
     @Autowired
-    private VendorInfoMapper vendorInfoMapper;
-
-    @Autowired
-    private VendorAdapterConfigAssembler adapterConfigAssembler;
+    private ActiveVendorConnectorRuntimeService connectorRuntimeService;
 
     @Override
     public boolean checkHealth(Long vendorId) {
@@ -156,26 +149,16 @@ public class VendorHealthServiceImpl implements VendorHealthService {
     }
 
     private Map<String, Object> testConfig(VendorConfig config) {
-        if (config.getApiUrl() == null || config.getApiUrl().isBlank()) {
-            return Map.of("success", false, "message", "API地址未配置");
-        }
-        VendorInfo vendor = vendorInfoMapper.selectById(config.getVendorId());
-        if (vendor == null || vendor.getVendorCode() == null || vendor.getVendorCode().isBlank()) {
-            return Map.of("success", false, "message", "厂商不存在或编码未配置");
-        }
-
         try {
-            VendorAdapterConfig adapterConfig = adapterConfigAssembler.build(config, vendor);
-            Map<String, Object> adapterResult = VendorAdapterFactory.getAdapter(vendor.getVendorCode())
-                    .execute(adapterConfig, Map.of());
-            Map<String, Object> result = new HashMap<>(adapterResult);
-            boolean success = Boolean.TRUE.equals(adapterResult.get("success"));
+            Map<String, Object> runtimeResult = connectorRuntimeService.execute(config.getId(), Map.of());
+            Map<String, Object> result = new HashMap<>(runtimeResult);
+            boolean success = Boolean.TRUE.equals(runtimeResult.get("success"));
             result.put("message", success ? "连接正常"
-                    : String.valueOf(adapterResult.getOrDefault("errorMsg", "连接失败")));
+                    : String.valueOf(runtimeResult.getOrDefault("errorMsg", "连接失败")));
             return result;
         } catch (Exception e) {
             return Map.of("success", false,
-                    "message", e.getClass().getSimpleName() + ": " + e.getMessage());
+                    "message", "连接器执行失败");
         }
     }
 

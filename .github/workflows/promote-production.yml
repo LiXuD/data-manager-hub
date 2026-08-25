@@ -1,0 +1,204 @@
+name: Promote production
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full master SHA of the successful staging deployment
+        required: true
+        type: string
+      version:
+        description: New immutable SemVer, for example v1.2.3
+        required: true
+        type: string
+      snapshot_receipt_path:
+        description: Protected runner path for the verified PostgreSQL snapshot receipt
+        required: false
+        default: ''
+        type: string
+      release_gate_samples_path:
+        description: Protected runner path containing Prometheus gate samples JSON
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  attestations: read
+  deployments: write
+
+concurrency:
+  # SemVer validation reads the current tag set. Serialize all production
+  # promotions so two approvals cannot both validate against the same stale
+  # highest tag and then publish out of order.
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  resolve-staging:
+    name: resolve successful staging manifest
+    runs-on: ubuntu-24.04
+    outputs:
+      manifest_digest: ${{ steps.resolve.outputs.manifest_digest }}
+      staging_completed_at: ${{ steps.resolve.outputs.staging_completed_at }}
+    steps:
+      - name: Checkout source for release policy scripts
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          # A failed GitHub API request is not evidence that the version is
+          # free.  Treat only an explicit 404 from both release/tag probes as
+          # absence; authentication, rate-limit and transport errors must
+          # stop production promotion instead of allowing a duplicate check
+          # to be bypassed.
+          for endpoint in \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/$VERSION" \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/$VERSION"; do
+            if response="$(gh api --include "$endpoint" 2>&1)"; then
+              echo "version already exists: $VERSION" >&2
+              exit 2
+            fi
+            status="$(sed -n '1s/^[^ ]* \([0-9][0-9][0-9]\).*/\1/p' <<< "$response")"
+            [[ "$status" == 404 ]] || {
+              echo "unable to prove release version is unused ($endpoint; HTTP ${status:-unknown})" >&2
+              exit 2
+            }
+          done
+          tags_json="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/tags?per_page=100" --jq 'map(.[] | .name) | flatten')"
+          python3 ci/scripts/verify-semver-bump.py --candidate "$VERSION" --tags-json "$tags_json"
+          deployments="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/deployments?environment=staging&sha=${SOURCE_SHA}" | jq 'add')"
+          while IFS= read -r id; do
+            status="$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" \
+              --jq 'sort_by(.updated_at // .created_at) | last | [.state // "unknown", .updated_at // .created_at // ""] | @tsv')"
+            IFS=$'\t' read -r state completed_at <<< "$status"
+            if [[ "$state" == success ]]; then
+              digest="$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}" --jq '.payload' \
+                | jq -r 'if type == "string" then (try fromjson catch {}) else . end | .buildManifest // empty')"
+              [[ "$digest" == sha256:* ]] || continue
+              [[ "$completed_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]] || {
+                echo "successful staging deployment $id has no usable completion timestamp" >&2
+                continue
+              }
+              echo "manifest_digest=$digest" >> "$GITHUB_OUTPUT"
+              echo "staging_completed_at=$completed_at" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done < <(jq -r '.[].id' <<< "$deployments")
+          echo "no successful staging deployment found for $SOURCE_SHA" >&2
+          exit 2
+  deploy:
+    needs: resolve-staging
+    uses: ./.github/workflows/_deploy-reusable.yml
+    with:
+      environment: production
+      runner_label: prod-deploy
+      manifest_digest: ${{ needs.resolve-staging.outputs.manifest_digest }}
+      source_sha: ${{ inputs.source_sha }}
+      release_version: ${{ inputs.version }}
+      snapshot_receipt_path: ${{ inputs.snapshot_receipt_path }}
+      snapshot_not_before: ${{ needs.resolve-staging.outputs.staging_completed_at }}
+      release_gate_samples_path: ${{ inputs.release_gate_samples_path }}
+    secrets: inherit
+  release:
+    needs: [resolve-staging, deploy]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+      deployments: write
+    steps:
+      - name: Checkout release SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@8d34698a59f5ffe24821f0b48ab62a3de8b64b20
+        with:
+          version: 1.2.2
+      - name: Login to GHCR for immutable SemVer aliases
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish immutable OCI SemVer aliases
+        env:
+          IMAGE_NAMESPACE: ghcr.io/lixud
+          MANIFEST_DIGEST: ${{ needs.resolve-staging.outputs.manifest_digest }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          manifest_ref="$IMAGE_NAMESPACE/data-manager-hub-build-manifest@$MANIFEST_DIGEST"
+          test "$(oras manifest fetch --descriptor "$manifest_ref" | jq -r .digest)" = "$MANIFEST_DIGEST"
+          rm -rf release-manifest
+          mkdir -p release-manifest
+          oras pull "$manifest_ref" -o release-manifest
+          manifest=release-manifest/build-manifest.v1.json
+          test -s "$manifest"
+          python3 ci/scripts/manifest.py verify --require-required-ci --manifest "$manifest"
+          test "$(jq -r '.metadata.gitSha' "$manifest")" = "$SOURCE_SHA"
+          bash ci/scripts/publish-immutable-oci-aliases.sh \
+            --manifest "$manifest" \
+            --build-manifest-ref "$manifest_ref" \
+            --version "$VERSION" \
+            --image-namespace "$IMAGE_NAMESPACE" \
+            --output release-aliases.v1.json
+          test "$(jq -r '.version' release-aliases.v1.json)" = "$VERSION"
+          test "$(jq '.aliases | length' release-aliases.v1.json)" = 10
+      - name: Upload immutable OCI alias evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-aliases-${{ inputs.version }}-${{ github.run_id }}
+          path: release-aliases.v1.json
+          if-no-files-found: error
+      - name: Create immutable tag and Release Record
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          MANIFEST_DIGEST: ${{ needs.resolve-staging.outputs.manifest_digest }}
+        run: |
+          set -euo pipefail
+          # Hosted runners do not guarantee a global Git identity. Configure
+          # the bot identity explicitly so the release tag step cannot fail
+          # after a successful production deployment merely because `git tag
+          # --annotate` has no committer metadata.
+          for endpoint in \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/$VERSION" \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/$VERSION"; do
+            if response="$(gh api --include "$endpoint" 2>&1)"; then
+              echo "release version was created while deployment was running: $VERSION" >&2
+              exit 2
+            fi
+            status="$(sed -n '1s/^[^ ]* \([0-9][0-9][0-9]\).*/\1/p' <<< "$response")"
+            [[ "$status" == 404 ]] || {
+              echo "unable to prove release version is still unused ($endpoint; HTTP ${status:-unknown})" >&2
+              exit 2
+            }
+          done
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag --annotate "$VERSION" "$SOURCE_SHA" --message "data-manager-hub $VERSION"
+          git push origin "$VERSION"
+          aliases_json="$(cat release-aliases.v1.json)"
+          jq -n \
+            --arg version "$VERSION" --arg gitSha "$SOURCE_SHA" --arg manifest "$MANIFEST_DIGEST" \
+            --argjson aliases "$aliases_json" \
+            '{apiVersion:"cicd.data-manager-hub/v1",kind:"ReleaseRecord",version:$version,gitSha:$gitSha,buildManifestDigest:$manifest,ociAliases:$aliases,createdAt:(now|todate)}' \
+            > release-record.v1.json
+          gh release create "$VERSION" --target "$SOURCE_SHA" --title "data-manager-hub $VERSION" \
+            --notes "Build-once promotion of $MANIFEST_DIGEST" release-record.v1.json release-aliases.v1.json

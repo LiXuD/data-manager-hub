@@ -1,0 +1,79 @@
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: latest
+    properties:
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_SSL}
+      sasl.mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-512}
+      sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";
+      ssl.truststore.location: ${KAFKA_SSL_TRUSTSTORE_LOCATION}
+      ssl.truststore.password: ${KAFKA_SSL_TRUSTSTORE_PASSWORD}
+      ssl.endpoint.identification.algorithm: https
+
+spring.data.redis:
+  host: ${REDIS_HOST}
+  port: ${REDIS_PORT}
+  password: ${REDIS_PASSWORD}
+  database: 0
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.dataplatform.access.caller.entity,com.dataplatform.common.entity
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: true
+      logic-not-delete-value: false
+
+platform.security.internal:
+  enabled: true
+  issuer: data-platform-identity
+  service-name: data-platform-access
+  token-uri: ${INTERNAL_AUTH_TOKEN_URI}
+  client-secret: ${INTERNAL_AUTH_ACCESS_SECRET}
+  public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH:/run/secrets/dmh/internal-auth/public.pem}
+
+platform.openapi:
+  public-base-url: ${OPENAPI_PUBLIC_BASE_URL}
+
+connector.runtime:
+  instance-id: ${CONNECTOR_INSTANCE_ID}
+  host-version: ${CONNECTOR_HOST_VERSION}
+  cache-directory: ${CONNECTOR_PLUGIN_CACHE_DIR}
+  repository-allowed-prefixes:
+    - ${CONNECTOR_ARTIFACT_REPOSITORY_PREFIX}
+  network-allowed-protocols: [https]
+  network-allowed-hosts:
+    - ${CONNECTOR_VENDOR_ALLOWED_HOST}
+  allow-private-networks: false
+  max-connect-timeout-ms: ${CONNECTOR_MAX_CONNECT_TIMEOUT_MS:5000}
+  max-read-timeout-ms: ${CONNECTOR_MAX_READ_TIMEOUT_MS:30000}
+  max-total-timeout-ms: ${CONNECTOR_MAX_TOTAL_TIMEOUT_MS:60000}
+  test-timeout-ms: ${CONNECTOR_TEST_TIMEOUT_MS:30000}
+  max-response-bytes: ${CONNECTOR_MAX_RESPONSE_BYTES:10485760}
+  signing-keys:
+    platform-default:
+      resource: ${CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE}
+      algorithm: Ed25519
+
+server.port: 8082
+flowable.database-schema-update: false
+flowable.history-level: audit
+flowable.check-process-definitions: true
+flowable.async-executor-activate: false
+flowable.idm.enabled: false
+flowable.eventregistry.enabled: false
+management.endpoints.web.exposure.include: health,info,prometheus
+management.endpoint.health.probes.enabled: true
+management.endpoint.health.show-details: never
+management.endpoint.health.group.liveness.include: livenessState,ping
+management.endpoint.health.group.readiness.include: readinessState,connectorRuntimeReadiness
+logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"

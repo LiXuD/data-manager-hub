@@ -1,0 +1,32 @@
+spring.data.redis:
+  host: ${REDIS_HOST}
+  port: ${REDIS_PORT}
+  password: ${REDIS_PASSWORD}
+  database: 0
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.dataplatform.billing.entity
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: true
+      logic-not-delete-value: false
+
+platform.security.internal:
+  enabled: true
+  issuer: data-platform-identity
+  service-name: data-platform-billing
+  token-uri: ${INTERNAL_AUTH_TOKEN_URI}
+  client-secret: ${INTERNAL_AUTH_BILLING_SECRET}
+  public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH:/run/secrets/dmh/internal-auth/public.pem}
+
+server.port: 8084
+management.endpoint.health.probes.enabled: true
+management.endpoint.health.show-details: never
+management.endpoint.health.group.liveness.include: livenessState,ping
+management.endpoint.health.group.readiness.include: readinessState,ping
+management.endpoints.web.exposure.include: health,info,prometheus
+logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"

@@ -492,24 +492,6 @@ CREATE INDEX idx_operation_log_module ON operation_log(operation_module);
 -- 提交
 COMMIT;
 
--- 计费规则表
-CREATE TABLE IF NOT EXISTS billing_rule (
-    id BIGSERIAL PRIMARY KEY,
-    rule_name VARCHAR(100) NOT NULL DEFAULT '默认计费规则',
-    vendor_id BIGINT,
-    vendor_name VARCHAR(100),
-    data_type VARCHAR(50),
-    unit_price DECIMAL(10, 4) NOT NULL DEFAULT 0,
-    tier_min INTEGER DEFAULT 0,
-    tier_max INTEGER,
-    discount DECIMAL(3, 2) DEFAULT 1.00,
-    status VARCHAR(20) DEFAULT 'active',
-    created_by BIGINT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_by BIGINT
-);
-
 -- 厂商配置扩展表（配置中心用）
 CREATE TABLE IF NOT EXISTS vendor_config_extended (
     id BIGSERIAL PRIMARY KEY,
@@ -606,6 +588,8 @@ CREATE INDEX idx_quality_score_rule ON quality_score(rule_id);
 
 -- =====================================================
 -- 更新记录
+-- 2026-07-22: 数据库迁移改由 Liquibase 统一编排，本文件只保留基础 DDL
+-- 2026-07-21: 引入模板化、版本化计费方案与事件账本
 -- 2026-04-24: 添加缺失字段 (nickname, updated_by, resolved_by等)
 -- 2026-04-24: 添加 data_lineage, quality_rule, quality_score 表
 -- =====================================================

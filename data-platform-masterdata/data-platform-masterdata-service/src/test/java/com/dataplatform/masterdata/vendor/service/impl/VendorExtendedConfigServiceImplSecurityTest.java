@@ -118,21 +118,21 @@ class VendorExtendedConfigServiceImplSecurityTest {
     }
 
     @Test
-    void shouldReadLegacyPlaintextMarkedEncryptedAndEncryptItOnNextUpdate() {
+    void shouldRejectPlaintextMarkedEncrypted() {
         VendorExtendedConfig stored = config(true, "legacy-plain-secret");
         stored.setId(5L);
         when(values.get("config:9:vendor.aes.key")).thenReturn(null);
         doReturn(stored).when(service).getOne(any());
         when(mapper.selectById(5L)).thenReturn(stored);
-        when(encryptionClient.encrypt(any(EncryptionReqDTO.class))).thenReturn(Result.success("v1:1:ciphertext"));
-        doReturn(true).when(service).updateById(any(VendorExtendedConfig.class));
 
-        assertEquals("legacy-plain-secret", service.getConfig(9L, "vendor.aes.key"));
-        service.updateSecure(5L, config(true, "••••••••"));
+        assertThrows(IllegalStateException.class, () -> service.getConfig(9L, "vendor.aes.key"));
+        assertThrows(IllegalStateException.class,
+                () -> service.updateSecure(5L, config(true, "••••••••")));
 
         verify(encryptionClient, never()).decrypt(any(EncryptionReqDTO.class));
-        verify(service).updateById(org.mockito.ArgumentMatchers.argThat(
-                entity -> "v1:1:ciphertext".equals(entity.getConfigValue())));
+        verify(encryptionClient, never()).encrypt(any(EncryptionReqDTO.class));
+        verify(service, never()).updateById(any(VendorExtendedConfig.class));
+        verify(values, never()).set(eq("config:9:vendor.aes.key"), any(), any(Long.class), eq(TimeUnit.SECONDS));
     }
 
     @Test

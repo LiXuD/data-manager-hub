@@ -24,6 +24,12 @@ public class CallRecordDTO implements Serializable {
     private String errorMsg;
     private Integer latency;
     private BigDecimal cost;
+    private String pluginId;
+    private String pluginVersion;
+    private Integer pipelineVersion;
+    private String snapshotHash;
+    private String hashAlgorithm;
+    private String integrityHash;
     private LocalDateTime callTime;
 
     public Long getId() {
@@ -129,6 +135,19 @@ public class CallRecordDTO implements Serializable {
     public void setCost(BigDecimal cost) {
         this.cost = cost;
     }
+
+    public String getPluginId() { return pluginId; }
+    public void setPluginId(String pluginId) { this.pluginId = pluginId; }
+    public String getPluginVersion() { return pluginVersion; }
+    public void setPluginVersion(String pluginVersion) { this.pluginVersion = pluginVersion; }
+    public Integer getPipelineVersion() { return pipelineVersion; }
+    public void setPipelineVersion(Integer pipelineVersion) { this.pipelineVersion = pipelineVersion; }
+    public String getSnapshotHash() { return snapshotHash; }
+    public void setSnapshotHash(String snapshotHash) { this.snapshotHash = snapshotHash; }
+    public String getHashAlgorithm() { return hashAlgorithm; }
+    public void setHashAlgorithm(String hashAlgorithm) { this.hashAlgorithm = hashAlgorithm; }
+    public String getIntegrityHash() { return integrityHash; }
+    public void setIntegrityHash(String integrityHash) { this.integrityHash = integrityHash; }
 
     public LocalDateTime getCallTime() {
         return callTime;

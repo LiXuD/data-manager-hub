@@ -23,7 +23,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -56,13 +55,6 @@ public class InterfaceContractServiceImpl implements InterfaceContractService {
     private static final Set<String> SCALAR_CONSTRAINT_KEYS = Set.of("enum");
     private static final Set<String> SUPPORTED_FORMATS = Set.of(
             "date", "date-time", "email", "uri", "uuid", "ipv4", "ipv6");
-    private static final Set<String> ROOT_SCHEMA_KEYS = Set.of(
-            "type", "properties", "required", "additionalProperties");
-    private static final Set<String> FIELD_SCHEMA_KEYS = Set.of(
-            "type", "properties", "required", "additionalProperties", "items",
-            "description", "default", "example",
-            "enum", "pattern", "minimum", "maximum", "minLength", "maxLength",
-            "minItems", "maxItems", "format");
 
     private final ApiInterfaceService apiInterfaceService;
     private final InterfaceParamService interfaceParamService;
@@ -83,8 +75,8 @@ public class InterfaceContractServiceImpl implements InterfaceContractService {
         InterfaceContractDTO dto = baseContract(apiInterface);
         dto.setRequestFields(buildTree(fields, REQUEST));
         dto.setResponseFields(buildTree(fields, RESPONSE));
-        dto.setRequestSchema(schemaOrGenerated(apiInterface.getRequestSchema(), dto.getRequestFields()));
-        dto.setResponseSchema(schemaOrGenerated(apiInterface.getResponseSchema(), dto.getResponseFields()));
+        dto.setRequestSchema(writeSchema(dto.getRequestFields()));
+        dto.setResponseSchema(writeSchema(dto.getResponseFields()));
         return dto;
     }
 
@@ -112,28 +104,6 @@ public class InterfaceContractServiceImpl implements InterfaceContractService {
         apiInterface.setRequestSchema(requestSchema);
         apiInterface.setResponseSchema(responseSchema);
         return getContract(interfaceId);
-    }
-
-    @Override
-    @Transactional
-    public InterfaceContractDTO importLegacySchemas(Long interfaceId) {
-        ApiInterface apiInterface = requireInterface(interfaceId);
-        InterfaceContractDTO contract = baseContract(apiInterface);
-        contract.setRequestFields(importSchema(apiInterface.getRequestSchema(), "requestSchema"));
-        contract.setResponseFields(importSchema(apiInterface.getResponseSchema(), "responseSchema"));
-        return saveContract(interfaceId, contract);
-    }
-
-    @Override
-    @Transactional
-    public InterfaceContractDTO saveLegacySchemas(Long interfaceId, String requestSchema, String responseSchema) {
-        ApiInterface existing = requireInterface(interfaceId);
-        String effectiveRequestSchema = requestSchema != null ? requestSchema : existing.getRequestSchema();
-        String effectiveResponseSchema = responseSchema != null ? responseSchema : existing.getResponseSchema();
-        InterfaceContractDTO contract = new InterfaceContractDTO();
-        contract.setRequestFields(importSchema(effectiveRequestSchema, "requestSchema"));
-        contract.setResponseFields(importSchema(effectiveResponseSchema, "responseSchema"));
-        return saveContract(interfaceId, contract);
     }
 
     @Override
@@ -206,7 +176,6 @@ public class InterfaceContractServiceImpl implements InterfaceContractService {
         dto.setArrayItemType(entity.getArrayItemType());
         dto.setRequired(entity.getRequired());
         dto.setDefaultValue(entity.getDefaultValue());
-        dto.setValidationRule(entity.getValidationRule());
         dto.setExampleValue(entity.getExampleValue());
         dto.setConstraintConfig(entity.getConstraintConfig());
         dto.setSort(entity.getSort());
@@ -229,7 +198,6 @@ public class InterfaceContractServiceImpl implements InterfaceContractService {
                     ? normalizeArrayItemType(dto.getArrayItemType(), dto.getChildren()) : null);
             entity.setRequired(Boolean.TRUE.equals(dto.getRequired()));
             entity.setDefaultValue(dto.getDefaultValue());
-            entity.setValidationRule(dto.getValidationRule());
             entity.setExampleValue(dto.getExampleValue());
             entity.setConstraintConfig(normalizeConstraints(dto.getConstraintConfig()));
             entity.setSort(dto.getSort() != null ? dto.getSort() : index);
@@ -574,7 +542,7 @@ public class InterfaceContractServiceImpl implements InterfaceContractService {
         }
         putJsonValue(schema, "default", field.getDefaultValue(), type);
         putJsonValue(schema, "example", field.getExampleValue(), type);
-        applyConstraints(schema, field.getConstraintConfig(), field.getValidationRule());
+        applyConstraints(schema, field.getConstraintConfig());
         return schema;
     }
 
@@ -602,7 +570,7 @@ public class InterfaceContractServiceImpl implements InterfaceContractService {
         }
     }
 
-    private void applyConstraints(ObjectNode target, String rawConstraints, String legacyRule) {
+    private void applyConstraints(ObjectNode target, String rawConstraints) {
         if (StringUtils.hasText(rawConstraints)) {
             try {
                 JsonNode constraints = objectMapper.readTree(rawConstraints);
@@ -614,20 +582,6 @@ public class InterfaceContractServiceImpl implements InterfaceContractService {
             } catch (JsonProcessingException e) {
                 throw new IllegalArgumentException("constraintConfig必须是JSON对象", e);
             }
-        }
-        if (!StringUtils.hasText(legacyRule)) {
-            return;
-        }
-        if (legacyRule.startsWith("regex:")) {
-            target.put("pattern", legacyRule.substring(6));
-        } else if (legacyRule.startsWith("range:")) {
-            String[] bounds = legacyRule.substring(6).split("-", 2);
-            if (bounds.length == 2) {
-                target.put("minimum", Double.parseDouble(bounds[0]));
-                target.put("maximum", Double.parseDouble(bounds[1]));
-            }
-        } else if ("not_empty".equals(legacyRule)) {
-            target.put("minLength", 1);
         }
     }
 
@@ -651,168 +605,6 @@ public class InterfaceContractServiceImpl implements InterfaceContractService {
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("constraintConfig必须是有效JSON", e);
         }
-    }
-
-    private List<InterfaceParamDTO> importSchema(String rawSchema, String path) {
-        if (!StringUtils.hasText(rawSchema)) {
-            return List.of();
-        }
-        try {
-            JsonNode root = objectMapper.readTree(rawSchema);
-            validateImportableSchema(root, path, true);
-            return importProperties(root);
-        } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException(path + "不是有效JSON", e);
-        }
-    }
-
-    private void validateImportableSchema(JsonNode schema, String path, boolean root) {
-        if (schema == null || !schema.isObject()) {
-            throw new IllegalArgumentException(path + "必须是Schema对象");
-        }
-        Set<String> allowedKeys = root ? ROOT_SCHEMA_KEYS : FIELD_SCHEMA_KEYS;
-        schema.fieldNames().forEachRemaining(key -> {
-            if (!allowedKeys.contains(key)) {
-                throw new IllegalArgumentException(path + "包含无法无损导入的Schema关键字: " + key);
-            }
-        });
-
-        JsonNode typeNode = schema.get("type");
-        if (typeNode == null || !typeNode.isTextual()) {
-            throw new IllegalArgumentException(path + ".type必须明确指定为字符串类型");
-        }
-        String type = normalizeType(typeNode.asText());
-        if (!TYPES.contains(type)) {
-            throw new IllegalArgumentException(path + ".type暂不支持: " + typeNode.asText());
-        }
-        if (root && !"object".equals(type)) {
-            throw new IllegalArgumentException(path + "根节点必须为object");
-        }
-
-        JsonNode additionalProperties = schema.get("additionalProperties");
-        if (additionalProperties != null
-                && (!additionalProperties.isBoolean() || !additionalProperties.booleanValue())) {
-            throw new IllegalArgumentException(path + ".additionalProperties无法无损导入，仅支持true或省略");
-        }
-
-        if ("object".equals(type)) {
-            if (schema.has("items")) {
-                throw new IllegalArgumentException(path + "的object类型不能包含items");
-            }
-            validateObjectSchema(schema, path);
-            return;
-        }
-        if ("array".equals(type)) {
-            if (schema.has("properties") || schema.has("required") || schema.has("additionalProperties")) {
-                throw new IllegalArgumentException(path + "的数组Schema包含对象专用关键字");
-            }
-            JsonNode items = schema.get("items");
-            if (items == null || (items.isObject() && items.isEmpty())) {
-                return;
-            }
-            if (!items.isObject()) {
-                throw new IllegalArgumentException(path + ".items必须是Schema对象");
-            }
-            String itemType = normalizeType(items.path("type").asText());
-            if (!ARRAY_ITEM_TYPES.contains(itemType)) {
-                throw new IllegalArgumentException(path + ".items.type暂不支持: " + items.path("type").asText());
-            }
-            validateImportableSchema(items, path + ".items", false);
-            return;
-        }
-        if (schema.has("properties") || schema.has("required")
-                || schema.has("additionalProperties") || schema.has("items")) {
-            throw new IllegalArgumentException(path + "的" + type + "类型包含不适用的结构关键字");
-        }
-    }
-
-    private void validateObjectSchema(JsonNode schema, String path) {
-        JsonNode properties = schema.get("properties");
-        if (properties != null && !properties.isObject()) {
-            throw new IllegalArgumentException(path + ".properties必须是对象");
-        }
-        Set<String> propertyNames = new HashSet<>();
-        if (properties != null) {
-            properties.fields().forEachRemaining(entry -> {
-                propertyNames.add(entry.getKey());
-                validateImportableSchema(entry.getValue(), path + ".properties." + entry.getKey(), false);
-            });
-        }
-        JsonNode required = schema.get("required");
-        if (required == null) {
-            return;
-        }
-        if (!required.isArray()) {
-            throw new IllegalArgumentException(path + ".required必须是字符串数组");
-        }
-        Set<String> requiredNames = new HashSet<>();
-        for (JsonNode item : required) {
-            if (!item.isTextual() || !requiredNames.add(item.asText())) {
-                throw new IllegalArgumentException(path + ".required包含非字符串或重复字段");
-            }
-            if (!propertyNames.contains(item.asText())) {
-                throw new IllegalArgumentException(path + ".required引用了不存在的字段: " + item.asText());
-            }
-        }
-    }
-
-    private List<InterfaceParamDTO> importProperties(JsonNode objectSchema) {
-        JsonNode properties = objectSchema.path("properties");
-        if (!properties.isObject()) {
-            return List.of();
-        }
-        Set<String> requiredNames = new HashSet<>();
-        objectSchema.path("required").forEach(item -> requiredNames.add(item.asText()));
-        List<InterfaceParamDTO> result = new ArrayList<>();
-        int sort = 0;
-        Iterator<Map.Entry<String, JsonNode>> iterator = properties.fields();
-        while (iterator.hasNext()) {
-            Map.Entry<String, JsonNode> entry = iterator.next();
-            InterfaceParamDTO field = new InterfaceParamDTO();
-            field.setParamName(entry.getKey());
-            JsonNode schema = entry.getValue();
-            String type = schema.path("type").asText(schema.has("properties") ? "object" : "string");
-            field.setParamType(type);
-            field.setRequired(requiredNames.contains(entry.getKey()));
-            field.setDescription(schema.path("description").isMissingNode() ? null : schema.path("description").asText());
-            field.setDefaultValue(schema.has("default") ? configuredValueText(schema.get("default"), type) : null);
-            field.setExampleValue(schema.has("example") ? configuredValueText(schema.get("example"), type) : null);
-            field.setConstraintConfig(extractConstraints(schema));
-            field.setSort(sort++);
-            if ("object".equals(type)) {
-                field.setChildren(importProperties(schema));
-            } else if ("array".equals(type)) {
-                JsonNode items = schema.path("items");
-                String itemType = items.isObject() && items.has("type")
-                        ? normalizeType(items.path("type").asText()) : null;
-                field.setArrayItemType(itemType);
-                if ("object".equals(itemType)) {
-                    field.setChildren(importProperties(items));
-                }
-            }
-            result.add(field);
-        }
-        return result;
-    }
-
-    private String extractConstraints(JsonNode schema) {
-        ObjectNode constraints = objectMapper.createObjectNode();
-        for (String key : CONSTRAINT_KEYS) {
-            if (schema.has(key)) {
-                constraints.set(key, schema.get(key));
-            }
-        }
-        return constraints.isEmpty() ? null : constraints.toString();
-    }
-
-    private String schemaOrGenerated(String legacySchema, List<InterfaceParamDTO> fields) {
-        if (!fields.isEmpty()) {
-            return writeSchema(fields);
-        }
-        if (StringUtils.hasText(legacySchema)) {
-            return legacySchema;
-        }
-        return writeSchema(List.of());
     }
 
     private String normalizeType(String type) {

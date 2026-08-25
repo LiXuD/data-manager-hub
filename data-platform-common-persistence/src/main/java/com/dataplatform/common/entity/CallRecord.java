@@ -50,6 +50,12 @@ public class CallRecord {
     private Boolean cacheHit;
     private String cacheScope;
     private Long cacheSourceRecordId;
+    private String pluginId;
+    private String pluginVersion;
+    private Integer pipelineVersion;
+    private String snapshotHash;
+    private String hashAlgorithm;
+    private String integrityHash;
     private LocalDateTime requestTime;
     private LocalDateTime responseAt;
     private LocalDateTime callTime;
@@ -120,6 +126,18 @@ public class CallRecord {
     public void setCacheScope(String cacheScope) { this.cacheScope = cacheScope; }
     public Long getCacheSourceRecordId() { return cacheSourceRecordId; }
     public void setCacheSourceRecordId(Long cacheSourceRecordId) { this.cacheSourceRecordId = cacheSourceRecordId; }
+    public String getPluginId() { return pluginId; }
+    public void setPluginId(String pluginId) { this.pluginId = pluginId; }
+    public String getPluginVersion() { return pluginVersion; }
+    public void setPluginVersion(String pluginVersion) { this.pluginVersion = pluginVersion; }
+    public Integer getPipelineVersion() { return pipelineVersion; }
+    public void setPipelineVersion(Integer pipelineVersion) { this.pipelineVersion = pipelineVersion; }
+    public String getSnapshotHash() { return snapshotHash; }
+    public void setSnapshotHash(String snapshotHash) { this.snapshotHash = snapshotHash; }
+    public String getHashAlgorithm() { return hashAlgorithm; }
+    public void setHashAlgorithm(String hashAlgorithm) { this.hashAlgorithm = hashAlgorithm; }
+    public String getIntegrityHash() { return integrityHash; }
+    public void setIntegrityHash(String integrityHash) { this.integrityHash = integrityHash; }
     public LocalDateTime getRequestTime() { return requestTime; }
     public void setRequestTime(LocalDateTime requestTime) { this.requestTime = requestTime; }
     public LocalDateTime getResponseAt() { return responseAt; }

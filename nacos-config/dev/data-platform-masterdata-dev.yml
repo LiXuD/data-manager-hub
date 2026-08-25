@@ -1,0 +1,53 @@
+spring.data.redis:
+  host: ${REDIS_HOST:localhost}
+  port: ${REDIS_PORT:6379}
+  password: ${REDIS_PASSWORD:redis_password}
+  database: 0
+
+sa-token:
+  token-name: Authorization
+  timeout: 7200
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+  token-prefix: Bearer
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.dataplatform.masterdata.vendor.entity,com.dataplatform.masterdata.interface_.entity,com.dataplatform.masterdata.graylog.entity
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: true
+      logic-not-delete-value: false
+
+platform.security.internal:
+  enabled: ${INTERNAL_AUTH_ENABLED:true}
+  issuer: data-platform-identity
+  service-name: data-platform-masterdata
+  token-uri: ${INTERNAL_AUTH_TOKEN_URI:http://localhost:8086/internal-auth/v1/token}
+  client-secret: ${INTERNAL_AUTH_MASTERDATA_SECRET:dev-masterdata-internal-secret}
+  public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH:/run/secrets/dmh/internal-auth/public.pem}
+
+spring.datasource.hikari.maximum-pool-size: 5
+
+server.port: 8081
+management.endpoints.web.exposure.include: health,info,prometheus
+management.endpoint.health.probes.enabled: true
+management.endpoint.health.show-details: never
+management.endpoint.health.group.liveness.include: livenessState,ping
+management.endpoint.health.group.readiness.include: readinessState,ping
+masterdata.vendor-config.cache-ttl-seconds: 300
+masterdata.connector-plugin:
+  artifact-allowed-hosts:
+    - ${CONNECTOR_ARTIFACT_REPOSITORY_HOST:plugins.example.invalid}
+  artifact-allowed-path-prefixes:
+    - ${CONNECTOR_ARTIFACT_REPOSITORY_PATH:/repository/data-platform}
+  trusted-signing-keys:
+    platform-default: ${CONNECTOR_SIGNING_PUBLIC_KEY_BASE64:}
+  max-artifact-bytes: 52428800
+  max-manifest-bytes: 262144
+  max-schema-bytes: 131072
+logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"

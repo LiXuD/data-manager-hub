@@ -2,7 +2,6 @@ package com.dataplatform.access.call.controller;
 
 import com.dataplatform.access.call.entity.CallScene;
 import com.dataplatform.access.call.service.CallSceneService;
-import com.dataplatform.access.call.service.GrayVendorResolver;
 import com.dataplatform.access.call.service.OpenApiQueryService;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
@@ -12,6 +11,7 @@ import com.dataplatform.access.call.vo.OpenApiBatchQueryRespVO;
 import com.dataplatform.access.call.vo.OpenApiQueryReqVO;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
 import com.dataplatform.access.caller.entity.ApiKey;
+import com.dataplatform.access.caller.entity.ApiKeyInterface;
 import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.entity.CallerProduct;
 import com.dataplatform.access.caller.service.ApiKeyProductService;
@@ -25,6 +25,7 @@ import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
+import com.dataplatform.masterdata.interface_.api.dto.RoutingReadiness;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.vendor.api.dto.VendorInfoDTO;
@@ -67,7 +68,6 @@ public class OpenApiQueryController {
     private final ApiInterfaceFeignClient apiInterfaceFeignClient;
     private final VendorConfigInternalFeignClient vendorConfigFeignClient;
     private final VendorInternalFeignClient vendorFeignClient;
-    private final GrayVendorResolver grayVendorResolver;
 
     public OpenApiQueryController(OpenApiQueryService openApiQueryService,
                                   RateLimitService rateLimitService,
@@ -79,8 +79,7 @@ public class OpenApiQueryController {
                                   CallSceneService callSceneService,
                                   ApiInterfaceFeignClient apiInterfaceFeignClient,
                                   VendorConfigInternalFeignClient vendorConfigFeignClient,
-                                  VendorInternalFeignClient vendorFeignClient,
-                                  GrayVendorResolver grayVendorResolver) {
+                                  VendorInternalFeignClient vendorFeignClient) {
         this.openApiQueryService = openApiQueryService;
         this.rateLimitService = rateLimitService;
         this.apiKeyService = apiKeyService;
@@ -92,7 +91,6 @@ public class OpenApiQueryController {
         this.apiInterfaceFeignClient = apiInterfaceFeignClient;
         this.vendorConfigFeignClient = vendorConfigFeignClient;
         this.vendorFeignClient = vendorFeignClient;
-        this.grayVendorResolver = grayVendorResolver;
     }
 
     @PostMapping("/query")
@@ -139,14 +137,19 @@ public class OpenApiQueryController {
             return error(403, "调用场景不存在或未启用");
         }
 
-        GrayVendorResolver.GrayRequestContext grayCtx = GrayVendorResolver.fromRequest(httpRequest,
-                apiKeyEntity.getCallerId(), caller.getCallerCode());
-        ApiRoute route = resolveApiRoute(apiCode, grayCtx);
+        ApiRoute route = resolveApiRoute(apiCode);
         if (route == null) {
             return error(404, "接口配置不存在");
         }
-        if (!validateInterfacePermission(apiKeyEntity.getId(), route.interfaceId())) {
+        ApiKeyInterface interfaceGrant = apiKeyInterfaceService.findEffectiveGrant(
+                apiKeyEntity.getId(), route.interfaceId());
+        if (interfaceGrant == null) {
             return error(403, "API Key没有访问该接口的权限");
+        }
+        String cachePolicyError = validateApprovedCachePolicy(
+                request.getUseCache(), request.getCacheDays(), interfaceGrant);
+        if (cachePolicyError != null) {
+            return error(403, cachePolicyError);
         }
         Map<String, Object> requestParams = request.getParams() != null
                 ? new HashMap<>(request.getParams()) : new HashMap<>();
@@ -221,14 +224,19 @@ public class OpenApiQueryController {
             return error(403, "调用场景不存在或未启用");
         }
 
-        GrayVendorResolver.GrayRequestContext batchGrayCtx = GrayVendorResolver.fromRequest(httpRequest,
-                apiKeyEntity.getCallerId(), caller.getCallerCode());
-        ApiRoute route = resolveApiRoute(apiCode, batchGrayCtx);
+        ApiRoute route = resolveApiRoute(apiCode);
         if (route == null) {
             return error(404, "接口配置不存在");
         }
-        if (!validateInterfacePermission(apiKeyEntity.getId(), route.interfaceId())) {
+        ApiKeyInterface interfaceGrant = apiKeyInterfaceService.findEffectiveGrant(
+                apiKeyEntity.getId(), route.interfaceId());
+        if (interfaceGrant == null) {
             return error(403, "API Key没有访问该接口的权限");
+        }
+        String cachePolicyError = validateApprovedCachePolicy(
+                request.getUseCache(), request.getCacheDays(), interfaceGrant);
+        if (cachePolicyError != null) {
+            return error(403, cachePolicyError);
         }
         for (int index = 0; index < request.getItems().size(); index++) {
             OpenApiBatchQueryReqVO.QueryItem item = request.getItems().get(index);
@@ -284,30 +292,28 @@ public class OpenApiQueryController {
         return apiKeyEntity;
     }
 
-    private boolean validateInterfacePermission(Long apiKeyId, Long interfaceId) {
-        if (interfaceId == null) {
-            return false;
+    private String validateApprovedCachePolicy(
+            Boolean useCache,
+            Integer cacheDays,
+            ApiKeyInterface grant) {
+        if (!Boolean.TRUE.equals(useCache)) {
+            return null;
         }
-        return apiKeyInterfaceService.hasInterfacePermission(apiKeyId, interfaceId);
+        if (!Boolean.TRUE.equals(grant.getCacheEnabled())
+                || grant.getApprovedCacheDays() == null) {
+            return "当前接口授权未批准使用缓存";
+        }
+        if (cacheDays > grant.getApprovedCacheDays()) {
+            return "请求缓存时效超过审批上限"
+                    + grant.getApprovedCacheDays() + "天";
+        }
+        return null;
     }
 
     private String validateParams(InterfaceContractDTO contract, Map<String, Object> params) {
         List<InterfaceParamDTO> definitions = contract != null
                 ? contract.getRequestFields() : Collections.emptyList();
         return InterfaceContractValidator.validate(definitions, params, true).firstError();
-    }
-
-    /** 保留给旧测试和兼容调用；正式调用统一使用 InterfaceContractValidator。 */
-    private boolean matchesParamType(Object value, String type) {
-        if (type == null || "string".equalsIgnoreCase(type)) return value instanceof String;
-        if ("integer".equalsIgnoreCase(type)) {
-            return value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long;
-        }
-        if ("number".equalsIgnoreCase(type)) return value instanceof Number;
-        if ("boolean".equalsIgnoreCase(type)) return value instanceof Boolean;
-        if ("object".equalsIgnoreCase(type)) return value instanceof Map;
-        if ("array".equalsIgnoreCase(type)) return value instanceof List;
-        return false;
     }
 
     private boolean checkRateLimit(ApiKey apiKeyEntity) {
@@ -318,51 +324,51 @@ public class OpenApiQueryController {
         return rateLimitService.checkRateLimit(apiKeyEntity.getApiKey(), rateLimit);
     }
 
-    private ApiRoute resolveApiRoute(String apiCode, GrayVendorResolver.GrayRequestContext grayCtx) {
+    private ApiRoute resolveApiRoute(String apiCode) {
         Result<ApiInterfaceDTO> interfaceResult = apiInterfaceFeignClient.getByInterfaceCode(apiCode);
         ApiInterfaceDTO apiInterface = interfaceResult != null ? interfaceResult.getData() : null;
-        if (apiInterface == null || apiInterface.getId() == null) {
+        if (apiInterface == null || apiInterface.getId() == null
+                || apiInterface.getPrimaryVendorConfigId() == null
+                || !(RoutingReadiness.READY.equals(apiInterface.getRoutingReadiness())
+                || RoutingReadiness.FALLBACK_NOT_READY.equals(apiInterface.getRoutingReadiness()))) {
             return null;
         }
 
-        Result<List<VendorConfigDTO>> configResult = vendorConfigFeignClient.list(
-                null,
-                null,
-                apiInterface.getId(),
-                StatusConstants.ACTIVE);
-        List<VendorConfigDTO> configs = configResult != null ? configResult.getData() : Collections.emptyList();
-        if (configs == null || configs.isEmpty()) {
+        VendorConfigDTO primary = getActiveConfig(apiInterface.getPrimaryVendorConfigId(), apiInterface.getId());
+        if (primary == null) {
             return null;
         }
-
-        VendorConfigDTO config = configs.get(0);
-        if (configs.size() >= 2) {
-            VendorConfigDTO graySelected = grayVendorResolver.resolve(apiCode, configs, grayCtx);
-            if (graySelected != null) {
-                config = graySelected;
-            }
+        VendorConfigDTO fallback = null;
+        if (RoutingReadiness.READY.equals(apiInterface.getRoutingReadiness())
+                && apiInterface.getFallbackVendorConfigId() != null) {
+            fallback = getActiveConfig(apiInterface.getFallbackVendorConfigId(), apiInterface.getId());
         }
 
-        VendorInfoDTO vendor = getVendor(config.getVendorId());
-        if (vendor == null || normalize(vendor.getVendorCode()) == null || normalize(config.getDataTypeCode()) == null) {
+        VendorInfoDTO primaryVendor = getActiveVendor(primary.getVendorId());
+        VendorInfoDTO fallbackVendor = fallback == null ? null : getActiveVendor(fallback.getVendorId());
+        String primaryDataTypeCode = normalize(primary.getDataTypeCode());
+        String fallbackDataTypeCode = fallback == null ? null : normalize(fallback.getDataTypeCode());
+        if (primaryVendor == null || normalize(primaryVendor.getVendorCode()) == null
+                || primaryDataTypeCode == null) {
             return null;
+        }
+        if (fallback != null && (fallbackVendor == null || normalize(fallbackVendor.getVendorCode()) == null
+                || !primaryDataTypeCode.equals(fallbackDataTypeCode))) {
+            fallback = null;
+            fallbackVendor = null;
         }
         InterfaceContractDTO contract = loadContract(apiInterface.getId());
-        return new ApiRoute(apiInterface.getId(), config.getVendorId(), vendor.getVendorCode(),
-                config.getDataTypeCode(), config, contract);
+        return new ApiRoute(apiInterface.getId(), primary.getVendorId(), primaryVendor.getVendorCode(),
+                fallback == null ? null : fallbackVendor.getVendorCode(), primaryDataTypeCode,
+                primary, fallback, contract);
     }
 
     private InterfaceContractDTO loadContract(Long interfaceId) {
         Result<InterfaceContractDTO> contractResult = apiInterfaceFeignClient.getContract(interfaceId);
-        if (contractResult != null && contractResult.getData() != null) {
-            return contractResult.getData();
+        if (contractResult == null || contractResult.getData() == null) {
+            throw new IllegalStateException("接口契约加载失败: interfaceId=" + interfaceId);
         }
-        Result<List<InterfaceParamDTO>> legacyResult = apiInterfaceFeignClient.listParams(interfaceId);
-        InterfaceContractDTO fallback = new InterfaceContractDTO();
-        fallback.setInterfaceId(interfaceId);
-        fallback.setRequestFields(legacyResult != null && legacyResult.getData() != null
-                ? legacyResult.getData() : Collections.emptyList());
-        return fallback;
+        return contractResult.getData();
     }
 
     private VendorInfoDTO getVendor(Long vendorId) {
@@ -371,6 +377,22 @@ public class OpenApiQueryController {
         }
         Result<VendorInfoDTO> vendorResult = vendorFeignClient.getById(vendorId);
         return vendorResult != null ? vendorResult.getData() : null;
+    }
+
+    private VendorConfigDTO getActiveConfig(Long configId, Long interfaceId) {
+        Result<VendorConfigDTO> result = vendorConfigFeignClient.getById(configId);
+        VendorConfigDTO config = result != null ? result.getData() : null;
+        if (config == null || !configId.equals(config.getId())
+                || !interfaceId.equals(config.getInterfaceId())
+                || !StatusConstants.ACTIVE.equals(config.getStatus())) {
+            return null;
+        }
+        return config;
+    }
+
+    private VendorInfoDTO getActiveVendor(Long vendorId) {
+        VendorInfoDTO vendor = getVendor(vendorId);
+        return vendor != null && StatusConstants.ACTIVE.equals(vendor.getStatus()) ? vendor : null;
     }
 
     private OpenApiBatchQueryRespVO buildBatchResp(OpenApiBatchQueryReqVO request, ApiKey apiKey,
@@ -430,8 +452,11 @@ public class OpenApiQueryController {
         context.setApiKeyId(apiKey.getId());
         context.setVendorId(route.vendorId());
         context.setVendorCode(route.vendorCode());
+        context.setFallbackVendorCode(route.fallbackVendorCode());
         context.setDataTypeCode(route.dataTypeCode());
-        context.setVendorConfig(route.config());
+        context.setVendorConfig(route.primaryConfig());
+        context.setPrimaryVendorConfig(route.primaryConfig());
+        context.setFallbackVendorConfig(route.fallbackConfig());
         context.setProductId(product.getId());
         context.setProductCode(product.getProductCode());
         context.setProductName(product.getProductName());
@@ -466,7 +491,8 @@ public class OpenApiQueryController {
         return value.trim();
     }
 
-    private record ApiRoute(Long interfaceId, Long vendorId, String vendorCode, String dataTypeCode,
-                            VendorConfigDTO config, InterfaceContractDTO contract) {
+    private record ApiRoute(Long interfaceId, Long vendorId, String vendorCode, String fallbackVendorCode,
+                            String dataTypeCode, VendorConfigDTO primaryConfig,
+                            VendorConfigDTO fallbackConfig, InterfaceContractDTO contract) {
     }
 }

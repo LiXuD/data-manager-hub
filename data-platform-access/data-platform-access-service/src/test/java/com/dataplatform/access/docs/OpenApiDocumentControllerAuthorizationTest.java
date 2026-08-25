@@ -60,9 +60,10 @@ class OpenApiDocumentControllerAuthorizationTest {
 
         var result = controller.list("caller-key", null);
 
-        assertThat(result.getCode()).isEqualTo(200);
-        assertThat(result.getData()).hasSize(1);
-        assertThat(result.getData().get(0).get("interfaceCode")).isEqualTo("WORLD_TIME");
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().getData()).hasSize(1);
+        assertThat(result.getBody().getData().get(0).get("interfaceCode")).isEqualTo("WORLD_TIME");
         verify(apiKeyService, never()).validateAndConsumeQuota(anyString(), anyLong());
     }
 
@@ -82,7 +83,9 @@ class OpenApiDocumentControllerAuthorizationTest {
 
         var result = controller.detail("WORLD_TIME", "caller-key", null);
 
-        assertThat(result.getCode()).isEqualTo(403);
+        assertThat(result.getStatusCode().value()).isEqualTo(403);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().getCode()).isEqualTo(403);
         verify(interfaceClient, never()).getContract(1L);
     }
 

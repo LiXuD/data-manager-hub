@@ -2,15 +2,29 @@ import { request } from '@/utils/request'
 import type { PageParams, ListResponse, CallerDTO, ApiKeyDTO, CallerProductDTO } from '@/types'
 
 export type Caller = CallerDTO
-export type ApiKey = ApiKeyDTO
+export type ApiKey = ApiKeyDTO & { keyName?: string }
 export type CallerProduct = CallerProductDTO
+
+export interface CurrentUserApiKeyOption {
+  id: number
+  callerId: number
+  callerCode: string
+  callerName: string
+  keyName: string
+  maskedApiKey: string
+}
+
+export interface CurrentUserApiKeyOptions {
+  hasAssociatedCaller: boolean
+  options: CurrentUserApiKeyOption[]
+}
 
 export const getCallerList = (params: PageParams & { keyword?: string; status?: 'active' | 'inactive' }) => {
   return request.get<ListResponse<CallerDTO>>('/caller/list', { params })
 }
 
 export const getCaller = (id: number) => {
-  return request.get<CallerDTO>(`/caller/${id}`)
+  return request.get<{ data: CallerDTO }>(`/caller/${id}`)
 }
 
 export const createCaller = (data: CallerDTO) => {
@@ -30,11 +44,21 @@ export const updateCallerStatus = (id: number, status: 'active' | 'inactive') =>
 }
 
 export const getApiKeyList = (callerId: number) => {
-  return request.get<ListResponse<ApiKeyDTO>>('/caller/apikey/list', { params: { callerId } })
+  return request.get<ListResponse<ApiKey>>('/caller/apikey/list', { params: { callerId } })
 }
 
-export const createApiKey = (callerId: number) => {
-  return request.post<{ data: ApiKeyDTO }>(`/caller/apikey/${callerId}/api-key`, { name: 'default' })
+export const getCurrentUserApiKeyOptions = () => {
+  return request.get<{ data: CurrentUserApiKeyOptions }>('/caller/apikey/current-user-options')
+}
+
+export interface ApiKeyCreateRequest {
+  callerId: number
+  name: string
+  productIds: number[]
+}
+
+export const createApiKey = (data: ApiKeyCreateRequest) => {
+  return request.post<{ data: ApiKey }>('/caller/apikey', data)
 }
 
 export interface ApiKeyRateLimitPolicy {
@@ -43,15 +67,15 @@ export interface ApiKeyRateLimitPolicy {
 }
 
 export const updateApiKeyRateLimit = (id: number, data: ApiKeyRateLimitPolicy) => {
-  return request.put<{ data: ApiKeyDTO }>(`/caller/apikey/${id}/rate-limit`, data)
+  return request.put<{ data: ApiKey }>(`/caller/apikey/${id}/rate-limit`, data)
 }
 
-export const updateApiKeyStatus = (id: number, status: 'active' | 'inactive' | 'expired') => {
-  return request.patch<void>(`/caller/api-key/${id}/status`, { status })
+export const updateApiKeyStatus = (id: number, status: 'active' | 'revoked' | 'expired') => {
+  return request.put<void>(`/caller/apikey/${id}/status`, { status })
 }
 
 export const deleteApiKey = (id: number) => {
-  return request.delete<void>(`/caller/api-key/${id}`)
+  return request.delete<void>(`/caller/apikey/${id}`)
 }
 
 export const getApiKeyInterfaces = (apiKeyId: number) => {
@@ -68,6 +92,10 @@ export const getCallerProducts = (callerId: number) => {
 
 export const createCallerProduct = (callerId: number, data: CallerProductDTO) => {
   return request.post<{ data: CallerProductDTO }>(`/caller/${callerId}/products`, data)
+}
+
+export const updateCallerProduct = (callerId: number, productId: number, data: CallerProductDTO) => {
+  return request.put<{ data: CallerProductDTO }>(`/caller/${callerId}/products/${productId}`, data)
 }
 
 export const getApiKeyProducts = (apiKeyId: number) => {

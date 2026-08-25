@@ -1,6 +1,6 @@
 # 数据管理平台部署文档
 
-**版本**: 2026-07-14
+**版本**: 2026-08-10
 
 ---
 
@@ -12,7 +12,7 @@
 |------|----------|------|
 | Java | 21+ | OpenJDK 或 Oracle JDK |
 | Maven | 3.9+ | 构建工具 |
-| Node.js | 18+ | 前端构建 |
+| Node.js | 20.19+、22.13+ 或 24+ | 前端构建 |
 | Docker | 24+ | 容器化部署 |
 | Docker Compose | 2.x | 容器编排 |
 | OpenSSL | 3.x | 本地生成服务间认证 RSA 密钥 |
@@ -23,8 +23,10 @@
 |------|------|------|------|
 | PostgreSQL | 16 | 5432 | 主数据库 |
 | Redis | 7.x | 6379 | 缓存/会话 |
+| Nacos | 2.3.x | 8848 | 服务注册与配置中心 |
 | SkyWalking OAP | 9.4.0 | 11800/12800 | 链路追踪服务端 (gRPC/HTTP) |
 | SkyWalking UI | 9.4.0 | 8088 | 链路追踪可视化 |
+| Nexus/S3 兼容 HTTPS 制品库 | 由环境提供 | 443 | 连接器 JAR；坐标不可覆盖，仓库主机和路径必须在白名单 |
 
 ---
 
@@ -40,34 +42,67 @@ cd data-manager-hub
 ### 2. 启动本地基础设施
 
 ```bash
-docker compose up -d
+# 使用本机 PostgreSQL
+docker compose up -d redis kafka nacos
 ```
 
 > `docker-compose.yml` 仅用于本地开发/测试，包含 PostgreSQL、Redis、Kafka、Nacos、Prometheus、Grafana、Elasticsearch、Kibana 和 SkyWalking。生产环境应使用独立的高可用基础设施，并通过环境变量或密钥系统提供连接信息和密码。
 
-如本机 5432 已被占用，可改用备用宿主端口：
+如需使用 Compose PostgreSQL，可改用备用宿主端口：
 
 ```bash
 POSTGRES_PORT=15432 docker compose up -d postgres
 export DB_PORT=15432
 ```
 
-### 3. 初始化数据库
+### 3. 发布 Nacos 配置
 
 ```bash
-psql -h localhost -U postgres -d dataplatform -f sql/init.sql
-for migration in sql/migrations/*.sql; do
-  psql -h localhost -U postgres -d dataplatform -f "$migration"
-done
+./publish-nacos-config.sh dev
 ```
 
-### 4. 构建项目
+应用采用 Spring Boot `spring.config.import` 标准机制加载 Nacos Config。五个业务域加载共享数据库 Data ID 和各自服务 Data ID，Gateway 只加载自身 Data ID。Data ID 缺失或 Nacos 不可用时应用拒绝启动，避免退回不完整的本地配置。
+
+### 4. 初始化数据库
+
+```bash
+DB_PASSWORD=123456 ./migrate-db.sh dry-run
+DB_PASSWORD=123456 ./migrate-db.sh update
+```
+
+Liquibase 使用 `DATABASECHANGELOG` 和 `DATABASECHANGELOGLOCK` 管理顺序、校验和与并发锁。旧的手工初始化数据库必须先执行 `./migrate-db.sh backup`，再用 `MIGRATION_CONFIRM_BASELINE=<数据库名> ./migrate-db.sh baseline` 接管，不能直接重复执行历史 SQL。`start-services.sh` 默认也会在任何 Java 服务启动前执行 `update`。
+
+接口权限审批由 V026 创建业务表，并使用 Flowable 7.1.0 官方 PostgreSQL 脚本在独立 `workflow` schema 创建引擎表。生产环境保持 `flowable.database-schema-update=false`；应用通过表前缀访问 `workflow`，业务 MyBatis 仍固定使用 `public` schema。引擎表只能经 Liquibase 升级，禁止应用启动时自动建表或手工修改已登记 changeset。
+
+V028 将结果缓存策略纳入申请项和最终授权事实。由于旧服务端未限制缓存天数，存量接口授权兼容回填为“允许缓存、上限 365 天”；新授权默认不允许缓存，必须通过审批显式开通。新建产品缓存作用域默认由 `GLOBAL` 收紧为 `CALLER`。回滚脚本会在发现新缓存申请、审批或非兼容授权事实时拒绝执行，发布前应使用隔离数据库完成 update、rollback、re-update 演练。
+
+V042 增加 Masterdata 所有的插件目录/连接器版本和不可变受控测试事实、Access 所有的逐实例激活事实、
+`vendor_config.runtime_mode/active_connector_version_id/connector_version` 以及 `call_record` 插件追踪字段，
+并种入内置 `legacy-http:1.0.0`。U042 只允许在不存在真实插件、连接器草稿/发布版本、激活事实、
+受控测试事实、PLUGIN 绑定和插件调用事实时回滚；出现任一事实后必须备份并做前向恢复，不能强制执行 U042。
+
+后续连接器迁移必须连续应用到 V047：
+
+- V043：迁移计划和 Access/Billing 观察事实；完成后迁移控制面只读；
+- V044：失败关闭地为存量配置建立活动连接器并强制 PLUGIN-only；
+- V045：删除旧适配器配置列；
+- V046：新增 `V1_DERIVED/V2_EMBEDDED` 完整性事实，不改写旧快照、调用或计费历史；
+- V047：升级前核对目录、发布步骤和调用/计费事实，随后冻结插件制品、发布版本和物理删除。
+
+V043—V047 在坏目录/完整性历史上必须原子 HALT，禁止临时关闭 precondition 或原地修历史。发布前
+执行 `backup + validate + dry-run`，在隔离 PostgreSQL 同时验证 fresh V001—V047 和 V046→V047。
+受保护事实产生后，U043—U047 不作为普通回滚路径；使用升级前备份恢复或新增 forward-recovery
+changeset。精确策略见 `sql/MIGRATIONS.md`。
+
+发布新审批节点时，将经过评审的 BPMN 作为 `data-platform-access-service/src/main/resources/processes/` 下的新版本资源发布。新申请使用最新版本，运行中实例继续原定义；禁止在线暴露 Flowable REST、引擎 Actuator 管理端点或 workflow schema。
+
+### 5. 构建项目
 
 ```bash
 mvn clean install -DskipTests
 ```
 
-### 5. 启动服务
+### 6. 启动服务
 
 **使用一键启动脚本 (推荐)**:
 
@@ -87,7 +122,7 @@ cd data-platform-governance/data-platform-governance-service && mvn spring-boot:
 cd data-platform-gateway && mvn spring-boot:run &
 ```
 
-### 6. 启动前端
+### 7. 启动前端
 
 ```bash
 cd data-platform-web
@@ -103,7 +138,7 @@ npm run dev
 |----|------|------|------|
 | - | Gateway | 8888 | API 网关 |
 | masterdata | data-platform-masterdata | 8081 | 厂商/数据类型/接口/灰度 |
-| access | data-platform-access | 8082 | 调用方/API Key/调用 |
+| access | data-platform-access | 8082 | 调用方/API Key/接口权限审批/调用 |
 | billing | data-platform-billing | 8084 | 计费 |
 | identity | data-platform-identity | 8086 | 身份/租户/安全 |
 | governance | data-platform-governance | 8085 | 监控/日志/质量/血缘 |
@@ -166,45 +201,33 @@ java -cp data-platform-sdk.jar com.dataplatform.sdk.generator.SDKCli --lang go -
 
 | 语言 | 模板 | 说明 |
 |------|------|------|
-| Java | `client-java.ftl` + `model-java.ftl` | Maven 项目结构 |
-| Python | `client-python.ftl` + `model-python.ftl` | pip 可安装 |
-| Go | `client-go.ftl` + `model-go.ftl` | go module |
+| Java | `java-client.ftl` + `java-model.ftl` | Java 客户端与模型 |
+| Python | `python-client.ftl` + `python-model.ftl` | Python 客户端与模型 |
+| Go | `go-client.ftl` + `go-model.ftl` | Go 客户端与模型 |
 
 ---
 
 ## 配置说明
 
-### 数据库配置
+### Nacos Config
 
 ```yaml
 spring:
-  datasource:
-    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-```
-
-### Redis 配置
-
-```yaml
-spring:
-  data:
-    redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
-      password: ${REDIS_PASSWORD}
-```
-
-### Nacos 配置
-
-```yaml
-spring:
+  config:
+    import:
+      - nacos:data-platform-database-${spring.profiles.active}.properties?group=DEFAULT_GROUP&refreshEnabled=true
+      - nacos:${spring.application.name}-${spring.profiles.active}.yml?group=DEFAULT_GROUP&refreshEnabled=true
   cloud:
     nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR}
+        namespace: ${NACOS_NAMESPACE:prod}
       discovery:
         server-addr: ${NACOS_SERVER_ADDR}
         namespace: ${NACOS_NAMESPACE:prod}
 ```
+
+版本化配置模板位于 `nacos-config/`，通过 `publish-nacos-config.sh` 发布。应用本地不再保存数据库、Redis、Kafka、Gateway 路由等业务运行配置。生产模板中的密码和密钥占位符必须由部署环境或密钥系统提供。
 
 ### Sa-Token 认证配置
 
@@ -239,6 +262,136 @@ export INTERNAL_AUTH_IDENTITY_SECRET=...
 
 最小授权关系：Access 可读 Masterdata、读取厂商密钥、调用 Billing 和写 Governance 日志；Billing 可读 Access 统计并写 Governance 告警/日志；Masterdata 可读 Access 统计并写 Governance 日志；Identity 仅写 Governance 日志。
 
+### 连接器制品、签名和运行时配置
+
+连接器有两个独立信任检查：Masterdata 在导入时验证目录数据，Access 在实际加载前再次验证本地
+缓存。同一 `keyId` 必须使用同一公钥，但配置格式不同：
+
+- `CONNECTOR_SIGNING_PUBLIC_KEY_BASE64`：X.509 DER 公钥的 Base64，供 Masterdata V1 Ed25519 验证；
+- `CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE`：只读 `file:` 或 `classpath:` PEM，供 Access 加载时验证；
+- JVM TLS TrustStore：信任制品库和厂商 HTTPS 证书，和插件签名公钥不是同一套密钥。
+
+生产环境必须提供以下变量，不能使用 dev 的 `*.invalid` 失败关闭占位值：
+
+```bash
+export CONNECTOR_ARTIFACT_REPOSITORY_HOST=plugins.example.com
+export CONNECTOR_ARTIFACT_REPOSITORY_PATH=/repository/data-platform
+export CONNECTOR_ARTIFACT_REPOSITORY_PREFIX=https://plugins.example.com/repository/data-platform
+export CONNECTOR_SIGNING_PUBLIC_KEY_BASE64='<X.509 DER Base64>'
+export CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE=file:/run/secrets/connector-signing-public.pem
+export CONNECTOR_PLUGIN_CACHE_DIR=/var/lib/data-platform/plugins
+export CONNECTOR_INSTANCE_ID="${HOSTNAME}:8082"
+export CONNECTOR_HOST_VERSION=1.0.0
+export CONNECTOR_VENDOR_ALLOWED_HOST=api.vendor.example.com
+export JAVA_TOOL_OPTIONS='-Djavax.net.ssl.trustStore=/run/secrets/connector-ca.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=***'
+```
+
+当前 Nacos 键由以下两个前缀绑定：
+
+```yaml
+masterdata.connector-plugin:
+  artifact-allowed-hosts: [${CONNECTOR_ARTIFACT_REPOSITORY_HOST}]
+  artifact-allowed-path-prefixes: [${CONNECTOR_ARTIFACT_REPOSITORY_PATH}]
+  trusted-signing-keys:
+    platform-default: ${CONNECTOR_SIGNING_PUBLIC_KEY_BASE64}
+  max-artifact-bytes: ${CONNECTOR_MAX_ARTIFACT_BYTES:52428800}
+  max-manifest-bytes: ${CONNECTOR_MAX_MANIFEST_BYTES:262144}
+  max-schema-bytes: ${CONNECTOR_MAX_SCHEMA_BYTES:131072}
+
+connector.runtime:
+  instance-id: ${CONNECTOR_INSTANCE_ID}
+  host-version: ${CONNECTOR_HOST_VERSION}
+  cache-directory: ${CONNECTOR_PLUGIN_CACHE_DIR}
+  repository-allowed-prefixes: [${CONNECTOR_ARTIFACT_REPOSITORY_PREFIX}]
+  network-allowed-protocols: [https]
+  network-allowed-hosts: [${CONNECTOR_VENDOR_ALLOWED_HOST}]
+  allow-private-networks: false
+  max-connect-timeout-ms: ${CONNECTOR_MAX_CONNECT_TIMEOUT_MS:5000}
+  max-read-timeout-ms: ${CONNECTOR_MAX_READ_TIMEOUT_MS:30000}
+  max-total-timeout-ms: ${CONNECTOR_MAX_TOTAL_TIMEOUT_MS:60000}
+  test-timeout-ms: ${CONNECTOR_TEST_TIMEOUT_MS:30000}
+  max-response-bytes: ${CONNECTOR_MAX_RESPONSE_BYTES:10485760}
+  signing-keys:
+    platform-default:
+      resource: ${CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE}
+      algorithm: Ed25519
+```
+
+仓库 URI 只允许无 user-info、query 和 fragment 的 HTTPS 地址；Masterdata 同时校验主机和路径，
+Access 校验完整 URI 前缀且禁止重定向。缓存路径固定为
+`<cache-directory>/<pluginId>/<version>/<sha256>/connector-plugin.jar`，下载先写临时文件，哈希通过后
+原子移动。缓存目录应挂载为仅 Access 服务账号可写，不可与插件构建或上传目录共享。
+
+Access 启动后会从 Masterdata 拉取所有活动连接器所需版本。健康组件名为
+`connectorRuntimeReadiness`：所需版本未完成本地加载、哈希不一致或仓库不可用且无已验证缓存时，
+Access `/actuator/health` 保持 `DOWN`；已有匹配缓存可在仓库故障时恢复。预加载会按 Nacos 服务发现
+中的活动 Access 实例创建 `connector_plugin_activation` 事实，只有聚合 `ready=true` 才允许激活。
+发布或切换期间旧版本继续服务在途租约，引用归零后才关闭插件和 ClassLoader。
+
+生产至少部署两个具有唯一 `CONNECTOR_INSTANCE_ID` 的 Access 实例。新实例在当前活动绑定全部预加载
+完成前 readiness 必须保持 DOWN；候选版本只有所有服务发现中的活动实例 READY 后才能激活。任一
+实例失败时旧 ACTIVE 继续服务。实例下线后由服务发现更新活动集合，不永久阻塞；发布/回滚/禁用/
+解绑在事务提交后触发 release，定时 required-artifact 对账重试部分失败并释放无绑定版本。
+
+内部 JWT 最小 scope 还包括：Access 读取制品 `masterdata:connector-artifact:read`、读取运行快照
+`masterdata:connector-runtime:read`；Masterdata 查询/管理 Access 激活状态和受控测试分别使用
+`access:connector-runtime:read`、`access:connector-runtime:manage`、`access:connector-runtime:test`。
+
+### 连接器供应链 CI
+
+插件源码必须在独立 CI 构建、测试、扫描、计算 SHA-256，并由受信离线私钥对规范化 Manifest 与
+JAR 哈希进行 Ed25519 脱离签名；平台只导入 HTTPS 制品坐标，不提供本地 JAR 执行入口。同坐标不得
+覆盖。宿主仓库的可复现扫描命令为：
+
+```bash
+mvn -B -ntp -Pconnector-supply-chain-scan -DskipTests -DskipTests=true verify
+```
+
+`.github/workflows/connector-plugin-supply-chain.yml` 在相关变更上执行 OWASP Dependency-Check、CycloneDX
+SBOM 和许可证报告；`NVD_API_KEY` 只配置在 CI Secret。危险字节码门禁属于日常离线测试与导入/加载
+路径，不依赖在线服务，并拒绝直接 Socket/URL/HttpClient、文件系统、宿主反射、System/ClassLoader、
+Thread/Executors 和 native load。扫描失败或签名/哈希/白名单不匹配时不得导入或激活。
+
+### 连接器发布与回滚 Runbook
+
+1. 通过管理 API import/verify，确认制品哈希、签名 keyId、SPI/Host 版本和权限清单。
+2. stage 后查看逐实例 activation；任何实例不是 READY 都停止，不能调用 activate。
+3. 使用目标 vendor 草稿完成 Schema/secretRef 校验和有界受控测试，再以 CAS 发布。
+4. 观察错误率、P95、ClassLoader gauge、缓存/计费和实际完整性事实，按批次放量。
+5. 运行错误时对厂商连接器执行历史版本 rollback；该动作创建新发布版本，不修改旧历史。
+6. 制品加载错误时保持旧 ACTIVE，修复制品/信任配置后重新 stage；不要删除目录事实。
+7. 数据库 changeset 错误使用升级前备份恢复或 forward recovery；不要强制执行受保护 U 脚本。
+
+### 隔离连接器 E2E 夹具
+
+`data-platform-test/test-fixtures/connector-e2e` 提供最小外部插件、Ed25519 签名、localhost HTTPS
+制品库/厂商端点、PKCS12 TrustStore 和唯一 PostgreSQL 测试库。它只用于测试，不改变生产默认值。
+
+```bash
+E2E_DB_HOST=localhost \
+E2E_DB_PORT=5432 \
+E2E_DB_USERNAME=postgres \
+E2E_DB_PASSWORD=postgres \
+  ./data-platform-test/test-fixtures/connector-e2e/prepare-e2e.sh
+```
+
+脚本输出 `E2E_STATE_FILE`、制品 URI/哈希/签名/`keyId`、两种公钥格式、TLS TrustStore、导入请求 JSON
+和 `FIXTURE_VENDOR_CONFIG_ID`。把输出值注入隔离服务进程后，按 `docs/API.md` 完成导入、stage、
+activate、草稿、validate、test、publish 和 OpenAPI 调用。`prepare-e2e.sh` 自身验证的是制品/TLS/迁移
+夹具，不代表六服务链路已经通过。
+
+验收结束必须使用脚本输出的精确状态文件清理；脚本会校验 PID、数据库名和目录归属后才删除：
+
+```bash
+./data-platform-test/test-fixtures/connector-e2e/cleanup-e2e.sh "$E2E_STATE_FILE"
+```
+
+2026-08-10 已按此隔离方式启动五域、Gateway、Web 和双 Access，完成签名插件、控制面、单条/批量
+OpenAPI、权限/限流/配额、缓存/契约、delivery/主备/计费、离线缓存/readiness、并发切换、卸载和浏览器
+验收。清理后数据库、Nacos、Redis、缓存、进程、端口和凭据残留为 0。精确验收结论见
+[外部请求连接器插件化升级设计第 0.1 节](2026-08-03-external-request-connector-plugin-upgrade-design.md#01-隔离运行环境与浏览器验收记录)；
+该隔离证据不替代生产容量和放量验收。
+
 ---
 
 ## 服务依赖关系
@@ -254,7 +407,7 @@ Gateway (8888)
 
 Access (8082)
     │
-    ├─→ Masterdata (8081) - 获取厂商配置/接口定义 (Feign)
+    ├─→ Masterdata (8081) - 获取厂商配置/接口定义/连接器制品与快照 (Feign)
     ├─→ Billing (8084) - 计算调用费用 (Feign)
     └─→ Governance (8085) - 写入操作日志 (Feign)
 
@@ -265,7 +418,7 @@ Billing (8084)
 
 Masterdata
     │
-    ├─→ Access (8082) - 接口调用统计 (Feign)
+    ├─→ Access (8082) - 接口调用统计/插件激活/受控测试 (Feign)
     └─→ Governance (8085) - 写入操作日志 (Feign)
 
 Identity
@@ -368,10 +521,20 @@ export REDIS_PASSWORD=your_redis_password
 
 # Nacos
 export NACOS_SERVER_ADDR=nacos-server:8848
+export NACOS_NAMESPACE=prod
 
 # SkyWalking
 export SW_AGENT_ENABLED=true
 export SW_OAP_ADDRESS=skywalking-oap:11800
+
+# 连接器（示例；真实值来自部署 Secret/只读挂载）
+export CONNECTOR_ARTIFACT_REPOSITORY_HOST=plugins.example.com
+export CONNECTOR_ARTIFACT_REPOSITORY_PATH=/repository/data-platform
+export CONNECTOR_ARTIFACT_REPOSITORY_PREFIX=https://plugins.example.com/repository/data-platform
+export CONNECTOR_SIGNING_PUBLIC_KEY_BASE64='<X.509 DER Base64>'
+export CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE=file:/run/secrets/connector-signing-public.pem
+export CONNECTOR_PLUGIN_CACHE_DIR=/var/lib/data-platform/plugins
+export CONNECTOR_INSTANCE_ID="${HOSTNAME}:8082"
 ```
 
 ### Docker 部署
@@ -458,5 +621,5 @@ psql -h localhost -U postgres dataplatform < backup_20260516.sql
 
 ---
 
-**文档版本**: 2026-07-10
-**最后更新**: 补充全新数据库的迁移执行步骤，并与当前五域部署基线保持一致。
+**文档版本**: 2026-08-10
+**最后更新**: 同步 V042—V047、PLUGIN-only、供应链 CI、双 Access 激活/readiness、release/回滚和隔离 E2E。

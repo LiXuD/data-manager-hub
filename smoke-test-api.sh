@@ -181,22 +181,9 @@ check "API Key 列表" "$http_code"
 echo ""
 
 # ============================================================
-# 6. 计费域 — 计费规则与账单
+# 6. 计费域 — 账单
 # ============================================================
-echo "--- 6. 计费规则与账单 ---"
-
-http_code=$(api GET "$BILLING/billing/rule/list?pageNum=1&pageSize=10")
-check "计费规则列表" "$http_code"
-
-http_code=$(api POST "$BILLING/billing/rule" "{
-    \"ruleName\": \"冒烟测试计费规则\",
-    \"vendorCode\": \"TEST_V_${TIMESTAMP}\",
-    \"dataTypeCode\": \"TEST_DT_${TIMESTAMP}\",
-    \"billingType\": \"standard\",
-    \"unitPrice\": 0.5,
-    \"status\": \"active\"
-}")
-check "创建计费规则" "$http_code"
+echo "--- 6. 账单 ---"
 
 http_code=$(api GET "$BILLING/billing/list?pageNum=1&pageSize=10")
 check "账单列表" "$http_code"

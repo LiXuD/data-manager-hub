@@ -9,16 +9,11 @@ export interface AlertRule {
   thresholdValue: number
   timeWindowMinutes: number
   notifyChannels: string
+  severity: string
   status: 'active' | 'inactive'
   createdBy?: number
   createdAt: string
   updatedAt: string
-  // 兼容字段
-  metric?: string
-  threshold?: number
-  condition?: string
-  level?: string
-  operator?: string
 }
 
 // 告警记录
@@ -117,22 +112,6 @@ export interface ApiKeyListResponse {
 }
 
 // 计费相关类型
-export interface BillingRule {
-  id: string
-  vendorId: string
-  vendorName: string
-  dataTypeId: string
-  dataTypeName: string
-  pricePerCall: number
-  minPrice: number
-  maxPrice: number
-  discountThreshold: number
-  discountRate: number
-  status: 'enabled' | 'disabled'
-  createdAt: string
-  updatedAt: string
-}
-
 export interface BillingRecord {
   id: string
   tenantId: string
@@ -165,7 +144,14 @@ export interface ApiInterface {
   dataTypeName?: string
   vendorId?: number
   vendorName?: string
-  path: string
+  /** Legacy storage field; OpenAPI callers use the fixed query entry instead. */
+  path?: string
+  primaryVendorConfigId?: number
+  fallbackVendorConfigId?: number
+  primaryVendorName?: string
+  fallbackVendorName?: string
+  bindingCount?: number
+  routingReadiness?: 'UNBOUND' | 'PRIMARY_NOT_READY' | 'FALLBACK_NOT_READY' | 'READY'
   description?: string
   requestSchema?: string
   responseSchema?: string
@@ -174,6 +160,11 @@ export interface ApiInterface {
   hasConfig?: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface VendorRoutingUpdateRequest {
+  primaryVendorConfigId: number
+  fallbackVendorConfigId?: number | null
 }
 
 export interface InterfaceParam {
@@ -187,7 +178,6 @@ export interface InterfaceParam {
   arrayItemType?: 'string' | 'integer' | 'number' | 'boolean' | 'object'
   required?: boolean
   defaultValue?: string
-  validationRule?: string
   exampleValue?: string
   constraintConfig?: string
   sort?: number
@@ -465,64 +455,6 @@ export interface QualityScore {
   checkedAt: string
 }
 
-// ===================== 接口配置相关类型 =====================
-
-// HTTP 方法类型
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
-
-// 认证类型
-export type AuthType = 'NONE' | 'BASIC' | 'BEARER' | 'API_KEY'
-
-// 签名类型
-export type SignType = 'NONE' | 'HMAC_SHA256' | 'MD5'
-
-// Content-Type 类型
-export type ContentType = 'application/json' | 'application/x-www-form-urlencoded' | 'text/plain' | 'raw'
-
-// API 配置
-export interface ApiConfig {
-  url: string
-  method: HttpMethod
-  timeout: number
-  retryCount: number
-}
-
-// 请求头配置项
-export interface HeaderConfigItem {
-  key: string
-  value: string
-  enabled: boolean
-  description?: string
-}
-
-// 请求头配置（键值对形式）
-export type HeaderConfig = Record<string, string>
-
-// 请求参数映射项
-export interface RequestMappingItem {
-  targetField: string
-  sourceVar: string
-  defaultValue?: string
-  required?: boolean
-  transformType?: 'none' | 'uppercase' | 'lowercase' | 'trim'
-}
-
-// 响应参数映射项
-export interface ResponseMappingItem {
-  targetField: string
-  sourcePath: string
-  sourceType?: 'field' | 'jsonPath'
-  defaultValue?: any
-  transformType?: 'none' | 'toString' | 'toNumber'
-}
-
-// 签名配置
-export interface SignConfig {
-  type: SignType
-  secretKey?: string
-  signFields?: string[]
-}
-
 export type SecurityDirection = 'REQUEST' | 'RESPONSE'
 
 export type SecurityStepType =
@@ -562,7 +494,6 @@ export interface VendorSecurityCapability {
   directions: SecurityDirection[]
   algorithms: string[]
   defaults: Record<string, any>
-  legacy: boolean
 }
 
 export interface VendorSecurityPreview {
@@ -579,20 +510,6 @@ export interface VendorSecurityVersion {
   createdAt: string
 }
 
-// 认证配置
-export interface AuthConfig {
-  type: AuthType
-  // Basic Auth
-  username?: string
-  password?: string
-  // Bearer Token
-  token?: string
-  // API Key
-  apiKeyName?: string
-  apiKeyValue?: string
-  apiKeyLocation?: 'header' | 'query'
-}
-
 // 降级配置
 export interface FallbackConfig {
   enabled: boolean
@@ -606,36 +523,7 @@ export interface CircuitBreakerConfig {
   timeout: number        // 熔断时间（秒）
 }
 
-// 厂商接口配置 - 关联厂商、数据类型和接口
-export interface VendorInterfaceConfig {
-  id: number
-  vendorId: number
-  vendorName?: string
-  dataTypeId: number
-  dataTypeName?: string
-  dataTypeCode?: string
-  interfaceId: number
-  interfaceName?: string
-  apiUrl: string
-  method: HttpMethod
-  timeout: number
-  retryCount: number
-  circuitThreshold: number
-  circuitTimeout: number
-  signType?: string
-  encryptType?: string
-  headerConfig?: string
-  requestTemplate?: string
-  responseMapping?: string
-  fallbackVendorId?: number
-  fallbackVendorName?: string
-  // 扩展字段
-  authType?: AuthType
-  authConfig?: string
-  status: 'active' | 'inactive'
-  createdAt: string
-  updatedAt: string
-}
+export * from './connector'
 
 // ===================== API 专用 DTO 类型 =====================
 
@@ -699,23 +587,6 @@ export interface UserDTO {
   email?: string
   tenantId?: number
   tenantName?: string
-  status: string
-  createdAt: string
-  updatedAt: string
-}
-
-// 计费规则 (API DTO)
-export interface BillingRuleDTO {
-  id: number
-  vendorId: number
-  vendorName: string
-  dataTypeId: number
-  dataTypeName: string
-  pricePerCall: number
-  minPrice: number
-  maxPrice: number
-  discountThreshold: number
-  discountRate: number
   status: string
   createdAt: string
   updatedAt: string

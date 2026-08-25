@@ -20,7 +20,6 @@ public class InterfaceParamDTO implements Serializable {
     private String arrayItemType;
     private Boolean required;
     private String defaultValue;
-    private String validationRule;
     private String exampleValue;
     private String constraintConfig;
     private Integer sort;
@@ -48,8 +47,6 @@ public class InterfaceParamDTO implements Serializable {
     public void setRequired(Boolean required) { this.required = required; }
     public String getDefaultValue() { return defaultValue; }
     public void setDefaultValue(String defaultValue) { this.defaultValue = defaultValue; }
-    public String getValidationRule() { return validationRule; }
-    public void setValidationRule(String validationRule) { this.validationRule = validationRule; }
     public String getExampleValue() { return exampleValue; }
     public void setExampleValue(String exampleValue) { this.exampleValue = exampleValue; }
     public String getConstraintConfig() { return constraintConfig; }

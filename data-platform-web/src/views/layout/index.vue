@@ -4,13 +4,23 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { ElConfigProvider, ElMenu, ElMenuItem, ElSubMenu, ElDropdown, ElDropdownItem, ElDropdownMenu, ElBadge } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getAlertRecordList } from '@/api/monitor'
 import { STORAGE_KEYS, THEME_MODE } from '@/constants'
 import { applyTheme, getStoredTheme } from '@/composables/useTheme'
+import { extractPageData } from '@/utils/pagination'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const isCollapse = ref(false)
+const pendingAlertCount = ref(0)
+let alertCountTimer: number | undefined
+
+const handleViewportResize = () => {
+  if (window.innerWidth <= 900) {
+    isCollapse.value = true
+  }
+}
 
 const handleStorageChange = (e: StorageEvent) => {
   if (e.key === STORAGE_KEYS.THEME) {
@@ -22,15 +32,27 @@ const handleThemeChange = () => {
   applyTheme(getStoredTheme())
 }
 
+const handleAlertRecordUpdated = () => {
+  void fetchPendingAlertCount()
+}
+
 onMounted(() => {
   applyTheme(getStoredTheme())
+  handleViewportResize()
   window.addEventListener('storage', handleStorageChange)
   window.addEventListener('theme-change', handleThemeChange)
+  window.addEventListener('resize', handleViewportResize)
+  window.addEventListener('alert-record-updated', handleAlertRecordUpdated)
+  void fetchPendingAlertCount()
+  alertCountTimer = window.setInterval(fetchPendingAlertCount, 60_000)
 })
 
 onUnmounted(() => {
   window.removeEventListener('storage', handleStorageChange)
   window.removeEventListener('theme-change', handleThemeChange)
+  window.removeEventListener('resize', handleViewportResize)
+  window.removeEventListener('alert-record-updated', handleAlertRecordUpdated)
+  if (alertCountTimer) window.clearInterval(alertCountTimer)
 })
 
 const activeMenu = computed(() => route.path)
@@ -61,8 +83,30 @@ const allMenuItems = [
     permission: 'business:view',
     children: [
       { path: '/vendor', title: '厂商管理', permission: 'vendor:view' },
-      { path: '/caller', title: '调用方管理', permission: 'caller:view' },
-      { path: '/call-scene', title: '场景字典', permission: 'call-scene:view' },
+      {
+        path: '/connector-plugin',
+        title: '连接器插件',
+        permissions: [
+          'connector-plugin:view',
+          'connector-plugin:import',
+          'connector-plugin:verify',
+          'connector-plugin:activate',
+          'connector-plugin:disable'
+        ]
+      },
+      {
+        path: '/connector-migration',
+        title: '厂商连接器迁移',
+        permissions: [
+          'connector-plugin:view',
+          'connector-plugin:migrate',
+          'connector-plugin:test',
+          'connector-plugin:publish',
+          'connector-plugin:rollback'
+        ]
+      },
+      { path: '/caller', title: '内部系统管理', permission: 'caller:view' },
+      { path: '/call-scene', title: '场景管理', permission: 'call-scene:view' },
       { path: '/datatype', title: '数据类型', permission: 'datatype:view' },
       { path: '/interface', title: '接口管理', permission: 'interface:view' }
     ]
@@ -72,6 +116,18 @@ const allMenuItems = [
     title: '调用记录',
     icon: 'connection',
     permission: 'call:view'
+  },
+  {
+    path: '/api-permission',
+    title: '接口权限审批',
+    icon: 'document',
+    permissions: [
+      'api-permission:view',
+      'api-permission:approve',
+      'api-permission:grant-view',
+      'api-permission:process-view',
+      'api-permission:emergency-grant'
+    ]
   },
   {
     path: '/billing',
@@ -102,14 +158,39 @@ const allMenuItems = [
     title: '操作日志',
     icon: 'document',
     permission: 'audit:view'
+  },
+  {
+    path: '/data-test',
+    title: '数据查询测试',
+    icon: 'play'
   }
 ]
 
 // 判断是否为管理员（拥有admin角色）
 const isAdmin = computed(() => {
   const roles = userStore.userInfo?.roles || []
-  return roles.includes('admin')
+  return roles.some(role => role.trim().toLowerCase() === 'admin')
 })
+
+const canViewNotifications = computed(() => isAdmin.value || userStore.hasPermission('monitor:view'))
+
+const fetchPendingAlertCount = async () => {
+  if (!canViewNotifications.value) {
+    pendingAlertCount.value = 0
+    return
+  }
+  try {
+    const response = await getAlertRecordList({ page: 1, pageSize: 1, status: 'pending' })
+    pendingAlertCount.value = extractPageData(response).total
+  } catch {
+    pendingAlertCount.value = 0
+  }
+}
+
+const handleNotificationClick = () => {
+  if (!canViewNotifications.value) return
+  router.push({ path: '/monitor', query: { tab: 'record', status: 'pending' } })
+}
 
 // 过滤菜单 - 根据用户权限
 const menuItems = computed(() => {
@@ -130,12 +211,12 @@ function filterMenuItems(items: any[]): any[] {
           return { ...item, children: filteredChildren }
         }
         // 如果没有子菜单，检查是否有父权限
-        if (hasPermission(item.permission)) {
+        if (hasPermission(item.permission, item.permissions)) {
           return { ...item, children: [] }
         }
         return null
       }
-      if (hasPermission(item.permission)) {
+      if (hasPermission(item.permission, item.permissions)) {
         return item
       }
       return null
@@ -143,7 +224,10 @@ function filterMenuItems(items: any[]): any[] {
     .filter((item): item is any => item !== null)
 }
 
-function hasPermission(permission?: string): boolean {
+function hasPermission(permission?: string, permissions?: string[]): boolean {
+  if (permissions?.length) {
+    return permissions.some(candidate => userStore.hasPermission(candidate))
+  }
   if (!permission) return true
   return userStore.hasPermission(permission)
 }
@@ -176,6 +260,9 @@ const IconRelease = {
 const IconDocument = {
   template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`
 }
+const IconPlay = {
+  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`
+}
 
 const icons: Record<string, { template: string }> = {
   dashboard: IconDashboard,
@@ -186,7 +273,8 @@ const icons: Record<string, { template: string }> = {
   alarm: IconAlarm,
   config: IconConfig,
   release: IconRelease,
-  document: IconDocument
+  document: IconDocument,
+  play: IconPlay
 }
 
 const handleMenuSelect = (path: string) => {
@@ -248,7 +336,12 @@ const handleCommand = (command: string) => {
 
         <!-- 底部折叠按钮 -->
         <div class="sidebar-footer">
-          <button class="collapse-btn" type="button" :aria-label="isCollapse ? '展开侧边栏' : '收起侧边栏'">
+          <button
+            class="collapse-btn"
+            type="button"
+            :aria-label="isCollapse ? '展开侧边栏' : '收起侧边栏'"
+            @click="isCollapse = !isCollapse"
+          >
             <svg v-if="isCollapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 18l6-6-6-6"/>
             </svg>
@@ -281,8 +374,14 @@ const handleCommand = (command: string) => {
             </button>
 
             <!-- 通知 -->
-            <el-badge :value="3" :max="99" class="notification-badge" @click="router.push('/monitor')">
-              <button class="header-btn" type="button" aria-label="通知">
+            <el-badge
+              v-if="canViewNotifications"
+              :value="pendingAlertCount"
+              :hidden="pendingAlertCount === 0"
+              :max="99"
+              class="notification-badge"
+            >
+              <button class="header-btn" type="button" aria-label="通知" @click="handleNotificationClick">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                   <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -717,6 +816,65 @@ const handleCommand = (command: string) => {
   padding: 24px;
   overflow-y: auto;
   background: var(--color-bg);
+}
+
+@media (max-width: 900px) {
+  .sidebar,
+  .sidebar.collapsed {
+    width: 64px;
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+
+  .header {
+    padding: 0 16px;
+  }
+
+  .username,
+  .dropdown-arrow {
+    display: none;
+  }
+
+  .user-info {
+    margin-left: 0;
+    padding: 6px;
+  }
+
+  .main-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar,
+  .sidebar.collapsed {
+    width: 56px;
+  }
+
+  .logo {
+    height: 64px;
+    padding: 0 12px;
+  }
+
+  .logo-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .header {
+    height: 64px;
+    padding: 0 12px;
+  }
+
+  .header-btn {
+    display: none;
+  }
+
+  .main-content {
+    padding: 12px;
+  }
 }
 
 /* 过渡动画 */

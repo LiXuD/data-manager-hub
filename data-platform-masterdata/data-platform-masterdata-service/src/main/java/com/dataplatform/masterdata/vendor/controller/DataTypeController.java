@@ -146,7 +146,7 @@ public class DataTypeController {
     @GetMapping("/all")
     public Result<List<DataTypeDTO>> listAll() {
         LambdaQueryWrapper<DataType> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(DataType::getStatus, CommonStatus.ACTIVE);
+        wrapper.eq(DataType::getStatus, CommonStatus.ACTIVE.getCode());
         wrapper.eq(DataType::getDeleted, false);
         wrapper.orderByAsc(DataType::getDataTypeCode);
         return Result.success(dataTypeMapper.selectList(wrapper).stream()
@@ -164,7 +164,7 @@ public class DataTypeController {
         }
         CommonStatus statusEnum = CommonStatus.fromCode(status);
         if (statusEnum != null) {
-            wrapper.eq(DataType::getStatus, statusEnum);
+            wrapper.eq(DataType::getStatus, statusEnum.getCode());
         }
         wrapper.eq(DataType::getDeleted, false);
         return wrapper;

@@ -25,8 +25,8 @@ CREATE TABLE IF NOT EXISTS api_interface (
 );
 
 -- 创建索引
-CREATE INDEX idx_api_interface_datatype ON api_interface(data_type_id);
-CREATE INDEX idx_api_interface_status ON api_interface(status);
+CREATE INDEX IF NOT EXISTS idx_api_interface_datatype ON api_interface(data_type_id);
+CREATE INDEX IF NOT EXISTS idx_api_interface_status ON api_interface(status);
 
 -- 添加注释
 COMMENT ON TABLE api_interface IS '接口定义表';

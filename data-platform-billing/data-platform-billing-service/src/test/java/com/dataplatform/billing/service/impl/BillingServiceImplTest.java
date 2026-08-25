@@ -1,63 +1,79 @@
 package com.dataplatform.billing.service.impl;
 
-import com.dataplatform.billing.entity.BillingRule;
-import com.dataplatform.billing.mapper.BillingRuleMapper;
-import com.dataplatform.common.billing.BillingCalculatorFactory;
-import java.math.BigDecimal;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.dataplatform.billing.entity.BillingDaily;
+import com.dataplatform.billing.mapper.BillingDailyMapper;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
+
 class BillingServiceImplTest {
 
-    @Mock
-    private BillingRuleMapper billingRuleMapper;
-
-    @Spy
-    private BillingCalculatorFactory billingCalculatorFactory = new BillingCalculatorFactory();
-
-    @InjectMocks
-    private BillingServiceImpl billingService;
-
     @Test
-    void shouldHonorStandardBillingTypeWithoutTierOrSlaAdjustments() {
-        BillingRule rule = rule("STANDARD");
-        rule.setDiscount(new BigDecimal("0.50"));
-        rule.setSlaThreshold(100);
-        rule.setCompensationRate(new BigDecimal("0.50"));
-        when(billingRuleMapper.selectOne(any())).thenReturn(rule);
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void exportAppliesEveryRequestedScopeToDatabaseQuery() {
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "test"),
+                BillingDaily.class);
+        BillingDailyMapper mapper = mock(BillingDailyMapper.class);
+        when(mapper.selectList(any(Wrapper.class))).thenReturn(List.of());
+        BillingServiceImpl service = new BillingServiceImpl();
+        ReflectionTestUtils.setField(service, "baseMapper", mapper);
+        LocalDate startDate = LocalDate.of(2026, 7, 1);
+        LocalDate endDate = LocalDate.of(2026, 7, 21);
 
-        BigDecimal cost = billingService.calculateCost("personal", 2, 5000L);
+        byte[] csv = service.export(7L, 3L, startDate, endDate);
 
-        assertEquals(new BigDecimal("20.0000"), cost);
+        ArgumentCaptor<Wrapper<BillingDaily>> wrapperCaptor = ArgumentCaptor.forClass(Wrapper.class);
+        verify(mapper).selectList(wrapperCaptor.capture());
+        LambdaQueryWrapper<BillingDaily> wrapper = (LambdaQueryWrapper<BillingDaily>) wrapperCaptor.getValue();
+        String sqlSegment = wrapper.getSqlSegment();
+        Map<String, Object> parameters = wrapper.getParamNameValuePairs();
+        assertTrue(parameters.containsValue(7L));
+        assertTrue(parameters.containsValue(3L));
+        assertTrue(parameters.containsValue(startDate));
+        assertTrue(parameters.containsValue(endDate));
+        assertTrue(sqlSegment.contains("ORDER BY billing_date DESC"));
+        assertEquals("\uFEFFid,tenant_id,caller_id,vendor_id,data_type,billing_date,call_count,success_count,fail_count,total_cost\n",
+                new String(csv, StandardCharsets.UTF_8));
     }
 
     @Test
-    void shouldDelegateTieredBillingToSharedCalculator() {
-        BillingRule rule = rule("TIERED");
-        rule.setDiscount(new BigDecimal("0.50"));
-        when(billingRuleMapper.selectOne(any())).thenReturn(rule);
+    @SuppressWarnings("rawtypes")
+    void exportNeutralizesSpreadsheetFormulasAndEscapesCsvCells() {
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "test"),
+                BillingDaily.class);
+        BillingDaily row = new BillingDaily();
+        row.setId(1L);
+        row.setTenantId(7L);
+        row.setCallerId(9L);
+        row.setVendorId(3L);
+        row.setDataType("=HYPERLINK(\"https://invalid\",\"x\")");
+        row.setBillingDate(LocalDate.of(2026, 7, 21));
+        row.setCallCount(1L);
+        row.setSuccessCount(1L);
+        row.setFailCount(0L);
+        BillingDailyMapper mapper = mock(BillingDailyMapper.class);
+        when(mapper.selectList(any(Wrapper.class))).thenReturn(List.of(row));
+        BillingServiceImpl service = new BillingServiceImpl();
+        ReflectionTestUtils.setField(service, "baseMapper", mapper);
 
-        BigDecimal cost = billingService.calculateCost("personal", 2, 0L);
+        String csv = new String(service.export(7L, null, null, null), StandardCharsets.UTF_8);
 
-        assertEquals(new BigDecimal("10.0000"), cost);
-    }
-
-    private BillingRule rule(String billingType) {
-        BillingRule rule = new BillingRule();
-        rule.setBillingType(billingType);
-        rule.setDataType("personal");
-        rule.setUnitPrice(new BigDecimal("10.00"));
-        rule.setTierMin(0);
-        rule.setStatus("active");
-        return rule;
+        assertTrue(csv.contains("\"'=HYPERLINK(\"\"https://invalid\"\",\"\"x\"\")\""));
     }
 }

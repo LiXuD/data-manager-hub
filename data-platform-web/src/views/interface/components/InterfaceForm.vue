@@ -17,19 +17,6 @@
       <el-form-item label="接口名称" prop="interfaceName">
         <el-input v-model="form.interfaceName" placeholder="请输入接口名称" />
       </el-form-item>
-      <el-form-item label="接口路径" prop="path">
-        <el-input v-model="form.path" placeholder="请输入接口路径，如 /api/v1/user/query" />
-      </el-form-item>
-      <el-form-item label="所属厂商" prop="vendorId">
-        <el-select v-model="form.vendorId" placeholder="请选择所属厂商" clearable style="width: 100%">
-          <el-option
-            v-for="vendor in vendorOptions"
-            :key="vendor.id"
-            :label="vendor.vendorName"
-            :value="vendor.id"
-          />
-        </el-select>
-      </el-form-item>
       <el-form-item label="数据类型" prop="dataTypeId">
         <el-select v-model="form.dataTypeId" placeholder="请选择数据类型" clearable style="width: 100%">
           <el-option
@@ -46,12 +33,10 @@
       <el-form-item label="描述" prop="description">
         <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入接口描述" />
       </el-form-item>
-      <el-form-item label="状态" prop="status">
-        <el-radio-group v-model="form.status">
-          <el-radio value="active">启用</el-radio>
-          <el-radio value="inactive">禁用</el-radio>
-        </el-radio-group>
-      </el-form-item>
+      <el-alert type="info" :closable="false" show-icon>
+        <template #title>固定调用入口：POST /openapi/v1/query</template>
+        请求体通过 apiCode 区分业务接口；新增接口默认停用，请先绑定厂商、配置主备并发布连接器。
+      </el-alert>
     </el-form>
     <template #footer>
       <el-button @click="handleClose">取消</el-button>
@@ -64,13 +49,12 @@
 import { ref, watch } from 'vue'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { createInterface, updateInterface } from '@/api/interface'
-import type { ApiInterface, Vendor, DataType } from '@/types'
+import type { ApiInterface, DataType } from '@/types'
 
 interface Props {
   modelValue: boolean
   formData?: ApiInterface | null
   mode: 'add' | 'edit'
-  vendorOptions: Vendor[]
   datatypeOptions: DataType[]
 }
 
@@ -80,32 +64,23 @@ const emit = defineEmits(['update:modelValue', 'success'])
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 
-type InterfaceStatus = 'active' | 'inactive'
-
 const form = ref<{
   interfaceCode: string
   interfaceName: string
-  path: string
-  vendorId?: number | string
   dataTypeId?: number | string
   sort: number
   description: string
-  status: InterfaceStatus
 }>({
   interfaceCode: '',
   interfaceName: '',
-  path: '',
-  vendorId: undefined,
   dataTypeId: undefined,
   sort: 0,
-  description: '',
-  status: 'active'
+  description: ''
 })
 
 const rules: FormRules = {
   interfaceCode: [{ required: true, message: '请输入接口编码', trigger: 'blur' }],
   interfaceName: [{ required: true, message: '请输入接口名称', trigger: 'blur' }],
-  path: [{ required: true, message: '请输入接口路径', trigger: 'blur' }],
   dataTypeId: [{ required: true, message: '请选择数据类型', trigger: 'change' }]
 }
 
@@ -122,23 +97,17 @@ watch(() => props.formData, (val) => {
     form.value = {
       interfaceCode: val.interfaceCode || '',
       interfaceName: val.interfaceName || '',
-      path: val.path || '',
-      vendorId: normalizeId(val.vendorId),
       dataTypeId: normalizeId(val.dataTypeId),
       sort: val.sort ?? 0,
-      description: val.description || '',
-      status: val.status || 'active'
+      description: val.description || ''
     }
   } else {
     form.value = {
       interfaceCode: '',
       interfaceName: '',
-      path: '',
-      vendorId: undefined,
       dataTypeId: undefined,
       sort: 0,
-      description: '',
-      status: 'active'
+      description: ''
     }
   }
 }, { immediate: true })
@@ -153,18 +122,18 @@ const handleSubmit = async () => {
 
   loading.value = true
   try {
-    // 提交时确保id是number类型
-    const submitData: Partial<ApiInterface> = {
-      ...form.value,
-      vendorId: form.value.vendorId != null ? Number(form.value.vendorId) : undefined,
-      dataTypeId: form.value.dataTypeId != null ? Number(form.value.dataTypeId) : undefined
+    const commonFields: Partial<ApiInterface> = {
+      interfaceName: form.value.interfaceName,
+      dataTypeId: form.value.dataTypeId != null ? Number(form.value.dataTypeId) : undefined,
+      sort: form.value.sort,
+      description: form.value.description
     }
-    
+
     if (props.mode === 'add') {
-      await createInterface(submitData)
+      await createInterface({ ...commonFields, interfaceCode: form.value.interfaceCode })
       ElMessage.success('新增成功')
     } else {
-      await updateInterface(props.formData!.id, submitData)
+      await updateInterface(props.formData!.id, commonFields)
       ElMessage.success('更新成功')
     }
     emit('success')

@@ -14,11 +14,16 @@ public final class SlidingWindowRateLimitAlgorithm {
             local window = tonumber(ARGV[1])
             local now = tonumber(ARGV[2])
             local member = ARGV[3]
+            local limit = tonumber(ARGV[4])
             redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
-            redis.call('ZADD', key, now, member)
             local count = redis.call('ZCARD', key)
+            if count >= limit then
+                redis.call('PEXPIRE', key, window)
+                return count + 1
+            end
+            redis.call('ZADD', key, now, member)
             redis.call('PEXPIRE', key, window)
-            return count
+            return count + 1
             """;
 
     public static final String COUNT_SCRIPT = """

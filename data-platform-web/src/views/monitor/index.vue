@@ -148,7 +148,7 @@
             </el-table-column>
             <el-table-column prop="severity" label="告警级别" width="100">
               <template #default="{ row }">
-                <el-tag :type="getLevelType(row.severity || row.level || 'warning')" size="small">{{ getLevelTextLocalized(row.severity || row.level || 'warning') }}</el-tag>
+                <el-tag :type="getLevelType(row.severity || 'warning')" size="small">{{ getLevelTextLocalized(row.severity || 'warning') }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
@@ -252,8 +252,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   checkServiceHealth,
@@ -272,11 +272,12 @@ import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 import { extractPageData } from '@/utils/pagination'
 
 const loading = ref(false)
+const route = useRoute()
 const router = useRouter()
-const activeTab = ref('health')
+const monitorTabs = ['health', 'alert', 'record', 'chart']
+const activeTab = ref(typeof route.query.tab === 'string' && monitorTabs.includes(route.query.tab) ? route.query.tab : 'health')
 const tableData = ref<ServiceHealth[]>([])
-type AlertRuleView = AlertRule & { severity?: string }
-const alertData = ref<AlertRuleView[]>([])
+const alertData = ref<AlertRule[]>([])
 const alertRecords = ref<AlertRecord[]>([])
 const ruleDialogVisible = ref(false)
 const ruleSubmitting = ref(false)
@@ -335,16 +336,25 @@ const fetchHealth = async () => {
 const fetchAlerts = async () => {
   try {
     const res = await getAlertRuleList({ page: 1, pageSize: 100 })
-    alertData.value = extractPageData<AlertRuleView>(res).list
+    alertData.value = extractPageData<AlertRule>(res).list
   } catch {
     alertData.value = []
   }
 }
 
 const fetchAlertRecords = async () => {
-  const response = await getAlertRecordList({ page: 1, pageSize: 100 })
+  const response = await getAlertRecordList({
+    page: 1,
+    pageSize: 100,
+    status: route.query.status === 'pending' ? 'pending' : undefined
+  })
   alertRecords.value = extractPageData<AlertRecord>(response).list
 }
+
+watch([() => route.query.tab, () => route.query.status], ([tab]) => {
+  activeTab.value = typeof tab === 'string' && monitorTabs.includes(tab) ? tab : 'health'
+  void fetchAlertRecords()
+})
 
 const handleSearch = () => { fetchHealth() }
 const handleReset = () => { searchForm.serviceName = ''; searchForm.status = ''; fetchHealth() }
@@ -352,7 +362,7 @@ const handleAddRule = () => {
   Object.assign(ruleForm, { id: null, ruleName: '', ruleType: 'THRESHOLD', targetType: '', conditionType: 'gt', thresholdValue: 0, timeWindowMinutes: 5, notifyChannels: '', severity: 'warning', status: 'active' })
   ruleDialogVisible.value = true
 }
-const handleEditRule = (row: AlertRuleView) => {
+const handleEditRule = (row: AlertRule) => {
   Object.assign(ruleForm, { ...row })
   ruleDialogVisible.value = true
 }
@@ -398,7 +408,8 @@ const handleResolveAlert = async () => {
     await resolveAlertRecord(resolvingRecordId.value, resolution.value.trim())
     ElMessage.success('告警已处理')
     resolveDialogVisible.value = false
-    fetchAlertRecords()
+    await fetchAlertRecords()
+    window.dispatchEvent(new Event('alert-record-updated'))
   } finally {
     resolving.value = false
   }

@@ -3,21 +3,23 @@ package com.dataplatform.masterdata.interface_.controller;
 import com.dataplatform.api.Result;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
-import com.dataplatform.masterdata.interface_.entity.InterfaceParam;
 import com.dataplatform.masterdata.interface_.service.ApiInterfaceService;
-import com.dataplatform.masterdata.interface_.service.InterfaceParamService;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
-import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.service.InterfaceContractService;
+import com.dataplatform.masterdata.interface_.service.ApiInterfaceDTOAssembler;
 import com.dataplatform.common.security.InternalScope;
-import java.util.List;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.List;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 /**
  * 主数据域接口定义的 Api Interface Internal Controller。
@@ -32,10 +34,10 @@ public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {
     private ApiInterfaceService apiInterfaceService;
 
     @Autowired
-    private InterfaceParamService interfaceParamService;
+    private InterfaceContractService interfaceContractService;
 
     @Autowired
-    private InterfaceContractService interfaceContractService;
+    private ApiInterfaceDTOAssembler dtoAssembler;
 
     @GetMapping("/by-code/{code}")
     @Override
@@ -57,18 +59,6 @@ public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {
         return Result.success(toDTO(entity));
     }
 
-    @GetMapping("/{id}/params")
-    @Override
-    public Result<List<InterfaceParamDTO>> listParams(@PathVariable("id") Long id) {
-        if (apiInterfaceService.getById(id) == null) {
-            return Result.error(404, "接口不存在");
-        }
-        return Result.success(interfaceParamService.listByInterfaceId(id).stream()
-                .filter(param -> param.getDirection() == null || "REQUEST".equalsIgnoreCase(param.getDirection()))
-                .map(this::toParamDTO)
-                .toList());
-    }
-
     @GetMapping("/{id}/contract")
     @Override
     public Result<InterfaceContractDTO> getContract(@PathVariable("id") Long id) {
@@ -78,16 +68,31 @@ public class ApiInterfaceInternalController implements ApiInterfaceFeignClient {
         return Result.success(interfaceContractService.getContract(id));
     }
 
-    private ApiInterfaceDTO toDTO(ApiInterface entity) {
-        ApiInterfaceDTO dto = new ApiInterfaceDTO();
-        BeanUtils.copyProperties(entity, dto);
-        dto.setStatus(entity.getStatus() != null ? entity.getStatus().getCode() : null);
-        return dto;
+    @PostMapping("/batch-get")
+    @Override
+    public Result<List<ApiInterfaceDTO>> batchGet(@RequestBody List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return Result.success(List.of());
+        }
+        return Result.success(dtoAssembler.toDTOs(apiInterfaceService.listByIds(ids)));
     }
 
-    private InterfaceParamDTO toParamDTO(InterfaceParam entity) {
-        InterfaceParamDTO dto = new InterfaceParamDTO();
-        BeanUtils.copyProperties(entity, dto);
-        return dto;
+    @Override
+    public Result<List<ApiInterfaceDTO>> getOptions(
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        LambdaQueryWrapper<ApiInterface> query = new LambdaQueryWrapper<ApiInterface>()
+                .eq(ApiInterface::getDeleted, false)
+                .eq(ApiInterface::getStatus, "active")
+                .and(keyword != null && !keyword.isBlank(),
+                        condition -> condition.like(ApiInterface::getInterfaceCode, keyword.trim())
+                                .or()
+                                .like(ApiInterface::getInterfaceName, keyword.trim()))
+                .orderByAsc(ApiInterface::getInterfaceCode)
+                .last("LIMIT 200");
+        return Result.success(dtoAssembler.toDTOs(apiInterfaceService.list(query)));
+    }
+
+    private ApiInterfaceDTO toDTO(ApiInterface entity) {
+        return dtoAssembler.toDTO(entity);
     }
 }

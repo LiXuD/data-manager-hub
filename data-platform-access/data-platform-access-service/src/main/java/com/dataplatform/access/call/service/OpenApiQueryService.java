@@ -3,13 +3,18 @@ package com.dataplatform.access.call.service;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.dataplatform.api.Result;
 import com.dataplatform.access.call.vo.OpenApiQueryRespVO;
-import com.dataplatform.billing.api.dto.BillingCalculateReqDTO;
-import com.dataplatform.billing.api.dto.BillingCalculateRespDTO;
+import com.dataplatform.billing.api.dto.BillingChargeReqDTO;
+import com.dataplatform.billing.api.dto.BillingChargeRespDTO;
+import com.dataplatform.billing.api.dto.BillingAdditionalPlanDTO;
+import com.dataplatform.billing.api.dto.BillingMeteringPolicyDTO;
 import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
 import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.access.call.service.VendorProxyService;
 import com.dataplatform.masterdata.vendor.api.dto.VendorConfigDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
+import com.dataplatform.plugin.spi.ConnectorErrorPolicy;
+import com.dataplatform.plugin.spi.ErrorCategory;
+import com.dataplatform.plugin.spi.RequestDeliveryState;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.math.BigDecimal;
@@ -17,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Collections;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import io.micrometer.core.instrument.Metrics;
 import org.slf4j.Logger;
@@ -39,17 +45,20 @@ public class OpenApiQueryService {
     private final CallRecordEventPublisher callRecordEventPublisher;
     private final VendorProxyService vendorProxyService;
     private final BillingInternalFeignClient billingFeignClient;
+    private final BillingFactExtractor billingFactExtractor;
     private final ObjectMapper objectMapper;
 
     public OpenApiQueryService(CallRecordService callRecordService,
                                CallRecordEventPublisher callRecordEventPublisher,
                                VendorProxyService vendorProxyService,
-                               BillingInternalFeignClient billingFeignClient) {
+                               BillingInternalFeignClient billingFeignClient,
+                               BillingFactExtractor billingFactExtractor) {
         this.callRecordService = callRecordService;
         this.callRecordEventPublisher = callRecordEventPublisher;
         this.vendorProxyService = vendorProxyService;
         this.billingFeignClient = billingFeignClient;
-        this.objectMapper = new ObjectMapper();
+        this.billingFactExtractor = billingFactExtractor;
+        this.objectMapper = new ObjectMapper().findAndRegisterModules();
         this.objectMapper.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
     }
 
@@ -57,39 +66,83 @@ public class OpenApiQueryService {
         LocalDateTime requestTime = LocalDateTime.now();
         long startTime = System.currentTimeMillis();
         String platformRequestId = generateRequestId();
-        String requestHash = buildRequestHash(context.getParams());
+        String requestHash = buildRequestHash(context);
         boolean useCache = Boolean.TRUE.equals(context.getUseCache());
-
         if (useCache) {
             CallRecord cachedRecord = callRecordService.findLatestReusableCache(
                     context.getApiCode(),
                     requestHash,
+                    context.getTenantId(),
                     context.getCallerId(),
                     requestTime.minusDays(context.getCacheDays()),
                     context.getCacheScope());
-            if (cachedRecord != null) {
+            if (cachedRecord != null && !Boolean.FALSE.equals(cachedRecord.getResponseContractValid())) {
                 LocalDateTime responseTime = LocalDateTime.now();
                 long duration = System.currentTimeMillis() - startTime;
-                Map<String, Object> cachedResult = readResponseData(cachedRecord.getResponseData());
-                BigDecimal cost = calculateCost(context, platformRequestId, duration, requestTime, true, false);
-                CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
-                        true, duration, cost, true, cachedRecord.getId(), requestTime, responseTime);
-                callRecordEventPublisher.publish(record);
-                return buildResponse(context, platformRequestId, cachedResult, true,
-                        cachedRecord.getId(), requestTime, responseTime, duration, cost);
+                Map<String, Object> cachedResult = new LinkedHashMap<>(readResponseData(cachedRecord.getResponseData()));
+                cachedResult.putIfAbsent("actualVendorId", cachedRecord.getVendorId());
+                cachedResult.putIfAbsent("actualVendorCode", cachedRecord.getVendorCode());
+                ResponseContractEvaluation contractEvaluation = evaluateResponseContract(context, cachedResult);
+                if (contractEvaluation.valid()) {
+                    cachedResult.put("responseContractValid", true);
+                    BillingMeteringPolicyDTO meteringPolicy = resolveMeteringPolicy(
+                            actualVendorCode(context, cachedResult), context.getApiCode(), requestTime);
+                    BigDecimal cost = charge(context, meteringPolicy, platformRequestId, duration,
+                            requestTime, true, true, cachedResult,
+                            cachedRecord.getPluginId(), cachedRecord.getPluginVersion(),
+                            cachedRecord.getPipelineVersion(), cachedRecord.getSnapshotHash(),
+                            cachedRecord.getHashAlgorithm(), cachedRecord.getIntegrityHash());
+                    CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
+                            true, duration, cost, true, cachedRecord.getId(), requestTime, responseTime);
+                    copyConnectorTrace(cachedRecord, record);
+                    callRecordEventPublisher.publish(record);
+                    return buildResponse(context, platformRequestId, cachedResult, true,
+                            cachedRecord.getId(), requestTime, responseTime, duration, cost);
+                }
             }
         }
 
-        Map<String, Object> vendorResult = vendorProxyService.callVendor(
-                context.getVendorCode(),
-                context.getDataTypeCode(),
-                context.getParams(),
-                context.getVendorConfig());
+        Map<String, Object> vendorResult;
+        if (context.getPrimaryVendorConfig() != null) {
+            vendorResult = vendorProxyService.callVendor(
+                    context.getVendorCode(),
+                    context.getFallbackVendorCode(),
+                    context.getDataTypeCode(),
+                    context.getParams(),
+                    context.getPrimaryVendorConfig(),
+                    context.getFallbackVendorConfig(),
+                    platformRequestId);
+        } else {
+            vendorResult = vendorProxyService.callVendor(
+                    context.getVendorCode(),
+                    context.getDataTypeCode(),
+                    context.getParams(),
+                    context.getVendorConfig(),
+                    platformRequestId);
+        }
 
         LocalDateTime responseTime = LocalDateTime.now();
         long duration = System.currentTimeMillis() - startTime;
+        if (Boolean.TRUE.equals(vendorResult.get("success"))) {
+            ResponseContractEvaluation contractEvaluation = evaluateResponseContract(context, vendorResult);
+            if (contractEvaluation.valid()) {
+                vendorResult.put("responseContractValid", true);
+            } else {
+                applyContractViolation(vendorResult, contractEvaluation.errors());
+            }
+        }
         boolean success = Boolean.TRUE.equals(vendorResult.get("success"));
-        BigDecimal cost = calculateCost(context, platformRequestId, duration, requestTime, success, success);
+        boolean billingEligible = "ELIGIBLE".equals(String.valueOf(vendorResult.get("billingSignal")));
+        BigDecimal cost = BigDecimal.ZERO;
+        if (billingEligible) {
+            BillingMeteringPolicyDTO meteringPolicy = resolveMeteringPolicy(
+                    actualVendorCode(context, vendorResult), context.getApiCode(), requestTime);
+            cost = charge(context, meteringPolicy, platformRequestId, duration,
+                    requestTime, success, false, vendorResult,
+                    stringValue(vendorResult.get("pluginId")), stringValue(vendorResult.get("pluginVersion")),
+                    integerValue(vendorResult.get("pipelineVersion")), stringValue(vendorResult.get("snapshotHash")),
+                    stringValue(vendorResult.get("hashAlgorithm")), stringValue(vendorResult.get("integrityHash")));
+        }
         vendorResult.put("requestId", platformRequestId);
         vendorResult.put("cached", false);
         vendorResult.put("latency", duration);
@@ -101,26 +154,103 @@ public class OpenApiQueryService {
                 null, requestTime, responseTime, duration, cost);
     }
 
-    private BigDecimal calculateCost(OpenApiCallContext context, String requestId, long latencyMs,
-                                     LocalDateTime callTime, boolean success, boolean billable) {
-        BillingCalculateReqDTO req = new BillingCalculateReqDTO();
-        req.setVendorCode(context.getVendorCode());
-        req.setDataType(context.getDataTypeCode());
-        req.setCallCount(1);
-        req.setLatency(latencyMs);
-        req.setRequestId(requestId);
-        req.setTenantId(context.getTenantId());
-        req.setCallerId(context.getCallerId());
-        req.setVendorId(context.getVendorId());
-        req.setSuccess(success);
-        req.setBillable(billable);
-        req.setCallTime(callTime);
-        Result<BillingCalculateRespDTO> costResult = billingFeignClient.calculateCost(req);
-        BillingCalculateRespDTO resp = costResult != null ? costResult.getData() : null;
-        if (resp == null || resp.getCost() == null) {
-            throw new IllegalStateException("Billing service returned an empty cost");
+    private BillingMeteringPolicyDTO resolveMeteringPolicy(String vendorCode, String apiCode,
+                                                           LocalDateTime callTime) {
+        Result<BillingMeteringPolicyDTO> result = billingFeignClient.getMeteringPolicy(
+                vendorCode, apiCode, callTime);
+        BillingMeteringPolicyDTO policy = result != null ? result.getData() : null;
+        if (policy == null || policy.getPlanId() == null) {
+            throw new IllegalStateException("Billing service returned an empty metering policy");
         }
-        return resp.getCost();
+        return policy;
+    }
+
+    private BigDecimal charge(OpenApiCallContext context, BillingMeteringPolicyDTO policy,
+                              String requestId, long latencyMs, LocalDateTime callTime,
+                              boolean success, boolean cached, Map<String, Object> result,
+                              String pluginId, String pluginVersion,
+                              Integer pipelineVersion, String snapshotHash,
+                              String hashAlgorithm, String integrityHash) {
+        BillingChargeReqDTO request = new BillingChargeReqDTO();
+        request.setRequestId(requestId);
+        request.setPlanId(policy.getPlanId());
+        request.setPlanVersion(policy.getPlanVersion());
+        request.setPolicyHash(policy.getPolicyHash());
+        request.setVendorCode(actualVendorCode(context, result));
+        request.setInterfaceCode(context.getApiCode());
+        request.setDataType(context.getDataTypeCode());
+        request.setTenantId(context.getTenantId());
+        request.setCallerId(context.getCallerId());
+        request.setVendorId(longValue(result.get("actualVendorId"), context.getVendorId()));
+        request.setCallTime(callTime);
+        request.setSuccess(success);
+        request.setCached(cached);
+        request.setResponseContractValid(Boolean.TRUE.equals(result.get("responseContractValid")));
+        request.setLatencyMs(latencyMs);
+        request.setHttpStatus(success ? 200 : 502);
+        request.setPluginId(pluginId);
+        request.setPluginVersion(pluginVersion);
+        request.setPipelineVersion(pipelineVersion);
+        request.setSnapshotHash(snapshotHash);
+        request.setHashAlgorithm(hashAlgorithm);
+        request.setIntegrityHash(integrityHash);
+        request.setMeteringFacts(billingFactExtractor.extract(
+                policy, result, context.getParams()));
+        request.setAdditionalPlans(buildAdditionalPlans(policy, result, context.getParams()));
+        Result<BillingChargeRespDTO> chargeResult = billingFeignClient.charge(request);
+        BillingChargeRespDTO response = chargeResult != null ? chargeResult.getData() : null;
+        if (response == null || response.getFinalAmount() == null) {
+            throw new IllegalStateException("Billing service returned an empty charge result");
+        }
+        return response.getFinalAmount();
+    }
+
+    private java.util.List<BillingAdditionalPlanDTO> buildAdditionalPlans(
+            BillingMeteringPolicyDTO policy, Map<String, Object> result,
+            Map<String, Object> params) {
+        if (policy.getAdditionalPlans() == null) return java.util.List.of();
+        return policy.getAdditionalPlans().stream().map(source -> {
+            BillingAdditionalPlanDTO target = new BillingAdditionalPlanDTO();
+            target.setPlanId(source.getPlanId());
+            target.setPlanCode(source.getPlanCode());
+            target.setPlanVersion(source.getPlanVersion());
+            target.setTemplateCode(source.getTemplateCode());
+            target.setAccountingPurpose(source.getAccountingPurpose());
+            target.setPolicyHash(source.getPolicyHash());
+            target.setMeteringFacts(billingFactExtractor.extract(source, result, params));
+            return target;
+        }).toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private ResponseContractEvaluation evaluateResponseContract(OpenApiCallContext context,
+                                                                 Map<String, Object> result) {
+        InterfaceContractDTO contract = context.getInterfaceContract();
+        if (contract == null || contract.getResponseFields() == null || contract.getResponseFields().isEmpty()) {
+            return new ResponseContractEvaluation(true, List.of());
+        }
+        Object rawData = result.get("data");
+        if (!(rawData instanceof Map<?, ?> map)) {
+            return new ResponseContractEvaluation(false, List.of("data类型必须为object"));
+        }
+        InterfaceContractValidator.ValidationResult validation = InterfaceContractValidator.validate(
+                contract.getResponseFields(), (Map<String, Object>) map, false);
+        return new ResponseContractEvaluation(validation.valid(), validation.errors());
+    }
+
+    private void applyContractViolation(Map<String, Object> result, List<String> errors) {
+        ConnectorErrorPolicy policy = ConnectorErrorPolicy.CONTRACT_VIOLATION;
+        result.put("success", false);
+        result.put("data", Collections.emptyMap());
+        result.put("errorCategory", ErrorCategory.CONTRACT_VIOLATION.name());
+        result.put("connectorErrorCode", "RESPONSE_CONTRACT_INVALID");
+        result.put("errorCode", policy.externalCode());
+        result.put("errorMsg", "厂商响应不符合接口契约");
+        result.put("billingSignal", policy.billingSignal(null).name());
+        result.put("cacheSignal", policy.cacheSignal(null).name());
+        result.put("deliveryState", policy.deliveryState(deliveryState(result.get("deliveryState"))).name());
+        result.put("responseContractValid", false);
+        result.put("responseContractErrors", List.copyOf(errors));
     }
 
     @SuppressWarnings("unchecked")
@@ -173,8 +303,9 @@ public class OpenApiQueryService {
         record.setTenantId(context.getTenantId());
         record.setCallerId(context.getCallerId());
         record.setApiKeyId(context.getApiKeyId());
-        record.setVendorId(context.getVendorId());
-        record.setVendorCode(context.getVendorCode());
+        record.setVendorId(longValue(result.get("actualVendorId"), context.getVendorId()));
+        record.setVendorCode(stringValue(result.get("actualVendorCode")) != null
+                ? stringValue(result.get("actualVendorCode")) : context.getVendorCode());
         record.setApiCode(context.getApiCode());
         record.setProductId(context.getProductId());
         record.setProductCode(context.getProductCode());
@@ -191,11 +322,18 @@ public class OpenApiQueryService {
         record.setDurationMs((int) duration);
         record.setCost(cost);
         record.setCached(cacheHit);
-        record.setUseCache(Boolean.TRUE.equals(context.getUseCache()));
+        record.setUseCache(Boolean.TRUE.equals(context.getUseCache())
+                && "CACHEABLE".equals(String.valueOf(result.get("cacheSignal"))));
         record.setCacheDays(context.getCacheDays());
         record.setCacheHit(cacheHit);
         record.setCacheScope(normalize(context.getCacheScope()) != null ? context.getCacheScope() : "GLOBAL");
         record.setCacheSourceRecordId(cacheSourceRecordId);
+        record.setPluginId(stringValue(result.get("pluginId")));
+        record.setPluginVersion(stringValue(result.get("pluginVersion")));
+        record.setPipelineVersion(integerValue(result.get("pipelineVersion")));
+        record.setSnapshotHash(stringValue(result.get("snapshotHash")));
+        record.setHashAlgorithm(stringValue(result.get("hashAlgorithm")));
+        record.setIntegrityHash(stringValue(result.get("integrityHash")));
         record.setRequestTime(requestTime);
         record.setResponseAt(responseTime);
         record.setCallTime(requestTime);
@@ -206,28 +344,88 @@ public class OpenApiQueryService {
                     ? result : sanitizeForRecord(result);
             record.setResponseData(objectMapper.writeValueAsString(responseForRecord));
         } catch (Exception e) {
+            log.warn("Failed to serialize call record payload: requestId={}, type={}",
+                    platformRequestId, e.getClass().getSimpleName());
             record.setRequestParams("{}");
             record.setResponseData("{}");
         }
         return record;
     }
 
+    private void copyConnectorTrace(CallRecord source, CallRecord target) {
+        target.setPluginId(source.getPluginId());
+        target.setPluginVersion(source.getPluginVersion());
+        target.setPipelineVersion(source.getPipelineVersion());
+        target.setSnapshotHash(source.getSnapshotHash());
+        target.setHashAlgorithm(source.getHashAlgorithm());
+        target.setIntegrityHash(source.getIntegrityHash());
+    }
+
+    private String stringValue(Object value) {
+        return value != null ? String.valueOf(value) : null;
+    }
+
+    private Integer integerValue(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private Long longValue(Object value, Long defaultValue) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
+    }
+
+    private String actualVendorCode(OpenApiCallContext context, Map<String, Object> result) {
+        String actual = stringValue(result.get("actualVendorCode"));
+        return actual != null ? actual : context.getVendorCode();
+    }
+
+    private RequestDeliveryState deliveryState(Object value) {
+        if (value == null) return null;
+        try {
+            return RequestDeliveryState.valueOf(String.valueOf(value));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void applyResponseContractResult(CallRecord record, OpenApiCallContext context,
                                              Map<String, Object> result) {
-        InterfaceContractDTO contract = context.getInterfaceContract();
-        if (contract == null || contract.getResponseFields() == null || contract.getResponseFields().isEmpty()) {
+        Object explicitValid = result.get("responseContractValid");
+        if (explicitValid instanceof Boolean valid) {
+            record.setResponseContractValid(valid);
+            Object explicitErrors = result.get("responseContractErrors");
+            if (!valid && explicitErrors != null) {
+                try {
+                    record.setResponseContractErrors(objectMapper.writeValueAsString(explicitErrors));
+                } catch (Exception ignored) {
+                    record.setResponseContractErrors("[]");
+                }
+                Metrics.counter("openapi.response.contract.invalid", "apiCode", context.getApiCode()).increment();
+            }
             return;
         }
-        Object rawData = result.get("data");
-        InterfaceContractValidator.ValidationResult validation;
-        if (rawData instanceof Map<?, ?> map) {
-            validation = InterfaceContractValidator.validate(
-                    contract.getResponseFields(), (Map<String, Object>) map, false);
-        } else {
-            validation = new InterfaceContractValidator.ValidationResult(
-                    false, java.util.List.of("data类型必须为object"));
-        }
+        if (!Boolean.TRUE.equals(result.get("success"))) return;
+        ResponseContractEvaluation validation = evaluateResponseContract(context, result);
         record.setResponseContractValid(validation.valid());
         if (!validation.valid()) {
             try {
@@ -241,31 +439,74 @@ public class OpenApiQueryService {
         }
     }
 
-    private String buildRequestHash(Map<String, Object> params) {
+    private String buildRequestHash(OpenApiCallContext context) {
         try {
-            String canonicalParams = objectMapper.writeValueAsString(params != null ? params : Collections.emptyMap());
+            Map<String, Object> cacheIdentity = new LinkedHashMap<>();
+            cacheIdentity.put(
+                    "apiVersion",
+                    normalize(context.getApiVersion()) != null
+                            ? context.getApiVersion().trim()
+                            : DEFAULT_API_VERSION);
+            cacheIdentity.put(
+                    "params",
+                    context.getParams() != null
+                            ? context.getParams()
+                            : Collections.emptyMap());
+            String canonicalParams = objectMapper.writeValueAsString(cacheIdentity);
             return DigestUtil.sha256Hex(canonicalParams);
         } catch (Exception e) {
-            return DigestUtil.sha256Hex(String.valueOf(params));
+            return DigestUtil.sha256Hex(
+                    String.valueOf(context.getApiVersion())
+                            + ":"
+                            + String.valueOf(context.getParams()));
         }
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> sanitizeForRecord(Map<String, Object> source) {
+        return sanitizeRecordMap(source, 0);
+    }
+
+    private Map<String, Object> sanitizeRecordMap(Map<String, Object> source, int depth) {
         if (source == null || source.isEmpty()) {
             return Collections.emptyMap();
         }
+        if (depth >= 16) return Map.of("_truncated", true);
         Map<String, Object> sanitized = new LinkedHashMap<>();
         source.forEach((key, value) -> {
+            if (sanitized.size() >= 500) return;
             if (isSensitiveKey(key)) {
                 sanitized.put(key, MASKED_VALUE);
-            } else if (value instanceof Map<?, ?> nested) {
-                sanitized.put(key, sanitizeForRecord((Map<String, Object>) nested));
             } else {
-                sanitized.put(key, value);
+                sanitized.put(key, sanitizeRecordValue(value, depth + 1));
             }
         });
         return sanitized;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object sanitizeRecordValue(Object value, int depth) {
+        if (depth >= 16) return "[TRUNCATED]";
+        if (value instanceof Map<?, ?> nested) {
+            return sanitizeRecordMap((Map<String, Object>) nested, depth);
+        }
+        if (value instanceof Iterable<?> iterable) {
+            java.util.List<Object> sanitized = new java.util.ArrayList<>();
+            for (Object item : iterable) {
+                if (sanitized.size() >= 500) break;
+                sanitized.add(sanitizeRecordValue(item, depth + 1));
+            }
+            return sanitized;
+        }
+        if (value != null && value.getClass().isArray()) {
+            java.util.List<Object> sanitized = new java.util.ArrayList<>();
+            int length = Math.min(java.lang.reflect.Array.getLength(value), 500);
+            for (int index = 0; index < length; index++) {
+                sanitized.add(sanitizeRecordValue(java.lang.reflect.Array.get(value, index), depth + 1));
+            }
+            return sanitized;
+        }
+        return value;
     }
 
     private boolean isSensitiveKey(String key) {
@@ -277,7 +518,15 @@ public class OpenApiQueryService {
                 || lower.contains("id_card")
                 || lower.contains("cert")
                 || lower.contains("secret")
-                || lower.contains("token");
+                || lower.contains("token")
+                || lower.contains("password")
+                || lower.contains("passwd")
+                || lower.contains("authorization")
+                || lower.contains("credential")
+                || lower.contains("privatekey")
+                || lower.contains("private_key")
+                || lower.equals("apikey")
+                || lower.equals("api_key");
     }
 
     private String generateRequestId() {
@@ -291,6 +540,9 @@ public class OpenApiQueryService {
         return value.trim();
     }
 
+    private record ResponseContractEvaluation(boolean valid, List<String> errors) {
+    }
+
     public static class OpenApiCallContext {
         private String externalRequestId;
         private String traceId;
@@ -301,8 +553,11 @@ public class OpenApiQueryService {
         private Long apiKeyId;
         private Long vendorId;
         private String vendorCode;
+        private String fallbackVendorCode;
         private String dataTypeCode;
         private VendorConfigDTO vendorConfig;
+        private VendorConfigDTO primaryVendorConfig;
+        private VendorConfigDTO fallbackVendorConfig;
         private Long productId;
         private String productCode;
         private String productName;
@@ -332,10 +587,20 @@ public class OpenApiQueryService {
         public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
         public String getVendorCode() { return vendorCode; }
         public void setVendorCode(String vendorCode) { this.vendorCode = vendorCode; }
+        public String getFallbackVendorCode() { return fallbackVendorCode; }
+        public void setFallbackVendorCode(String fallbackVendorCode) { this.fallbackVendorCode = fallbackVendorCode; }
         public String getDataTypeCode() { return dataTypeCode; }
         public void setDataTypeCode(String dataTypeCode) { this.dataTypeCode = dataTypeCode; }
         public VendorConfigDTO getVendorConfig() { return vendorConfig; }
         public void setVendorConfig(VendorConfigDTO vendorConfig) { this.vendorConfig = vendorConfig; }
+        public VendorConfigDTO getPrimaryVendorConfig() { return primaryVendorConfig; }
+        public void setPrimaryVendorConfig(VendorConfigDTO primaryVendorConfig) {
+            this.primaryVendorConfig = primaryVendorConfig;
+        }
+        public VendorConfigDTO getFallbackVendorConfig() { return fallbackVendorConfig; }
+        public void setFallbackVendorConfig(VendorConfigDTO fallbackVendorConfig) {
+            this.fallbackVendorConfig = fallbackVendorConfig;
+        }
         public Long getProductId() { return productId; }
         public void setProductId(Long productId) { this.productId = productId; }
         public String getProductCode() { return productCode; }

@@ -122,13 +122,17 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
     }
 
     @Override
-    public CallRecord findLatestReusableCache(String apiCode, String requestHash, Long callerId,
+    public CallRecord findLatestReusableCache(String apiCode, String requestHash, Long tenantId, Long callerId,
                                              LocalDateTime since, String cacheScope) {
         LambdaQueryWrapper<CallRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CallRecord::getApiCode, apiCode)
                 .eq(CallRecord::getRequestHash, requestHash)
+                .eq(CallRecord::getTenantId, tenantId)
                 .eq(CallRecord::getSuccess, true)
                 .eq(CallRecord::getUseCache, true)
+                .eq(CallRecord::getCacheHit, false)
+                .and(nested -> nested.isNull(CallRecord::getResponseContractValid)
+                        .or().eq(CallRecord::getResponseContractValid, true))
                 .ge(CallRecord::getCallTime, since);
         if ("CALLER".equalsIgnoreCase(cacheScope)) {
             wrapper.eq(CallRecord::getCallerId, callerId);

@@ -8,6 +8,7 @@ import com.dataplatform.identity.iam.entity.Role;
 import com.dataplatform.identity.iam.mapper.RoleMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import java.util.Locale;
 
 /**
  * 身份租户域用户权限的 Role Service。
@@ -42,8 +43,11 @@ public class RoleService extends ServiceImpl<RoleMapper, Role> {
     }
 
     public Role getByRoleCode(String roleCode) {
+        if (!StringUtils.hasText(roleCode)) {
+            return null;
+        }
         return this.getOne(new LambdaQueryWrapper<Role>()
-            .eq(Role::getRoleCode, roleCode)
+            .apply("LOWER(role_code) = {0}", roleCode.trim().toLowerCase(Locale.ROOT))
             .eq(Role::getDeleted, false));
     }
 }

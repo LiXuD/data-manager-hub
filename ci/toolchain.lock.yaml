@@ -1,0 +1,39 @@
+schemaVersion: 1
+java:
+  distribution: temurin
+  version: '21'
+maven:
+  version: 3.9.15
+  wrapperDistributionSha256: 36182f85e91128cd5c4608462ac92194e7a30638f65034de66f4e1b00600a6fc
+node:
+  version: 22.19.0
+npm:
+  version: 10.9.3
+postgres:
+  version: '16'
+helm:
+  version: 3.19.0
+kubectl:
+  version: 1.33.0
+tools:
+  actionlint:
+    version: 1.7.12
+    image: rhysd/actionlint
+    digest: sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+  promtool:
+    version: 2.54.0
+    image: prom/prometheus
+    digest: sha256:497fe921f22fea8535fa2bcb1c193dacc6ce98c08274257b3d18a4eaae0f9647
+images:
+  mavenBuilder:
+    reference: docker.io/library/maven:3.9.15-eclipse-temurin-21
+    digest: sha256:d6e32a254897415a445654a3c43c30fbc731a4d946cf5c66d1cb9184141c20c1
+  nodeBuilder:
+    reference: docker.io/library/node:22.19.0-bookworm-slim
+    digest: sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90
+  javaRuntime:
+    reference: docker.io/library/eclipse-temurin:21-jre-alpine
+    digest: sha256:974b08960c5d96694c780e65b2d5705268ab1e1ca1a0dd0caf4ba6c3fe34d699
+  webRuntime:
+    reference: docker.io/nginxinc/nginx-unprivileged:1.29-alpine
+    digest: sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6

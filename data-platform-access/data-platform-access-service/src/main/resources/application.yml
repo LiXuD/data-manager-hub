@@ -1,18 +1,24 @@
-server:
-  port: 8082
-
 spring:
   profiles:
     active: @profiles.active@
   application:
     name: data-platform-access
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-
-logging:
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"
+  config:
+    import:
+      - nacos:data-platform-database-${spring.profiles.active}.properties?group=${NACOS_GROUP:DEFAULT_GROUP}&refreshEnabled=true
+      - nacos:data-platform-access-${spring.profiles.active}.yml?group=${NACOS_GROUP:DEFAULT_GROUP}&refreshEnabled=true
+  cloud:
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      config:
+        server-addr: ${spring.cloud.nacos.server-addr}
+        namespace: ${NACOS_NAMESPACE:${spring.profiles.active}}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        enabled: true
+      discovery:
+        server-addr: ${spring.cloud.nacos.server-addr}
+        namespace: ${NACOS_NAMESPACE:${spring.profiles.active}}
+        group: ${NACOS_GROUP:DEFAULT_GROUP}
+        enabled: true
+        metadata:
+          connectorInstanceId: ${CONNECTOR_INSTANCE_ID:${spring.application.name}:${server.port}}

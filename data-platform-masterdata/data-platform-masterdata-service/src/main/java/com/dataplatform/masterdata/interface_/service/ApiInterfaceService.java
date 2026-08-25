@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.masterdata.interface_.entity.ApiInterface;
 import com.dataplatform.masterdata.interface_.entity.ApiInterfaceVO;
+import com.dataplatform.masterdata.interface_.api.dto.VendorRoutingUpdateReqDTO;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,22 +24,20 @@ public interface ApiInterfaceService extends IService<ApiInterface> {
 
     ApiInterface getByInterfaceCode(String interfaceCode);
 
+    ApiInterface updateVendorRouting(Long interfaceId, VendorRoutingUpdateReqDTO request);
+
+    boolean assignPrimaryIfAbsent(Long interfaceId, Long vendorConfigId);
+
+    ApiInterface getByRoutingConfigId(Long vendorConfigId);
+
+    boolean canActivate(Long interfaceId);
+
     boolean hasApiConfig(Long interfaceId);
 
     /**
-     * 获取接口文档（请求/响应 Schema）
-     */
-    Map<String, Object> getInterfaceSchema(Long id);
-
-    /**
-     * 更新接口文档
+     * 更新由结构化契约生成的 Schema 快照。
      */
     boolean updateSchema(Long id, String requestSchema, String responseSchema);
-
-    /**
-     * 验证 JSON Schema 格式
-     */
-    boolean validateSchema(String schema);
 
     /**
      * 获取接口调用统计

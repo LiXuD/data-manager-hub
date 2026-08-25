@@ -1,0 +1,78 @@
+spring.data.redis:
+  host: ${REDIS_HOST:localhost}
+  port: ${REDIS_PORT:6379}
+  password: ${REDIS_PASSWORD:redis_password}
+  database: 0
+
+sa-token:
+  token-name: Authorization
+  timeout: 7200
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+  is-read-header: true
+  is-read-cookie: false
+  token-prefix: Bearer
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.dataplatform.identity.tenant.entity,com.dataplatform.identity.iam.entity,com.dataplatform.identity.security.entity
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: true
+      logic-not-delete-value: false
+
+logging:
+  level:
+    com.dataplatform.identity: DEBUG
+    com.dataplatform.identity.iam: DEBUG
+    com.baomidou.mybatisplus: DEBUG
+
+platform:
+  security:
+    internal:
+      enabled: ${INTERNAL_AUTH_ENABLED:true}
+      issuer: data-platform-identity
+      service-name: data-platform-identity
+      token-uri: ${INTERNAL_AUTH_TOKEN_URI:http://localhost:8086/internal-auth/v1/token}
+      client-secret: ${INTERNAL_AUTH_IDENTITY_SECRET:dev-identity-internal-secret}
+      public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH:/run/secrets/dmh/internal-auth/public.pem}
+      private-key-location: file:${INTERNAL_AUTH_PRIVATE_KEY_PATH:/run/secrets/dmh/internal-auth/private.pem}
+      token-ttl: 5m
+      clients:
+        data-platform-access:
+          secret: ${INTERNAL_AUTH_ACCESS_SECRET:dev-access-internal-secret}
+          grants:
+            data-platform-identity: [identity:access:read]
+            data-platform-masterdata: [masterdata:read, masterdata:vendor-secret:read, masterdata:vendor-security:read, masterdata:connector-artifact:read, masterdata:connector-runtime:read]
+            data-platform-billing: [billing:calculate]
+            data-platform-governance: [governance:log]
+        data-platform-billing:
+          secret: ${INTERNAL_AUTH_BILLING_SECRET:dev-billing-internal-secret}
+          grants:
+            data-platform-masterdata: [masterdata:read]
+            data-platform-access: [access:stats:read]
+            data-platform-governance: [governance:alert, governance:log]
+        data-platform-masterdata:
+          secret: ${INTERNAL_AUTH_MASTERDATA_SECRET:dev-masterdata-internal-secret}
+          grants:
+            data-platform-access: [access:stats:read, access:connector-runtime:read, access:connector-runtime:manage, access:connector-runtime:test]
+            data-platform-billing: [billing:connector-observation:read]
+            data-platform-identity: [identity:encryption]
+            data-platform-governance: [governance:log]
+        data-platform-identity:
+          secret: ${INTERNAL_AUTH_IDENTITY_SECRET:dev-identity-internal-secret}
+          grants:
+            data-platform-governance: [governance:log]
+
+server.port: 8086
+management.endpoints.web.exposure.include: health,info,prometheus
+management.endpoint.health.probes.enabled: true
+management.endpoint.health.show-details: never
+management.endpoint.health.group.liveness.include: livenessState,ping
+management.endpoint.health.group.readiness.include: readinessState,ping
+logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"
+platform.encryption.master-key: ${PLATFORM_ENCRYPTION_MASTER_KEY}

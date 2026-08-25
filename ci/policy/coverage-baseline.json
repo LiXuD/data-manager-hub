@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": "verified-ci-run",
+  "decreaseThresholdPercentagePoints": 0.5,
+  "modules": {
+    "data-platform-common-runtime": {
+      "line": 76.3732,
+      "branch": 55.997
+    },
+    "data-platform-common-web": {
+      "line": 52.1583,
+      "branch": 32.9457
+    },
+    "data-platform-gateway": {
+      "line": 77.8182,
+      "branch": 59.5238
+    },
+    "data-platform-plugin-spi": {
+      "line": 68.9895,
+      "branch": 50.6993
+    },
+    "data-platform-common-persistence": {
+      "line": 8.377,
+      "branch": 50.0
+    },
+    "data-platform-plugin-testkit": {
+      "line": 84.8485,
+      "branch": 75.0
+    },
+    "data-platform-access/data-platform-access-service": {
+      "line": 53.7955,
+      "branch": 44.636
+    },
+    "data-platform-billing/data-platform-billing-service": {
+      "line": 50.5397,
+      "branch": 37.574
+    },
+    "data-platform-governance/data-platform-governance-service": {
+      "line": 9.0439,
+      "branch": 4.6512
+    },
+    "data-platform-identity/data-platform-identity-service": {
+      "line": 27.3124,
+      "branch": 15.3439
+    },
+    "data-platform-masterdata/data-platform-masterdata-service": {
+      "line": 64.0031,
+      "branch": 46.9055
+    },
+    "data-platform-web": {
+      "line": 4.08,
+      "branch": 57.59
+    }
+  }
+}

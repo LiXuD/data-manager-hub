@@ -1,0 +1,146 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "dmh.fullname" . }}-access
+  labels:
+    {{- include "dmh.labels" . | nindent 4 }}
+    dmh.io/component: access
+spec:
+  serviceName: {{ include "dmh.fullname" . }}-access-headless
+  replicas: {{ .Values.components.access.replicas }}
+  podManagementPolicy: OrderedReady
+  minReadySeconds: 60
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: {{ .Values.access.partition }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "dmh.name" . }}
+      dmh.io/component: access
+  template:
+    metadata:
+      labels:
+        {{- include "dmh.labels" . | nindent 8 }}
+        dmh.io/component: access
+    spec:
+      serviceAccountName: {{ .Values.global.workloadServiceAccount }}
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: {{ .Values.existingSecrets.ghcrPull }}
+      terminationGracePeriodSeconds: {{ .Values.global.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: access
+          image: {{ .Values.images.components.access.repository }}@{{ .Values.images.components.access.digest }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          ports:
+            - name: http
+              containerPort: 8082
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ .Values.global.springProfile | quote }}
+            - name: NACOS_NAMESPACE
+              value: {{ .Values.global.nacosNamespace | quote }}
+            - name: NACOS_GROUP
+              value: {{ .Values.global.nacosGroup | quote }}
+            - name: CONNECTOR_PLUGIN_CACHE_DIR
+              value: /var/lib/dmh/plugins
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: INTERNAL_AUTH_ENABLED
+              value: "true"
+            - name: INTERNAL_AUTH_PUBLIC_KEY_PATH
+              value: /run/secrets/dmh/internal-auth/public.pem
+            - name: INTERNAL_AUTH_TOKEN_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_TOKEN_URI
+            - name: INTERNAL_AUTH_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_ACCESS_SECRET
+            - name: INTERNAL_AUTH_BILLING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_BILLING_SECRET
+            - name: INTERNAL_AUTH_MASTERDATA_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_MASTERDATA_SECRET
+            - name: INTERNAL_AUTH_IDENTITY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_IDENTITY_SECRET
+            - name: INTERNAL_AUTH_GOVERNANCE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.internalAuth }}
+                  key: INTERNAL_AUTH_GOVERNANCE_SECRET
+            - name: PLATFORM_ENCRYPTION_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.internalAuth }}
+                  key: PLATFORM_ENCRYPTION_MASTER_KEY
+          envFrom:
+            - secretRef: {name: {{ .Values.existingSecrets.runtime }}}
+            - secretRef: {name: {{ .Values.existingSecrets.connectorTruststore }} }
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          startupProbe:
+            httpGet: {path: /actuator/health, port: http}
+            failureThreshold: 60
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          volumeMounts:
+            - name: connector-plugin-cache
+              mountPath: /var/lib/dmh/plugins
+            - name: tmp
+              mountPath: /tmp
+            - name: internal-auth
+              mountPath: /run/secrets/dmh/internal-auth
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: internal-auth
+          secret:
+            secretName: {{ .Values.existingSecrets.internalAuth }}
+            defaultMode: 0440
+            items:
+              - key: public.pem
+                path: public.pem
+  volumeClaimTemplates:
+    - metadata:
+        name: connector-plugin-cache
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.access.cacheStorageClass }}
+        storageClassName: {{ .Values.access.cacheStorageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.access.cacheSize }}

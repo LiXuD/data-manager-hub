@@ -24,6 +24,15 @@ public class UserRoleService extends ServiceImpl<UserRoleMapper, UserRole> {
                 .toList();
     }
 
+    public List<Long> getUserIdsByRoleId(Long roleId) {
+        return this.list(new LambdaQueryWrapper<UserRole>()
+                        .eq(UserRole::getRoleId, roleId))
+                .stream()
+                .map(UserRole::getUserId)
+                .distinct()
+                .toList();
+    }
+
     @Transactional
     public void assignRoles(Long userId, List<Long> roleIds) {
         this.remove(new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, userId));

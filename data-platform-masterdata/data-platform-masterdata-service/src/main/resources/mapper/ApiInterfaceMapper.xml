@@ -9,6 +9,8 @@
         <result column="dataTypeId" property="dataTypeId"/>
         <result column="dataTypeName" property="dataTypeName"/>
         <result column="vendorId" property="vendorId"/>
+        <result column="primaryVendorConfigId" property="primaryVendorConfigId"/>
+        <result column="fallbackVendorConfigId" property="fallbackVendorConfigId"/>
         <result column="vendorName" property="vendorName"/>
         <result column="path" property="path"/>
         <result column="description" property="description"/>
@@ -30,6 +32,8 @@
             i.interface_name AS interfaceName,
             i.data_type_id AS dataTypeId,
             i.vendor_id AS vendorId,
+            i.primary_vendor_config_id AS primaryVendorConfigId,
+            i.fallback_vendor_config_id AS fallbackVendorConfigId,
             i.path,
             i.description,
             i.request_schema AS requestSchema,

@@ -1,16 +1,18 @@
 package com.dataplatform.masterdata.graylog.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.GrayRuleStatus;
+import com.dataplatform.common.handler.CodeEnumTypeHandler;
 import java.time.LocalDateTime;
 
 /**
  * 主数据域灰度规则的 Gray Rule。
  * <p>数据库实体对象，映射业务表字段并承载持久化层数据结构。</p>
  */
-@TableName("gray_rule")
+@TableName(value = "gray_rule", autoResultMap = true)
 public class GrayRule {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -21,6 +23,7 @@ public class GrayRule {
     private String conditionType;
     private String conditionValue;
     private String description;
+    @TableField(typeHandler = CodeEnumTypeHandler.class)
     private GrayRuleStatus status;
     private LocalDateTime startTime;
     private LocalDateTime endTime;

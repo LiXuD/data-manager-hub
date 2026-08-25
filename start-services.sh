@@ -14,12 +14,22 @@ export INTERNAL_AUTH_PRIVATE_KEY_PATH="${INTERNAL_AUTH_PRIVATE_KEY_PATH:-$RUNTIM
 export INTERNAL_AUTH_PUBLIC_KEY_PATH="${INTERNAL_AUTH_PUBLIC_KEY_PATH:-$RUNTIME_DIR/internal-auth-public.pem}"
 export INTERNAL_AUTH_TOKEN_URI="${INTERNAL_AUTH_TOKEN_URI:-http://localhost:8086/internal-auth/v1/token}"
 export INTERNAL_AUTH_ENABLED="${INTERNAL_AUTH_ENABLED:-true}"
+export PLATFORM_ENCRYPTION_MASTER_KEY="${PLATFORM_ENCRYPTION_MASTER_KEY:-}"
 
 if [ ! -f "$INTERNAL_AUTH_PRIVATE_KEY_PATH" ] || [ ! -f "$INTERNAL_AUTH_PUBLIC_KEY_PATH" ]; then
     echo "生成开发环境内部服务认证密钥..."
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$INTERNAL_AUTH_PRIVATE_KEY_PATH" >/dev/null 2>&1
     openssl pkey -in "$INTERNAL_AUTH_PRIVATE_KEY_PATH" -pubout -out "$INTERNAL_AUTH_PUBLIC_KEY_PATH" >/dev/null 2>&1
     chmod 600 "$INTERNAL_AUTH_PRIVATE_KEY_PATH"
+fi
+
+if [ -z "$PLATFORM_ENCRYPTION_MASTER_KEY" ]; then
+    if [ ! -s "$RUNTIME_DIR/encryption-master-key.txt" ]; then
+        openssl rand -base64 32 > "$RUNTIME_DIR/encryption-master-key.txt"
+        chmod 600 "$RUNTIME_DIR/encryption-master-key.txt"
+    fi
+    PLATFORM_ENCRYPTION_MASTER_KEY="$(<"$RUNTIME_DIR/encryption-master-key.txt")"
+    export PLATFORM_ENCRYPTION_MASTER_KEY
 fi
 
 # SkyWalking Agent 配置
@@ -43,9 +53,21 @@ fi
 
 cd "$SCRIPT_DIR"
 
+# 应用只保留 Nacos 连接信息；启动前将版本化配置幂等发布到对应 namespace。
+if [ "${NACOS_CONFIG_SYNC:-true}" = "true" ]; then
+    active_profile="${SPRING_PROFILES_ACTIVE:-dev}"
+    echo "同步 $active_profile 环境 Nacos 配置..."
+    if ! bash "$SCRIPT_DIR/publish-nacos-config.sh" "$active_profile"; then
+        echo "Nacos 配置同步失败，终止启动"
+        exit 1
+    fi
+else
+    echo "警告: NACOS_CONFIG_SYNC=false，已显式跳过 Nacos 配置同步"
+fi
+
 if [ "${SKIP_BUILD:-false}" != "true" ]; then
     echo "构建并安装最新模块依赖..."
-    if ! mvn -q -DskipTests install; then
+    if ! mvn -q -DskipTests clean install; then
         echo "构建失败，终止启动"
         exit 1
     fi
@@ -86,7 +108,7 @@ echo "日志目录: $LOG_DIR"
 echo "========================================"
 
 # 先停止所有运行中的服务
-echo "正在停止可能存在的旧服务..."
+echo "正在停止当前端口上可能存在的服务进程..."
 service_ports=(8081 8082 8084 8085 8086 8888)
 
 for port in "${service_ports[@]}"; do
@@ -97,6 +119,18 @@ for port in "${service_ports[@]}"; do
     fi
 done
 sleep 2
+
+# 在任何服务启动前统一应用数据库迁移。Liquibase 会加锁并校验已执行变更的校验和；
+# 迁移失败时保持服务停止，避免新代码运行在旧数据库结构上。
+if [ "${MIGRATE_DB:-true}" = "true" ]; then
+    echo "校验并应用数据库迁移..."
+    if ! bash "$SCRIPT_DIR/migrate-db.sh" update; then
+        echo "数据库迁移失败，终止启动"
+        exit 1
+    fi
+else
+    echo "警告: MIGRATE_DB=false，已显式跳过数据库迁移"
+fi
 
 # 身份服务先启动以签发机器凭证，Gateway 最后启动。
 start_order=(8086 8081 8084 8085 8082 8888)

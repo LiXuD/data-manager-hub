@@ -16,7 +16,12 @@ import org.springframework.util.StringUtils;
 @Service
 public class UserService extends ServiceImpl<UserMapper, User> {
 
-    public PageResult<User> list(String keyword, String status, int page, int pageSize) {
+    public PageResult<User> list(
+            String keyword,
+            String status,
+            Long tenantId,
+            int page,
+            int pageSize) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.hasText(keyword)) {
             wrapper.like(User::getUsername, keyword)
@@ -25,6 +30,9 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         }
         if (StringUtils.hasText(status)) {
             wrapper.eq(User::getStatus, status);
+        }
+        if (tenantId != null) {
+            wrapper.eq(User::getTenantId, tenantId);
         }
         wrapper.eq(User::getDeleted, false);
         wrapper.orderByDesc(User::getCreatedAt);
@@ -39,6 +47,15 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         response.setPage(page);
         response.setPageSize(pageSize);
         return response;
+    }
+
+    public java.util.List<Long> listUserIds() {
+        return this.list(new LambdaQueryWrapper<User>()
+                        .eq(User::getDeleted, false)
+                        .select(User::getId))
+                .stream()
+                .map(User::getId)
+                .toList();
     }
 
     public User getByUsername(String username) {

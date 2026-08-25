@@ -4,7 +4,7 @@
     <div class="page-header">
       <div>
         <h2>计费管理</h2>
-        <p class="header-desc">查看账单明细与管理计费规则</p>
+        <p class="header-desc">查看账单明细与配置计费方案</p>
       </div>
     </div>
 
@@ -26,6 +26,9 @@
     <!-- Tab 切换 -->
     <el-card class="table-card">
       <el-tabs v-model="activeTab">
+        <el-tab-pane label="计费方案" name="plan">
+          <BillingPlanWorkspace />
+        </el-tab-pane>
         <!-- 账单记录 -->
         <el-tab-pane label="账单记录" name="record">
           <!-- 搜索区域 -->
@@ -97,51 +100,6 @@
           </div>
         </el-tab-pane>
 
-        <!-- 计费规则 -->
-        <el-tab-pane label="计费规则" name="rule">
-          <div class="tool-bar">
-            <el-button type="primary" @click="handleAddRule">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              新增规则
-            </el-button>
-          </div>
-
-          <el-table :data="ruleData" stripe>
-            <el-table-column prop="vendorName" label="厂商" width="150" />
-            <el-table-column prop="dataType" label="数据类型" width="150" />
-            <el-table-column prop="unitPrice" label="单价" width="100">
-              <template #default="{ row }">
-                <span class="price-cell">¥{{ row.unitPrice?.toFixed(2) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="阶梯范围" width="150">
-              <template #default="{ row }">
-                <span class="number-cell">{{ row.tierMin?.toLocaleString() }} - {{ row.tierMax?.toLocaleString() }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="discount" label="折扣" width="100">
-              <template #default="{ row }">
-                <el-tag type="warning" size="small">{{ (row.discount * 10).toFixed(1) }}折</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="status" label="状态" width="100">
-              <template #default="{ row }">
-                <el-tag :type="row.status === 'active' ? 'success' : row.status === 'tier' ? 'warning' : 'info'" size="small">
-                  {{ row.status === 'active' ? '标准' : row.status === 'tier' ? '阶梯' : '禁用' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="150" fixed="right">
-              <template #default="{ row }">
-                <el-button type="primary" link @click="handleEditRule(row)">编辑</el-button>
-                <el-button type="danger" link @click="handleDeleteRule(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
-
         <!-- 报表分析 -->
         <el-tab-pane label="报表分析" name="report">
           <el-descriptions :column="2" border>
@@ -153,48 +111,6 @@
         </el-tab-pane>
       </el-tabs>
     </el-card>
-
-    <!-- 新增/编辑规则弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="ruleForm.id ? '编辑规则' : '新增规则'" width="500px" class="form-dialog">
-      <el-form :model="ruleForm" label-width="100px">
-        <el-form-item label="厂商" required>
-          <el-select v-model="ruleForm.vendorId" style="width: 100%">
-            <el-option v-for="vendor in cacheStore.vendorOptions" :key="vendor.id" :label="vendor.vendorName" :value="Number(vendor.id)" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="规则名称" required>
-          <el-input v-model="ruleForm.ruleName" placeholder="请输入规则名称" />
-        </el-form-item>
-        <el-form-item label="数据类型" required>
-          <el-select v-model="ruleForm.dataType" style="width: 100%">
-            <el-option v-for="item in cacheStore.dataTypeOptions" :key="item.id" :label="item.dataTypeName" :value="item.dataTypeCode" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="单价(元)" required>
-          <el-input-number v-model="ruleForm.unitPrice" :min="0" :precision="2" style="width: 100%" />
-        </el-form-item>
-        <el-divider>阶梯计费（可选）</el-divider>
-        <el-form-item label="最小调用量">
-          <el-input-number v-model="ruleForm.tierMin" :min="0" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="最大调用量">
-          <el-input-number v-model="ruleForm.tierMax" :min="0" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="折扣">
-          <el-slider v-model="ruleForm.discount" :min="0.5" :max="1" :step="0.1" show-stops />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="ruleForm.status" style="width: 100%">
-            <el-option label="启用" value="active" />
-            <el-option label="禁用" value="inactive" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmitRule">确定</el-button>
-      </template>
-    </el-dialog>
 
     <el-dialog v-model="detailVisible" title="账单详情" width="620px">
       <el-descriptions v-if="detail" :column="2" border>
@@ -213,10 +129,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { createBillingRule, deleteBillingRule, exportBilling, getBillingById, getBillingList, getBillingRuleList, getBillingStats, updateBillingRule } from '@/api/billing'
+import { exportBilling, getBillingById, getBillingList, getBillingStats } from '@/api/billing'
 import { extractPageData } from '@/utils/pagination'
 import { useCacheStore } from '@/stores/cache'
+import BillingPlanWorkspace from './BillingPlanWorkspace.vue'
 // StatCard is globally registered by unplugin-vue-components
 
 interface BillingRecord {
@@ -232,24 +148,10 @@ interface BillingRecord {
   billingDate: string
 }
 
-interface BillingRule {
-  id: number
-  ruleName: string
-  vendorId: number
-  vendorName: string
-  dataType: string
-  unitPrice: number
-  tierMin: number
-  tierMax: number
-  discount: number
-  status: string
-}
-
 const loading = ref(false)
 const exporting = ref(false)
-const activeTab = ref('record')
+const activeTab = ref('plan')
 const tableData = ref<BillingRecord[]>([])
-const ruleData = ref<BillingRule[]>([])
 const total = ref(0)
 const pagination = reactive({ currentPage: 1, pageSize: 10 })
 
@@ -259,20 +161,6 @@ const searchForm = reactive({
   dateRange: [] as string[]
 })
 
-const ruleForm = reactive({
-  id: null as number | null,
-  ruleName: '',
-  vendorId: undefined as number | undefined,
-  vendorName: '',
-  dataType: '',
-  unitPrice: 0,
-  tierMin: 0,
-  tierMax: 100000,
-  discount: 1.0,
-  status: 'active'
-})
-
-const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const detail = ref<BillingRecord | null>(null)
 const cacheStore = useCacheStore()
@@ -326,15 +214,6 @@ const fetchList = async () => {
   }
 }
 
-const fetchRules = async () => {
-  try {
-    const res = await getBillingRuleList({ page: 1, pageSize: 100 })
-    ruleData.value = extractPageData<BillingRule>(res).list
-  } catch {
-    ruleData.value = []
-  }
-}
-
 const handleSearch = () => {
   pagination.currentPage = 1
   Promise.all([fetchStats(), fetchList()])
@@ -348,46 +227,11 @@ const handleReset = () => {
   Promise.all([fetchStats(), fetchList()])
 }
 
-const handleAddRule = () => {
-  Object.assign(ruleForm, { id: null, ruleName: '', vendorId: undefined, vendorName: '', dataType: '', unitPrice: 0, tierMin: 0, tierMax: 100000, discount: 1.0, status: 'active' })
-  dialogVisible.value = true
-}
-
-const handleEditRule = (row: BillingRule) => {
-  Object.assign(ruleForm, { ...row })
-  dialogVisible.value = true
-}
-
-const handleDeleteRule = async (row: BillingRule) => {
-  try {
-    await ElMessageBox.confirm(`确定要删除该计费规则吗？`, '提示', { type: 'warning' })
-    await deleteBillingRule(row.id)
-    ElMessage.success('删除成功')
-    fetchRules()
-  } catch {}
-}
-
-const handleSubmitRule = async () => {
-  if (!ruleForm.vendorId || !ruleForm.ruleName || !ruleForm.dataType) {
-    ElMessage.warning('请填写完整信息')
-    return
-  }
-  const vendor = cacheStore.vendorOptions.find(item => Number(item.id) === ruleForm.vendorId)
-  const payload = { ...ruleForm, vendorName: vendor?.vendorName || '', id: undefined }
-  if (ruleForm.id) {
-    await updateBillingRule(ruleForm.id, payload)
-  } else {
-    await createBillingRule(payload)
-  }
-  ElMessage.success('保存成功')
-  dialogVisible.value = false
-  fetchRules()
-}
-
 const handleExport = async () => {
   exporting.value = true
   try {
     const blob = await exportBilling({
+      tenantId: searchForm.tenantId,
       vendorId: searchForm.vendorId,
       startDate: searchForm.dateRange[0],
       endDate: searchForm.dateRange[1]
@@ -413,7 +257,7 @@ const vendorName = (vendorId: number) => cacheStore.vendorOptions.find(item => N
 
 onMounted(async () => {
   await cacheStore.loadAll()
-  await Promise.all([fetchStats(), fetchList(), fetchRules()])
+  await Promise.all([fetchStats(), fetchList()])
 })
 </script>
 
@@ -427,17 +271,14 @@ onMounted(async () => {
 .stats-row { margin-bottom: 20px; }
 
 .search-card { margin-bottom: 20px; }
-.search-bar, .tool-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.search-bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
 .search-inputs { display: flex; gap: 12px; flex: 1; flex-wrap: wrap; }
 .search-input { width: 160px; }
 .search-select { width: 140px; }
 .date-picker { width: 260px; }
 .search-btn-group { display: flex; gap: 10px; }
-.tool-bar .el-button { display: flex; align-items: center; gap: 6px; }
-.tool-bar .el-button svg { width: 16px; height: 16px; }
 
 .number-cell { font-family: var(--font-mono); color: var(--color-text-secondary); }
-.price-cell { color: var(--color-text-secondary); }
 .cost-cell { color: var(--color-primary); font-weight: 600; font-family: var(--font-mono); }
 .time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
 

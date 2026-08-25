@@ -83,7 +83,6 @@ watch(() => props.modelValue, async (val) => {
       }
     } catch (error) {
       console.error('加载接口详情失败:', error)
-      ElMessage.error('加载接口详情失败')
     }
   } else if (!val) {
     form.value = {
@@ -130,7 +129,6 @@ const handleSubmit = async () => {
     handleClose()
   } catch (error) {
     console.error('保存配置失败:', error)
-    ElMessage.error('保存配置失败，请稍后重试')
   } finally {
     loading.value = false
   }

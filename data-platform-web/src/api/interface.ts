@@ -1,5 +1,11 @@
 import { request } from '@/utils/request'
-import type { ApiInterface, InterfaceContract, InterfaceParam, ListResponse } from '@/types'
+import type {
+  ApiInterface,
+  InterfaceContract,
+  InterfaceParam,
+  ListResponse,
+  VendorRoutingUpdateRequest
+} from '@/types'
 
 export const getInterfaceList = (params: {
   page: number
@@ -28,22 +34,18 @@ export const getInterfaceOptions = (params: {
   return request.get<{ data: ApiInterface[] }>('/interface/options', { params })
 }
 
-export const getInterfaceParams = (interfaceId: number) => {
-  return request.get<{ data: InterfaceParam[] }>(`/interface/${interfaceId}/params`)
-}
-
 export const getInterfaceContract = async (interfaceId: number) => {
   const response = await request.get<{ data: InterfaceContract }>(`/interface/${interfaceId}/contract`)
   return response.data
 }
 
-export const saveInterfaceContract = async (interfaceId: number, contract: Partial<InterfaceContract>) => {
-  const response = await request.put<{ data: InterfaceContract }>(`/interface/${interfaceId}/contract`, contract)
-  return response.data
+export const getInterfaceParams = async (interfaceId: number): Promise<InterfaceParam[]> => {
+  const contract = await getInterfaceContract(interfaceId)
+  return contract.requestFields
 }
 
-export const importInterfaceSchema = async (interfaceId: number) => {
-  const response = await request.post<{ data: InterfaceContract }>(`/interface/${interfaceId}/contract/import-schema`)
+export const saveInterfaceContract = async (interfaceId: number, contract: Partial<InterfaceContract>) => {
+  const response = await request.put<{ data: InterfaceContract }>(`/interface/${interfaceId}/contract`, contract)
   return response.data
 }
 
@@ -61,6 +63,10 @@ export const deleteInterface = (id: number) => {
 
 export const updateInterfaceStatus = (id: number, status: 'active' | 'inactive') => {
   return request.patch<void>(`/interface/${id}/status`, { status })
+}
+
+export const updateVendorRouting = (id: number, payload: VendorRoutingUpdateRequest) => {
+  return request.put<{ data: ApiInterface }>(`/interface/${id}/vendor-routing`, payload)
 }
 
 // 获取接口调用统计

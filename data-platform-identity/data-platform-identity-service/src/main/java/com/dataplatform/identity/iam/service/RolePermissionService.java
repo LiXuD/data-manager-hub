@@ -44,6 +44,15 @@ public class RolePermissionService extends ServiceImpl<RolePermissionMapper, Rol
                 .collect(Collectors.toList());
     }
 
+    public List<Long> getRoleIdsByPermissionId(Long permissionId) {
+        return list(new LambdaQueryWrapper<RolePermission>()
+                        .eq(RolePermission::getPermissionId, permissionId))
+                .stream()
+                .map(RolePermission::getRoleId)
+                .distinct()
+                .toList();
+    }
+
     @Transactional
     public void assignPermissions(Long roleId, List<Long> permissionIds) {
         LambdaQueryWrapper<RolePermission> wrapper = new LambdaQueryWrapper<>();

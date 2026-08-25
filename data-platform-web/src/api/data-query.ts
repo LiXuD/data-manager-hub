@@ -1,22 +1,6 @@
-import { request } from '@/utils/request'
 import axios from 'axios'
-import type { DataQueryRequest, DataQueryResponse, OpenApiQueryRequest } from '@/types'
-
-export const executeQuery = (data: DataQueryRequest) => {
-  return request.post<DataQueryResponse>('/data/query', data)
-}
-
-export const executeBatchQuery = (data: DataQueryRequest[]) => {
-  return request.post<DataQueryResponse[]>('/data/batch-query', data)
-}
-
-export const getCacheStats = () => {
-  return request.get<Record<string, any>>('/data/cache/stats')
-}
-
-export const clearCache = (params: { vendorCode: string; dataType: string; interfaceCode?: string }) => {
-  return request.post<void>('/data/cache/clear', params)
-}
+import { request } from '@/utils/request'
+import type { DataQueryResponse, OpenApiQueryRequest } from '@/types'
 
 const openApiClient = axios.create({
   baseURL: import.meta.env.PROD ? (import.meta.env.VITE_OPENAPI_BASE_URL || '') : '',
@@ -37,4 +21,12 @@ export const executeOpenApiQuery = async (apiKey: string, data: OpenApiQueryRequ
     return res.data as DataQueryResponse
   }
   throw new Error(res?.message || res?.msg || '请求失败')
+}
+
+export const executeDataTestQuery = async (apiKeyId: number, data: OpenApiQueryRequest) => {
+  const res = await request.post<{ data: DataQueryResponse }>('/data-test/query', {
+    ...data,
+    apiKeyId
+  })
+  return res.data
 }
