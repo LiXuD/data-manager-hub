@@ -15,7 +15,7 @@ TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-1800}"
 command -v jq >/dev/null 2>&1 || { echo 'jq is required' >&2; exit 20; }
 
 deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
-while (( $(date +%s) < deadline )); do
+while :; do
   job_json="$(kubectl -n "$NAMESPACE" get job "$JOB" -o json 2>/dev/null || true)"
   if [[ -n "$job_json" ]]; then
     if jq -e '.status.conditions[]? | select(.type == "Complete" and .status == "True")' <<< "$job_json" >/dev/null; then
@@ -27,6 +27,9 @@ while (( $(date +%s) < deadline )); do
       echo "Job failed: $JOB (${reason})" >&2
       exit 2
     fi
+  fi
+  if (( $(date +%s) >= deadline )); then
+    break
   fi
   sleep 5
 done
