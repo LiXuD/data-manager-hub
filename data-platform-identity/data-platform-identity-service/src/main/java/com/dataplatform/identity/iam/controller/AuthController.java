@@ -177,8 +177,7 @@ public class AuthController {
         if (user == null || oldPassword == null || !passwordService.matches(oldPassword, user.getPassword())) {
             return Result.error(400, "当前密码错误");
         }
-        if (newPassword == null || newPassword.length() < 8
-                || !newPassword.matches(".*[A-Za-z].*") || !newPassword.matches(".*\\d.*")) {
+        if (!passwordService.isStrongEnough(newPassword)) {
             return Result.error(400, "新密码至少8位，且包含数字和字母");
         }
         User update = new User();

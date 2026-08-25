@@ -24,4 +24,13 @@ class PasswordServiceTest {
         assertFalse(passwordService.matches("plaintext-password", "plaintext-password"));
         assertFalse(passwordService.isEncoded("plaintext-password"));
     }
+
+    @Test
+    void enforcesLetterAndDigitPolicyWithoutBacktrackingRegex() {
+        assertTrue(passwordService.isStrongEnough("Password123"));
+        assertFalse(passwordService.isStrongEnough(null));
+        assertFalse(passwordService.isStrongEnough("12345678"));
+        assertFalse(passwordService.isStrongEnough("password"));
+        assertFalse(passwordService.isStrongEnough("Pass123"));
+    }
 }
