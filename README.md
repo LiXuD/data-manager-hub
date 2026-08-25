@@ -21,8 +21,8 @@
 | 技术 | 版本 |
 |------|------|
 | Java | 21 |
-| Spring Boot | 3.4.13 |
-| Spring Cloud | 2024.0.3 |
+| Spring Boot | 3.5.16 |
+| Spring Cloud | 2025.0.3 |
 | MyBatis-Plus | 3.5.8 |
 | Flowable Process Engine | 7.1.0 |
 | PostgreSQL | 16 |
@@ -328,6 +328,9 @@ data-platform/
 - [架构知识库](CODE_WIKI.md)
 - [API 文档](docs/API.md)
 - [部署文档](docs/DEPLOYMENT.md)
+- [CI/CD 流水线方案 v2.0（仓库实现已落地，外部环境未验证）](docs/2026-08-22-ci-cd-pipeline-design.md)
+- [数据库恢复 Runbook（生产启用前必须演练）](docs/runbooks/database-recovery.md)
+- [发布与回滚 Runbook（生产启用前必须演练）](docs/runbooks/release-deployment.md)
 - [2026-07-23 深度清理审查](docs/2026-07-23-deep-cleanup-review.md)
 - [外部请求连接器插件化升级设计（已实现并通过隔离验收）](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)
 - [连接器粗粒度插件与配置简化设计（阶段 0—4 已实现，阶段 5—6 待生产门禁）](docs/2026-08-12-connector-product-model-simplification-design.md)
@@ -337,14 +340,15 @@ data-platform/
 
 ## ✅ 合并前检查
 
-PR 合入 `dev` 前必须全部通过：
+PR 合入受保护主分支（当前 CI 监听 `master`）前必须全部通过：
 
 ```bash
-# 1. 后端全量验证
-mvn verify
+# 1. 后端全量验证（使用仓库锁定的 Maven Wrapper）
+./mvnw -B -ntp verify
 
 # 2. 前端依赖、安全、规范与生产构建
 cd data-platform-web
+npm ci
 npm audit
 npm run lint
 npm test
@@ -354,11 +358,25 @@ cd ..
 # 3. 数据库变更校验与预演
 ./migrate-db.sh validate
 ./migrate-db.sh dry-run
+./verify-v048-routing.sh
 ./verify-v049-connector-product-spec.sh
 ./verify-v050-generic-http.sh
 
 # 4. 架构边界扫描
 bash arch-scan.sh
+
+# 5. CI/CD 合同、Workflow、Helm、RBAC 与供应链策略
+python3 -m pip install -r ci/requirements.txt
+python3 -m unittest discover -s ci/tests -v
+python3 ci/scripts/check-workflows.py
+python3 ci/scripts/check-markdown-links.py
+python3 ci/scripts/check-actions-pinned.py
+python3 ci/scripts/check-workflow-matrices.py
+python3 ci/scripts/verify-contracts.py
+python3 ci/scripts/verify-rbac.py
+python3 ci/scripts/verify-admission-policy.py
+python3 ci/scripts/verify-observability-rules.py
+python3 ci/scripts/verify-release-gates-policy.py
 ```
 
 任一步骤失败不可合入。
