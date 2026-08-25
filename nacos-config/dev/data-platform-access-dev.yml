@@ -40,7 +40,7 @@ platform.security.internal:
   service-name: data-platform-access
   token-uri: ${INTERNAL_AUTH_TOKEN_URI:http://localhost:8086/internal-auth/v1/token}
   client-secret: ${INTERNAL_AUTH_ACCESS_SECRET:dev-access-internal-secret}
-  public-key-location: file:__PROJECT_ROOT__/.runtime/internal-auth-public.pem
+  public-key-location: file:${INTERNAL_AUTH_PUBLIC_KEY_PATH:/run/secrets/dmh/internal-auth/public.pem}
 
 platform.openapi:
   public-base-url: ${OPENAPI_PUBLIC_BASE_URL:http://localhost:8888}
@@ -73,4 +73,8 @@ flowable.async-executor-activate: false
 flowable.idm.enabled: false
 flowable.eventregistry.enabled: false
 management.endpoints.web.exposure.include: health,info,prometheus
+management.endpoint.health.probes.enabled: true
+management.endpoint.health.show-details: never
+management.endpoint.health.group.liveness.include: livenessState,ping
+management.endpoint.health.group.readiness.include: readinessState,connectorRuntimeReadiness
 logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Only exact component/CVE false positives belong here. This is not a release
+  waiver: real vulnerabilities stay fail-closed in the NVD gate and every
+  entry must explain why the affected product is not present in this artifact.
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+  <suppress>
+    <notes><![CDATA[Nacos server access-control and embedded Derby issues are mis-associated with the client logging adapter; this artifact contains no Nacos server or Derby endpoint.]]></notes>
+    <packageUrl regex="true">^pkg:maven/com\.alibaba\.nacos/logback-adapter@.*$</packageUrl>
+    <cve>CVE-2021-43116</cve>
+  </suppress>
+  <suppress>
+    <notes><![CDATA[Nacos server unauthenticated Derby management endpoint is not present in the client logging adapter.]]></notes>
+    <packageUrl regex="true">^pkg:maven/com\.alibaba\.nacos/logback-adapter@.*$</packageUrl>
+    <cve>CVE-2021-29442</cve>
+  </suppress>
+  <suppress>
+    <notes><![CDATA[Nacos server login access-control issue is not present in the client logging adapter.]]></notes>
+    <packageUrl regex="true">^pkg:maven/com\.alibaba\.nacos/logback-adapter@.*$</packageUrl>
+    <cve>CVE-2021-29441</cve>
+  </suppress>
+  <suppress>
+    <notes><![CDATA[Prometheus server remote-read Snappy allocation bug is not in Micrometer's Java registry client.]]></notes>
+    <packageUrl regex="true">^pkg:maven/(io\.micrometer/micrometer-registry-prometheus|io\.prometheus/.*)@.*$</packageUrl>
+    <cve>CVE-2026-42154</cve>
+  </suppress>
+  <suppress>
+    <notes><![CDATA[Nu Html Checker SSRF/restriction-bypass advisory is unrelated to Hibernate Validator.]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.hibernate\.validator/hibernate-validator@.*$</packageUrl>
+    <cve>CVE-2025-15104</cve>
+  </suppress>
+  <suppress>
+    <notes><![CDATA[Kotlin build-cache metadata deserialization is a compiler/build-cache issue; this service only receives Kotlin stdlib transitively from OkHttp and does not run the Kotlin compiler or build cache.]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.jetbrains\.kotlin/kotlin-stdlib(-common|-jdk[78])?@.*$</packageUrl>
+    <cve>CVE-2026-53914</cve>
+  </suppress>
+  <suppress>
+    <notes><![CDATA[Kotlin 1.9.25 is newer than the affected 1.4.20 range; this is a stale CPE match on the transitive stdlib family.]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.jetbrains\.kotlin/kotlin-stdlib(-common|-jdk[78])?@.*$</packageUrl>
+    <cve>CVE-2020-29582</cve>
+  </suppress>
+  <suppress>
+    <notes><![CDATA[The NVD match is for Tomcat's optional WebSocket chat example. The embedded core jar has no examples or chat application; the application does not package that webapp.]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/tomcat-embed-(core|websocket)@.*$</packageUrl>
+    <cve>CVE-2026-66299</cve>
+  </suppress>
+  <suppress>
+    <notes><![CDATA[CVE-2025-7962 is an SMTP injection in the Angus Mail SMTP artifact (org.eclipse.angus:smtp). The dependency-check CPE is incorrectly attached to org.eclipse.angus:angus-activation:2.0.3; this jar contains only Jakarta Activation provider classes and no SMTP/mail implementation. Keep the match scoped to the exact resolved package/version so a future activation upgrade is re-evaluated.]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.eclipse\.angus/angus-activation@2\.0\.3$</packageUrl>
+    <cve>CVE-2025-7962</cve>
+  </suppress>
+</suppressions>

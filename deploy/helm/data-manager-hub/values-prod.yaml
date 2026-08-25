@@ -1,0 +1,16 @@
+global:
+  environment: production
+  springProfile: prod
+  nacosNamespace: prod
+  nacosGroup: DMH_PROD_LOCAL
+  terminationGracePeriodSeconds: 90
+components:
+  gateway: {replicas: 2}
+  masterdata: {replicas: 2}
+  access: {replicas: 2}
+  billing: {replicas: 2}
+  identity: {replicas: 2}
+  governance: {replicas: 2}
+  web: {replicas: 2}
+access:
+  partition: 1

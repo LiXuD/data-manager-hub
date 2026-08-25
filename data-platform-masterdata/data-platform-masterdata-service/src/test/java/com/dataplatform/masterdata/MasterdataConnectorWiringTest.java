@@ -28,7 +28,8 @@ class MasterdataConnectorWiringTest {
         MapperScan scan = MasterdataApplication.class.getAnnotation(MapperScan.class);
         EnableFeignClients feign = MasterdataApplication.class.getAnnotation(EnableFeignClients.class);
 
-        assertTrue(List.of(scan.value()).contains("com.dataplatform.masterdata.connector.mapper"));
+        assertTrue(List.of(scan.basePackages()).contains("com.dataplatform.masterdata.connector.mapper"));
+        assertTrue(List.of(scan.basePackages()).contains("com.dataplatform.masterdata.connector.spec"));
         assertTrue(List.of(feign.clients()).contains(ConnectorPluginActivationInternalFeignClient.class));
         assertTrue(List.of(feign.clients()).contains(VendorConnectorRuntimeInternalFeignClient.class));
         assertTrue(List.of(feign.clients()).contains(ConnectorMigrationObservationInternalFeignClient.class));

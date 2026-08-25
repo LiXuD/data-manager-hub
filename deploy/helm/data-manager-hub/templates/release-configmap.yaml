@@ -1,0 +1,13 @@
+{{ include "dmh.validateNacosGroup" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dmh.fullname" . }}-release
+  labels:
+    {{- include "dmh.labels" . | nindent 4 }}
+data:
+  manifestDigest: {{ .Values.global.manifestDigest | quote }}
+  releaseId: {{ .Values.global.releaseId | quote }}
+  nacosGroup: {{ .Values.global.nacosGroup | quote }}
+  environment: {{ .Values.global.environment | quote }}
+  springProfile: {{ .Values.global.springProfile | quote }}

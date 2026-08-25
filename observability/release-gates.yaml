@@ -1,0 +1,39 @@
+schemaVersion: 1
+window:
+  baseline: 30m
+  acute: 15m
+  blocking: 60m
+  enhanced: 24h
+thresholds:
+  errorRatio: 0.01
+  minimumTraffic: 100
+  p95AbsoluteSeconds: 1
+  p95Multiplier: 1.2
+  maxRestarts: 1
+queries:
+  traffic: >-
+    sum(increase(http_server_requests_seconds_count{namespace="${NAMESPACE}",service=~"${SERVICE_REGEX}"}[15m]))
+  errorRatio: >-
+    sum(rate(http_server_requests_seconds_count{namespace="${NAMESPACE}",service=~"${SERVICE_REGEX}",status=~"5.."}[5m]))
+    /
+    sum(rate(http_server_requests_seconds_count{namespace="${NAMESPACE}",service=~"${SERVICE_REGEX}"}[5m]))
+  p95Seconds: >-
+    histogram_quantile(0.95,
+      sum(rate(http_server_requests_seconds_bucket{namespace="${NAMESPACE}",service=~"${SERVICE_REGEX}"}[5m])) by (le))
+  readyReplicas: >-
+    sum(kube_deployment_status_replicas_available{namespace="${NAMESPACE}",deployment=~"${DEPLOYMENT_REGEX}"})
+    + sum(kube_statefulset_status_replicas_ready{namespace="${NAMESPACE}",statefulset=~"${DEPLOYMENT_REGEX}"})
+  desiredReplicas: >-
+    sum(kube_deployment_spec_replicas{namespace="${NAMESPACE}",deployment=~"${DEPLOYMENT_REGEX}"})
+    + sum(kube_statefulset_replicas{namespace="${NAMESPACE}",statefulset=~"${DEPLOYMENT_REGEX}"})
+  oomKills: >-
+    sum(max_over_time(kube_pod_container_status_last_terminated_reason{namespace="${NAMESPACE}",reason="OOMKilled"}[15m]))
+  restarts: >-
+    sum(increase(kube_pod_container_status_restarts_total{namespace="${NAMESPACE}"}[15m]))
+  connectorReadiness: >-
+    min(dm_connector_runtime_readiness{namespace="${NAMESPACE}"})
+continuousSlo:
+  availability: 0.999
+  burnRates:
+    critical: [14.4, 5m, 1h]
+    warning: [6, 30m, 6h]

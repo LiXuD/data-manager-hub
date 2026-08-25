@@ -1,0 +1,24 @@
+schemaVersion: 1
+registry: ghcr.io
+repository: data-manager-hub
+artifacts:
+  releaseDigests:
+    retentionDays: 0
+    delete: false
+  productionBuildManifests:
+    retentionDays: 0
+    delete: false
+  productionSemverAliases:
+    retentionDays: 0
+    delete: false
+  candidateDigests:
+    retentionDays: 365
+    delete: false
+  sbomAndProvenance:
+    retentionDays: 365
+    delete: false
+rules:
+  - never-delete-digest-referenced-by-release-record
+  - never-delete-build-manifest-referenced-by-deployment-receipt
+  - never-repoint-semver-tag
+  - audit-before-any-retention-change

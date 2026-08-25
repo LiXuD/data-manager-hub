@@ -1,0 +1,453 @@
+name: Build Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  # GHCR repository paths are lowercase even though the GitHub owner is mixed case.
+  IMAGE_NAMESPACE: ghcr.io/lixud
+  SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  guard:
+    name: verify master CI result and source change
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      allowed: ${{ steps.guard.outputs.allowed }}
+      base_ref: ${{ steps.classification.outputs.base_ref }}
+      backend: ${{ steps.classification.outputs.backend }}
+      frontend: ${{ steps.classification.outputs.frontend }}
+      migration: ${{ steps.classification.outputs.migration }}
+      security: ${{ steps.classification.outputs.security }}
+      deployability: ${{ steps.classification.outputs.deployability }}
+      plugin: ${{ steps.classification.outputs.plugin }}
+      external_plugin: ${{ steps.classification.outputs.external_plugin }}
+      docs: ${{ steps.classification.outputs.docs }}
+      full: ${{ steps.classification.outputs.full }}
+      source_change: ${{ steps.classification.outputs.source_change }}
+      ci_run_id: ${{ steps.verify_ci.outputs.ci_run_id }}
+      ci_run_attempt: ${{ steps.verify_ci.outputs.ci_run_attempt }}
+    steps:
+      - name: Checkout source SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify upstream required CI conclusion
+        id: verify_ci
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_SHA: ${{ env.SOURCE_SHA }}
+        run: |
+          set -euo pipefail
+          jobs="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}/jobs?per_page=100" --jq '.jobs[] | [.name, (.conclusion // "")] | @tsv')"
+          required="$(awk -F '\t' '$1 == "CI / required-ci" { print $2; exit }' <<< "$jobs")"
+          [[ "$required" == success ]] || {
+            echo "upstream CI / required-ci conclusion is not success: ${required:-missing}" >&2
+            exit 2
+          }
+          # A source SHA can have more than one successful CI run after a
+          # rerun.  Pin the manifest to the earliest successful run for that
+          # SHA so a Build Release rerun remains byte-for-byte idempotent;
+          # this is still an API-verified required-ci run, not a caller claim.
+          stable_ci="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${SOURCE_SHA}&status=success&per_page=100" \
+            --jq 'map(.workflow_runs) | add | map(select(.head_sha == env.SOURCE_SHA and .conclusion == "success" and .head_branch == "master" and (.event == "push" or .event == "workflow_dispatch"))) | sort_by(.created_at) | .[0] | if . then "\(.id)\t\(.run_attempt)" else empty end')"
+          IFS=$'\t' read -r stable_ci_run_id stable_ci_run_attempt <<< "$stable_ci"
+          [[ "$stable_ci_run_id" =~ ^[0-9]+$ && "$stable_ci_run_attempt" =~ ^[1-9][0-9]*$ ]] || {
+            echo "no successful CI run found for source SHA $SOURCE_SHA" >&2
+            exit 2
+          }
+          stable_jobs="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${stable_ci_run_id}/jobs?per_page=100" --jq '.jobs[] | [.name, (.conclusion // "")] | @tsv')"
+          stable_required="$(awk -F '\t' '$1 == "CI / required-ci" { print $2; exit }' <<< "$stable_jobs")"
+          [[ "$stable_required" == success ]] || {
+            echo "stable CI / required-ci conclusion is not success: ${stable_required:-missing}" >&2
+            exit 2
+          }
+          echo "ci_run_id=$stable_ci_run_id" >> "$GITHUB_OUTPUT"
+          echo "ci_run_attempt=$stable_ci_run_attempt" >> "$GITHUB_OUTPUT"
+      - name: Read immutable classification from upstream CI
+        id: classification
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI_RUN_ID: ${{ steps.verify_ci.outputs.ci_run_id }}
+          SOURCE_SHA: ${{ env.SOURCE_SHA }}
+        run: |
+          set -euo pipefail
+          rm -rf classification
+          mkdir -p classification
+          gh run download "$CI_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "ci-classification-${CI_RUN_ID}" \
+            --dir classification
+          file=classification/classification.env
+          test -s "$file"
+          declare -A values=()
+          allowed_keys='backend frontend migration security deployability plugin external_plugin docs full source_change base_ref source_sha'
+          while IFS='=' read -r key value; do
+            [[ -n "$key" && "$key" != *' '* ]] || {
+              echo "invalid classification key" >&2
+              exit 2
+            }
+            case " $allowed_keys " in
+              *" $key "*) ;;
+              *) echo "unknown classification key: $key" >&2; exit 2 ;;
+            esac
+            [[ -z "${values[$key]+present}" ]] || {
+              echo "duplicate classification key: $key" >&2
+              exit 2
+            }
+            values[$key]="$value"
+          done < "$file"
+          for key in $allowed_keys; do
+            [[ -n "${values[$key]+present}" ]] || {
+              echo "missing classification key: $key" >&2
+              exit 2
+            }
+          done
+          [[ "${values[source_sha]}" == "$SOURCE_SHA" ]] || {
+            echo 'classification artifact is not bound to the workflow source SHA' >&2
+            exit 2
+          }
+          [[ "${values[base_ref]}" =~ ^([0-9a-f]{40}|HEAD\^|origin/[A-Za-z0-9._/-]+)$ ]] || {
+            echo "invalid classification base ref: ${values[base_ref]}" >&2
+            exit 2
+          }
+          for key in backend frontend migration security deployability plugin external_plugin docs full source_change; do
+            [[ "${values[$key]}" == true || "${values[$key]}" == false ]] || {
+              echo "classification value must be true/false: $key" >&2
+              exit 2
+            }
+            echo "$key=${values[$key]}" >> "$GITHUB_OUTPUT"
+          done
+          echo "base_ref=${values[base_ref]}" >> "$GITHUB_OUTPUT"
+      - id: guard
+        env:
+          SOURCE_CHANGE: ${{ steps.classification.outputs.source_change }}
+        run: |
+          set -euo pipefail
+          if [[ "$SOURCE_CHANGE" == true ]]; then
+            echo 'allowed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'allowed=false' >> "$GITHUB_OUTPUT"
+            echo 'docs-only change: no release images or manifest will be built'
+          fi
+
+  sign-plugin:
+    name: sign and publish external plugins
+    needs: guard
+    if: needs.guard.outputs.allowed == 'true' && needs.guard.outputs.external_plugin == 'true'
+    runs-on: [self-hosted, plugin-signing]
+    environment: plugin-signing
+    permissions:
+      contents: read
+    outputs:
+      receipts: ${{ steps.sign.outputs.receipts }}
+    steps:
+      - name: Checkout source SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Sign, publish and read back external plugin receipts
+        id: sign
+        env:
+          SOURCE_SHA: ${{ env.SOURCE_SHA }}
+          PLUGIN_SIGNING_ADAPTER: ${{ secrets.DMH_PLUGIN_SIGNING_ADAPTER }}
+        run: |
+          set -euo pipefail
+          [[ "$PLUGIN_SIGNING_ADAPTER" = /* && -x "$PLUGIN_SIGNING_ADAPTER" ]] || {
+            echo 'plugin-signing requires DMH_PLUGIN_SIGNING_ADAPTER as an executable absolute path' >&2
+            exit 2
+          }
+          rm -rf plugin-receipts
+          mkdir -p plugin-receipts
+          "$PLUGIN_SIGNING_ADAPTER" \
+            --source-sha "$SOURCE_SHA" \
+            --workspace "$GITHUB_WORKSPACE" \
+            --output-dir "$GITHUB_WORKSPACE/plugin-receipts"
+          python3 ci/scripts/collect-plugin-receipts.py --require plugin-receipts plugins.json
+          test -s plugins.json
+          echo 'receipts=true' >> "$GITHUB_OUTPUT"
+      - name: Upload signed plugin receipts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: plugin-receipts-${{ github.run_id }}
+          path: plugin-receipts/*.json
+          if-no-files-found: error
+
+  build:
+    name: build ${{ matrix.component }}
+    needs: guard
+    if: needs.guard.outputs.allowed == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: gateway
+            dockerfile: docker/java-service.Dockerfile
+            module: data-platform-gateway
+            buildArgs: MODULE=data-platform-gateway
+          - component: masterdata
+            dockerfile: docker/java-service.Dockerfile
+            module: data-platform-masterdata/data-platform-masterdata-service
+            buildArgs: MODULE=data-platform-masterdata/data-platform-masterdata-service
+          - component: access
+            dockerfile: docker/java-service.Dockerfile
+            module: data-platform-access/data-platform-access-service
+            buildArgs: MODULE=data-platform-access/data-platform-access-service
+          - component: billing
+            dockerfile: docker/java-service.Dockerfile
+            module: data-platform-billing/data-platform-billing-service
+            buildArgs: MODULE=data-platform-billing/data-platform-billing-service
+          - component: identity
+            dockerfile: docker/java-service.Dockerfile
+            module: data-platform-identity/data-platform-identity-service
+            buildArgs: MODULE=data-platform-identity/data-platform-identity-service
+          - component: governance
+            dockerfile: docker/java-service.Dockerfile
+            module: data-platform-governance/data-platform-governance-service
+            buildArgs: MODULE=data-platform-governance/data-platform-governance-service
+          - component: web
+            dockerfile: docker/web.Dockerfile
+            module: web
+            buildArgs: ''
+          - component: dbops
+            dockerfile: docker/dbops.Dockerfile
+            module: dbops
+            buildArgs: ''
+          - component: acceptance
+            dockerfile: docker/acceptance.Dockerfile
+            module: acceptance
+            buildArgs: ''
+    steps:
+      - name: Checkout source SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2
+      - name: Login to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ env.IMAGE_NAMESPACE }}/data-manager-hub-${{ matrix.component }}:sha-${{ env.SOURCE_SHA }}
+          build-args: |
+            ${{ matrix.buildArgs }}
+          cache-from: type=gha,scope=dmh-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=dmh-${{ matrix.component }}
+      - name: Attest image provenance
+        uses: actions/attest-build-provenance@bd77c077858b8d561b7a36cbe48ef4cc642ca39d
+        with:
+          subject-name: ${{ env.IMAGE_NAMESPACE }}/data-manager-hub-${{ matrix.component }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@8d34698a59f5ffe24821f0b48ab62a3de8b64b20
+        with:
+          version: 1.2.2
+      - name: Generate and publish image SBOM artifact
+        uses: anchore/sbom-action@da167eac915b4e86f08b264dbdbc867b61be6f0c
+        with:
+          # Generate the SBOM from the exact digest returned by Buildx, not a
+          # mutable source-SHA tag that a concurrent rerun could retarget.
+          image: ${{ env.IMAGE_NAMESPACE }}/data-manager-hub-${{ matrix.component }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom-${{ matrix.component }}.json
+      - name: Push SBOM and write evidence
+        env:
+          COMPONENT: ${{ matrix.component }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Bind the SBOM artifact name to the exact image digest. A source-SHA
+          # tag can be retargeted by a concurrent rebuild; the manifest must
+          # never depend on that mutable alias.
+          sbom_ref="${IMAGE_NAMESPACE}/data-manager-hub-${COMPONENT}-sbom:img-${IMAGE_DIGEST#sha256:}"
+          oras push "$sbom_ref" \
+            --artifact-type application/vnd.cyclonedx+json \
+            "sbom-${COMPONENT}.json:application/json" >/tmp/oras-sbom.log
+          sbom_digest="$(oras manifest fetch --descriptor "$sbom_ref" | jq -r .digest)"
+          cat > "${COMPONENT}.json" <<EOF
+          {"component":"${COMPONENT}","image":{"reference":"${IMAGE_NAMESPACE}/data-manager-hub-${COMPONENT}@${IMAGE_DIGEST}","sbom":"oci://${IMAGE_NAMESPACE}/data-manager-hub-${COMPONENT}-sbom@${sbom_digest}","provenance":"oci://${IMAGE_NAMESPACE}/data-manager-hub-${COMPONENT}@${IMAGE_DIGEST}"}}
+          EOF
+      - name: Upload image evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: image-evidence-${{ matrix.component }}-${{ github.run_id }}
+          path: |
+            ${{ matrix.component }}.json
+            sbom-${{ matrix.component }}.json
+          if-no-files-found: error
+
+  finalize:
+    name: finalize immutable Build Manifest
+    needs: [guard, build, sign-plugin]
+    if: always() && needs.guard.outputs.allowed == 'true' && needs.build.result == 'success' && (needs.guard.outputs.external_plugin != 'true' || needs.sign-plugin.result == 'success')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      manifest_digest: ${{ steps.publish.outputs.manifest_digest }}
+    steps:
+      - name: Checkout source SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download all image evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: image-evidence-*-${{ github.run_id }}
+          path: image-evidence
+          merge-multiple: true
+      - name: Download signed plugin receipts
+        if: needs.guard.outputs.external_plugin == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: plugin-receipts-${{ github.run_id }}
+          path: plugin-receipts
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@8d34698a59f5ffe24821f0b48ab62a3de8b64b20
+        with:
+          version: 1.2.2
+      - name: Login to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build canonical manifest input
+        run: |
+          set -euo pipefail
+          python3 ci/scripts/collect-image-evidence.py image-evidence images.json
+          python3 ci/scripts/hash-tree.py nacos-config > nacos.digest
+          python3 ci/scripts/hash-tree.py sql/changelog > changelog.digest
+          python3 ci/scripts/hash-tree.py ci/toolchain.lock.yaml > toolchain.digest
+          python3 ci/scripts/hash-tree.py --git-tracked . > source.digest
+          # Use Git's tracked-file view and POSIX numeric sort instead of GNU
+          # find/sort extensions so local release rehearsals on macOS select
+          # the same latest migration as protected Linux runners.
+          latest_version="$(git ls-files 'sql/migrations/V*.sql' | sed -n 's#.*/V\([0-9][0-9]*\)__.*#\1#p' | sort -n | tail -1)"
+          latest="V${latest_version}"
+          CLASSIFICATION_BASE_REF="${{ needs.guard.outputs.base_ref }}"
+          MIGRATION_MODE="$(BASE_REF="$CLASSIFICATION_BASE_REF" HEAD_REF="$SOURCE_SHA" bash ci/scripts/detect-migration-mode.sh)"
+          backend_gate="${{ needs.guard.outputs.backend }}"
+          frontend_gate="${{ needs.guard.outputs.frontend }}"
+          security_gate="${{ needs.guard.outputs.security }}"
+          deployability_gate="${{ needs.guard.outputs.deployability }}"
+          migration_gate="${{ needs.guard.outputs.migration }}"
+          external_plugin_gate="${{ needs.guard.outputs.external_plugin }}"
+          ci_run_id="${{ needs.guard.outputs.ci_run_id }}"
+          ci_run_attempt="${{ needs.guard.outputs.ci_run_attempt }}"
+          jq -n \
+            --arg backend "$backend_gate" \
+            --arg frontend "$frontend_gate" \
+            --arg security "$security_gate" \
+            --arg deployability "$deployability_gate" \
+            --arg migration "$migration_gate" \
+            --arg ciRunId "$ci_run_id" \
+            --arg ciRunAttempt "$ci_run_attempt" \
+            '{backend:(if $backend == "true" then "passed" else "not-applicable" end),frontend:(if $frontend == "true" then "passed" else "not-applicable" end),security:(if $security == "true" then "passed" else "not-applicable" end),deployability:(if $deployability == "true" then "passed" else "not-applicable" end),migration:(if $migration == "true" then "passed" else "not-applicable" end),requiredCi:{runId:$ciRunId,runAttempt:($ciRunAttempt|tonumber),conclusion:"success"}}' > evidence.json
+          plugin_args=()
+          [[ "$external_plugin_gate" == true ]] && plugin_args+=(--require)
+          python3 ci/scripts/collect-plugin-receipts.py "${plugin_args[@]}" plugin-receipts plugins.json
+          python3 ci/scripts/manifest.py create \
+            --git-sha "$SOURCE_SHA" \
+            --source-ref "refs/heads/master" \
+            --run-id "$ci_run_id" \
+            --run-attempt "$ci_run_attempt" \
+            --generated-at "$(git show -s --format=%cI "$SOURCE_SHA")" \
+            --source-tree-digest "$(cat source.digest)" \
+            --toolchain-lock-digest "$(cat toolchain.digest)" \
+            --changelog-digest "$(cat changelog.digest)" \
+            --nacos-digest "$(cat nacos.digest)" \
+            --latest-migration "$latest" \
+            --migration-mode "$MIGRATION_MODE" \
+            --images images.json --plugins plugins.json --evidence evidence.json \
+            --output build-manifest.v1.json
+          jq '.spec.images | with_entries(.value = .value.reference)' build-manifest.v1.json > image-references.json
+          python3 ci/scripts/verify-oci-references.py build-manifest.v1.json image-references.json
+      - name: Push immutable Build Manifest
+        id: publish
+        env:
+          MANIFEST_REF: ${{ env.IMAGE_NAMESPACE }}/data-manager-hub-build-manifest:sha-${{ env.SOURCE_SHA }}
+        run: |
+          set -euo pipefail
+          digest="$(bash ci/scripts/publish-immutable-manifest.sh --ref "$MANIFEST_REF" --file build-manifest.v1.json)"
+          echo "manifest_digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "$digest" > manifest.digest
+      - name: Attest Build Manifest
+        uses: actions/attest-build-provenance@bd77c077858b8d561b7a36cbe48ef4cc642ca39d
+        with:
+          subject-name: ${{ env.IMAGE_NAMESPACE }}/data-manager-hub-build-manifest
+          subject-digest: ${{ steps.publish.outputs.manifest_digest }}
+          push-to-registry: true
+      - name: Upload Build Manifest evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: build-manifest-${{ github.run_id }}
+          path: |
+            build-manifest.v1.json
+            image-references.json
+            manifest.digest
+
+  deploy-dev:
+    name: deploy dev
+    needs: [finalize]
+    if: needs.finalize.result == 'success'
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
+      deployments: write
+    uses: ./.github/workflows/_deploy-reusable.yml
+    with:
+      environment: dev
+      runner_label: nonprod-deploy
+      manifest_digest: ${{ needs.finalize.outputs.manifest_digest }}
+      source_sha: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit

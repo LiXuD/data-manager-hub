@@ -1,0 +1,92 @@
+# Portable Prometheus rule groups for the staging/production release SLO.
+# Install this file in the platform-owned Prometheus rule bundle after mapping
+# service/namespace labels to the cluster's instrumentation conventions.
+groups:
+  - name: data-manager-hub.release-slo
+    interval: 30s
+    rules:
+      - alert: DmhReleaseErrorBudgetBurnCritical
+        expr: >-
+          (
+            sum(rate(http_server_requests_seconds_count{namespace=~"dmh-(staging|prod)",service=~"data-manager-hub-.*",status=~"5.."}[5m]))
+            /
+            sum(rate(http_server_requests_seconds_count{namespace=~"dmh-(staging|prod)",service=~"data-manager-hub-.*"}[5m]))
+          ) > (1 - 0.999) * 14.4
+          and
+          (
+            sum(rate(http_server_requests_seconds_count{namespace=~"dmh-(staging|prod)",service=~"data-manager-hub-.*",status=~"5.."}[1h]))
+            /
+            sum(rate(http_server_requests_seconds_count{namespace=~"dmh-(staging|prod)",service=~"data-manager-hub-.*"}[1h]))
+          ) > (1 - 0.999) * 14.4
+        for: 5m
+        labels:
+          severity: critical
+          service: data-manager-hub
+        annotations:
+          summary: data-manager-hub critical error-budget burn
+          runbook: docs/runbooks/release-deployment.md
+      - alert: DmhReleaseErrorBudgetBurnWarning
+        expr: >-
+          (
+            sum(rate(http_server_requests_seconds_count{namespace=~"dmh-(staging|prod)",service=~"data-manager-hub-.*",status=~"5.."}[30m]))
+            /
+            sum(rate(http_server_requests_seconds_count{namespace=~"dmh-(staging|prod)",service=~"data-manager-hub-.*"}[30m]))
+          ) > (1 - 0.999) * 6
+          and
+          (
+            sum(rate(http_server_requests_seconds_count{namespace=~"dmh-(staging|prod)",service=~"data-manager-hub-.*",status=~"5.."}[6h]))
+            /
+            sum(rate(http_server_requests_seconds_count{namespace=~"dmh-(staging|prod)",service=~"data-manager-hub-.*"}[6h]))
+          ) > (1 - 0.999) * 6
+        for: 30m
+        labels:
+          severity: warning
+          service: data-manager-hub
+        annotations:
+          summary: data-manager-hub warning error-budget burn
+          runbook: docs/runbooks/release-deployment.md
+      - alert: DmhReleaseLatencyP95High
+        expr: >-
+          histogram_quantile(
+            0.95,
+            sum(rate(http_server_requests_seconds_bucket{namespace=~"dmh-(staging|prod)",service=~"data-manager-hub-.*"}[5m])) by (le)
+          ) > 1
+        for: 15m
+        labels:
+          severity: warning
+          service: data-manager-hub
+        annotations:
+          summary: data-manager-hub p95 latency exceeds the absolute release limit
+          runbook: docs/runbooks/release-deployment.md
+      - alert: DmhReleaseOomKilled
+        expr: >-
+          max by (namespace, pod, container) (
+            kube_pod_container_status_last_terminated_reason{namespace=~"dmh-(staging|prod)",reason="OOMKilled"}
+          ) == 1
+        for: 5m
+        labels:
+          severity: critical
+          service: data-manager-hub
+        annotations:
+          summary: data-manager-hub container was OOMKilled
+          runbook: docs/runbooks/release-deployment.md
+      - alert: DmhReleaseRestartSpike
+        expr: >-
+          sum(increase(kube_pod_container_status_restarts_total{namespace=~"dmh-(staging|prod)"}[15m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: data-manager-hub
+        annotations:
+          summary: data-manager-hub restart count exceeds release gate
+          runbook: docs/runbooks/release-deployment.md
+      - alert: DmhConnectorRuntimeNotReady
+        expr: >-
+          min(dm_connector_runtime_readiness{namespace=~"dmh-(staging|prod)"}) < 0.5
+        for: 5m
+        labels:
+          severity: critical
+          service: data-manager-hub
+        annotations:
+          summary: data-manager-hub connector runtime readiness is down
+          runbook: docs/runbooks/release-deployment.md

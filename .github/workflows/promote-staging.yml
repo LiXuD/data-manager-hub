@@ -1,0 +1,59 @@
+name: Promote staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full master SHA of the successful dev deployment
+        required: true
+        type: string
+      release_gate_samples_path:
+        description: Protected runner path containing Prometheus gate samples JSON
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  attestations: read
+  deployments: write
+
+jobs:
+  resolve-dev:
+    name: resolve successful dev manifest
+    runs-on: ubuntu-24.04
+    outputs:
+      manifest_digest: ${{ steps.resolve.outputs.manifest_digest }}
+    steps:
+      - id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          deployments="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/deployments?environment=dev&sha=${SOURCE_SHA}" | jq 'add')"
+          while IFS= read -r id; do
+            state="$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" \
+              --jq 'sort_by(.updated_at // .created_at) | last | .state // "unknown"')"
+            if [[ "$state" == success ]]; then
+              digest="$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}" --jq '.payload' \
+                | jq -r 'if type == "string" then (try fromjson catch {}) else . end | .buildManifest // empty')"
+              [[ "$digest" == sha256:* ]] || continue
+              echo "manifest_digest=$digest" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done < <(jq -r '.[].id' <<< "$deployments")
+          echo "no successful dev deployment found for $SOURCE_SHA" >&2
+          exit 2
+  deploy:
+    needs: resolve-dev
+    uses: ./.github/workflows/_deploy-reusable.yml
+    with:
+      environment: staging
+      runner_label: nonprod-deploy
+      manifest_digest: ${{ needs.resolve-dev.outputs.manifest_digest }}
+      source_sha: ${{ inputs.source_sha }}
+      release_gate_samples_path: ${{ inputs.release_gate_samples_path }}
+    secrets: inherit

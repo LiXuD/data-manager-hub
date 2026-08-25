@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/schema#",
+  "type": "object",
+  "required": ["global", "images", "components", "existingSecrets"],
+  "properties": {
+    "global": {
+      "type": "object",
+      "required": ["environment", "springProfile", "manifestDigest", "nacosGroup", "serviceAccount", "workloadServiceAccount"],
+      "properties": {
+        "environment": {"enum": ["dev", "staging", "production"]},
+        "springProfile": {"enum": ["dev", "staging", "prod"]},
+        "manifestDigest": {"pattern": "^sha256:[0-9a-f]{64}$"},
+        "nacosGroup": {"pattern": "^(DEFAULT_GROUP|DMH_[A-Z]+_[A-Za-z0-9_-]+)$"},
+        "serviceAccount": {"const": "dmh-deployer"},
+        "workloadServiceAccount": {"const": "dmh-runtime"}
+      }
+    },
+    "existingSecrets": {
+      "type": "object",
+      "required": ["runtime", "internalAuth", "connectorTruststore", "ghcrPull"],
+      "properties": {
+        "runtime": {"const": "dmh-runtime"},
+        "internalAuth": {"const": "dmh-internal-auth"},
+        "connectorTruststore": {"const": "dmh-connector-truststore"},
+        "ghcrPull": {"const": "dmh-ghcr-pull"}
+      }
+    },
+    "images": {
+      "type": "object",
+      "required": ["components"],
+      "properties": {
+        "components": {
+          "type": "object",
+          "minProperties": 9,
+          "additionalProperties": {
+            "type": "object",
+            "required": ["repository", "digest"],
+            "properties": {
+              "repository": {"pattern": "^ghcr\\.io/lixud/data-manager-hub-[a-z0-9-]+$"},
+              "digest": {"pattern": "^sha256:[0-9a-f]{64}$"}
+            }
+          }
+        }
+      }
+    }
+  }
+}
