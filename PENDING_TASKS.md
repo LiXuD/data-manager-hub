@@ -19,12 +19,16 @@
 - `generic-http:2.0.0` 是宿主内置的标准单次 HTTPS 产品插件；`platform-core:1.0.0` 承担平台 Transport、安全和响应映射，二者均受签名目录事实、SecretRef 所有权和 Access 网络策略约束。
 - `ADVANCED_LEGACY` 草稿和历史继续只读可解释；旧 raw 变更、测试、发布和回滚接口不能覆盖 SIMPLE 事实，Legacy 可通过只读预检和 CAS 转换进入 SIMPLE。
 
-## CI/CD 流水线落地（仓库实现已落地，外部环境未验证）
+## CI/CD 流水线落地（开发阶段可执行，外部环境未验证）
 
 详细方案见 [CI/CD 流水线设计](docs/2026-08-22-ci-cd-pipeline-design.md)。
 目标技术栈为 GitHub Actions、GHCR、Kubernetes、Helm、Nacos 和 Prometheus，采用一次构建、
 同一 digest 依次晋级 dev、staging、production。仓库侧已经实现对应 Workflow、脚本、Chart 和
 Runbook；外部平台尚未连接，因此以下“已实现”只表示代码和隔离证据，不表示生产可用。
+
+当前阶段性成果：通过 `docker-compose.local-infra.yml`，Mac Docker 已提供 PostgreSQL 16、Redis 7、Kafka 3.7、Nacos 2.3.2；Mac
+本地可启动六个后端服务和 Vite 前端，六个后端健康检查均为 `UP`，数据库 V001—V050 已迁移并
+通过校验。该成果满足开发阶段执行目标，但不改变 staging/production 尚未真实发布的结论。
 
 | 阶段 | 状态 | 完成门槛 |
 |---|---|---|
@@ -81,6 +85,7 @@ render 必须通过当前 source SHA 的 immutable Nacos Group 覆盖参数；�
 | UAPI 指定日期程序员历史接口与前后端真实链路 | 已完成 | 2026-07-24 |
 | 外部请求连接器插件化阶段 0—5 与旧链退役 | 已完成并通过隔离验收 | 2026-08-10 |
 | 连接器粗粒度产品模型阶段 0—4 | 已实现并通过隔离自动化验收；未生产发布 | 2026-08-20 |
+| CI/CD 开发阶段本地运行闭环 | 已完成；非生产/生产 CD 未验证 | 2026-08-25 |
 
 ## 当前整改进度
 

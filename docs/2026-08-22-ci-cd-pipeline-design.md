@@ -1,7 +1,7 @@
 # data-manager-hub CI/CD 流水线方案 v2.0
 
 **文档日期**：2026-08-22
-**状态**：仓库侧实现与隔离验证已落地；GitHub 单人维护者治理已配置，PR #5 的 GitHub-hosted CI 已完成 NVD API preflight、OWASP Dependency-Check/CycloneDX、CodeQL 和 required-ci（run `32806667253`）；GHCR、Kubernetes、Nacos、快照平台和生产流量尚未连接验证
+**状态**：仓库侧实现与隔离验证已落地；开发阶段本地运行闭环已验证（Mac Docker 基础中间件 + Mac 后端/前端）；GitHub 单人维护者治理已配置，PR #5 的 GitHub-hosted CI 已完成 NVD API preflight、OWASP Dependency-Check/CycloneDX、CodeQL 和 required-ci（run `32806667253`）；GHCR、Kubernetes、Nacos、快照平台和生产流量尚未连接验证
 **目标平台**：GitHub Actions + GHCR + Kubernetes + Helm + Nacos + Prometheus
 **当前部署手册**：[DEPLOYMENT.md](DEPLOYMENT.md)（本次不修改，仍是当前可执行部署方式）
 
@@ -114,6 +114,7 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
 | `publish-nacos-config.sh` apply/verify 合同桩 | 通过 | 临时 Nacos HTTP API 桩验证 7 个 Data ID 的首次发布、幂等重跑、verify 和内容漂移 fail-closed；未连接真实 Nacos |
 | 本机 Docker Nacos 2.3.2 集成 | 通过 | 临时 namespace 实测 `plan → apply → 幂等 apply → verify`，直接篡改一个 Data ID 后 verify 返回非零并拒绝漂移；测试 namespace、配置和容器已清理，不代表共享/生产 Nacos |
 | Docker build/runtime | 部分通过 | 本机 Docker Desktop 已完成九个组件的 linux/amd64 和 linux/arm64 `--load` 构建；CI 在九个镜像逐一构建前以 `check-base-image-platforms.py` 实际检查锁定 digest 同时包含两种平台，并在 required CI 阶段验证每个 Dockerfile、构建上下文和入口层；Web 已在本机容器通过 `/healthz` 和首页检查，全部 Java/dbops/acceptance 镜像确认 UID 10001。dbops 镜像在 read-only root、无 Maven 网络的临时 PostgreSQL 16 环境中完成 preflight→首次迁移→重复迁移→status（28 changesets，重复执行 0）；acceptance 镜像在无网络模式下用预取依赖完成 `-DskipITs=true` 的 Maven 编译/离线生命周期预检，真实 Failsafe 验收仍需 staging/production 服务、登录凭据和数据断言。GHCR 推送、CI Runner 多架构矩阵、镜像签名/attestation 和九镜像制品全量回读仍需 GitHub Runner 证据 |
+| 开发阶段本地运行闭环 | 通过（阶段性成果） | Mac Docker 运行 PostgreSQL 16、Redis 7、Kafka 3.7、Nacos 2.3.2，端口仅绑定 loopback；Mac 本地启动六个后端服务和 Vite 前端，六个 `/actuator/health` 均为 `UP`，前端首页返回 200、代理未认证请求按预期返回 401；本地数据库 V001—V050 已迁移并通过 validate。该证据只覆盖开发运行态，不代表非生产或生产 CD 已部署 |
 | GitHub/GHCR/Kubernetes/Nacos/Prometheus/生产回滚 | 未验证 | GitHub 基础治理和 NVD Secret 已配置，PR #5 的 hosted CI run `32806667253` 已完成安全门；仍需要在线 Runner、GHCR 推送/回读、Secret、集群和真实流量 |
 | 外部平台状态审计 | 部分就绪 | `master` 已要求 `CI / required-ci`，单人模式审批数为 0；`dev`、`staging`、`production`、`plugin-signing` Environment 已配置分支策略和 `LiXuD` 自审（production wait timer 1800 秒）；当前分支的 CODEOWNERS 尚未合并到 `master`，在线 Runner 数为 0，GHCR Build Manifest、kubectl context、Nacos/Prometheus/快照平台仍未验证 |
 
