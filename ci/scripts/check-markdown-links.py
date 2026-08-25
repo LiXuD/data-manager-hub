@@ -38,11 +38,16 @@ def heading_anchors(content: str) -> set[str]:
 
 
 def markdown_files(root: Path) -> list[Path]:
+    # AGENTS.md is a local agent instruction file.  Its link to the ignored
+    # developer-only CLAUDE.md is intentionally not part of the published
+    # repository documentation and must not make the product-doc link gate
+    # fail on a clean GitHub runner.
     excluded = {".git", ".gitnexus", ".idea", ".claude", "node_modules", "target", "logs"}
     return sorted(
         path
         for path in root.rglob("*.md")
-        if not any(part in excluded for part in path.relative_to(root).parts)
+        if path.name != "AGENTS.md"
+        and not any(part in excluded for part in path.relative_to(root).parts)
     )
 
 
