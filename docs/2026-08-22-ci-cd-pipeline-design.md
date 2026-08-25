@@ -1,7 +1,7 @@
 # data-manager-hub CI/CD 流水线方案 v2.0
 
 **文档日期**：2026-08-22
-**状态**：仓库侧实现与隔离验证已落地；GitHub 单人维护者治理已配置，NVD Secret 名称已存在；GHCR、Kubernetes、Nacos、快照平台和生产流量尚未连接验证
+**状态**：仓库侧实现与隔离验证已落地；GitHub 单人维护者治理已配置，PR #5 的 GitHub-hosted CI 已完成 NVD API preflight、OWASP Dependency-Check/CycloneDX、CodeQL 和 required-ci（run `32806667253`）；GHCR、Kubernetes、Nacos、快照平台和生产流量尚未连接验证
 **目标平台**：GitHub Actions + GHCR + Kubernetes + Helm + Nacos + Prometheus
 **当前部署手册**：[DEPLOYMENT.md](DEPLOYMENT.md)（本次不修改，仍是当前可执行部署方式）
 
@@ -103,7 +103,7 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
 | OWASP Dependency-Check + CycloneDX/许可证 profile | 通过（真实扫描无未抑制 CVSS≥7 结果） | 2026-08-24 Java 21.0.7 扫描生成 SARIF/JSON；Spring Boot/Cloud/Alibaba 已升级到兼容的 3.5.16/2025.0.3/2025.0.0.0 组合，并锁定 HttpClient 5.6.4、HttpCore 5.4.3、Jackson 2.18.9、Commons Lang 3.18.0、Nacos logback adapter 1.1.5。`CVE-2025-7962` 对 `org.eclipse.angus:angus-activation:2.0.3` 属于 Angus Mail SMTP 的错误 CPE 归属，已按精确包坐标和版本 suppression，并在 jar 内容中确认没有 SMTP/mail 实现；该 suppression 不是通用 waiver，依赖升级后必须重新审查。Nacos/Prometheus/Tomcat/Kotlin/Validator 的 CPE 误匹配仅按精确组件+CVE suppression 记录理由；OSS Index 因未配置独立认证令牌被显式关闭，NVD/CodeQL/npm audit 仍是阻断门禁 |
 | `python3 -m unittest discover -s ci/tests -v` | 通过 | 64 个 CI 合同回归测试，覆盖 manifest、OCI 引用、不可变 Manifest tag、OCI SemVer 别名幂等/漂移拒绝、source/security 分类、docs-only build guard、受保护插件签名 Job、插件签名回执、镜像证据严格白名单、Workflow YAML/shell（含重复 YAML key 拒绝）、CI/Release 九镜像矩阵与 RuntimeContract 一致性、禁止 `pull_request_target` 和 PR 调度 self-hosted、Maven wrapper 与完整运行时工具链锁定、覆盖率基线/非有限值与未来 waiver 篡改防护、CODEOWNERS 关键路径保护、release-gates policy 防阈值放宽、namespace RBAC/admission policy（含 namespace/host namespace boundary）、显式 Prometheus 跨 namespace NetworkPolicy、严格迁移拒绝无 Liquibase 历史的数据库、集群 preflight（实际 Runner 身份、命名 Secret 读取及 Secret 列表/变更拒绝）、Nacos plan/apply/verify/漂移、Prometheus baseline/gate、gate sample 的环境/source SHA/Manifest 绑定、未知 gate 字段和非法 JSON 拒绝、持续告警规则、live image digest、Access 逐 Pod、初始 partition 防并行滚动与 connector readiness 配置绑定、Helm policy、内部认证 Secret、私有 Job（只允许 dbops/acceptance digest 且按镜像限制 entrypoint）、acceptance 离线依赖闭包、快照创建/恢复回执和 recovery position 类型、Job Failed 快速失败、非 dev Nacos loopback fail-closed 和 release gate、发布权限分层、夜间 CodeQL、SemVer 单调性、GHCR retention 保护规则、基础镜像双架构检查和新迁移 changelog 引用防漏、全零 push base fail-closed、Markdown 相对链接和本地锚点、Snapshot verifier 仅限受保护 Runner、GitHub 分支保护/CODEOWNERS/Environment 审批/Secret 名称/在线 Runner 外部状态审计 |
 | 本机 OCI Registry 2 Build Manifest/alias 集成 | 通过 | 真实 registry 实测 canonical Manifest push、同 tag 同内容复用、同 tag 内容篡改拒绝，以及 ORAS digest→SemVer tag 保持同一 descriptor；临时 registry 已清理，不代表 GHCR 权限/attestation 已验证 |
-| `arch-scan.sh`、契约、Workflow YAML/shell、Markdown、Action pin、release-gates policy 和 Prometheus rule 检查 | 通过 | 6 个 Workflow、81 个 `run` 块由 `check-workflows.py` 解析并经 `bash -n`；`check-markdown-links.py` 校验 24 个 Markdown 文件的相对链接和本地锚点；CI meta 与本地复核均使用 digest 锁定的 actionlint 1.7.12 和 Prometheus 2.54.0 `promtool check rules`，另经 release-gates policy verifier 复核；失败即阻断 required CI |
+| `arch-scan.sh`、契约、Workflow YAML/shell、Markdown、Action pin、release-gates policy 和 Prometheus rule 检查 | 通过 | 6 个 Workflow、84 个 `run` 块由 `check-workflows.py` 解析并经 `bash -n`；`check-markdown-links.py` 校验 23 个 Markdown 文件的相对链接和本地锚点；CI meta 与本地复核均使用 digest 锁定的 actionlint 1.7.12 和 Prometheus 2.54.0 `promtool check rules`，另经 release-gates policy verifier 复核；失败即阻断 required CI |
 | 本机 Docker PostgreSQL 16 严格迁移集成 | 通过 | 临时 PostgreSQL 16 容器执行 `preflight`、首次 `update`、重复 `update`、`status`；人为持有 `DATABASECHANGELOGLOCK` 后 `preflight` 以非零退出并拒绝自动清锁；容器和数据库自动清理，未触碰项目现有数据库 |
 | `verify-v048-routing.sh` | 通过 | fresh、upgrade、repeat、duplicate、ambiguous、rollback 矩阵；隔离数据库自动清理 |
 | `verify-v049-connector-product-spec.sh` | 通过 | fresh、upgrade、repeat、HALT、U049/reapply 矩阵 |
@@ -114,7 +114,7 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
 | `publish-nacos-config.sh` apply/verify 合同桩 | 通过 | 临时 Nacos HTTP API 桩验证 7 个 Data ID 的首次发布、幂等重跑、verify 和内容漂移 fail-closed；未连接真实 Nacos |
 | 本机 Docker Nacos 2.3.2 集成 | 通过 | 临时 namespace 实测 `plan → apply → 幂等 apply → verify`，直接篡改一个 Data ID 后 verify 返回非零并拒绝漂移；测试 namespace、配置和容器已清理，不代表共享/生产 Nacos |
 | Docker build/runtime | 部分通过 | 本机 Docker Desktop 已完成九个组件的 linux/amd64 和 linux/arm64 `--load` 构建；CI 在九个镜像逐一构建前以 `check-base-image-platforms.py` 实际检查锁定 digest 同时包含两种平台，并在 required CI 阶段验证每个 Dockerfile、构建上下文和入口层；Web 已在本机容器通过 `/healthz` 和首页检查，全部 Java/dbops/acceptance 镜像确认 UID 10001。dbops 镜像在 read-only root、无 Maven 网络的临时 PostgreSQL 16 环境中完成 preflight→首次迁移→重复迁移→status（28 changesets，重复执行 0）；acceptance 镜像在无网络模式下用预取依赖完成 `-DskipITs=true` 的 Maven 编译/离线生命周期预检，真实 Failsafe 验收仍需 staging/production 服务、登录凭据和数据断言。GHCR 推送、CI Runner 多架构矩阵、镜像签名/attestation 和九镜像制品全量回读仍需 GitHub Runner 证据 |
-| GitHub/GHCR/Kubernetes/Nacos/Prometheus/生产回滚 | 未验证 | GitHub 基础治理和 NVD Secret 名称已配置；仍需要在线 Runner、GHCR 推送/回读、Secret、集群和真实流量 |
+| GitHub/GHCR/Kubernetes/Nacos/Prometheus/生产回滚 | 未验证 | GitHub 基础治理和 NVD Secret 已配置，PR #5 的 hosted CI run `32806667253` 已完成安全门；仍需要在线 Runner、GHCR 推送/回读、Secret、集群和真实流量 |
 | 外部平台状态审计 | 部分就绪 | `master` 已要求 `CI / required-ci`，单人模式审批数为 0；`dev`、`staging`、`production`、`plugin-signing` Environment 已配置分支策略和 `LiXuD` 自审（production wait timer 1800 秒）；当前分支的 CODEOWNERS 尚未合并到 `master`，在线 Runner 数为 0，GHCR Build Manifest、kubectl context、Nacos/Prometheus/快照平台仍未验证 |
 
 ## 4. CI 工作流和 required check
@@ -251,7 +251,9 @@ Failsafe；因此 acceptance Job 默认执行 `integration.tests=true` 的真实
 ### 4.5 安全门禁
 
 - Maven `connector-supply-chain-scan` profile 执行 OWASP Dependency-Check、CycloneDX/许可证报告；
+- 安全 Job 先用 `ci/scripts/verify-nvd-api.sh` 以不泄露值的方式验证 `NVD_API_KEY`，再执行扫描；NVD 数据目录显式缓存，扫描成功后保存缓存，避免后续 PR 重复冷启动；
 - CodeQL Java + JavaScript/TypeScript；
+- CodeQL Java 构建使用仓库锁定的 `./mvnw`，不调用会改写 wrapper 分发版本的自动构建器；
 - PR/Push 的安全门随源码变更执行，夜间 `scheduled-security.yml` 再执行完整 Java + JavaScript/TypeScript CodeQL 扫描；
 - npm lockfile 使用 `npm ci`，高危/严重依赖在安全 Job 失败；
 - tracked source 的私钥、云密钥和 GitHub token pattern guard；

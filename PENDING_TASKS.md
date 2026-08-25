@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
 **最后更新**: 2026-08-25
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现；连接器“一个粗粒度插件 + 一份配置”的产品模型阶段 0—4 也已完成代码实现和隔离自动化验收，包括 Manifest v2/高层 SDK、V049/V050、`connectorSpec` 控制面、`generic-http:2.0.0`、Legacy 转换/清点和简化前端工作区。设计阶段 5 的逐厂商生产迁移、容量/滚动升级观察以及阶段 6 的旧高级入口最终退役仍未执行。CI/CD v2.0 的仓库合同、Workflow、Dockerfile、Helm、严格迁移、快照回执、发布门禁、不可变 OCI SemVer 别名、恢复 Runbook 和只读 GitHub 前置审计脚本已落地；OWASP/CycloneDX 供应链扫描已通过，`CVE-2025-7962` 仅对 `org.eclipse.angus:angus-activation:2.0.3` 的错误 CPE 归属做了版本精确、可审计 suppression，`NVD_API_KEY` Secret 名称已配置，需由下一次 CI 实际扫描证明可用。GitHub 单人维护者模式的分支保护和四个 Environment 已配置；ARC Runner/RBAC、GHCR、Nacos、Prometheus、签名仓库、快照 adapter、真实 staging/prod 发布和生产回滚仍未验证。上述结论不表示已经部署到生产环境。
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现；连接器“一个粗粒度插件 + 一份配置”的产品模型阶段 0—4 也已完成代码实现和隔离自动化验收，包括 Manifest v2/高层 SDK、V049/V050、`connectorSpec` 控制面、`generic-http:2.0.0`、Legacy 转换/清点和简化前端工作区。设计阶段 5 的逐厂商生产迁移、容量/滚动升级观察以及阶段 6 的旧高级入口最终退役仍未执行。CI/CD v2.0 的仓库合同、Workflow、Dockerfile、Helm、严格迁移、快照回执、发布门禁、不可变 OCI SemVer 别名、恢复 Runbook 和只读 GitHub 前置审计脚本已落地；OWASP/CycloneDX 供应链扫描、NVD API preflight、CodeQL 和 required-ci 已在 GitHub-hosted PR run `32806667253` 通过，`CVE-2025-7962` 仅对 `org.eclipse.angus:angus-activation:2.0.3` 的错误 CPE 归属做了版本精确、可审计 suppression。GitHub 单人维护者模式的分支保护和四个 Environment 已配置；ARC Runner/RBAC、GHCR、Nacos、Prometheus、签名仓库、快照 adapter、真实 staging/prod 发布和生产回滚仍未验证。上述结论不表示已经部署到生产环境。
 
 ---
 
@@ -48,7 +48,7 @@ Runbook；外部平台尚未连接，因此以下“已实现”只表示代码�
 - [ ] 配置 GHCR 包权限和保留策略：production digest/Manifest、九镜像与 Build Manifest 的 OCI SemVer 别名永不删除，候选、SBOM、provenance 至少 365 天；完成一次 retention audit，并在真实 GHCR 回读十个别名的 digest 一致性。
 - [ ] 配置插件签名/KMS、Nexus/S3 adapter、TrustStore，并用真实插件 receipt 完成一次签名回读。
 - [ ] 配置 Nacos namespace/immutable Group、PostgreSQL16、Redis、Kafka、Ingress/TLS、StorageClass 和 Prometheus 指标/短期 bearer Token；非 loopback Prometheus URL 无 Token 必须保持 fail-closed。
-- [x] 已在 GitHub Actions Repository Secret 配置 `NVD_API_KEY`（只记录名称，不记录值）；下一步必须重新运行 PR #5 的完整 CI，确认 OWASP Dependency-Check 使用 API Key 后在合理时间内完成并保留 SARIF/JSON 证据。
+- [x] 已在 GitHub Actions Repository Secret 配置 `NVD_API_KEY`（只记录名称，不记录值）；PR #5 的 GitHub-hosted CI run `32806667253` 已通过不泄露值的 API preflight、OWASP Dependency-Check/CycloneDX、CodeQL 和 `CI / required-ci`，并上传 SARIF/JSON 供应链证据；NVD 数据目录已保存为 Actions cache，后续 PR 不应重复冷启动。
 - [x] OWASP Dependency-Check/CycloneDX 供应链门禁：Spring Boot/Cloud/Alibaba 已升至兼容的 3.5.16/2025.0.3/2025.0.0.0 组合，并修复 HttpClient、HttpCore、Jackson、Commons Lang 等可用补丁；2026-08-24 扫描无未抑制 CVSS≥7 结果。`CVE-2025-7962` 对 `org.eclipse.angus:angus-activation:2.0.3` 属于 Angus Mail SMTP 的错误 CPE 归属，已用版本精确 suppression 记录 jar 内容与适用边界；依赖升级后必须重新审查，不得把 suppression 当作通用 waiver。Nacos/Prometheus/Tomcat/Kotlin/Validator 的已审计 CPE 误匹配同样仅按精确组件+CVE suppression 记录理由；OSS Index 未配置独立认证令牌，已在 Maven profile 中显式关闭并由 NVD/CodeQL/npm audit 分担门禁，不能误报为完整 OSS Index 覆盖。
 - [ ] 部署并验证 PostgreSQL snapshot/PITR adapter 与 `DMH_SNAPSHOT_SIGNATURE_VERIFIER`；生产快照必须由晋级流程绑定成功 staging Deployment 时间戳，完成快照恢复到新实例、Liquibase 校验和、Secret 切换与 Helm rollback 演练。
 - [ ] 在 dev→staging 完成真实 acceptance、登录态 UI、容量、Access Pod/PVC、Nacos/制品仓库故障演练；在 production 完成无流量彩排、具体 digest 回滚和至少两次成功发布，连续观察 14 天。
