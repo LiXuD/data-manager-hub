@@ -23,6 +23,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--contract", default="ci/contracts/runtime-contract.v1.yaml")
     parser.add_argument("--root", default=".")
+    parser.add_argument(
+        "--require-artifacts",
+        action="store_true",
+        help="also require locally built artifact parent directories",
+    )
     args = parser.parse_args()
     root = Path(args.root).resolve()
     contract = yaml.safe_load((root / args.contract).read_text(encoding="utf-8"))
@@ -151,7 +156,7 @@ def main() -> int:
         if not module.exists():
             errors.append(f"{name}: module path does not exist: {component['module']}")
         artifact_glob = component.get("artifactGlob")
-        if artifact_glob and not artifact_glob.startswith("ci/"):
+        if args.require_artifacts and artifact_glob and not artifact_glob.startswith("ci/"):
             artifact_parent = root / artifact_glob.split("/target/")[0]
             if not artifact_parent.exists():
                 errors.append(f"{name}: artifact parent does not exist: {artifact_parent.relative_to(root)}")

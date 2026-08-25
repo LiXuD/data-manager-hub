@@ -86,6 +86,14 @@ def verify_new_migration_contract(root: Path, changed: list[Path]) -> list[str]:
         match = re.fullmatch(r"V([0-9]+)__.+\.sql", path.name)
         if not match:
             continue
+        # The repository's master branch predates V017--V050, so a PR based
+        # on the long-lived dev branch can legitimately contain those already
+        # published legacy migrations in its merge-base diff.  Rollback and
+        # immutable-history contracts start at V051; requiring U017/U021/etc.
+        # would manufacture a false failure for historical files that never
+        # had a rollback artifact.
+        if int(match.group(1)) < 51:
+            continue
         relative = path.relative_to(root)
         rollback_candidates = sorted((root / "sql" / "rollbacks").glob(f"U{match.group(1)}__*.sql"))
         if not rollback_candidates:
