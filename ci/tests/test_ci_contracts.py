@@ -368,7 +368,7 @@ class CiContractTests(unittest.TestCase):
 
     def test_codeowners_protects_ci_supply_chain_inputs(self) -> None:
         result = subprocess.run(
-            ["python3", str(SCRIPTS / "verify-policy-files.py"), "--base-ref", "HEAD"],
+            ["python3", str(SCRIPTS / "verify-policy-files.py"), "--base-ref", "origin/master"],
             cwd=ROOT,
             text=True,
             capture_output=True,
