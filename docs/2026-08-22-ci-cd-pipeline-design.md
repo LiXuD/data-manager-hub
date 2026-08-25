@@ -1,13 +1,13 @@
 # data-manager-hub CI/CD 流水线方案 v2.0
 
 **文档日期**：2026-08-22
-**状态**：仓库侧实现与隔离验证已落地；GitHub、GHCR、Kubernetes、Nacos、快照平台和生产流量尚未连接验证
+**状态**：仓库侧实现与隔离验证已落地；GitHub 单人维护者治理已配置，NVD Secret 名称已存在；GHCR、Kubernetes、Nacos、快照平台和生产流量尚未连接验证
 **目标平台**：GitHub Actions + GHCR + Kubernetes + Helm + Nacos + Prometheus
 **当前部署手册**：[DEPLOYMENT.md](DEPLOYMENT.md)（本次不修改，仍是当前可执行部署方式）
 
 > 这份文档已经从“目标设计”升级为“设计、代码和验证合同”。仓库中的 Workflow、
 > Dockerfile、Helm Chart、迁移门禁、快照回执校验、发布门禁和 Runbook 已提供真实入口，
-> 但没有 GitHub Environment、集群 Runner、GHCR 包、生产 Secret 或真实生产发布证据时，
+> 但没有可用的集群 Runner、GHCR 包、生产 Secret 或真实生产发布证据时，
 > 不能把仓库实现描述为生产已部署。
 
 ## 1. 审查报告吸收与本方案的判断
@@ -57,6 +57,25 @@ billing/governance 的后续能力。Prometheus、快照和制品仓库采用可
 - 不在数据库迁移失败时自动反向迁移或重建生产库；
 - 不在本次仓库变更中修改 `docs/DEPLOYMENT.md`。
 
+### 2.3 单人维护者模式（当前启用）
+
+本仓库由 `LiXuD` 一人维护，且项目采用 AI VibeCoding；不创建虚假 reviewer、机器人账号或
+“自审即独立复核”的证明。当前治理合同明确区分“可追责的单人发布”与“双人职责分离”：
+
+- `master` 仍要求 `CI / required-ci` 成功，启用管理员强制执行、线性历史、会话解决，禁止
+  force-push 和删除；PR 审批数为 `0`，不声称存在 CODEOWNERS 独立审批，CODEOWNERS 只保留
+  责任路径元数据；
+- `dev`、`staging`、`production`、`plugin-signing` Environment 已建立并限制到受保护分支；
+  后三个 Environment 的 required reviewer 配置为 `LiXuD`，`prevent_self_review=false`，允许
+  同一维护者完成发布确认。`production` 额外保留 1800 秒（30 分钟）wait timer，给维护者留出
+  人工核对、暂停或取消窗口；
+- 生产仍只能通过手工 `workflow_dispatch` 晋级，并继续强制 Manifest digest、SnapshotReceipt、
+  SLO/告警、attestation、Nacos/迁移/回滚等门禁；Environment 自审不替代这些技术门禁；
+- 单人模式不等价于双人复核，风险由强制 CI、不可变制品、最小权限 Runner、等待窗口、可审计
+  Deployment Receipt 和可演练的恢复 Runbook 降低。未来新增独立维护者时，切回双人模式需将
+  PR 审批数恢复为至少 1、启用 CODEOWNERS/过期审批失效，并将生产 Environment 设置为
+  `prevent_self_review=true`。
+
 ## 3. 当前基线和已验证事实
 
 仓库当前为五域结构：`masterdata`、`access`、`billing`、`identity`、`governance`，另有
@@ -95,8 +114,8 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
 | `publish-nacos-config.sh` apply/verify 合同桩 | 通过 | 临时 Nacos HTTP API 桩验证 7 个 Data ID 的首次发布、幂等重跑、verify 和内容漂移 fail-closed；未连接真实 Nacos |
 | 本机 Docker Nacos 2.3.2 集成 | 通过 | 临时 namespace 实测 `plan → apply → 幂等 apply → verify`，直接篡改一个 Data ID 后 verify 返回非零并拒绝漂移；测试 namespace、配置和容器已清理，不代表共享/生产 Nacos |
 | Docker build/runtime | 部分通过 | 本机 Docker Desktop 已完成九个组件的 linux/amd64 和 linux/arm64 `--load` 构建；CI 在九个镜像逐一构建前以 `check-base-image-platforms.py` 实际检查锁定 digest 同时包含两种平台，并在 required CI 阶段验证每个 Dockerfile、构建上下文和入口层；Web 已在本机容器通过 `/healthz` 和首页检查，全部 Java/dbops/acceptance 镜像确认 UID 10001。dbops 镜像在 read-only root、无 Maven 网络的临时 PostgreSQL 16 环境中完成 preflight→首次迁移→重复迁移→status（28 changesets，重复执行 0）；acceptance 镜像在无网络模式下用预取依赖完成 `-DskipITs=true` 的 Maven 编译/离线生命周期预检，真实 Failsafe 验收仍需 staging/production 服务、登录凭据和数据断言。GHCR 推送、CI Runner 多架构矩阵、镜像签名/attestation 和九镜像制品全量回读仍需 GitHub Runner 证据 |
-| GitHub/GHCR/Kubernetes/Nacos/Prometheus/生产回滚 | 未验证 | 需要外部权限、Runner、Secret、集群和真实流量 |
-| 外部平台状态审计 | 未就绪 | 只读 `verify-github-readiness.py` 在 `master` 分支保护 API 返回 404（Branch not protected）；GitHub Environments 数量为 0、kubectl 无可用 context、GHCR Build Manifest 包不存在。本次未修改 GitHub、GHCR 或集群状态；Docker 仅完成本机隔离构建，不代表 GHCR 或集群已连接 |
+| GitHub/GHCR/Kubernetes/Nacos/Prometheus/生产回滚 | 未验证 | GitHub 基础治理和 NVD Secret 名称已配置；仍需要在线 Runner、GHCR 推送/回读、Secret、集群和真实流量 |
+| 外部平台状态审计 | 部分就绪 | `master` 已要求 `CI / required-ci`，单人模式审批数为 0；`dev`、`staging`、`production`、`plugin-signing` Environment 已配置分支策略和 `LiXuD` 自审（production wait timer 1800 秒）；当前分支的 CODEOWNERS 尚未合并到 `master`，在线 Runner 数为 0，GHCR Build Manifest、kubectl context、Nacos/Prometheus/快照平台仍未验证 |
 
 ## 4. CI 工作流和 required check
 
@@ -108,7 +127,7 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
 | `.github/workflows/build-release.yml` | master CI 成功的 `workflow_run` | 九镜像、多架构、SBOM、provenance、外部插件签名回读、Manifest、自动 dev | 只接受同仓库 master SHA；构建和受保护插件 Job 完成后才发布 Manifest |
 | `.github/workflows/_deploy-reusable.yml` | 被 dev/staging/prod 调用 | digest 验证、Nacos、DB Job、Helm、Access、验收、回滚、Deployment Receipt | 仅 self-hosted protected Runner + Environment |
 | `.github/workflows/promote-staging.yml` | 手工 | 找到同 SHA 的成功 dev Deployment，调用 staging | `nonprod-deploy` Runner |
-| `.github/workflows/promote-production.yml` | 手工 + production Environment 审批 | SemVer、staging 成功、快照、生产部署、tag/release | `prod-deploy` Runner；不允许自审 |
+| `.github/workflows/promote-production.yml` | 手工 + production Environment 审批 | SemVer、staging 成功、快照、生产部署、tag/release | `prod-deploy` Runner；当前单人模式允许 `LiXuD` 自审并保留 30 分钟 wait timer |
 | `.github/workflows/scheduled-security.yml` | 每夜/每周 | 全量依赖扫描、迁移矩阵和契约复核 | 不产生部署 |
 
 所有第三方 Action 使用完整 commit SHA；`ci/scripts/check-actions-pinned.py` 拒绝 tag、branch
@@ -483,7 +502,8 @@ GitHub Deployment Receipt。dev 不要求生产快照和 15 分钟门禁，但�
 - 版本占用检查同时探测 Release 和 Git tag；只有两个 API 都明确返回 HTTP 404 才视为未占用，权限、限流、网络或解析错误均 fail-closed；
 - 同 SHA staging Deployment success；
 - production snapshot adapter/receipt；
-- production Environment 非发起人审批；
+- 当前单人模式下 production Environment 由 `LiXuD` 自审（`prevent_self_review=false`），并等待
+  1800 秒；这不是独立复核。切回双人模式时才要求非发起人审批；
 - Manifest、镜像、插件和 attestation 全部复验。
 
 部署成功后才发布十个不可变 OCI SemVer 别名（九个运行时镜像和一个 Build Manifest），再创建
@@ -599,7 +619,9 @@ ValidatingAdmissionPolicy 尚未完成 type-check、绑定丢失或错误地放�
 必须在 GitHub/集群侧完成：
 
 1. master 默认分支、required `CI / required-ci`、CODEOWNERS、禁止 force-push/删除和 stale approval；
-2. `dev`、`staging`、`production` Environments，其中 production 非发起人审批；外部插件另外配置受保护的
+   当前单人模式的 PR 审批数为 0，不把 CODEOWNERS 误报为独立 reviewer；
+2. `dev`、`staging`、`production` Environments，其中 staging/production 由 `LiXuD` 自审且
+   `prevent_self_review=false`；production 另加 1800 秒 wait timer。外部插件另外配置受保护的
    `plugin-signing` Environment 和只允许签名仓库/密钥的 Runner；
 3. 先应用 `deploy/rbac/overlays/dev|staging|production`，由 overlay 预置 `dmh-deployer`、`dmh-runtime`
    ServiceAccount，并把 `dmh-deployer` Role 绑定到 ARC Runner ServiceAccount；Chart 内业务 Pod 使用
@@ -639,22 +661,26 @@ ValidatingAdmissionPolicy 尚未完成 type-check、绑定丢失或错误地放�
 
 ### 12.1 GitHub 与 GHCR
 
-先执行仓库提供的只读 GitHub 前置审计；它会校验默认分支、required check、stale approval、
+先执行仓库提供的只读 GitHub 前置审计；它会校验默认分支、required check、单人/双人 review 合同、
 CODEOWNERS 关键路径、Environment reviewer/分支策略、必需 Environment Secret **名称**和在线受保护
 Runner label，并把不含 Secret 值的证据 JSON 写入指定路径。审计失败必须保持 production Environment 禁用：
 
 ```bash
 python3 ci/scripts/verify-github-readiness.py \
   --repository LiXuD/data-manager-hub \
+  --review-mode solo-maintainer \
   --output evidence/github-readiness.json
 ```
 
-该脚本只调用 `gh api` 的读取接口，不创建或修改 GitHub 资源；默认要求 `dev`、`staging`、
-`production`、`plugin-signing` 四个 Environment，`staging`/`production`/`plugin-signing` 至少
-一个 reviewer 和受保护/自定义部署分支，以及 `nonprod-deploy`、`prod-deploy`、`plugin-signing`
-三个在线 Runner label；staging/production/plugin-signing 还必须存在 Workflow 实际引用的
-Prometheus、snapshot、plugin-signing Secret 名称。若平台采用不同命名，必须显式传入 `--require-*`
-参数并把变更记录在平台
+该脚本只调用 `gh api` 的读取接口，不创建或修改 GitHub 资源。`--review-mode solo-maintainer`
+要求分支保护审批数为 0、不能声称 CODEOWNERS 独立审批；同时仍要求 `dev`、`staging`、
+`production`、`plugin-signing` 四个 Environment，staging/production/plugin-signing 至少一个
+配置 reviewer、受保护/自定义部署分支，以及 `nonprod-deploy`、`prod-deploy`、`plugin-signing`
+三个在线 Runner label。单人模式还必须在人工证据中记录 staging/production/plugin-signing 的
+`LiXuD` reviewer、`prevent_self_review=false` 和 production 的 1800 秒 wait timer；这些字段只
+证明门禁已显式配置，不证明独立复核。staging/production/plugin-signing 还必须存在 Workflow
+实际引用的 Prometheus、snapshot、plugin-signing Secret 名称。若平台采用不同命名，必须显式传入
+`--require-*` 参数并把变更记录在平台
 变更单中，不能通过删除检查项把审计变成 fail-open。Runner label 只能证明在线 Runner 注册了该
 标签，不能替代组织级 Runner Group 的 fork/Environment 隔离审计；后者仍须按第 10 节的平台变更单
 和 12.1 的 `gh run list` 证据复核。

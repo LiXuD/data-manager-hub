@@ -189,13 +189,21 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
     reviews = protection.get("required_pull_request_reviews") or {}
     if not isinstance(reviews, dict):
         raise GithubApiError("required_pull_request_reviews must be an object")
-    if reviews.get("dismiss_stale_reviews") is not True:
-        raise GithubApiError("branch protection must dismiss stale approvals")
-    if reviews.get("require_code_owner_reviews") is not True:
-        raise GithubApiError("branch protection must require CODEOWNERS review")
     approval_count = reviews.get("required_approving_review_count")
-    if not isinstance(approval_count, int) or isinstance(approval_count, bool) or approval_count < 1:
-        raise GithubApiError("branch protection must require at least one approval")
+    if not isinstance(approval_count, int) or isinstance(approval_count, bool) or approval_count < 0:
+        raise GithubApiError("branch protection approval count must be a non-negative integer")
+    if args.review_mode == "two-person":
+        if reviews.get("dismiss_stale_reviews") is not True:
+            raise GithubApiError("branch protection must dismiss stale approvals")
+        if reviews.get("require_code_owner_reviews") is not True:
+            raise GithubApiError("branch protection must require CODEOWNERS review")
+        if approval_count < 1:
+            raise GithubApiError("branch protection must require at least one approval")
+    else:
+        if approval_count != 0:
+            raise GithubApiError("solo-maintainer mode must not claim an independent PR approval")
+        if reviews.get("require_code_owner_reviews") is True:
+            raise GithubApiError("solo-maintainer mode cannot claim independent CODEOWNERS review")
 
     codeowners_endpoint = f"repos/{repository}/contents/.github/CODEOWNERS?ref={args.default_branch}"
     codeowners = decode_codeowners(gh_json(repository, codeowners_endpoint), codeowners_endpoint)
@@ -279,6 +287,7 @@ def audit(args: argparse.Namespace) -> dict[str, Any]:
         "repository": repository,
         "defaultBranch": repo.get("default_branch"),
         "requiredCheck": args.required_check,
+        "reviewMode": args.review_mode,
         "requiredChecks": sorted(contexts),
         "requiredApprovals": approval_count,
         "codeownersSha256": hashlib.sha256(codeowners.encode("utf-8")).hexdigest(),
@@ -298,6 +307,12 @@ def main() -> int:
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument("--default-branch", default="master")
     parser.add_argument("--required-check", default="CI / required-ci")
+    parser.add_argument(
+        "--review-mode",
+        choices=("two-person", "solo-maintainer"),
+        default="two-person",
+        help="branch review contract to audit; solo-maintainer is an explicit self-approval exception",
+    )
     parser.add_argument("--require-environment", action="append", default=None)
     parser.add_argument("--require-environment-approval", action="append", default=None)
     parser.add_argument("--require-runner-label", action="append", default=None)

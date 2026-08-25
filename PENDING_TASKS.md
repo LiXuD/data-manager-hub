@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
 **最后更新**: 2026-08-25
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现；连接器“一个粗粒度插件 + 一份配置”的产品模型阶段 0—4 也已完成代码实现和隔离自动化验收，包括 Manifest v2/高层 SDK、V049/V050、`connectorSpec` 控制面、`generic-http:2.0.0`、Legacy 转换/清点和简化前端工作区。设计阶段 5 的逐厂商生产迁移、容量/滚动升级观察以及阶段 6 的旧高级入口最终退役仍未执行。CI/CD v2.0 的仓库合同、Workflow、Dockerfile、Helm、严格迁移、快照回执、发布门禁、不可变 OCI SemVer 别名、恢复 Runbook 和只读 GitHub 前置审计脚本已落地；OWASP/CycloneDX 供应链扫描已通过，`CVE-2025-7962` 仅对 `org.eclipse.angus:angus-activation:2.0.3` 的错误 CPE 归属做了版本精确、可审计 suppression，真实 NVD 风险仍 fail-closed。GitHub Environments、ARC Runner/RBAC、GHCR、Nacos、Prometheus、签名仓库、快照 adapter、真实 staging/prod 发布和生产回滚仍未验证。上述结论不表示已经部署到生产环境。
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现；连接器“一个粗粒度插件 + 一份配置”的产品模型阶段 0—4 也已完成代码实现和隔离自动化验收，包括 Manifest v2/高层 SDK、V049/V050、`connectorSpec` 控制面、`generic-http:2.0.0`、Legacy 转换/清点和简化前端工作区。设计阶段 5 的逐厂商生产迁移、容量/滚动升级观察以及阶段 6 的旧高级入口最终退役仍未执行。CI/CD v2.0 的仓库合同、Workflow、Dockerfile、Helm、严格迁移、快照回执、发布门禁、不可变 OCI SemVer 别名、恢复 Runbook 和只读 GitHub 前置审计脚本已落地；OWASP/CycloneDX 供应链扫描已通过，`CVE-2025-7962` 仅对 `org.eclipse.angus:angus-activation:2.0.3` 的错误 CPE 归属做了版本精确、可审计 suppression，`NVD_API_KEY` Secret 名称已配置，需由下一次 CI 实际扫描证明可用。GitHub 单人维护者模式的分支保护和四个 Environment 已配置；ARC Runner/RBAC、GHCR、Nacos、Prometheus、签名仓库、快照 adapter、真实 staging/prod 发布和生产回滚仍未验证。上述结论不表示已经部署到生产环境。
 
 ---
 
@@ -28,25 +28,27 @@ Runbook；外部平台尚未连接，因此以下“已实现”只表示代码�
 
 | 阶段 | 状态 | 完成门槛 |
 |---|---|---|
-| 0. 仓库治理和部署基础设施 | 仓库合同已实现，平台未启用 | `master` 保护、required checks、三个 GitHub Environment、隔离 Runner 和 namespace RBAC 生效 |
+| 0. 仓库治理和部署基础设施 | 仓库合同已实现，GitHub 单人治理已配置 | `master` 保护、required checks、四个 GitHub Environment、隔离 Runner 和 namespace RBAC 生效 |
 | 1. CI 门禁 | 已实现并隔离验证 | Java/Web、coverage ratchet、架构、V048—V050、九镜像 Docker build/smoke、依赖扫描和 Helm policy 在 GitHub required check 生效 |
 | 2. 制品供应链 | 已实现，GHCR/签名仓库待连接 | 九镜像、多架构、SBOM、provenance、attestation、Manifest digest 交接和生产 OCI SemVer 别名可在 CI 实际推送并复验 |
-| 3. 非生产 CD | Workflow/Chart 已实现，集群未验证 | dev 自动部署、staging 审批、acceptance、容量和失败演练留存真实证据 |
+| 3. 非生产 CD | Workflow/Chart 已实现，集群未验证 | dev 自动部署、staging 单人自审+等待窗口、acceptance、容量和失败演练留存真实证据 |
 | 4. 生产 CD | Workflow/Runbook 已实现，生产未启用 | SemVer、SnapshotReceipt、SLO、真实生产发布、具体 digest 回滚和至少两次成功发布完成 |
 
 ### CI/CD 外部落地待办
 
 以下事项不能由仓库文件自证，完成前不得把流水线标记为“生产已部署”：
 
-- [ ] 将 `master` 设置为默认受保护分支，启用 `CI / required-ci`、CODEOWNERS、stale approval 失效和禁止 force-push/删除。
-- [ ] GitHub 设置完成后运行只读 `python3 ci/scripts/verify-github-readiness.py --repository LiXuD/data-manager-hub --output evidence/github-readiness.json`；审计必须同时证明四个 Environment、stale approval/CODEOWNERS/required check、受保护分支策略和三个在线部署 Runner label，失败时不得启用 production Environment。
-- [ ] 创建 `dev`、`staging`、`production` GitHub Environment；production 配置非发起人审批和独立 `prod-deploy` Runner Group；外部插件签名另建受保护 `plugin-signing` Environment 和 `plugin-signing` Runner。
+- [x] 将 `master` 设置为默认受保护分支，启用 `CI / required-ci`、CODEOWNERS 路径合同、stale approval 失效和禁止 force-push/删除；当前单人模式的 PR 审批数为 0，不把 CODEOWNERS 误报为独立 reviewer。
+- [ ] 合并含 `.github/CODEOWNERS` 的分支后运行只读 `python3 ci/scripts/verify-github-readiness.py --repository LiXuD/data-manager-hub --review-mode solo-maintainer --output evidence/github-readiness.json`；审计必须同时证明四个 Environment、单人 review 合同、required check、受保护分支策略和三个在线部署 Runner label，失败时不得启用 production Environment。
+- [x] 创建 `dev`、`staging`、`production`、`plugin-signing` GitHub Environment；staging/production/plugin-signing 的 required reviewer 为 `LiXuD` 且 `prevent_self_review=false`，production wait timer 为 1800 秒。该配置允许单人自审但不提供独立复核；仍需配置独立 `nonprod-deploy`/`prod-deploy`/`plugin-signing` Runner。
+- [ ] 将来增加独立 reviewer 后，切回双人模式：PR 至少 1 个审批、启用 CODEOWNERS review、恢复 stale approval 失效，并把 staging/production/plugin-signing 的 `prevent_self_review` 设为 `true`。
 - [ ] 先应用 `deploy/rbac/overlays/dev|staging|production`，由 overlay 预置 `dmh-deployer`/`dmh-runtime` ServiceAccount，并将 `dmh-deployer` Role 绑定到 ARC Runner ServiceAccount；受保护 ARC Runner 使用 `dmh-deployer` token，Chart 业务 Pod 使用无权限且不自动挂载 token 的 `dmh-runtime` ServiceAccount。再部署 ARC ephemeral Runner，验证 kubeconfig 实际身份为 `system:serviceaccount:<namespace>:dmh-deployer`、只能操作所属 namespace，不能 list/watch/create/update/patch/delete Secret，且 fork PR 无法调度该 Runner；`preflight-cluster.sh` 还必须以该身份对 command override 做 API Server `dry-run=server`，确认 admission 已完成 type-check 后才允许创建真实 Job。
 - [ ] 在 Kubernetes 1.30+ 以 cluster-scoped 权限应用 `deploy/admission` 的 ValidatingAdmissionPolicy；验证 dmh Job 只能使用受信 data-manager-hub GHCR digest 镜像、单一容器、镜像 entrypoint 和 allowlist 参数，并只能使用 `dmh-runtime`、`dmh-ghcr-pull`、`dmh-acceptance` 允许边界，拒绝任意 Secret/ConfigMap 环境注入、非 allowlist 直接环境变量、ConfigMap/DownwardAPI/PVC/Secret volume、hostPath/CSI volume、非零 backoff 和 host namespace，只允许三个固定 `emptyDir` 挂载；Pod 固定 UID/GID 10001、RuntimeDefault seccomp、禁止提权并 drop `ALL` capabilities，acceptance 允许的临时可写 root 仍必须限制为 acceptance digest 且无 token。
 - [ ] 创建并轮换 `dmh-runtime`、`dmh-internal-auth`、`dmh-connector-truststore`、`dmh-ghcr-pull`、`dmh-acceptance`、`dmh-snapshot-verifier`，不把值写入仓库或 Actions artifact；`dmh-runtime` 至少包含 `NACOS_SERVER_ADDR`，其中 `dmh-internal-auth` 必须包含六个 `INTERNAL_AUTH_*_SECRET`/`INTERNAL_AUTH_TOKEN_URI`、`PLATFORM_ENCRYPTION_MASTER_KEY`、`public.pem` 和 `private.pem`，并验证 Java Pod 能以 UID 10001 读取挂载文件。
 - [ ] 配置 GHCR 包权限和保留策略：production digest/Manifest、九镜像与 Build Manifest 的 OCI SemVer 别名永不删除，候选、SBOM、provenance 至少 365 天；完成一次 retention audit，并在真实 GHCR 回读十个别名的 digest 一致性。
 - [ ] 配置插件签名/KMS、Nexus/S3 adapter、TrustStore，并用真实插件 receipt 完成一次签名回读。
 - [ ] 配置 Nacos namespace/immutable Group、PostgreSQL16、Redis、Kafka、Ingress/TLS、StorageClass 和 Prometheus 指标/短期 bearer Token；非 loopback Prometheus URL 无 Token 必须保持 fail-closed。
+- [x] 已在 GitHub Actions Repository Secret 配置 `NVD_API_KEY`（只记录名称，不记录值）；下一步必须重新运行 PR #5 的完整 CI，确认 OWASP Dependency-Check 使用 API Key 后在合理时间内完成并保留 SARIF/JSON 证据。
 - [x] OWASP Dependency-Check/CycloneDX 供应链门禁：Spring Boot/Cloud/Alibaba 已升至兼容的 3.5.16/2025.0.3/2025.0.0.0 组合，并修复 HttpClient、HttpCore、Jackson、Commons Lang 等可用补丁；2026-08-24 扫描无未抑制 CVSS≥7 结果。`CVE-2025-7962` 对 `org.eclipse.angus:angus-activation:2.0.3` 属于 Angus Mail SMTP 的错误 CPE 归属，已用版本精确 suppression 记录 jar 内容与适用边界；依赖升级后必须重新审查，不得把 suppression 当作通用 waiver。Nacos/Prometheus/Tomcat/Kotlin/Validator 的已审计 CPE 误匹配同样仅按精确组件+CVE suppression 记录理由；OSS Index 未配置独立认证令牌，已在 Maven profile 中显式关闭并由 NVD/CodeQL/npm audit 分担门禁，不能误报为完整 OSS Index 覆盖。
 - [ ] 部署并验证 PostgreSQL snapshot/PITR adapter 与 `DMH_SNAPSHOT_SIGNATURE_VERIFIER`；生产快照必须由晋级流程绑定成功 staging Deployment 时间戳，完成快照恢复到新实例、Liquibase 校验和、Secret 切换与 Helm rollback 演练。
 - [ ] 在 dev→staging 完成真实 acceptance、登录态 UI、容量、Access Pod/PVC、Nacos/制品仓库故障演练；在 production 完成无流量彩排、具体 digest 回滚和至少两次成功发布，连续观察 14 天。
