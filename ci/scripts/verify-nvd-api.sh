@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${NVD_API_KEY:?NVD_API_KEY must be provided by the GitHub Actions secret}"
+if [[ -z "${NVD_API_KEY:-}" ]]; then
+  if [[ "${ALLOW_UNKEYED_NVD:-false}" == "true" ]]; then
+    echo 'NVD_API_KEY is unavailable in the Dependabot pull_request context; continuing with the public NVD endpoint'
+    exit 0
+  fi
+  : "${NVD_API_KEY:?NVD_API_KEY must be provided by the GitHub Actions secret}"
+fi
 
 response_file="$(mktemp)"
 trap 'rm -f "$response_file"' EXIT
