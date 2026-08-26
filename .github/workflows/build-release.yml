@@ -46,7 +46,7 @@ jobs:
       ci_run_attempt: ${{ steps.verify_ci.outputs.ci_run_attempt }}
     steps:
       - name: Checkout source SHA
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
@@ -163,7 +163,7 @@ jobs:
       receipts: ${{ steps.sign.outputs.receipts }}
     steps:
       - name: Checkout source SHA
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
@@ -247,7 +247,7 @@ jobs:
             buildArgs: ''
     steps:
       - name: Checkout source SHA
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
@@ -336,7 +336,7 @@ jobs:
       manifest_digest: ${{ steps.publish.outputs.manifest_digest }}
     steps:
       - name: Checkout source SHA
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 0
