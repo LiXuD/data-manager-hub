@@ -328,7 +328,8 @@ data-platform/
 - [架构知识库](CODE_WIKI.md)
 - [API 文档](docs/API.md)
 - [部署文档](docs/DEPLOYMENT.md)
-- [CI/CD 流水线方案 v2.0（仓库实现已落地，外部环境未验证）](docs/2026-08-22-ci-cd-pipeline-design.md)
+- [开发阶段 CI 门禁](CODE_REVIEW_GATE.md)
+- [生产部署前 CI/CD 设计蓝图（当前不自动触发）](docs/2026-08-22-ci-cd-pipeline-design.md)
 - [数据库恢复 Runbook（生产启用前必须演练）](docs/runbooks/database-recovery.md)
 - [发布与回滚 Runbook（生产启用前必须演练）](docs/runbooks/release-deployment.md)
 - [2026-07-23 深度清理审查](docs/2026-07-23-deep-cleanup-review.md)
@@ -340,46 +341,29 @@ data-platform/
 
 ## ✅ 合并前检查
 
-PR 合入受保护主分支（当前 CI 监听 `master`）前必须全部通过：
+PR 合入受保护主分支前，当前 CI 自动执行以下基础检查：
 
 ```bash
-# 1. 后端全量验证（使用仓库锁定的 Maven Wrapper）
-./mvnw -B -ntp verify
+# 1. 后端编译和单元测试（使用仓库锁定的 Maven Wrapper）
+./mvnw -B -ntp verify \
+  -pl '!data-platform-test/data-platform-test-api,!data-platform-test/data-platform-test-service,!data-platform-test/test-fixtures/external-connector-plugin'
 
-# 2. 前端依赖、安全、规范与生产构建
+# 2. 前端依赖、规范、单元测试和构建
 cd data-platform-web
 npm ci
-npm audit
 npm run lint
 npm test
 npm run build
 cd ..
 
-# 3. 数据库变更校验与预演
-./migrate-db.sh validate
-./migrate-db.sh dry-run
-./verify-v048-routing.sh
-./verify-v049-connector-product-spec.sh
-./verify-v050-generic-http.sh
-
-# 4. 架构边界扫描
-bash arch-scan.sh
-
-# 5. CI/CD 合同、Workflow、Helm、RBAC 与供应链策略
-python3 -m pip install -r ci/requirements.txt
-python3 -m unittest discover -s ci/tests -v
-python3 ci/scripts/check-workflows.py
-python3 ci/scripts/check-markdown-links.py
-python3 ci/scripts/check-actions-pinned.py
-python3 ci/scripts/check-workflow-matrices.py
-python3 ci/scripts/verify-contracts.py
-python3 ci/scripts/verify-rbac.py
-python3 ci/scripts/verify-admission-policy.py
-python3 ci/scripts/verify-observability-rules.py
-python3 ci/scripts/verify-release-gates-policy.py
+# 3. 检查工作树格式
+git diff --check
 ```
 
 任一步骤失败不可合入。
+
+完整多服务集成、数据库迁移矩阵、Docker/Helm/Kubernetes、供应链、自动部署和生产回滚属于
+生产部署前置阶段，不是当前开发阶段提交门禁。
 
 ---
 

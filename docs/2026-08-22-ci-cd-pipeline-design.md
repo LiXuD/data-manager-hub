@@ -1,14 +1,12 @@
-# data-manager-hub CI/CD 流水线方案 v2.0
+# data-manager-hub 生产部署前 CI/CD 设计蓝图
 
 **文档日期**：2026-08-22
-**状态**：仓库侧实现与隔离验证已落地；开发阶段本地运行闭环已验证（Mac Docker 基础中间件 + Mac 后端/前端）；GitHub 单人维护者治理已配置，PR #5 的 GitHub-hosted CI 已完成 NVD API preflight、OWASP Dependency-Check/CycloneDX、CodeQL 和 required-ci（run `32806667253`）；GHCR、Kubernetes、Nacos、快照平台和生产流量尚未连接验证
-**目标平台**：GitHub Actions + GHCR + Kubernetes + Helm + Nacos + Prometheus
-**当前部署手册**：[DEPLOYMENT.md](DEPLOYMENT.md)（本次不修改，仍是当前可执行部署方式）
+**状态**：当前开发阶段只启用 `.github/workflows/ci.yml` 的后端/前端编译与测试；本文保留生产部署前的 GHCR、Kubernetes、Helm、Nacos、Prometheus、快照和回滚设计，相关 Workflow 目前不自动触发
+**目标平台**：生产部署前再评估 GitHub Actions、GHCR、Kubernetes、Helm、Nacos 和 Prometheus 的组合
+**当前部署手册**：[DEPLOYMENT.md](DEPLOYMENT.md)（本地开发和未来生产部署说明分开维护）
 
-> 这份文档已经从“目标设计”升级为“设计、代码和验证合同”。仓库中的 Workflow、
-> Dockerfile、Helm Chart、迁移门禁、快照回执校验、发布门禁和 Runbook 已提供真实入口，
-> 但没有可用的集群 Runner、GHCR 包、生产 Secret 或真实生产发布证据时，
-> 不能把仓库实现描述为生产已部署。
+> 本文不是当前开发阶段的提交门禁。它记录生产部署前可能采用的设计和已有实现蓝图；
+> 没有真实集群、GHCR、生产 Secret、快照恢复和生产发布证据时，不能把仓库内容描述为生产已部署。
 
 ## 1. 审查报告吸收与本方案的判断
 
@@ -57,10 +55,10 @@ billing/governance 的后续能力。Prometheus、快照和制品仓库采用可
 - 不在数据库迁移失败时自动反向迁移或重建生产库；
 - 不在本次仓库变更中修改 `docs/DEPLOYMENT.md`。
 
-### 2.3 单人维护者模式（当前启用）
+### 2.3 生产阶段治理（当前延期）
 
-本仓库由 `LiXuD` 一人维护，且项目采用 AI VibeCoding；不创建虚假 reviewer、机器人账号或
-“自审即独立复核”的证明。当前治理合同明确区分“可追责的单人发布”与“双人职责分离”：
+如果生产阶段启用本方案，本仓库由 `LiXuD` 一人维护，且项目采用 AI VibeCoding；不创建虚假
+reviewer、机器人账号或“自审即独立复核”的证明。治理合同明确区分“可追责的单人发布”与“双人职责分离”：
 
 - `master` 仍要求 `CI / required-ci` 成功，启用管理员强制执行、线性历史、会话解决，禁止
   force-push 和删除；PR 审批数为 `0`，不声称存在 CODEOWNERS 独立审批，CODEOWNERS 只保留
@@ -94,7 +92,8 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
   的真实报告，避免只抬高 JSON 数字绕过门禁；
 - `ci/policy/ghcr-retention.yaml`：制品保留合同。
 
-已在当前工作树完成的隔离验证：
+以下是此前完成的仓库/隔离验证记录，保留作生产部署前参考；它们不属于当前开发阶段提交门禁，
+也不表示外部平台或生产环境已经启用：
 
 | 验证 | 结果 | 说明 |
 |---|---|---|
@@ -103,7 +102,7 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
 | OWASP Dependency-Check + CycloneDX/许可证 profile | 通过（真实扫描无未抑制 CVSS≥7 结果） | 2026-08-24 Java 21.0.7 扫描生成 SARIF/JSON；Spring Boot/Cloud/Alibaba 已升级到兼容的 3.5.16/2025.0.3/2025.0.0.0 组合，并锁定 HttpClient 5.6.4、HttpCore 5.4.3、Jackson 2.18.9、Commons Lang 3.18.0、Nacos logback adapter 1.1.5。`CVE-2025-7962` 对 `org.eclipse.angus:angus-activation:2.0.3` 属于 Angus Mail SMTP 的错误 CPE 归属，已按精确包坐标和版本 suppression，并在 jar 内容中确认没有 SMTP/mail 实现；该 suppression 不是通用 waiver，依赖升级后必须重新审查。Nacos/Prometheus/Tomcat/Kotlin/Validator 的 CPE 误匹配仅按精确组件+CVE suppression 记录理由；OSS Index 因未配置独立认证令牌被显式关闭，NVD/CodeQL/npm audit 仍是阻断门禁 |
 | `python3 -m unittest discover -s ci/tests -v` | 通过 | 64 个 CI 合同回归测试，覆盖 manifest、OCI 引用、不可变 Manifest tag、OCI SemVer 别名幂等/漂移拒绝、source/security 分类、docs-only build guard、受保护插件签名 Job、插件签名回执、镜像证据严格白名单、Workflow YAML/shell（含重复 YAML key 拒绝）、CI/Release 九镜像矩阵与 RuntimeContract 一致性、禁止 `pull_request_target` 和 PR 调度 self-hosted、Maven wrapper 与完整运行时工具链锁定、覆盖率基线/非有限值与未来 waiver 篡改防护、CODEOWNERS 关键路径保护、release-gates policy 防阈值放宽、namespace RBAC/admission policy（含 namespace/host namespace boundary）、显式 Prometheus 跨 namespace NetworkPolicy、严格迁移拒绝无 Liquibase 历史的数据库、集群 preflight（实际 Runner 身份、命名 Secret 读取及 Secret 列表/变更拒绝）、Nacos plan/apply/verify/漂移、Prometheus baseline/gate、gate sample 的环境/source SHA/Manifest 绑定、未知 gate 字段和非法 JSON 拒绝、持续告警规则、live image digest、Access 逐 Pod、初始 partition 防并行滚动与 connector readiness 配置绑定、Helm policy、内部认证 Secret、私有 Job（只允许 dbops/acceptance digest 且按镜像限制 entrypoint）、acceptance 离线依赖闭包、快照创建/恢复回执和 recovery position 类型、Job Failed 快速失败、非 dev Nacos loopback fail-closed 和 release gate、发布权限分层、夜间 CodeQL、SemVer 单调性、GHCR retention 保护规则、基础镜像双架构检查和新迁移 changelog 引用防漏、全零 push base fail-closed、Markdown 相对链接和本地锚点、Snapshot verifier 仅限受保护 Runner、GitHub 分支保护/CODEOWNERS/Environment 审批/Secret 名称/在线 Runner 外部状态审计 |
 | 本机 OCI Registry 2 Build Manifest/alias 集成 | 通过 | 真实 registry 实测 canonical Manifest push、同 tag 同内容复用、同 tag 内容篡改拒绝，以及 ORAS digest→SemVer tag 保持同一 descriptor；临时 registry 已清理，不代表 GHCR 权限/attestation 已验证 |
-| `arch-scan.sh`、契约、Workflow YAML/shell、Markdown、Action pin、release-gates policy 和 Prometheus rule 检查 | 通过 | 6 个 Workflow、84 个 `run` 块由 `check-workflows.py` 解析并经 `bash -n`；`check-markdown-links.py` 校验 23 个 Markdown 文件的相对链接和本地锚点；CI meta 与本地复核均使用 digest 锁定的 actionlint 1.7.12 和 Prometheus 2.54.0 `promtool check rules`，另经 release-gates policy verifier 复核；失败即阻断 required CI |
+| `arch-scan.sh`、契约、Workflow YAML/shell、Markdown、Action pin、release-gates policy 和 Prometheus rule 检查 | 通过（历史记录） | 此前 6 个 Workflow、84 个 `run` 块由 `check-workflows.py` 解析并经 `bash -n`；`check-markdown-links.py` 校验 23 个 Markdown 文件的相对链接和本地锚点；这些高级检查当前不属于开发阶段 required CI |
 | 本机 Docker PostgreSQL 16 严格迁移集成 | 通过 | 临时 PostgreSQL 16 容器执行 `preflight`、首次 `update`、重复 `update`、`status`；人为持有 `DATABASECHANGELOGLOCK` 后 `preflight` 以非零退出并拒绝自动清锁；容器和数据库自动清理，未触碰项目现有数据库 |
 | `verify-v048-routing.sh` | 通过 | fresh、upgrade、repeat、duplicate、ambiguous、rollback 矩阵；隔离数据库自动清理 |
 | `verify-v049-connector-product-spec.sh` | 通过 | fresh、upgrade、repeat、HALT、U049/reapply 矩阵 |
@@ -118,27 +117,29 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
 | GitHub/GHCR/Kubernetes/Nacos/Prometheus/生产回滚 | 未验证 | GitHub 基础治理和 NVD Secret 已配置，PR #5 的 hosted CI run `32806667253` 已完成安全门；仍需要在线 Runner、GHCR 推送/回读、Secret、集群和真实流量 |
 | 外部平台状态审计 | 部分就绪 | `master` 已要求 `CI / required-ci`，单人模式审批数为 0；`dev`、`staging`、`production`、`plugin-signing` Environment 已配置分支策略和 `LiXuD` 自审（production wait timer 1800 秒）；当前分支的 CODEOWNERS 尚未合并到 `master`，在线 Runner 数为 0，GHCR Build Manifest、kubectl context、Nacos/Prometheus/快照平台仍未验证 |
 
-## 4. CI 工作流和 required check
+## 4. 当前开发阶段 CI
 
-### 4.1 Workflow 分工
+当前提交级 CI 只负责验证代码能否编译、测试和构建：
 
 | 文件 | 触发 | 责任 | 受信边界 |
 |---|---|---|---|
-| `.github/workflows/ci.yml` | PR、master push、手工 | classify、Maven、Web、迁移、安全、Helm、九镜像 Docker build/smoke、汇总 | GitHub 托管 Runner；PR 不能访问部署 Runner/Secret |
-| `.github/workflows/build-release.yml` | master CI 成功的 `workflow_run` | 九镜像、多架构、SBOM、provenance、外部插件签名回读、Manifest、自动 dev | 只接受同仓库 master SHA；构建和受保护插件 Job 完成后才发布 Manifest |
-| `.github/workflows/_deploy-reusable.yml` | 被 dev/staging/prod 调用 | digest 验证、Nacos、DB Job、Helm、Access、验收、回滚、Deployment Receipt | 仅 self-hosted protected Runner + Environment |
-| `.github/workflows/promote-staging.yml` | 手工 | 找到同 SHA 的成功 dev Deployment，调用 staging | `nonprod-deploy` Runner |
-| `.github/workflows/promote-production.yml` | 手工 + production Environment 审批 | SemVer、staging 成功、快照、生产部署、tag/release | `prod-deploy` Runner；当前单人模式允许 `LiXuD` 自审并保留 30 分钟 wait timer |
-| `.github/workflows/scheduled-security.yml` | 每夜/每周 | 全量依赖扫描、迁移矩阵和契约复核 | 不产生部署 |
+| `.github/workflows/ci.yml` | PR、`dev`/`master` push、手工 | Java 编译/单元测试、Web `npm ci/lint/test/build`、`CI / required-ci` | GitHub 托管 Runner；不访问部署 Runner、生产 Secret 或外部环境 |
 
-所有第三方 Action 使用完整 commit SHA；`ci/scripts/check-actions-pinned.py` 拒绝 tag、branch
-和短 SHA。默认 `contents: read`，只有构建和 attestation 步骤申请 packages/id-token/attestations
-权限。
+以下 Workflow 和脚本是生产部署前蓝图，当前不由开发 CI 触发：
 
-`ci/scripts/check-workflow-matrices.py` 在 required CI 的 meta Job 中读取
-`ci/contracts/runtime-contract.v1.yaml`，并逐一比对 `ci.yml` 的无推送矩阵与
-`build-release.yml` 的 GHCR 矩阵；组件集合、矩阵重复项和 Dockerfile 路径任一漂移都会在进入
-编译或部署前失败，避免九个镜像合同只在 Manifest 收尾阶段才暴露缺项。
+| 文件/能力 | 当前状态 |
+|---|---|
+| `build-release.yml`、`connector-plugin-supply-chain.yml`、`scheduled-security.yml` | 保留为手工/未来阶段使用 |
+| `_deploy-reusable.yml`、`promote-staging.yml`、`promote-production.yml` | 保留生产部署前设计，当前不自动晋级 |
+| Docker、GHCR/OCI、签名、Helm/Kubernetes、Nacos、快照和回滚 | 延期到生产部署前 |
+
+当前 CI 使用的第三方 Action 均锁定完整 commit SHA，默认只申请 `contents: read`；生产阶段重新启用
+构建、制品或 attestation 时，再按对应 Job 的最小权限要求开启额外权限。
+
+生产阶段重新启用上述能力时，需恢复对应的合同、矩阵和环境验证；当前开发阶段不以制品或部署
+矩阵作为提交成功条件。
+
+以下 4.2—4.5 以及后续章节只保留生产部署前的设计细节，当前不由 `ci.yml` 执行。
 
 ### 4.2 变更分类与跨文件防绕过
 
@@ -753,32 +754,21 @@ curl -fsS "$PROMETHEUS_URL/api/v1/query" \
 
 | 阶段 | 仓库状态 | 外部完成门槛 | 回退点 |
 |---|---|---|---|
-| 0. 合同与治理 | 已实现 | master protection、CODEOWNERS、Environments、Runner/RBAC 生效 | 关闭新 required check，不影响手工部署 |
-| 1. CI 门禁 | 已实现并隔离验证 | GitHub required check 成功；依赖缓存、CodeQL、npm audit、迁移矩阵稳定 | 暂停合并，保留 evidence |
-| 2. 制品供应链 | 仓库和本机单架构构建已验证，GHCR/CI 双架构待验证 | 九镜像、多架构、GHCR、签名仓库、SBOM/attestation 可拉取 | 不晋级该 Manifest，保留 digest |
-| 3. 非生产 CD | 工作流/Chart 已实现，集群未连接 | dev 自动、staging 审批、真实 acceptance、容量和失败演练 | Helm/Nacos 回滚；DB forward-fix |
-| 4. 生产 CD | Workflow/Runbook 已实现，生产未启用 | snapshot adapter、SLO、RBAC、无流量彩排、至少两次成功生产发布、一次具体 digest 回滚 | 禁用 production Environment，走事故流程 |
+| 0. 开发阶段 CI | 当前启用 | Java/Web 编译、单元测试、前端构建和 `CI / required-ci` 稳定通过 | 修复代码后重新提交 |
+| 1. 生产前 CI 扩展 | 暂不启用 | 需要时再评估迁移矩阵、架构、依赖扫描和完整集成测试 | 保持基础 CI |
+| 2. 制品供应链 | 延期 | GHCR、多架构、签名、SBOM/attestation 和 Manifest 真实回读 | 不发布制品 |
+| 3. 非生产 CD | 延期 | 集群、Nacos、真实 acceptance、容量和故障演练 | 不启用部署 Workflow |
+| 4. 生产 CD | 延期 | snapshot adapter、SLO、RBAC、彩排、生产发布和具体 digest 回滚 | 保持 production 未启用 |
 
 ## 14. 本次实现与后续工作边界
 
-本次仓库变更已经包含：
+当前开发阶段实际启用的内容只有：
 
-- CI/CD 合同、工具链锁、coverage/waiver/retention policy；
-- GitHub Actions 全链路、受保护外部插件签名 Job、可复用部署、Manifest/OCI/attestation；
-- `check-workflows.py`、`.github/actionlint.yaml` 和 Action SHA pin 门禁；
-- Java/Web/dbops/acceptance Dockerfile；
-- Helm、NetworkPolicy、Access partition rollout、Nacos immutable mode；
-- namespace/Secret 元数据、Runner RBAC preflight（不读取 Secret 值）和 Job Secret admission boundary；
-- strict migration、snapshot 创建/校验/新实例恢复 wrapper、release gate、live digest、恢复 Runbook；
-- 发布权限按 Job 最小化、夜间完整 CodeQL、SemVer 单调性校验，以及锁定基础镜像双架构实际检查；
-- 生产成功后按 digest 发布九个镜像和一个 Build Manifest 的不可变 OCI SemVer 别名，并上传别名回执；
-- 本地脚本单测、Maven/Web/迁移/Helm 静态和隔离验证；Docker Desktop 上九个组件均已完成
-  linux/amd64 与 linux/arm64 `--load` 构建，Web amd64 容器已通过 `/healthz` 和首页检查，Java/dbops/acceptance
-  镜像确认以非 root UID 运行；这些证据仍不替代 CI 双架构推送、GHCR 回读、签名和 attestation。
+- `.github/workflows/ci.yml` 的 Java 编译/单元测试；
+- Web 的 `npm ci`、lint、单元测试和构建；
+- `CI / required-ci` 汇总两个基础检查结果。
 
-仍必须由平台/DBA/发布负责人完成并留证：GitHub 设置、真实镜像推送、ARC/RBAC、Nacos/Prometheus、
-签名 TrustStore、快照恢复、真实 staging/prod acceptance、容量/故障演练和两次生产发布。任何
-“代码存在”都不能替代这些环境证据。
+生产前设计中的镜像、部署、快照、回滚和外部平台内容继续保留在本文，当前不由开发 CI 自动执行。
 
 ## 15. 参考与文档职责
 
@@ -797,7 +787,7 @@ curl -fsS "$PROMETHEUS_URL/api/v1/query" \
 | `README.md` | 项目入口、模块与当前能力 |
 | `PENDING_TASKS.md` | 当前未完成外部环境、生产迁移和证据 |
 | `docs/DEPLOYMENT.md` | 当前可执行手工/本地部署说明 |
-| 本文 | CI/CD 合同、实现、验收和生产前置条件 |
+| 本文 | 生产部署前 CI/CD 设计蓝图、验收和回滚前置条件；当前开发阶段不启用 |
 | `docs/runbooks/database-recovery.md` | 生产数据库事故恢复和演练 |
 | `docs/runbooks/release-deployment.md` | Manifest 晋级、发布门禁、失败处置和回滚证据 |
 | `deploy/rbac/overlays/*` | 三个 namespace 的 Runner Role/RoleBinding；只允许命名空间范围的发布资源和 Pod 日志读取 |

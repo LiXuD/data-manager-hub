@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-08-25
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现；连接器“一个粗粒度插件 + 一份配置”的产品模型阶段 0—4 也已完成代码实现和隔离自动化验收，包括 Manifest v2/高层 SDK、V049/V050、`connectorSpec` 控制面、`generic-http:2.0.0`、Legacy 转换/清点和简化前端工作区。设计阶段 5 的逐厂商生产迁移、容量/滚动升级观察以及阶段 6 的旧高级入口最终退役仍未执行。CI/CD v2.0 的仓库合同、Workflow、Dockerfile、Helm、严格迁移、快照回执、发布门禁、不可变 OCI SemVer 别名、恢复 Runbook 和只读 GitHub 前置审计脚本已落地；OWASP/CycloneDX 供应链扫描、NVD API preflight、CodeQL 和 required-ci 已在 GitHub-hosted PR run `32806667253` 通过，`CVE-2025-7962` 仅对 `org.eclipse.angus:angus-activation:2.0.3` 的错误 CPE 归属做了版本精确、可审计 suppression。GitHub 单人维护者模式的分支保护和四个 Environment 已配置；ARC Runner/RBAC、GHCR、Nacos、Prometheus、签名仓库、快照 adapter、真实 staging/prod 发布和生产回滚仍未验证。上述结论不表示已经部署到生产环境。
+**最后更新**: 2026-08-26
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现；连接器粗粒度产品模型阶段 0—4 已完成代码实现和隔离自动化验收，阶段 5—6 的生产迁移与旧入口退役仍未执行。当前开发阶段 CI/CD 已收敛为提交级 Java/Web 编译、单元测试、lint 和前端构建；自动部署、制品发布、制品升级及生产环境验证统一延期到生产部署前，不作为当前开发门禁。
 
 ---
 
@@ -19,28 +19,26 @@
 - `generic-http:2.0.0` 是宿主内置的标准单次 HTTPS 产品插件；`platform-core:1.0.0` 承担平台 Transport、安全和响应映射，二者均受签名目录事实、SecretRef 所有权和 Access 网络策略约束。
 - `ADVANCED_LEGACY` 草稿和历史继续只读可解释；旧 raw 变更、测试、发布和回滚接口不能覆盖 SIMPLE 事实，Legacy 可通过只读预检和 CAS 转换进入 SIMPLE。
 
-## CI/CD 流水线落地（开发阶段可执行，外部环境未验证）
+## 开发阶段 CI/CD（当前生效）
 
-详细方案见 [CI/CD 流水线设计](docs/2026-08-22-ci-cd-pipeline-design.md)。
-目标技术栈为 GitHub Actions、GHCR、Kubernetes、Helm、Nacos 和 Prometheus，采用一次构建、
-同一 digest 依次晋级 dev、staging、production。仓库侧已经实现对应 Workflow、脚本、Chart 和
-Runbook；外部平台尚未连接，因此以下“已实现”只表示代码和隔离证据，不表示生产可用。
+当前提交和 PR 只运行 [基础 CI](.github/workflows/ci.yml)：后端 Java 编译/单元测试，以及前端
+依赖安装、lint、单元测试和构建。`CI / required-ci` 是唯一的开发阶段必需检查，失败不得合并。
+完整部署、制品和生产方案保留在 [生产前 CI/CD 设计](docs/2026-08-22-ci-cd-pipeline-design.md)，
+当前不自动触发。
 
 当前阶段性成果：通过 `docker-compose.local-infra.yml`，Mac Docker 已提供 PostgreSQL 16、Redis 7、Kafka 3.7、Nacos 2.3.2；Mac
 本地可启动六个后端服务和 Vite 前端，六个后端健康检查均为 `UP`，数据库 V001—V050 已迁移并
 通过校验。该成果满足开发阶段执行目标，但不改变 staging/production 尚未真实发布的结论。
 
-| 阶段 | 状态 | 完成门槛 |
+| 阶段 | 状态 | 当前边界 |
 |---|---|---|
-| 0. 仓库治理和部署基础设施 | 仓库合同已实现，GitHub 单人治理已配置 | `master` 保护、required checks、四个 GitHub Environment、隔离 Runner 和 namespace RBAC 生效 |
-| 1. CI 门禁 | 已实现并隔离验证 | Java/Web、coverage ratchet、架构、V048—V050、九镜像 Docker build/smoke、依赖扫描和 Helm policy 在 GitHub required check 生效 |
-| 2. 制品供应链 | 已实现，GHCR/签名仓库待连接 | 九镜像、多架构、SBOM、provenance、attestation、Manifest digest 交接和生产 OCI SemVer 别名可在 CI 实际推送并复验 |
-| 3. 非生产 CD | Workflow/Chart 已实现，集群未验证 | dev 自动部署、staging 单人自审+等待窗口、acceptance、容量和失败演练留存真实证据 |
-| 4. 生产 CD | Workflow/Runbook 已实现，生产未启用 | SemVer、SnapshotReceipt、SLO、真实生产发布、具体 digest 回滚和至少两次成功发布完成 |
+| 开发阶段基础 CI | 已实现，待当前提交的远端 CI 验证 | 后端 `verify`（排除 `data-platform-test` 的 API、测试服务和 E2E fixture）、前端 `npm ci/lint/test/build`、`CI / required-ci` |
+| 生产前置能力 | 保留设计和代码蓝图，当前不自动执行 | 部署、GHCR/OCI、签名、Helm/Kubernetes、Nacos、快照、生产发布和回滚 |
 
-### CI/CD 外部落地待办
+### 生产部署前置方案（当前延期，不作为开发门禁）
 
-以下事项不能由仓库文件自证，完成前不得把流水线标记为“生产已部署”：
+以下事项在生产部署前重新启用；当前不要求执行，也不能作为开发阶段 CI 的失败原因。完成前不得把
+生产标记为已部署：
 
 - [x] 将 `master` 设置为默认受保护分支，启用 `CI / required-ci`、CODEOWNERS 路径合同、stale approval 失效和禁止 force-push/删除；当前单人模式的 PR 审批数为 0，不把 CODEOWNERS 误报为独立 reviewer。
 - [ ] 合并含 `.github/CODEOWNERS` 的分支后运行只读 `python3 ci/scripts/verify-github-readiness.py --repository LiXuD/data-manager-hub --review-mode solo-maintainer --output evidence/github-readiness.json`；审计必须同时证明四个 Environment、单人 review 合同、required check、受保护分支策略和三个在线部署 Runner label，失败时不得启用 production Environment。
@@ -57,18 +55,22 @@ Runbook；外部平台尚未连接，因此以下“已实现”只表示代码�
 - [ ] 部署并验证 PostgreSQL snapshot/PITR adapter 与 `DMH_SNAPSHOT_SIGNATURE_VERIFIER`；生产快照必须由晋级流程绑定成功 staging Deployment 时间戳，完成快照恢复到新实例、Liquibase 校验和、Secret 切换与 Helm rollback 演练。
 - [ ] 在 dev→staging 完成真实 acceptance、登录态 UI、容量、Access Pod/PVC、Nacos/制品仓库故障演练；在 production 完成无流量彩排、具体 digest 回滚和至少两次成功发布，连续观察 14 天。
 
-仓库内每次改动仍应先执行 `./mvnw -B -ntp verify`、Web 的 `npm ci/lint/test:coverage/build`、
-`verify-v048-routing.sh`、`verify-v049-connector-product-spec.sh`、`verify-v050-generic-http.sh`、
-`bash arch-scan.sh`、Helm lint/template/policy、`python3 ci/scripts/verify-rbac.py`、
-`python3 ci/scripts/verify-admission-policy.py`、
-`python3 ci/scripts/check-workflows.py`、
-`python3 ci/scripts/check-workflow-matrices.py`、
-`python3 ci/scripts/verify-observability-rules.py`、
-`python3 ci/scripts/verify-release-gates-policy.py` 和 `git diff --check`；staging/production 的 Helm
-render 必须通过当前 source SHA 的 immutable Nacos Group 覆盖参数；覆盖率基线变更还必须让
-同一次真实报告满足新数值，不能只编辑 `coverage-baseline.json`。Docker 本机验证可用
-`docker buildx build --load --platform linux/arm64 -f docker/web.Dockerfile ...` 并执行 `/healthz`，
-本机已完成九个组件的 linux/amd64 与 linux/arm64 构建；仍需 GitHub Runner 留存双架构九镜像推送、签名/attestation 和 GHCR 回读证据。
+开发阶段每次改动只需先执行：
+
+```bash
+./mvnw -B -ntp verify \
+  -pl '!data-platform-test/data-platform-test-api,!data-platform-test/data-platform-test-service,!data-platform-test/test-fixtures/external-connector-plugin'
+cd data-platform-web
+npm ci
+npm run lint
+npm test
+npm run build
+cd ..
+git diff --check
+```
+
+完整多服务集成、迁移矩阵、Docker、Helm、Kubernetes、供应链、部署和生产回滚检查均属于
+生产部署前置事项，当前不进入提交级 CI。
 
 ## 已完成里程碑
 
@@ -170,7 +172,7 @@ render 必须通过当前 source SHA 的 immutable Nacos Group 覆盖参数；�
 - 在目标环境运行只读 `/vendor/config/connector-spec/inventory`，逐项确认 `LOSSLESS_CONVERTIBLE/REQUIRES_DEDICATED_PLUGIN/MUST_REMAIN_LEGACY`，不得用隔离 fixture 代替生产事实清点。
 - 对目标厂商完成真实登录态工作区的选择、升级预检、保存、校验、测试、发布、历史、回滚和 Legacy 转换，并核对 CallRecord/Billing/缓存/主备副作用；当前本地浏览器验收受登录态与完整服务环境限制。
 - 阶段 5 观察窗口、生产容量和回滚演练完成前，不执行阶段 6 的 raw 入口物理删除。
-- 合入受保护主分支（当前 CI 监听 `master`）前执行 `./mvnw -B -ntp verify`、在 `data-platform-web` 执行 `npm ci`、`npm audit`、`npm run lint`、`npm test`、`npm run build`，并执行隔离数据库迁移回归和 `bash arch-scan.sh`。
+- 生产部署阶段重新启用高级门禁后，才执行隔离数据库迁移回归、架构扫描、供应链、Helm/RBAC/Admission 和外部平台验证；开发阶段只执行上文基础 Java/Web CI。
 
 ## 文档职责
 
@@ -180,7 +182,7 @@ render 必须通过当前 source SHA 的 immutable Nacos Group 覆盖参数；�
 | `CODE_WIKI.md` | 当前架构、模块职责和关键实现说明 |
 | `docs/API.md` | 对外 HTTP API 契约 |
 | `docs/DEPLOYMENT.md` | 本地与生产部署要求 |
-| `docs/2026-08-22-ci-cd-pipeline-design.md` | CI/CD v2.0 合同、已落地仓库能力、环境前置条件、验收与回滚门禁；当前状态为仓库实现已落地、外部环境未验证 |
+| `docs/2026-08-22-ci-cd-pipeline-design.md` | 生产部署前的 CI/CD 设计蓝图；当前开发阶段只以 `.github/workflows/ci.yml` 的编译与测试为准 |
 | `docs/runbooks/database-recovery.md` | PostgreSQL 快照/PITR 恢复、角色、验证、演练和禁止自动 rollback 的事故流程 |
 | `docs/runbooks/release-deployment.md` | Manifest 晋级、Nacos/Helm/Access 发布顺序、门禁、回滚和发布证据 |
 | `docs/2026-07-23-deep-cleanup-review.md` | 本轮清理范围、架构决策和回归证据 |

@@ -1,36 +1,32 @@
-# Code Review Gate（agent 必守）
+# 开发阶段提交门禁
 
-> 本文件由 Code Review Expert 制定，是 `data-manager-hub` 所有编码 agent（GitNexus 等）提交 / 提 PR 前的统一自检门禁。
-> 配套：`代码审查标准与流程.md`（完整检查清单）、`代码审查实施计划.md`（落地路线）。
+当前项目处于开发阶段。本文件只定义提交代码时必须通过的基础检查，目标是尽早发现
+编译、测试和前端构建错误；部署、制品发布、制品升级、Kubernetes、生产环境和自动回滚
+不属于当前 CI 门禁。
 
-任何编码 agent 在 commit / 提 PR 前必须：
+## 必须通过的检查
 
-1. **逐条核对 🔴 项**：对照 `代码审查标准与流程.md` 第 1 节的所有 🔴（阻断）项，未清不得 `declare done`。
-2. **本地验证**：
-   - 改动后端：对应模块 `mvn -pl <模块> test` 通过；
-   - 改动前端：`npm run lint && npm run test` 通过。
-3. **自审结论入提交信息**：提交信息须含「自审结论：🔴 已清 / 残留 🟡 清单」。
-4. **高风险变更显式标注**：跨域调用 / DB 脚本 / Flowable 流程 / Nacos 配置变更须显式标注，交由 CI review gate 裁决。
-5. **`data-platform-test` 不进 PR 门禁**：该模块是集成测试（需起 Gateway + 5 微服务 + PG/Redis/Kafka/Nacos 在线），其质量由夜间集成流水线（`nightly-integration.yml`）保障。改动业务模块时**只跑该模块的 `mvn test`（单测）**，请勿对其补集成测试作为 PR 验收。
+1. 后端执行 `./mvnw -B -ntp verify`，排除 `data-platform-test` 下的 API、测试服务和 E2E fixture 模块，完成 Java 编译和单元测试。
+2. 前端在 `data-platform-web` 执行 `npm ci`、`npm run lint`、`npm test` 和 `npm run build`。
+3. PR 或 push 到 `dev`/`master` 时，`.github/workflows/ci.yml` 自动执行后端和前端检查。
+4. 分支保护只要求 `CI / required-ci` 通过；任一编译或测试 Job 失败都不得合并。
 
-## 拦截链路（纵深防御）
+## 当前不要求
 
-- **A. 源头自检**：本文件即 agent 的 Definition of Done，🔴 未清不得结束任务。
-- **B. 本地 hook（辅助）**：`.githooks/pre-commit` 在本地提交时跑 lint + 编译（云端 / CI 直推不触发，仅辅助，见实施计划 1.2 N1）。
-- **C. 远端硬门禁**：`.github/workflows/pr-review-gate.yml` 对每次 PR 跑编译 + 测试 + 前端 lint/单测；分支保护要求该 check 通过且禁止直推 `dev`/`master`；`auto-merge.yml` 在 check 全绿后自动合入。
+- `data-platform-test` 的完整多服务集成验收；需要时手工启动环境后执行；
+- Docker 镜像构建、GHCR、OCI Manifest、签名、SBOM、attestation；
+- Helm、Kubernetes、Nacos、Prometheus、自动部署和 staging/production 晋级；
+- 夜间安全扫描、自动合并和 AI 代码审查。
 
-## 启用本地 hook（agent 本地 clone 时）
+上述能力保留在生产部署前方案中，当前只允许作为手工或未来阶段使用，不得被开发 CI 自动触发。
+
+## 本地辅助检查
+
+本地 hook 只是提交前的快速提示，不能替代远端 CI。启用方式：
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-> 仅对本地提交生效；云端 / CI 直推的 agent 由 C 端硬门禁兜底，不可依赖 hook。
-
-## 阶段 2 量化约束（agent 必守）
-
-仓库已在根 `pom.xml` 接入 **JaCoCo / Checkstyle / SpotBugs 报告模式**（当前不阻断，仅出报告；2.4 再转强制）。agent 须遵守：
-
-6. **配套测试**：改动含核心业务逻辑的，必须补单元测试（Mockito，参考各 `*-service/src/test` 下的 `*ServiceTest`）；CI review 对"无测试的核心逻辑改动"判 🔴。
-7. **薄弱域补测（由 agent 执行）**：`governance` / `identity` / `billing` 关键 Service 须各有 ≥3 单测。补的是业务模块**单元测试**（Mockito），不是 `data-platform-test` 集成测试；**禁止刷覆盖率**（空断言 / 只测 getter 判 🔴）。
-8. **尊重静态分析报告**：Checkstyle / SpotBugs 报告中的 🔴 级（未用导入、空 catch、`@SuppressWarnings` 无原因等）须在提交前修复；🟡 级可留作后续。待 2.4 转强制后，🔴 将直接 fail 构建。
+如果修改了核心业务逻辑，仍应补充对应单元测试；如果本地工具链不满足项目版本要求，先按
+`ci/toolchain.lock.yaml` 和模块 README 切换 Java/Node/Maven 版本。

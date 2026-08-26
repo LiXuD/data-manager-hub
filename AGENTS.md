@@ -64,4 +64,4 @@ This project is indexed by GitNexus as **data-manager-hub** (13878 symbols, 3391
 
 ## Code Review Gate（agent 提交前必守）
 
-> 编码规范见 [CODE_REVIEW_GATE.md](./CODE_REVIEW_GATE.md)（agent 提交前必守，由 Code Review Expert 制定）。任何编码 agent 在 commit / 提 PR 前须按该文件逐条自审，🔴 项未清不得 `declare done`；PR 须过 `pr-review-gate.yml` 硬门禁，且 `dev`/`master` 禁止直推（见 `auto-merge.yml`）。
+> 编码规范见 [CODE_REVIEW_GATE.md](./CODE_REVIEW_GATE.md)（agent 提交前必守）。任何编码 agent 在 commit / 提 PR 前须按该文件自审；PR 或 push 到 `dev`/`master` 必须通过 `.github/workflows/ci.yml` 的 `CI / required-ci` 基础门禁，且 `dev`/`master` 禁止直推。生产部署前的制品、部署和回滚能力保留在设计蓝图中，当前不属于开发门禁。
