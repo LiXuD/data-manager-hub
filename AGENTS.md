@@ -61,3 +61,7 @@ This project is indexed by GitNexus as **data-manager-hub** (13878 symbols, 3391
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+## Code Review Gate（agent 提交前必守）
+
+> 编码规范见 [CODE_REVIEW_GATE.md](./CODE_REVIEW_GATE.md)（agent 提交前必守，由 Code Review Expert 制定）。任何编码 agent 在 commit / 提 PR 前须按该文件逐条自审，🔴 项未清不得 `declare done`；PR 须过 `pr-review-gate.yml` 硬门禁，且 `dev`/`master` 禁止直推（见 `auto-merge.yml`）。
