@@ -110,13 +110,15 @@ public class OpenApiQueryService {
                     context.getDataTypeCode(),
                     context.getParams(),
                     context.getPrimaryVendorConfig(),
-                    context.getFallbackVendorConfig());
+                    context.getFallbackVendorConfig(),
+                    platformRequestId);
         } else {
             vendorResult = vendorProxyService.callVendor(
                     context.getVendorCode(),
                     context.getDataTypeCode(),
                     context.getParams(),
-                    context.getVendorConfig());
+                    context.getVendorConfig(),
+                    platformRequestId);
         }
 
         LocalDateTime responseTime = LocalDateTime.now();

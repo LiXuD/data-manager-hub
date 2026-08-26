@@ -2,7 +2,7 @@
 
 > **项目名称**: 数据管理平台 (Data Management Platform)
 > **仓库地址**: https://github.com/LiXuD/data-manager-hub.git
-> **文档版本**: 2026-08-10
+> **文档版本**: 2026-08-20
 > **技术栈**: Java 21 + Spring Boot 3.4.13 + Spring Cloud 2024.0.3 + MyBatis-Plus 3.5.8 + Vue 3 + TypeScript
 
 ---
@@ -37,7 +37,7 @@
 
 | 能力域 | 说明 |
 |--------|------|
-| 厂商管理 | 多厂商接入、API配置、数据类型管理、请求/响应映射、可排序安全流水线 |
+| 厂商管理 | 多厂商接入、数据类型管理、粗粒度连接器插件、单份产品配置、请求/响应映射与安全流水线 |
 | 接口契约 | 树形请求/响应字段、JSON Schema快照、运行时校验、OpenAPI 3.1动态文档 |
 | 调用管理 | API Key认证与接口/产品授权、滑动窗口限流、配额、调用代理、调用记录 |
 | 计费管理 | 标准计费、阶梯计费、动态计费、对账 |
@@ -120,6 +120,7 @@ data-manager-hub/
 ├── data-platform-common-persistence/     # 持久层 (Entity、MyBatis-Plus)
 ├── data-platform-common-runtime/        # 运行时 (适配器、认证、计费)
 ├── data-platform-plugin-spi/            # 连接器插件轻量编译契约 Jar
+├── data-platform-plugin-testkit/        # 高层连接器 SDK 的真实 runtime 契约 TestKit
 
 # 五域业务模块
 ├── data-platform-masterdata/            # 厂商/数据类型/接口/灰度 (8081)
@@ -191,13 +192,18 @@ data-manager-hub/
 
 ##### 当前连接器插件运行时 (`plugin/`)
 
-`data-platform-plugin-spi` 定义 `ConnectorPlugin`、`ConnectorStageFactory`、`ConnectorStage`、
+`data-platform-plugin-spi` 保留 `ConnectorPlugin`、`ConnectorStageFactory`、`ConnectorStage`、
 `StageLifecycle`、`PluginContext`、强类型请求/响应、穷举 `ConnectorErrorPolicy` 和六种
-`StageCapability`。它只依赖 Jackson，不依赖 Spring、数据库、Redis、Nacos、Feign 或五域 Service。
+`StageCapability`，并增加 `AbstractVendorConnectorPlugin`、不可变 invocation/result、deadline、取消、
+幂等事实和受宿主管理的多请求 Session。它只依赖 Jackson，不依赖 Spring、数据库、Redis、Nacos、
+Feign 或五域 Service；厂商开发者可用一个入口类实现 builder/parser 及可选处理器。
 
 `data-platform-common-runtime/common/plugin` 实现 Manifest 读取、制品哈希/签名验证、版本隔离
-ClassLoader、租约/引用计数注册表、流水线编译执行、受控 OkHttp Transport、统一安全消息处理和内置
-`legacy-http:1.0.0` bridge。
+ClassLoader、租约/引用计数注册表、流水线编译执行、受控 OkHttp Transport、统一安全消息处理，以及
+内置 `platform-core:1.0.0`、`generic-http:2.0.0` 和 Legacy `legacy-http:1.0.0` bridge。
+`platform-core` 独占宿主 Transport、平台安全和 HOST_MAPPING；Generic 只声明厂商 builder、认证处理和
+parser，不能绕过 Access NetworkPolicy。两个新内置坐标都由确定性静态 Metadata 提供 descriptor、
+canonical Manifest/Schema/permissions 和摘要；Generic 的数据库目录投影必须逐字段精确一致。
 Access 对外部 JAR 进行 HTTPS 白名单下载并缓存到
 `<cache-directory>/<pluginId>/<version>/<sha256>/connector-plugin.jar`；每个版本可与旧版本同时驻留，
 在途请求通过租约固定版本，引用归零后关闭插件和 ClassLoader。
@@ -206,6 +212,11 @@ Access 对外部 JAR 进行 HTTPS 白名单下载并缓存到
 逐实例 READY/激活失败门禁、Schema/secretRef、受控测试、V1/V2/V3 不可变历史、Gateway 单条/批量、
 缓存/契约、NOT_SENT/SENT/MAYBE_SENT、计费/调用事实、离线缓存/readiness、并发版本切换和 release。
 V001—V047 fresh/upgrade/HALT/不变性矩阵通过；这证明隔离环境落地，不代表生产部署或生产容量。
+
+2026-08-20 的粗粒度产品模型阶段 0—4 已完成代码与隔离自动化验收：Manifest v2/高层 SDK、
+`connectorSpec` 确定性编译、V049/V050、Generic HTTP、Legacy 转换/分页清点和简化前端工作区均已落地。
+V049/V050 fresh/upgrade/repeat/HALT/条件回滚脚本以及 Node 24 前端测试通过；逐厂商生产迁移、完整登录态
+多服务 E2E、容量/滚动升级和旧 raw 接口最终退役仍未完成，不能据此宣称生产已发布。
 
 插件模式的六阶段顺序为 `REQUEST_BUILDER → REQUEST_PROCESSOR* → TRANSPORT →
 RESPONSE_PROCESSOR* → RESPONSE_PARSER* → RESPONSE_NORMALIZER`，启用步骤必须恰好有一个
@@ -400,9 +411,11 @@ com.dataplatform.masterdata/
 │   └── graylog/                    # 灰度相关
 │       ├── GraylogController.java  # /graylog
 │       └── GraylogInternalController.java  # /internal/v1/masterdata/gray-rules
-├── connector/                      # 连接器插件控制面
-│   ├── controller/                 # /connector-plugin、/vendor/config/{id}/connector
-│   ├── service/                    # 签名导入、Schema校验、版本发布/回滚
+├── connector/                      # 连接器插件与产品控制面
+│   ├── controller/                 # /connector-plugin、Legacy /connector
+│   ├── compiler/                   # 纯函数 ConnectorSpec 确定性编译器
+│   ├── spec/                       # /connector-spec 目录、草稿、测试/发布、历史/回滚、升级、转换、清点
+│   ├── service/                    # 签名导入、Schema校验、Legacy兼容与转换器
 │   ├── mapper/                     # 插件目录和连接器版本
 │   └── entity/
 ├── service/
@@ -451,7 +464,13 @@ com.dataplatform.masterdata/
 | `/vendor/config/{configId}/security-preview`、`/security-test` | 脱敏预览流水线结果、执行厂商连通性测试 |
 | `/vendor/config/{configId}/security-versions` | 查询版本历史，并通过 `/{versionId}/rollback` 回滚 |
 | `/connector-plugin/**` | 插件目录、签名导入、验证、预加载、逐实例状态、激活和禁用 |
-| `/vendor/config/{configId}/connector/**` | 连接器草稿、Schema 校验、受控测试、不可变发布、历史和回滚 |
+| `/vendor/config/{configId}/connector-spec/catalog`、`/catalog/{pluginId}/versions` | 当前 vendor/dataType 兼容的强类型 SIMPLE 插件与固定版本 |
+| `/vendor/config/{configId}/connector-spec/draft`、`/validate`、`/execution-plan` | SIMPLE Spec CAS 草稿、纯校验和脱敏只读计划 |
+| `/vendor/config/{configId}/connector-spec/test`、`/publish`、`/versions`、`/rollback/{version}` | 五元组测试事实、不可变发布、安全历史和复制式回滚 |
+| `/vendor/config/{configId}/connector-spec/upgrade-preview` | 同插件显式版本的只读 Schema/config/plan 差异与确定性摘要预检 |
+| `/vendor/config/{configId}/connector-spec/convert-preview`、`/convert` | Legacy 无损分类预检与 expectedDraftVersion CAS 转换 |
+| `/vendor/config/connector-spec/inventory` | Legacy 活动/草稿的分页只读分类；不返回 pipeline、配置或 SecretRef |
+| `/vendor/config/{configId}/connector/**` | ADVANCED_LEGACY raw 兼容面；写/测试/发布/回滚拒绝 SIMPLE，validate 仅只读 |
 | `/interface` | 接口定义 CRUD |
 | `/interface/{id}/contract` | 查询或事务性替换完整请求/响应字段树，并自动刷新派生 Schema |
 | `/graylog` | 灰度规则 CRUD |
@@ -820,7 +839,12 @@ com.dataplatform.governance/
 
 数据测试页会依据 `/interface/{id}/contract` 返回的请求字段树自动生成输入项，应用默认值并校验必填项及参数类型。
 
-接口管理的“配置”分为内部调用契约和厂商接入配置：前者以树形表格维护请求/响应字段、子字段、约束、示例和排序，后者维护厂商参数映射及可排序安全流水线。保存契约后，管理端文档页和调用方文档页会立即使用最新字段树与 Schema 快照生成示例和 OpenAPI 3.1。
+接口管理的“配置”分为内部调用契约和厂商接入配置：前者以树形表格维护请求/响应字段、子字段、约束、
+示例和排序；后者在普通流程中只选择一个固定连接器插件版本并填写一份 Schema 产品表单。页面提供版本
+升级预检、响应字段映射、校验/测试/发布、历史/回滚和脱敏只读执行计划，不暴露
+`stageKey/capability/order/enabled/TRANSPORT` 编辑。Legacy 只读展示并在能证明无损时提供转换。
+产品 API 返回 403 时不会回退 raw API；只有非权限类兼容失败才使用 Legacy 只读 fallback。保存内部契约
+后，管理端文档页和调用方文档页会立即使用最新字段树与 Schema 快照生成示例和 OpenAPI 3.1。
 
 调用方管理页在 API Key 列表中展示限流状态和每分钟上限，并提供“启用限流 + 最大请求数”配置对话框。公开文档页中的 API Key 仅保存在 Vue 组件内存，通过 Header 发送，不写入 URL、localStorage 或下载内容。
 
@@ -853,6 +877,7 @@ data-platform-web/src/
 │   ├── log.ts              # 操作日志
 │   ├── graylog.ts          # 灰度发布
 │   ├── interface.ts        # 接口管理
+│   ├── connector-spec.ts   # SIMPLE 目录、草稿、计划、测试发布、升级和转换
 │   ├── openapi-docs.ts     # 管理端动态接口文档
 │   ├── datatype.ts         # 数据类型
 │   ├── security.ts         # 数据安全
@@ -1031,11 +1056,13 @@ data-platform-web/src/
 | 45 | connector_plugin_activation | Access 各实例的插件加载事实 | access |
 | 46 | vendor_connector_migration | 已完成迁移计划与三域观察的只读历史 | masterdata |
 
-V042 建立连接器控制面并种入 `legacy-http:1.0.0`；V043 建立迁移与三域观察事实；V044 强制
-PLUGIN-only；V045 删除旧配置列；V046 引入 `V1_DERIVED/V2_EMBEDDED` 完整性；V047 在升级前检查
-目录/历史一致性并冻结插件制品、已发布连接器和物理删除。全新库使用 `./migrate-db.sh update`，旧库
-先备份并按 `./migrate-db.sh baseline` 接管。V043—V047 的受保护事实使用备份恢复或 forward recovery，
-不直接执行破坏性 U 脚本，详见 `sql/MIGRATIONS.md`。
+V042 建立连接器控制面并种入 `legacy-http:1.0.0`；V043—V048 完成迁移观察、PLUGIN-only、旧列退役、
+完整性/不可变保护和主备用配置引用。V049 增加 Manifest v2 投影、SIMPLE Spec/编译事实和五元测试门禁；
+V050 种入与宿主静态 Metadata 精确一致的 `generic-http:2.0.0`。全新库使用
+`./migrate-db.sh update`，旧库先备份并按 `./migrate-db.sh baseline` 接管。V049/U049 与 V050/U050 的
+fresh、upgrade、repeat、HALT 原子性和条件回滚分别由 `verify-v049-connector-product-spec.sh`、
+`verify-v050-generic-http.sh` 在隔离临时库验证。已受保护或被引用的事实使用版本回滚、备份恢复或
+forward recovery，不执行破坏性逆迁移，详见 `sql/MIGRATIONS.md`。
 
 ---
 
@@ -1072,7 +1099,7 @@ PLUGIN-only；V045 删除旧配置列；V046 引入 `V1_DERIVED/V2_EMBEDDED` 完
 |------|----------|------|
 | **策略模式** | `ConnectorStage` / `ConnectorErrorPolicy` / `SecurityStepHandler` | 阶段能力与平台治理策略分离 |
 | **工厂模式** | `ConnectorStageFactory` / `AuthHandlerFactory` | 按固定插件版本创建共享或请求级阶段 |
-| **流水线模式** | `PipelineCompiler` / `ConnectorPipelineExecutor` | 编译并执行六阶段有序连接器 |
+| **产品编译 + 流水线模式** | `ConnectorSpecCompiler` / `PipelineCompiler` / `ConnectorPipelineExecutor` | 将一份 Spec 确定性编译为隐藏六阶段计划并执行 |
 | **AOP模式** | `OperationLogAspect` | 通过注解声明式记录操作日志 |
 | **代理模式** | `VendorProxyService` | 代理调用方请求到厂商API |
 | **自动配置模式** | Spring Boot AutoConfiguration | common模块自动注册Bean |

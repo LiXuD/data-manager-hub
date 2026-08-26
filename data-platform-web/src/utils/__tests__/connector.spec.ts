@@ -13,6 +13,7 @@ import {
   parseJsonDocument,
   readSecretReference,
   schemaDefault,
+  schemaFieldVisible,
   secretFieldRepresentation,
   writeSecretReference
 } from '../connector'
@@ -70,6 +71,18 @@ describe('connector helpers', () => {
   it('orders properties using x-ui-order', () => {
     const schema: JsonSchemaNode = { properties: { late: { 'x-ui-order': 2 }, early: { 'x-ui-order': 1 }, last: {} } }
     expect(orderedSchemaProperties(schema).map(([key]) => key)).toEqual(['early', 'late', 'last'])
+  })
+
+  it('evaluates only whitelisted declarative x-ui-visible-if conditions', () => {
+    expect(schemaFieldVisible({ 'x-ui-visible-if': { type: 'BEARER' } }, { type: 'BEARER' })).toBe(true)
+    expect(schemaFieldVisible({ 'x-ui-visible-if': { type: 'BASIC' } }, { type: 'BEARER' })).toBe(false)
+    expect(schemaFieldVisible({ 'x-ui-visible-if': { field: 'mode', equals: 'A' } }, { mode: 'A' })).toBe(true)
+    expect(schemaFieldVisible({ 'x-ui-visible-if': { field: 'mode', notEquals: 'B' } }, { mode: 'A' })).toBe(true)
+    expect(schemaFieldVisible({ 'x-ui-visible-if': { field: 'mode', in: ['A', 'C'] } }, { mode: 'A' })).toBe(true)
+    expect(schemaFieldVisible({ 'x-ui-visible-if': { field: 'token', present: true } }, { token: 'ref' })).toBe(true)
+    expect(schemaFieldVisible({ 'x-ui-visible-if': { field: 'token', present: false } }, {})).toBe(true)
+    expect(schemaFieldVisible({ 'x-ui-visible-if': { field: 'mode', equals: 'A', script: 'alert(1)' } }, { mode: 'A' })).toBe(false)
+    expect(schemaFieldVisible({ 'x-ui-visible-if': { '__proto__.polluted': true } }, {})).toBe(false)
   })
 
   it('reports added, removed and changed stages', () => {

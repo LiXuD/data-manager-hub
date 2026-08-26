@@ -7,6 +7,7 @@ import com.dataplatform.access.connector.api.feign.VendorConnectorRuntimeInterna
 import com.dataplatform.billing.api.feign.ConnectorBillingObservationInternalFeignClient;
 import com.dataplatform.governance.log.api.LogClient;
 import com.dataplatform.identity.api.feign.EncryptionInternalFeignClient;
+import org.apache.ibatis.annotations.Mapper;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -29,11 +30,12 @@ import org.springframework.context.annotation.ComponentScan;
         EncryptionInternalFeignClient.class,
         LogClient.class
 })
-@MapperScan({
+@MapperScan(annotationClass = Mapper.class, basePackages = {
         "com.dataplatform.masterdata.vendor.mapper",
         "com.dataplatform.masterdata.interface_.mapper",
         "com.dataplatform.masterdata.graylog.mapper",
-        "com.dataplatform.masterdata.connector.mapper"
+        "com.dataplatform.masterdata.connector.mapper",
+        "com.dataplatform.masterdata.connector.spec"
 })
 @ComponentScan(basePackages = {
         "com.dataplatform.masterdata",

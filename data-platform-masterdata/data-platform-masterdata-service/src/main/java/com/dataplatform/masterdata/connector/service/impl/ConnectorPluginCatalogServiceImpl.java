@@ -27,6 +27,9 @@ import com.dataplatform.masterdata.connector.service.VerifiedPluginArtifact;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.common.plugin.artifact.PluginManifest;
+import com.dataplatform.common.plugin.artifact.PluginManifestReader;
+import com.dataplatform.common.plugin.runtime.PlatformCoreConnectorMetadata;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
@@ -139,6 +142,7 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
             if (!pluginId.equals(verified.pluginId()) || !version.equals(verified.version())) {
                 throw new IllegalArgumentException("重新验证的Manifest身份与已导入版本不一致");
             }
+            assertManifestProjection(current, verified);
             persistSuccessfulState(current, ACTIVE.equals(current.getStatus()) ? ACTIVE : VERIFIED,
                     actorId, LocalDateTime.now());
             return toVersionDto(current);
@@ -278,6 +282,12 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
                 if (Boolean.FALSE.equals(step.enabled())) {
                     continue;
                 }
+                if (PlatformCoreConnectorMetadata.PLUGIN_ID.equals(step.pluginId())) {
+                    if (!PlatformCoreConnectorMetadata.VERSION.equals(step.pluginVersion())) {
+                        throw new IllegalStateException("PLATFORM_CORE_VERSION_INVALID");
+                    }
+                    continue;
+                }
                 String key = step.pluginId() + ":" + step.pluginVersion();
                 result.computeIfAbsent(key, ignored -> artifact(step.pluginId(), step.pluginVersion()));
             }
@@ -323,6 +333,13 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
         version.setCapabilities(writeJson(verified.capabilities()));
         version.setPermissionManifest(verified.permissionManifestJson());
         version.setMinHostVersion(verified.minHostVersion());
+        version.setManifestVersion(verified.manifestVersion());
+        version.setAuthoringModel(verified.authoringModel().name());
+        version.setConnectorKind(enumName(verified.connectorKind()));
+        version.setTransportMode(enumName(verified.transportMode()));
+        version.setOutputMode(enumName(verified.outputMode()));
+        version.setCompatibilityManifest("2".equals(verified.manifestVersion())
+                ? verified.compatibilityJson() : null);
         version.setStatus(VERIFIED);
         version.setVerifiedAt(LocalDateTime.now());
         version.setCreatedBy(actorId);
@@ -361,11 +378,31 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
     }
 
     private PluginArtifactDescriptorDTO toArtifactDto(ConnectorPluginVersion version) {
-        return new PluginArtifactDescriptorDTO(version.getPluginId(), version.getVersion(),
-                version.getSpiVersion(), version.getEntryClass(), version.getArtifactUri(),
-                version.getArtifactSha256(), version.getDetachedSignature(), version.getSigningKeyId(),
-                version.getManifestJson(), version.getConfigSchemaJson(), readStrings(version.getCapabilities()),
-                version.getPermissionManifest(), version.getMinHostVersion(), version.getStatus());
+        try {
+            PluginManifestReader reader = new PluginManifestReader(objectMapper);
+            byte[] manifestBytes = version.getManifestJson().getBytes(StandardCharsets.UTF_8);
+            PluginManifest manifest = reader.read(manifestBytes);
+            String compatibilityJson = "2".equals(manifest.manifestVersion())
+                    ? new String(reader.canonicalize(objectMapper.writeValueAsBytes(
+                    objectMapper.readTree(manifestBytes).path("compatibility"))), StandardCharsets.UTF_8)
+                    : "{}";
+            assertManifestProjection(version, manifest,
+                    "2".equals(manifest.manifestVersion()) ? compatibilityJson : null);
+            return new PluginArtifactDescriptorDTO(version.getPluginId(), version.getVersion(),
+                    version.getSpiVersion(), version.getEntryClass(), version.getArtifactUri(),
+                    version.getArtifactSha256(), version.getDetachedSignature(), version.getSigningKeyId(),
+                    version.getManifestJson(), version.getConfigSchemaJson(), readStrings(version.getCapabilities()),
+                    version.getPermissionManifest(), version.getMinHostVersion(), version.getStatus(),
+                    manifest.manifestVersion(), manifest.authoringModel().name(),
+                    manifest.connectorKind() == null ? null : manifest.connectorKind().name(),
+                    manifest.transportMode() == null ? null : manifest.transportMode().name(),
+                    manifest.outputMode() == null ? null : manifest.outputMode().name(),
+                    compatibilityJson);
+        } catch (RuntimeException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalStateException("插件Manifest投影损坏", exception);
+        }
     }
 
     private List<String> readStrings(String json) {
@@ -374,6 +411,56 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
         } catch (Exception exception) {
             throw new IllegalStateException("插件能力元数据损坏", exception);
         }
+    }
+
+    private void assertManifestProjection(
+            ConnectorPluginVersion version,
+            VerifiedPluginArtifact verified) {
+        assertManifestProjection(version, verified.manifestVersion(),
+                verified.authoringModel().name(), enumName(verified.connectorKind()),
+                enumName(verified.transportMode()), enumName(verified.outputMode()),
+                "2".equals(verified.manifestVersion()) ? verified.compatibilityJson() : null);
+    }
+
+    private void assertManifestProjection(
+            ConnectorPluginVersion version,
+            PluginManifest manifest,
+            String compatibilityJson) {
+        assertManifestProjection(version, manifest.manifestVersion(),
+                manifest.authoringModel().name(), enumName(manifest.connectorKind()),
+                enumName(manifest.transportMode()), enumName(manifest.outputMode()),
+                compatibilityJson);
+    }
+
+    private void assertManifestProjection(
+            ConnectorPluginVersion version,
+            String manifestVersion,
+            String authoringModel,
+            String connectorKind,
+            String transportMode,
+            String outputMode,
+            String compatibilityJson) {
+        if (!Objects.equals(version.getManifestVersion(), manifestVersion)
+                || !Objects.equals(version.getAuthoringModel(), authoringModel)
+                || !Objects.equals(version.getConnectorKind(), connectorKind)
+                || !Objects.equals(version.getTransportMode(), transportMode)
+                || !Objects.equals(version.getOutputMode(), outputMode)
+                || !sameJson(version.getCompatibilityManifest(), compatibilityJson)) {
+            throw new IllegalStateException("插件Manifest索引投影与签名Manifest不一致");
+        }
+    }
+
+    private boolean sameJson(String left, String right) {
+        if (left == null || right == null) return left == null && right == null;
+        try {
+            return Objects.equals(objectMapper.readTree(left), objectMapper.readTree(right));
+        } catch (Exception exception) {
+            throw new IllegalStateException("插件Manifest兼容投影损坏", exception);
+        }
+    }
+
+    private String enumName(Enum<?> value) {
+        return value == null ? null : value.name();
     }
 
     private List<ConnectorPipelineStepDTO> readPipeline(String json) {

@@ -4,21 +4,92 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE="${1:-dev}"
-NACOS_SERVER_ADDR="${NACOS_SERVER_ADDR:-localhost:8848}"
+NACOS_SERVER_ADDR="${NACOS_SERVER_ADDR:-}"
 NACOS_NAMESPACE="${NACOS_NAMESPACE:-$PROFILE}"
 NACOS_GROUP="${NACOS_GROUP:-DEFAULT_GROUP}"
-NACOS_CONFIG_DIR="$SCRIPT_DIR/nacos-config/$PROFILE"
-NACOS_BASE_URL="${NACOS_SERVER_ADDR#http://}"
-NACOS_BASE_URL="${NACOS_BASE_URL#https://}"
-NACOS_SCHEME="${NACOS_SCHEME:-http}"
-NACOS_BASE_URL="$NACOS_SCHEME://$NACOS_BASE_URL"
+NACOS_MODE="${NACOS_MODE:-apply}"
+SOURCE_PROFILE="$PROFILE"
+[[ "$PROFILE" == staging ]] && SOURCE_PROFILE=prod
+NACOS_CONFIG_DIR="$SCRIPT_DIR/nacos-config/$SOURCE_PROFILE"
 RUNTIME_DIR="$SCRIPT_DIR/.runtime"
+group_state="unknown"
 
 case "$PROFILE" in
-    dev|prod) ;;
+    dev|staging|prod) ;;
     *)
-        echo "错误: 只支持 dev 或 prod profile" >&2
+        echo "错误: 只支持 dev、staging 或 prod profile" >&2
         exit 1
+        ;;
+esac
+
+if [[ "$PROFILE" != dev ]]; then
+    if [[ "$NACOS_MODE" == plan || "${NACOS_CONFIG_DRY_RUN:-false}" == true ]]; then
+        # Plan is deliberately offline.  Use a non-routable placeholder so
+        # URL construction below remains deterministic without making a
+        # network request or requiring a production endpoint. Dry-run apply
+        # shares the same offline boundary and only renders the Data IDs.
+        NACOS_SERVER_ADDR="${NACOS_SERVER_ADDR:-nacos.invalid:8848}"
+    else
+        [[ -n "${NACOS_SERVER_ADDR:-}" ]] || {
+            echo "错误: staging/prod 必须显式提供 NACOS_SERVER_ADDR" >&2
+            exit 2
+        }
+        nacos_host="${NACOS_SERVER_ADDR#http://}"
+        nacos_host="${nacos_host#https://}"
+        case "$nacos_host" in
+            localhost|localhost:*|127.0.0.1|127.0.0.1:*|0.0.0.0|0.0.0.0:*|'[::1]'|'[::1]':*)
+                echo "错误: staging/prod 禁止使用 loopback NACOS_SERVER_ADDR" >&2
+                exit 2
+                ;;
+        esac
+    fi
+else
+    NACOS_SERVER_ADDR="${NACOS_SERVER_ADDR:-localhost:8848}"
+fi
+
+NACOS_SCHEME="${NACOS_SCHEME:-}"
+case "$NACOS_SERVER_ADDR" in
+    https://*)
+        [[ -z "$NACOS_SCHEME" || "$NACOS_SCHEME" == https ]] || {
+            echo "错误: https:// NACOS_SERVER_ADDR 不允许降级为 http" >&2
+            exit 2
+        }
+        NACOS_SCHEME=https
+        ;;
+    http://*)
+        [[ -z "$NACOS_SCHEME" || "$NACOS_SCHEME" == http ]] || {
+            echo "错误: http:// NACOS_SERVER_ADDR 不允许伪装为 https" >&2
+            exit 2
+        }
+        NACOS_SCHEME=http
+        ;;
+    *) NACOS_SCHEME="${NACOS_SCHEME:-http}" ;;
+esac
+case "$NACOS_SCHEME" in
+    http|https) ;;
+    *) echo "错误: NACOS_SCHEME 只支持 http 或 https" >&2; exit 2 ;;
+esac
+NACOS_BASE_URL="${NACOS_SERVER_ADDR#http://}"
+NACOS_BASE_URL="${NACOS_BASE_URL#https://}"
+NACOS_BASE_URL="$NACOS_SCHEME://$NACOS_BASE_URL"
+
+case "$NACOS_MODE" in
+    plan|apply|verify) ;;
+    *) echo "错误: NACOS_MODE 只支持 plan、apply 或 verify" >&2; exit 1 ;;
+esac
+
+case "$PROFILE" in
+    staging)
+        [[ "$NACOS_GROUP" =~ ^DMH_STAGING_[0-9a-f]{40}$ ]] || {
+            echo "错误: staging 必须使用不可变组 DMH_STAGING_<40-char-master-sha>" >&2
+            exit 2
+        }
+        ;;
+    prod)
+        [[ "$NACOS_GROUP" =~ ^DMH_PROD_[0-9a-f]{40}$ ]] || {
+            echo "错误: prod 必须使用不可变组 DMH_PROD_<40-char-master-sha>" >&2
+            exit 2
+        }
         ;;
 esac
 
@@ -89,6 +160,11 @@ ensure_namespace() {
         return 0
     fi
 
+    if [[ "$NACOS_MODE" == verify ]]; then
+        echo "错误: Nacos namespace 不存在，verify 模式禁止创建: $NACOS_NAMESPACE" >&2
+        return 2
+    fi
+
     if [[ -n "$token" ]]; then
         response="$(curl --noproxy '*' --silent --show-error --fail -X POST \
             "$NACOS_BASE_URL/nacos/v1/console/namespaces" \
@@ -136,6 +212,10 @@ render_config() {
         content="${content//__PROJECT_ROOT__/$SCRIPT_DIR}"
         content="${content//__PLATFORM_ENCRYPTION_MASTER_KEY__/$master_key}"
     fi
+    if [[ "$content" == *"__PROJECT_ROOT__"* || "$content" == *"__PLATFORM_ENCRYPTION_MASTER_KEY__"* ]]; then
+        echo "错误: Nacos 配置包含未渲染的内部占位符: $file" >&2
+        return 2
+    fi
     printf '%s' "$content"
 }
 
@@ -146,12 +226,62 @@ publish_file() {
     local response
     local token
     data_id="$(basename "$file")"
+    if [[ "$PROFILE" == staging ]]; then
+        data_id="${data_id/-prod./-staging.}"
+    fi
     content="$(render_config "$file")"
     token="$(append_auth_argument)"
 
-    if [[ "${NACOS_CONFIG_DRY_RUN:-false}" == "true" ]]; then
-        echo "  - dry-run: $data_id"
+    local rendered_sha existing_file status_code existing_sha
+    rendered_sha="$(printf '%s' "$content" | sha256sum | awk '{print $1}')"
+
+    if [[ "${NACOS_CONFIG_DRY_RUN:-false}" == "true" || "$NACOS_MODE" == "plan" ]]; then
+        echo "  - plan: $data_id sha256=$rendered_sha"
         return 0
+    fi
+
+    existing_file="$(mktemp)"
+    trap 'rm -f "$existing_file"' RETURN
+    if [[ -n "$token" ]]; then
+        status_code="$(curl --noproxy '*' --silent --show-error --output "$existing_file" --write-out '%{http_code}' -G \
+            "$NACOS_BASE_URL/nacos/v1/cs/configs" \
+            --data-urlencode "dataId=$data_id" --data-urlencode "group=$NACOS_GROUP" \
+            --data-urlencode "tenant=$NACOS_NAMESPACE" --data-urlencode "accessToken=$token")"
+    else
+        status_code="$(curl --noproxy '*' --silent --show-error --output "$existing_file" --write-out '%{http_code}' -G \
+            "$NACOS_BASE_URL/nacos/v1/cs/configs" \
+            --data-urlencode "dataId=$data_id" --data-urlencode "group=$NACOS_GROUP" \
+            --data-urlencode "tenant=$NACOS_NAMESPACE")"
+    fi
+    if [[ "$status_code" == 200 ]]; then
+        if [[ "$group_state" == "missing" ]]; then
+            echo "错误: Nacos Group 处于部分存在状态，拒绝继续写入: $NACOS_GROUP" >&2
+            return 2
+        fi
+        group_state="existing"
+        existing_sha="$(sha256sum "$existing_file" | awk '{print $1}')"
+        if [[ "$existing_sha" != "$rendered_sha" ]]; then
+            echo "错误: 不可变 Nacos Group 已存在但内容不同: $data_id" >&2
+            return 2
+        fi
+        if [[ "$NACOS_MODE" == "verify" ]]; then
+            echo "  - verify: $data_id sha256=$rendered_sha"
+        else
+            echo "  - 幂等: $data_id sha256=$rendered_sha"
+        fi
+        return 0
+    elif [[ "$status_code" != 404 ]]; then
+        echo "错误: 读取 Nacos 配置失败: $data_id HTTP $status_code" >&2
+        return 1
+    fi
+    if [[ "$group_state" == "existing" ]]; then
+        echo "错误: Nacos Group 处于部分存在状态，拒绝补写: $NACOS_GROUP" >&2
+        return 2
+    fi
+    group_state="missing"
+    if [[ "$NACOS_MODE" == "verify" ]]; then
+        echo "错误: Nacos 配置不存在: $data_id" >&2
+        return 2
     fi
 
     if [[ -n "$token" ]]; then
@@ -179,10 +309,12 @@ publish_file() {
     echo "  - 已发布: $data_id"
 }
 
-wait_for_nacos
-login_if_required
-ensure_namespace
 prepare_dev_secrets
+if [[ "$NACOS_MODE" != "plan" && "${NACOS_CONFIG_DRY_RUN:-false}" != true ]]; then
+    wait_for_nacos
+    login_if_required
+    ensure_namespace
+fi
 
 echo "发布 Nacos 配置: profile=$PROFILE namespace=$NACOS_NAMESPACE group=$NACOS_GROUP"
 published=0

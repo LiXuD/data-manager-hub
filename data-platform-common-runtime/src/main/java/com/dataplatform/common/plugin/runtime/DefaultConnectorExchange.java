@@ -46,6 +46,11 @@ final class DefaultConnectorExchange implements ConnectorExchange {
     void leave() { activeCapability = null; }
     void transportAttempted() { deliveryState = RequestDeliveryState.MAYBE_SENT; }
     void transportCompleted() { deliveryState = RequestDeliveryState.SENT; }
+    void mergeDeliveryState(RequestDeliveryState candidate) {
+        if (candidate != null && candidate.ordinal() > deliveryState.ordinal()) {
+            deliveryState = candidate;
+        }
+    }
     RequestDeliveryState deliveryState() { return deliveryState; }
     BusinessStatus businessStatus() { return businessStatus; }
     BillingSignal billingSignal() { return billingSignal; }

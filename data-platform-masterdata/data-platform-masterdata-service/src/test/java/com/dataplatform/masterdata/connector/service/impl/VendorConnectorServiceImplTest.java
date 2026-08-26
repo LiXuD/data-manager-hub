@@ -3,6 +3,7 @@ package com.dataplatform.masterdata.connector.service.impl;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -10,6 +11,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doAnswer;
 
@@ -28,6 +30,7 @@ import com.dataplatform.masterdata.connector.mapper.VendorConnectorVersionMapper
 import com.dataplatform.masterdata.connector.mapper.VendorConnectorTestFactMapper;
 import com.dataplatform.masterdata.connector.service.ConnectorConfigSchemaValidator;
 import com.dataplatform.masterdata.connector.service.ConnectorConflictException;
+import com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,6 +50,7 @@ class VendorConnectorServiceImplTest {
     private final VendorConnectorTestFactMapper testFactMapper = mock(VendorConnectorTestFactMapper.class);
     private ConnectorPluginActivationInternalFeignClient activationClient;
     private VendorConnectorRuntimeInternalFeignClient runtimeClient;
+    private ConnectorPluginReleaseCoordinator releaseCoordinator;
     private ConnectorPluginVersion pluginVersion;
     private VendorConnectorServiceImpl service;
 
@@ -54,10 +58,11 @@ class VendorConnectorServiceImplTest {
     void setUp() throws Exception {
         activationClient = mock(ConnectorPluginActivationInternalFeignClient.class);
         runtimeClient = mock(VendorConnectorRuntimeInternalFeignClient.class);
+        releaseCoordinator = mock(ConnectorPluginReleaseCoordinator.class);
         service = new VendorConnectorServiceImpl(connectorMapper, pluginMapper, vendorConfigMapper,
                 new ConnectorConfigSchemaValidator(objectMapper),
                 mock(com.dataplatform.masterdata.connector.service.ConnectorSecretReferenceService.class),
-                mock(com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator.class),
+                releaseCoordinator,
                 runtimeClient,
                 activationClient, testFactMapper, objectMapper);
         VendorConfig vendorConfig = new VendorConfig();
@@ -151,6 +156,9 @@ class VendorConnectorServiceImplTest {
         assertTrue(fact.getValue().getPluginBindings().contains("demo-http:1.0.0"));
         assertEquals(99L, fact.getValue().getTestedBy());
         assertEquals(64, fact.getValue().getResultDigest().length());
+        assertEquals("ADVANCED_LEGACY", fact.getValue().getAuthoringMode());
+        assertNull(fact.getValue().getSpecHash());
+        assertNull(fact.getValue().getCompileHash());
     }
 
     @Test
@@ -203,7 +211,26 @@ class VendorConnectorServiceImplTest {
         assertEquals(2, second.draftVersion());
         assertEquals("https://api.example.com/v2",
                 second.pipelineSnapshot().getFirst().config().get("endpoint"));
+        assertEquals("ADVANCED_LEGACY", stored.get().getAuthoringMode());
+        assertNull(stored.get().getConnectorSpec());
+        assertNull(stored.get().getSpecHash());
+        assertNull(stored.get().getCompilerVersion());
+        assertNull(stored.get().getCompileHash());
         verify(connectorMapper).updateDraft(eq(11L), eq(1), any(String.class), eq(3), eq(2), eq(99L));
+    }
+
+    @Test
+    void immutablePublishedVersionKeepsLegacyProjectionExplicit() {
+        VendorConnectorVersion version = ReflectionTestUtils.invokeMethod(service, "immutableVersion",
+                7L, 2, List.of(step("transport-a", 100)), "a".repeat(64),
+                "V2_EMBEDDED", "a".repeat(64), 3, 10L, 99L);
+
+        assertNotNull(version);
+        assertEquals("ADVANCED_LEGACY", version.getAuthoringMode());
+        assertNull(version.getConnectorSpec());
+        assertNull(version.getSpecHash());
+        assertNull(version.getCompilerVersion());
+        assertNull(version.getCompileHash());
     }
 
     @Test
@@ -217,14 +244,84 @@ class VendorConnectorServiceImplTest {
                 new VendorConnectorSaveDraftRequestDTO(1, List.of(step("transport-a", 100))), 99L));
     }
 
+    @Test
+    void rawSaveTestAndPublishRejectSimpleDraftBeforeNormalizationOrAnyWrite() throws Exception {
+        VendorConnectorVersion simple = simpleDraft();
+        when(connectorMapper.selectOne(any())).thenReturn(simple);
+        String connectorSpec = simple.getConnectorSpec();
+        String specHash = simple.getSpecHash();
+        String compileHash = simple.getCompileHash();
+        String pipeline = simple.getPipelineSnapshot();
+
+        assertProductApiRequired(() -> service.saveDraft(7L,
+                new VendorConnectorSaveDraftRequestDTO(1, List.of(step("transport-a", 100))), 99L));
+        assertProductApiRequired(() -> service.test(7L, null, 99L));
+        assertProductApiRequired(() -> service.publish(7L, 1, 99L));
+
+        verify(connectorMapper, never()).updateDraft(any(), any(), any(), any(), any(), any());
+        verify(connectorMapper, never()).insert(any(VendorConnectorVersion.class));
+        verify(vendorConfigMapper, never()).update(any(), any());
+        verifyNoInteractions(runtimeClient, activationClient, testFactMapper, releaseCoordinator);
+        assertEquals(connectorSpec, simple.getConnectorSpec());
+        assertEquals(specHash, simple.getSpecHash());
+        assertEquals(compileHash, simple.getCompileHash());
+        assertEquals(pipeline, simple.getPipelineSnapshot());
+        assertEquals("SIMPLE_CONNECTOR", simple.getAuthoringMode());
+    }
+
+    @Test
+    void rawRollbackRejectsSimpleHistoryBeforeStageOrPersistence() throws Exception {
+        VendorConnectorVersion simple = simpleDraft();
+        simple.setStatus("SUPERSEDED");
+        simple.setVersionNo(2);
+        simple.setDraftVersion(0);
+        when(connectorMapper.selectOne(any())).thenReturn(simple);
+
+        assertProductApiRequired(() -> service.rollback(7L, 2, 0, 99L));
+
+        verify(connectorMapper, never()).insert(any(VendorConnectorVersion.class));
+        verify(connectorMapper, never()).updateById(any(VendorConnectorVersion.class));
+        verify(vendorConfigMapper, never()).update(any(), any());
+        verifyNoInteractions(runtimeClient, activationClient, testFactMapper, releaseCoordinator);
+        assertEquals("SIMPLE_CONNECTOR", simple.getAuthoringMode());
+        assertNotNull(simple.getConnectorSpec());
+        assertNotNull(simple.getSpecHash());
+        assertNotNull(simple.getCompileHash());
+    }
+
+    @Test
+    void rawUpdateDraftSqlCanOnlyMutateAdvancedLegacyDrafts() throws Exception {
+        String sql = VendorConnectorVersionMapper.class.getMethod("updateDraft", Long.class,
+                        Integer.class, String.class, Integer.class, Integer.class, Long.class)
+                .getAnnotation(org.apache.ibatis.annotations.Update.class).value()[0];
+        assertTrue(sql.contains("status = 'DRAFT'"));
+        assertTrue(sql.contains("authoring_mode = 'ADVANCED_LEGACY'"));
+    }
+
     private VendorConnectorVersion draft(List<ConnectorPipelineStepDTO> pipeline) throws Exception {
         VendorConnectorVersion draft = new VendorConnectorVersion();
         draft.setId(1L);
         draft.setVendorConfigId(7L);
         draft.setStatus("DRAFT");
         draft.setDraftVersion(1);
+        draft.setAuthoringMode("ADVANCED_LEGACY");
         draft.setPipelineSnapshot(objectMapper.writeValueAsString(pipeline));
         return draft;
+    }
+
+    private VendorConnectorVersion simpleDraft() throws Exception {
+        VendorConnectorVersion draft = draft(List.of(step("transport-a", 100)));
+        draft.setAuthoringMode("SIMPLE_CONNECTOR");
+        draft.setConnectorSpec("{\"specVersion\":\"1\",\"config\":{}}");
+        draft.setSpecHash("b".repeat(64));
+        draft.setCompilerVersion("1.0.0");
+        draft.setCompileHash("c".repeat(64));
+        return draft;
+    }
+
+    private void assertProductApiRequired(org.junit.jupiter.api.function.Executable executable) {
+        ConnectorConflictException exception = assertThrows(ConnectorConflictException.class, executable);
+        assertEquals("SIMPLE_CONNECTOR_REQUIRES_PRODUCT_API", exception.getMessage());
     }
 
     private ConnectorPipelineStepDTO step(String key, int order) {

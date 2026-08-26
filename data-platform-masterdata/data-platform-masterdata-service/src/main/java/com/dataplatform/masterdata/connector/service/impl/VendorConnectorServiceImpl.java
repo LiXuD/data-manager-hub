@@ -64,6 +64,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
             "RESPONSE_PROCESSOR", "RESPONSE_PARSER", "RESPONSE_NORMALIZER");
     private static final int MAX_STEPS = 50;
     private static final int MAX_STEP_CONFIG_BYTES = 64 * 1024;
+    private static final String ADVANCED_LEGACY = "ADVANCED_LEGACY";
+    private static final String PRODUCT_API_REQUIRED = "SIMPLE_CONNECTOR_REQUIRES_PRODUCT_API";
 
     private final VendorConnectorVersionMapper connectorMapper;
     private final ConnectorPluginVersionMapper pluginVersionMapper;
@@ -128,13 +130,14 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     public VendorConnectorDraftDTO saveDraft(Long vendorConfigId, VendorConnectorSaveDraftRequestDTO request,
                                               Long actorId) {
         VendorConfig config = requireConfig(vendorConfigId);
+        VendorConnectorVersion draft = findDraft(vendorConfigId);
+        requireLegacyWritable(draft);
         List<ConnectorPipelineStepDTO> normalized = normalize(request.pipelineSnapshot());
         ConnectorValidationResultDTO validation = validatePipeline(
                 vendorConfigId, normalized, PluginBindingMode.DRAFT);
         if (!validation.valid()) {
             throw new IllegalArgumentException(String.join("; ", validation.errors()));
         }
-        VendorConnectorVersion draft = findDraft(vendorConfigId);
         if (draft == null) {
             if (request.expectedDraftVersion() != 0) {
                 throw new ConnectorConflictException("连接器草稿版本冲突");
@@ -143,6 +146,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
             draft.setVendorConfigId(vendorConfigId);
             draft.setDraftVersion(1);
             draft.setPipelineSnapshot(writeJson(normalized));
+            draft.setAuthoringMode(ADVANCED_LEGACY);
             draft.setSecurityVersion(config.getSecurityVersion() == null ? 0 : config.getSecurityVersion());
             draft.setStatus("DRAFT");
             draft.setCreatedBy(actorId);
@@ -181,6 +185,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
                                               Long actorId) {
         requireConfig(vendorConfigId);
         VendorConnectorVersion draft = requireDraft(vendorConfigId);
+        requireLegacyWritable(draft);
         List<ConnectorPipelineStepDTO> pipeline = normalize(readPipeline(draft.getPipelineSnapshot()));
         ConnectorValidationResultDTO validation = validatePipeline(vendorConfigId, pipeline, PluginBindingMode.TEST);
         if (!validation.valid()) {
@@ -213,6 +218,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     public VendorConnectorVersionDTO publish(Long vendorConfigId, Integer expectedDraftVersion, Long actorId) {
         VendorConfig config = requireConfig(vendorConfigId);
         VendorConnectorVersion draft = requireDraft(vendorConfigId);
+        requireLegacyWritable(draft);
         if (!expectedDraftVersion.equals(draft.getDraftVersion())) {
             throw new ConnectorConflictException("连接器草稿版本冲突");
         }
@@ -273,6 +279,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
                         .eq(VendorConnectorVersion::getVendorConfigId, vendorConfigId)
                         .eq(VendorConnectorVersion::getVersionNo, targetVersion));
         if (target == null) throw new IllegalArgumentException("连接器历史版本不存在");
+        requireLegacyWritable(target);
         List<ConnectorPipelineStepDTO> pipeline = normalize(readPipeline(target.getPipelineSnapshot()));
         ConnectorValidationResultDTO validation = validatePipeline(
                 vendorConfigId, pipeline, PluginBindingMode.ROLLBACK);
@@ -420,6 +427,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         entity.setSnapshotHash(hash);
         entity.setHashAlgorithm(hashAlgorithm);
         entity.setIntegrityHash(integrityHash);
+        entity.setAuthoringMode("ADVANCED_LEGACY");
         entity.setSecurityVersion(securityVersion == null ? 0 : securityVersion);
         entity.setStatus("ACTIVE");
         entity.setPreviousVersionId(previousId);
@@ -456,6 +464,12 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         VendorConnectorVersion draft = findDraft(vendorConfigId);
         if (draft == null) throw new IllegalArgumentException("连接器草稿不存在");
         return draft;
+    }
+
+    private void requireLegacyWritable(VendorConnectorVersion version) {
+        if (version != null && !ADVANCED_LEGACY.equals(version.getAuthoringMode())) {
+            throw new ConnectorConflictException(PRODUCT_API_REQUIRED);
+        }
     }
 
     private VendorConnectorVersion findDraft(Long vendorConfigId) {
@@ -595,6 +609,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         fact.setVendorConfigId(vendorConfigId);
         fact.setDraftVersion(draft.getDraftVersion());
         fact.setSnapshotHash(snapshotHash);
+        fact.setAuthoringMode("ADVANCED_LEGACY");
         fact.setPluginBindings(writeJson(pluginBindings(pipeline)));
         fact.setTestSucceeded(Boolean.TRUE.equals(result.success()));
         fact.setSafeErrorCategory(result.errorCategory());

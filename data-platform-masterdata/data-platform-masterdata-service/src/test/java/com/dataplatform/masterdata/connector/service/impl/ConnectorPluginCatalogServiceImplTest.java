@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,6 +33,7 @@ import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.dataplatform.access.connector.api.dto.ConnectorPluginActivationSummaryDTO;
 import com.dataplatform.api.Result;
+import com.dataplatform.common.plugin.runtime.PlatformCoreConnectorMetadata;
 import java.util.List;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.mockito.ArgumentCaptor;
@@ -242,6 +244,55 @@ class ConnectorPluginCatalogServiceImplTest {
         assertEquals("ACTIVE_CONNECTOR_BINDING_INVALID", error.getMessage());
     }
 
+    @Test
+    void requiredArtifactsSkipsOnlyExactPlatformCoreAndKeepsVendorArtifact() {
+        VendorConfigMapper configMapper = mock(VendorConfigMapper.class);
+        VendorConnectorVersionMapper connectorMapper = mock(VendorConnectorVersionMapper.class);
+        ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        VendorConfig config = activeConfig(77L, 88L);
+        VendorConnectorVersion connector = activePipeline(77L, """
+                [
+                  {"stageKey":"connector.request-builder","capability":"REQUEST_BUILDER",
+                   "pluginId":"vendor-http","pluginVersion":"2.0.0","order":1,"enabled":true,"config":{}},
+                  {"stageKey":"platform.transport","capability":"TRANSPORT",
+                   "pluginId":"platform-core","pluginVersion":"1.0.0","order":2,"enabled":true,"config":{}},
+                  {"stageKey":"platform.response-normalizer","capability":"RESPONSE_NORMALIZER",
+                   "pluginId":"platform-core","pluginVersion":"1.0.0","order":3,"enabled":true,"config":{}}
+                ]
+                """);
+        when(configMapper.selectList(any())).thenReturn(List.of(config));
+        when(connectorMapper.selectById(88L)).thenReturn(connector);
+        when(versionMapper.selectOne(any())).thenReturn(catalogVersion("vendor-http", "2.0.0"));
+        ConnectorPluginCatalogServiceImpl service = catalogService(
+                versionMapper, connectorMapper, configMapper);
+
+        var artifacts = service.requiredArtifacts();
+
+        assertEquals(1, artifacts.size());
+        assertEquals("vendor-http", artifacts.getFirst().pluginId());
+        verify(versionMapper, org.mockito.Mockito.times(1)).selectOne(any());
+    }
+
+    @Test
+    void requiredArtifactsRejectsWrongPlatformCoreVersionWithoutCatalogLookup() {
+        VendorConfigMapper configMapper = mock(VendorConfigMapper.class);
+        VendorConnectorVersionMapper connectorMapper = mock(VendorConnectorVersionMapper.class);
+        ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        when(configMapper.selectList(any())).thenReturn(List.of(activeConfig(77L, 88L)));
+        when(connectorMapper.selectById(88L)).thenReturn(activePipeline(77L, """
+                [{"stageKey":"platform.transport","capability":"TRANSPORT",
+                  "pluginId":"platform-core","pluginVersion":"1.0.1","order":1,"enabled":true,"config":{}}]
+                """));
+        ConnectorPluginCatalogServiceImpl service = catalogService(
+                versionMapper, connectorMapper, configMapper);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                service::requiredArtifacts);
+
+        assertEquals("PLATFORM_CORE_VERSION_INVALID", error.getMessage());
+        verify(versionMapper, never()).selectOne(any());
+    }
+
     private VendorConnectorVersion activeBinding(Long vendorConfigId, String pluginId) {
         VendorConnectorVersion version = new VendorConnectorVersion();
         version.setVendorConfigId(vendorConfigId);
@@ -250,6 +301,63 @@ class ConnectorPluginCatalogServiceImplTest {
                 + "\"pluginId\":\"" + pluginId + "\",\"pluginVersion\":\"1.0.0\","
                 + "\"order\":1,\"enabled\":true,\"config\":{}}]");
         return version;
+    }
+
+    private VendorConfig activeConfig(Long id, Long versionId) {
+        VendorConfig config = new VendorConfig();
+        config.setId(id);
+        config.setStatus(com.dataplatform.common.enums.CommonStatus.ACTIVE);
+        config.setDeleted(false);
+        config.setRuntimeMode("PLUGIN");
+        config.setActiveConnectorVersionId(versionId);
+        return config;
+    }
+
+    private VendorConnectorVersion activePipeline(Long vendorConfigId, String pipeline) {
+        VendorConnectorVersion version = new VendorConnectorVersion();
+        version.setId(88L);
+        version.setVendorConfigId(vendorConfigId);
+        version.setStatus("ACTIVE");
+        version.setPipelineSnapshot(pipeline);
+        return version;
+    }
+
+    private ConnectorPluginVersion catalogVersion(String pluginId, String versionValue) {
+        ConnectorPluginVersion version = new ConnectorPluginVersion();
+        version.setPluginId(pluginId);
+        version.setVersion(versionValue);
+        version.setSpiVersion("1.0");
+        version.setEntryClass("example.VendorPlugin");
+        version.setArtifactUri("https://repo.example/vendor.jar");
+        version.setArtifactSha256("a".repeat(64));
+        version.setDetachedSignature("signature");
+        version.setSigningKeyId("key-1");
+        version.setManifestJson("""
+                {"manifestVersion":"1","pluginId":"%s","version":"%s","spiVersion":"1.0",
+                 "displayName":"Vendor","provider":"internal","entryClass":"example.VendorPlugin",
+                 "capabilities":["REQUEST_BUILDER"],"minHostVersion":"1.0.0",
+                 "configSchema":{"type":"object"},
+                 "permissions":{"networkProtocols":[],"networkHosts":[]}}
+                """.formatted(pluginId, versionValue));
+        version.setConfigSchemaJson("{\"type\":\"object\"}");
+        version.setCapabilities("[\"REQUEST_BUILDER\"]");
+        version.setPermissionManifest("{\"networkProtocols\":[],\"networkHosts\":[]}");
+        version.setMinHostVersion("1.0.0");
+        version.setManifestVersion("1");
+        version.setAuthoringModel("ADVANCED_PIPELINE");
+        version.setStatus("ACTIVE");
+        return version;
+    }
+
+    private ConnectorPluginCatalogServiceImpl catalogService(
+            ConnectorPluginVersionMapper versionMapper,
+            VendorConnectorVersionMapper connectorMapper,
+            VendorConfigMapper configMapper) {
+        return new ConnectorPluginCatalogServiceImpl(
+                mock(ConnectorPluginMapper.class), versionMapper, connectorMapper, configMapper,
+                mock(VendorConnectorTestFactMapper.class), mock(PluginArtifactVerifier.class),
+                mock(ConnectorPluginActivationInternalFeignClient.class), releaseCoordinator(),
+                new ObjectMapper());
     }
 
     private ConnectorPluginCatalogServiceImpl service(
@@ -278,6 +386,8 @@ class ConnectorPluginCatalogServiceImplTest {
         version.setDetachedSignature("signature");
         version.setSigningKeyId("key-1");
         version.setCapabilities("[]");
+        version.setManifestVersion("1");
+        version.setAuthoringModel("ADVANCED_PIPELINE");
         version.setStatus(status);
         version.setSafeErrorCode("ACCESS_PRELOAD_FAILED");
         version.setSafeErrorDigest("old-error-digest");

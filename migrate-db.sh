@@ -9,7 +9,7 @@ export DB_HOST="${DB_HOST:-localhost}"
 export DB_PORT="${DB_PORT:-5432}"
 export DB_NAME="${DB_NAME:-dataplatform}"
 export DB_USERNAME="${DB_USERNAME:-postgres}"
-export DB_PASSWORD="${DB_PASSWORD:-postgres}"
+export DB_PASSWORD="${DB_PASSWORD:-123456}"
 export PGPASSWORD="$DB_PASSWORD"
 
 MAVEN_BIN="${MAVEN_BIN:-mvn}"
@@ -86,12 +86,12 @@ check_unique_migration_numbers() {
     duplicates="$(find sql/migrations -maxdepth 1 -type f -name 'V[0-9]*__*.sql' -exec basename {} \; \
         | sed 's/__.*//' | sort | uniq -d | grep -v '^V007$' || true)"
     [[ -z "$duplicates" ]] || \
-        fail "迁移编号重复: ${duplicates//$'\n'/ }。除历史 V007 外编号必须唯一，新迁移从 V030 起顺延，详见 sql/MIGRATIONS.md 的编号规则"
+        fail "迁移编号重复: ${duplicates//$'\n'/ }。除历史 V007 外编号必须唯一，新迁移从 V051 起顺延，详见 sql/MIGRATIONS.md 的编号规则"
 
     expected_v007_files=$'V007__add_permission_tables.sql\nV007__create_interface_param.sql'
     historical_v007_files="$(find sql/migrations -maxdepth 1 -type f -name 'V007__*.sql' -exec basename {} \; | sort)"
     [[ "$historical_v007_files" == "$expected_v007_files" ]] || \
-        fail "历史 V007 文件集合发生变化。只允许保留 V007__add_permission_tables.sql 和 V007__create_interface_param.sql；新迁移必须从 V030 起顺延"
+        fail "历史 V007 文件集合发生变化。只允许保留 V007__add_permission_tables.sql 和 V007__create_interface_param.sql；新迁移必须从 V051 起顺延"
 }
 
 run_liquibase() {
@@ -122,6 +122,8 @@ database_has_liquibase_history() {
 
 repair_inconsistent_history() {
     local inconsistent_count
+    local v029_changelog_count
+    local v029_inconsistent_count
     database_has_liquibase_history || return 0
     inconsistent_count="$(query_scalar "
         SELECT count(*)
@@ -147,13 +149,33 @@ repair_inconsistent_history() {
                  WHERE table_schema = 'public'
                    AND table_name = 'api_permission_application_item'
                    AND column_name = 'requested_cache_enabled'
-             ))
-         OR (changelog.id = 'uapi-programmer-history-by-date-2026-07-24'
-             AND changelog.author = 'data-platform'
-             AND NOT EXISTS (
-                 SELECT 1 FROM data_type
-                 WHERE data_type_code = 'programmer_history_by_date'
              ));")"
+
+    # A fresh database may contain only DATABASECHANGELOG after a read-only
+    # Liquibase status/validate command. Do not parse public.data_type until
+    # the table is known to exist; PostgreSQL resolves relation names before
+    # evaluating boolean branches.
+    v029_changelog_count="$(query_scalar "
+        SELECT count(*)
+        FROM databasechangelog
+        WHERE id = 'uapi-programmer-history-by-date-2026-07-24'
+          AND author = 'data-platform';")"
+    if [[ "$v029_changelog_count" != "0" ]]; then
+        if [[ "$(query_scalar "SELECT to_regclass('public.data_type') IS NOT NULL")" != "t" ]]; then
+            v029_inconsistent_count=1
+        else
+            v029_inconsistent_count="$(query_scalar "
+                SELECT count(*)
+                FROM databasechangelog changelog
+                WHERE changelog.id = 'uapi-programmer-history-by-date-2026-07-24'
+                  AND changelog.author = 'data-platform'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM public.data_type
+                      WHERE data_type_code = 'programmer_history_by_date'
+                  );")"
+        fi
+        inconsistent_count=$((inconsistent_count + v029_inconsistent_count))
+    fi
     [[ "$inconsistent_count" == "0" ]] && return 0
 
     echo "检测到 $inconsistent_count 条迁移历史与物理结构不一致，先备份再执行前向修复"

@@ -15,12 +15,17 @@ public final class PluginBytecodePolicy {
             "java/net/http/HttpClient", "java/io/File", "java/io/FileInputStream",
             "java/io/FileOutputStream", "java/io/RandomAccessFile",
             "java/lang/ClassLoader", "java/lang/System", "java/lang/Runtime", "java/lang/Thread",
+            "java/lang/Process", "java/lang/ProcessBuilder", "java/lang/invoke/MethodHandles",
             "java/util/concurrent/Executors", "java/util/concurrent/ThreadPoolExecutor",
-            "java/util/concurrent/ScheduledThreadPoolExecutor", "java/util/concurrent/ForkJoinPool");
+            "java/util/concurrent/ScheduledThreadPoolExecutor", "java/util/concurrent/ScheduledExecutorService",
+            "java/util/concurrent/ForkJoinPool", "java/util/Timer");
     private static final List<String> FORBIDDEN_PREFIXES = List.of(
             "java/nio/file/", "java/lang/reflect/", "sun/reflect/", "jdk/internal/reflect/",
-            "okhttp3/", "org/apache/http/", "org/apache/hc/client/", "reactor/netty/http/client/");
-    private static final Set<String> FORBIDDEN_MEMBER_OWNERS = Set.of("java/lang/Class");
+            "okhttp3/", "org/apache/http/", "org/apache/hc/client/", "reactor/netty/http/client/",
+            "io/netty/bootstrap/", "java/net/http/", "java/nio/channels/SocketChannel");
+    private static final Set<String> FORBIDDEN_MEMBER_OWNERS = Set.of(
+            "java/lang/Class", "java/lang/System", "java/lang/Runtime",
+            "java/lang/invoke/MethodHandles");
 
     private PluginBytecodePolicy() { }
 

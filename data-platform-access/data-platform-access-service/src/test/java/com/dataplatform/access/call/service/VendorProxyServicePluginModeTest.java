@@ -82,6 +82,21 @@ class VendorProxyServicePluginModeTest {
     }
 
     @Test
+    void forwardsPlatformRequestIdToConnectorExecutor() {
+        VendorConfigDTO config = activePluginConfig(1L, null);
+        Map<String, Object> params = Map.of("id", "1");
+        when(connectorExecutor.execute(config, "PLUGIN-VENDOR", "PERSON", params, "platform-123"))
+                .thenReturn(success("plugin", "1.0.0"));
+
+        Map<String, Object> result = service.callVendor(
+                "PLUGIN-VENDOR", "PERSON", params, config, "platform-123");
+
+        assertTrue(Boolean.TRUE.equals(result.get("success")));
+        verify(connectorExecutor).execute(
+                config, "PLUGIN-VENDOR", "PERSON", params, "platform-123");
+    }
+
+    @Test
     void backupVendorRequiresExplicitNotSentAndWhitelistedCategory() {
         assertTrue(shouldFallback(ErrorCategory.TRANSPORT_CONNECTION_ERROR, "NOT_SENT"));
         assertTrue(shouldFallback(ErrorCategory.TRANSPORT_TIMEOUT, "NOT_SENT"));

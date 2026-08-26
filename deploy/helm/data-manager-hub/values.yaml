@@ -1,0 +1,83 @@
+global:
+  environment: dev
+  springProfile: dev
+  releaseId: local
+  manifestDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  imagePullPolicy: IfNotPresent
+  nacosNamespace: dev
+  nacosGroup: DMH_DEV_LOCAL
+  serviceAccount: dmh-deployer
+  workloadServiceAccount: dmh-runtime
+  domain: data-manager-hub.local
+  terminationGracePeriodSeconds: 60
+
+images:
+  registry: ghcr.io/lixud
+  components:
+    gateway:
+      repository: ghcr.io/lixud/data-manager-hub-gateway
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    masterdata:
+      repository: ghcr.io/lixud/data-manager-hub-masterdata
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    access:
+      repository: ghcr.io/lixud/data-manager-hub-access
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    billing:
+      repository: ghcr.io/lixud/data-manager-hub-billing
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    identity:
+      repository: ghcr.io/lixud/data-manager-hub-identity
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    governance:
+      repository: ghcr.io/lixud/data-manager-hub-governance
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    web:
+      repository: ghcr.io/lixud/data-manager-hub-web
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    dbops:
+      repository: ghcr.io/lixud/data-manager-hub-dbops
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    acceptance:
+      repository: ghcr.io/lixud/data-manager-hub-acceptance
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+components:
+  gateway: {workload: Deployment, port: 8888, replicas: 1, service: true, readinessPath: /actuator/health/readiness}
+  masterdata: {workload: Deployment, port: 8081, replicas: 1, service: true, readinessPath: /actuator/health/readiness}
+  access: {workload: StatefulSet, port: 8082, replicas: 1, service: true, readinessPath: /actuator/health/readiness}
+  billing: {workload: Deployment, port: 8084, replicas: 1, service: true, readinessPath: /actuator/health/readiness}
+  identity: {workload: Deployment, port: 8086, replicas: 1, service: true, readinessPath: /actuator/health/readiness}
+  governance: {workload: Deployment, port: 8085, replicas: 1, service: true, readinessPath: /actuator/health/readiness}
+  web: {workload: Deployment, port: 8080, replicas: 1, service: true, readinessPath: /healthz}
+
+access:
+  partition: 0
+  cacheStorageClass: ""
+  cacheSize: 5Gi
+
+resources:
+  requests: {cpu: 100m, memory: 256Mi}
+  limits: {cpu: 1000m, memory: 1Gi}
+
+existingSecrets:
+  runtime: dmh-runtime
+  internalAuth: dmh-internal-auth
+  connectorTruststore: dmh-connector-truststore
+  ghcrPull: dmh-ghcr-pull
+
+networkPolicy:
+  enabled: true
+  ingressNamespaceLabels:
+    kubernetes.io/metadata.name: ingress-nginx
+  # Prometheus/metrics scraping is cross-namespace. Platform overlays may
+  # replace this label with the cluster's monitoring namespace label, but the
+  # boundary must remain explicit instead of relying on a broad allow rule.
+  metricsNamespaceLabels:
+    kubernetes.io/metadata.name: monitoring
+  dependencyNamespaceLabels:
+    kubernetes.io/metadata.name: dmh-infra
+  allowedExternalCidrs:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16

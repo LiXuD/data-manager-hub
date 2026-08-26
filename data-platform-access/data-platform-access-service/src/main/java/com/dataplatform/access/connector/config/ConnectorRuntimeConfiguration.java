@@ -16,8 +16,10 @@ import com.dataplatform.common.plugin.runtime.ConnectorPluginRegistry;
 import com.dataplatform.common.plugin.runtime.DefaultManagedTaskExecutor;
 import com.dataplatform.common.plugin.runtime.DefaultPluginContext;
 import com.dataplatform.common.plugin.runtime.DefaultPluginValidationContext;
+import com.dataplatform.common.plugin.runtime.GenericHttpConnectorPlugin;
 import com.dataplatform.common.plugin.runtime.JacksonObjectCodec;
 import com.dataplatform.common.plugin.runtime.PipelineCompiler;
+import com.dataplatform.common.plugin.runtime.PlatformCoreConnectorPlugin;
 import com.dataplatform.common.plugin.runtime.PluginLoader;
 import com.dataplatform.common.plugin.runtime.PluginContextFactory;
 import com.dataplatform.common.plugin.runtime.PluginRuntimeManager;
@@ -174,7 +176,7 @@ public class ConnectorRuntimeConfiguration {
             ConnectorRuntimeProperties properties) {
         PluginArtifactVerifier verifier = new PluginArtifactVerifier(objectMapper, keyProvider);
         PluginLoader loader = new PluginLoader(
-                pluginContextFactory, properties.getHostVersion(), "1.0");
+                pluginContextFactory, properties.getHostVersion(), "1.1");
         PluginRuntimeManager manager = new PluginRuntimeManager(verifier, loader, registry);
         try {
             LegacyHttpConnectorPlugin legacy = new LegacyHttpConnectorPlugin();
@@ -182,18 +184,34 @@ public class ConnectorRuntimeConfiguration {
             if (!legacy.selfTest().successful()) {
                 throw new IllegalStateException("Built-in legacy-http self-test failed");
             }
-            manager.registerBuiltIn(new PluginRuntimeManager.ConnectorPluginRegistration(legacy));
+            manager.registerBuiltIn(new PluginRuntimeManager.ConnectorPluginRegistration(legacy, pluginContext));
+            PlatformCoreConnectorPlugin platformCore = new PlatformCoreConnectorPlugin();
+            platformCore.initialize(pluginContext);
+            if (!platformCore.selfTest().successful()) {
+                throw new IllegalStateException("Built-in platform-core self-test failed");
+            }
+            manager.registerBuiltIn(
+                    new PluginRuntimeManager.ConnectorPluginRegistration(platformCore, pluginContext));
+            GenericHttpConnectorPlugin genericHttp = new GenericHttpConnectorPlugin();
+            genericHttp.initialize(pluginContext);
+            if (!genericHttp.selfTest().successful()) {
+                throw new IllegalStateException("Built-in generic-http self-test failed");
+            }
+            manager.registerBuiltIn(
+                    new PluginRuntimeManager.ConnectorPluginRegistration(genericHttp, pluginContext));
         } catch (Exception ex) {
             manager.close();
-            throw new IllegalStateException("Unable to initialize built-in legacy-http connector", ex);
+            throw new IllegalStateException("Unable to initialize built-in connector runtime", ex);
         }
         return manager;
     }
 
     @Bean
     public ConnectorPluginRuntimeOperations connectorPluginRuntimeOperations(
-            ConnectorPluginArtifactCache artifactCache, PluginRuntimeManager runtimeManager) {
-        return new DefaultConnectorPluginRuntimeOperations(artifactCache, runtimeManager);
+            ConnectorPluginArtifactCache artifactCache,
+            PluginRuntimeManager runtimeManager,
+            MasterdataConnectorPluginMetadataResolver metadataResolver) {
+        return new DefaultConnectorPluginRuntimeOperations(artifactCache, runtimeManager, metadataResolver);
     }
 
     @Bean

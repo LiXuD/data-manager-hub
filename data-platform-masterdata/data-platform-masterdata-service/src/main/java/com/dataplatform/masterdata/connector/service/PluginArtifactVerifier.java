@@ -2,9 +2,10 @@ package com.dataplatform.masterdata.connector.service;
 
 import com.dataplatform.masterdata.connector.api.dto.PluginImportRequestDTO;
 import com.dataplatform.masterdata.connector.config.ConnectorPluginProperties;
-import com.dataplatform.common.plugin.artifact.PluginManifestReader;
 import com.dataplatform.common.plugin.artifact.PluginArtifactException;
 import com.dataplatform.common.plugin.artifact.PluginBytecodePolicy;
+import com.dataplatform.common.plugin.artifact.PluginManifest;
+import com.dataplatform.common.plugin.artifact.PluginManifestReader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -103,16 +104,21 @@ public class PluginArtifactVerifier {
         }
         ManifestContent manifestContent = readManifest(artifact);
         JsonNode manifest = parseManifest(manifestContent.bytes());
-        validateManifest(manifest, manifestContent.classEntries());
+        PluginManifest parsedManifest = validateManifest(manifest, manifestContent.classEntries());
         verifySignature(manifest, actualSha256, request.detachedSignature(), request.signingKeyId());
         JsonNode configSchema = manifest.path("configSchema");
+        String compatibilityJson = "2".equals(parsedManifest.manifestVersion())
+                ? canonicalJson(manifest.path("compatibility")) : "{}";
         return new VerifiedPluginArtifact(
                 text(manifest, "pluginId"), text(manifest, "version"), text(manifest, "spiVersion"),
                 text(manifest, "displayName"), text(manifest, "provider"), optionalText(manifest, "description"),
                 text(manifest, "entryClass"), uri.toString(), actualSha256, request.detachedSignature(),
                 request.signingKeyId(), canonicalJson(manifest), canonicalJson(configSchema),
                 stringArray(manifest.path("capabilities")), canonicalJson(manifest.path("permissions")),
-                optionalText(manifest, "minHostVersion"), configSchema);
+                optionalText(manifest, "minHostVersion"), configSchema, parsedManifest.manifestVersion(),
+                parsedManifest.authoringModel(), parsedManifest.connectorKind(),
+                parsedManifest.transportMode(), parsedManifest.outputMode(),
+                parsedManifest.compatibility(), compatibilityJson);
     }
 
     private PluginArtifactValidationException validationFailure(IllegalArgumentException exception) {
@@ -241,15 +247,14 @@ public class PluginArtifactVerifier {
         }
     }
 
-    private void validateManifest(JsonNode manifest, Set<String> classEntries) {
+    private PluginManifest validateManifest(JsonNode manifest, Set<String> classEntries) {
         // Keep control-plane acceptance identical to the Access runtime's signed Manifest contract.
+        PluginManifest parsedManifest;
         try {
-            new PluginManifestReader(objectMapper).read(canonicalJson(manifest).getBytes(StandardCharsets.UTF_8));
+            parsedManifest = new PluginManifestReader(objectMapper)
+                    .read(canonicalJson(manifest).getBytes(StandardCharsets.UTF_8));
         } catch (PluginArtifactException exception) {
             throw new IllegalArgumentException("插件Manifest不符合运行时契约", exception);
-        }
-        if (!"1".equals(text(manifest, "manifestVersion"))) {
-            throw new IllegalArgumentException("仅支持manifestVersion=1");
         }
         String pluginId = text(manifest, "pluginId");
         if (!pluginId.matches("[a-z0-9][a-z0-9.-]{1,126}[a-z0-9]")) {
@@ -286,6 +291,7 @@ public class PluginArtifactVerifier {
         if (protocols.stream().anyMatch(protocol -> !"https".equalsIgnoreCase(protocol))) {
             throw new IllegalArgumentException("首期插件只允许声明HTTPS网络协议");
         }
+        return parsedManifest;
     }
 
     private void rejectRemoteReferences(JsonNode node) {

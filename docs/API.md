@@ -142,20 +142,75 @@ JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入�
 }
 ```
 
-厂商连接器路径中的 `{configId}` 是 `vendor_config.id`：
+厂商连接器路径中的 `{configId}` 是 `vendor_config.id`。普通配置使用
+`/vendor/config/{configId}/connector-spec/**` 产品接口；请求只提交一个固定插件版本和一份配置，
+不会提交 `stageKey/capability/order/enabled/TRANSPORT` 等运行计划字段：
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/vendor/config/{configId}/connector-spec/catalog` | `connector-plugin:view` | 返回与当前 vendor/dataType 兼容的 Manifest v2 SIMPLE 插件目录 |
+| GET | `/vendor/config/{configId}/connector-spec/catalog/{pluginId}/versions` | `connector-plugin:view` | 返回固定插件的 STAGING/ACTIVE 可测试版本 |
+| GET | `/vendor/config/{configId}/connector-spec/draft` | `connector-plugin:view` | 查询 SIMPLE 草稿；Legacy 只返回模式和空产品字段，不返回原流水线 |
+| PUT | `/vendor/config/{configId}/connector-spec/draft` | `connector-plugin:bind` | `expectedDraftVersion` CAS 保存并确定性编译 Spec |
+| POST | `/vendor/config/{configId}/connector-spec/validate` | `connector-plugin:bind` | 对当前已保存 SIMPLE 草稿重新编译并检查全部冻结事实，不写数据 |
+| GET | `/vendor/config/{configId}/connector-spec/execution-plan?version={version}` | `connector-plugin:view` | 返回当前/历史只读步骤摘要，不返回 stage config 或 SecretRef |
+| POST | `/vendor/config/{configId}/connector-spec/test` | `connector-plugin:test` | Access 执行 V2_EMBEDDED 受控测试，并原子写入无 payload 测试事实 |
+| POST | `/vendor/config/{configId}/connector-spec/publish` | `connector-plugin:publish` | 成功测试五元组和全部 Access 实例 READY 后发布不可变版本 |
+| GET | `/vendor/config/{configId}/connector-spec/versions` | `connector-plugin:view` | 查询 SIMPLE 与 ADVANCED_LEGACY 的安全历史投影 |
+| POST | `/vendor/config/{configId}/connector-spec/rollback/{version}` | `connector-plugin:rollback` | 复制历史冻结事实生成新的 ACTIVE 版本 |
+| POST | `/vendor/config/{configId}/connector-spec/upgrade-preview` | `connector-plugin:bind` | 对同一插件的显式目标版本做只读 Schema/config/plan 差异预检 |
+| POST | `/vendor/config/{configId}/connector-spec/convert-preview` | `connector-plugin:bind` | 只读判断当前 Legacy 草稿能否无损转换 |
+| POST | `/vendor/config/{configId}/connector-spec/convert` | `connector-plugin:bind` | 使用 `expectedDraftVersion` CAS 将当前 Legacy 草稿转换为 SIMPLE |
+| GET | `/vendor/config/connector-spec/inventory?page={page}&pageSize={pageSize}` | `connector-plugin:view` | 分页清点 Legacy 活动/草稿并安全分类，默认 1/50、最大 100 |
+
+产品草稿保存请求：
+
+```json
+{
+  "expectedDraftVersion": 3,
+  "connectorSpec": {
+    "specVersion": "1",
+    "plugin": {"pluginId": "generic-http", "pluginVersion": "2.0.0"},
+    "config": {
+      "endpoint": "https://api.vendor.example.com/company",
+      "method": "POST",
+      "auth": {"type": "BEARER", "tokenRef": "vendor.apiToken"}
+    },
+    "responseMapping": [
+      {"targetField": "companyName", "sourcePath": "data.name", "sourceType": "field", "transformType": "none"}
+    ]
+  }
+}
+```
+
+`upgrade-preview` 请求为
+`{"expectedDraftVersion":3,"targetPluginVersion":"2.1.0"}`；它只返回安全的 Schema/config/plan
+变化和预览哈希，不写草稿，也不调用 Access。`convert` 请求为 `{"expectedDraftVersion":3}`；
+不可转换返回 HTTP 409、`LEGACY_PIPELINE_NOT_CONVERTIBLE` 和固定安全原因列表，零数据写入。
+inventory 只返回 config/version/分类/固定原因等摘要，不返回 pipeline、config 或 SecretRef。
+
+产品受控测试事实精确绑定
+`vendorConfigId + draftVersion + specHash + snapshotHash + compileHash`，只保存安全结果摘要和启用插件
+坐标；发布必须匹配当前五元组的成功事实，并再次确认全部外部插件在所有 Access 实例 READY。
+修改 Spec、安全版本或任何编译事实后都必须重新测试。发布与回滚响应不包含完整 pipeline/config。
+
+现有 `/vendor/config/{configId}/connector/**` 是 ADVANCED_LEGACY 兼容面：
 
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
 | GET | `/vendor/config/{configId}/connector` | `connector-plugin:view` | 当前活动不可变版本；未发布时 `data` 可为空 |
-| GET | `/vendor/config/{configId}/connector/draft` | `connector-plugin:view` | 当前草稿；首次读取会得到可编辑草稿语义 |
-| PUT | `/vendor/config/{configId}/connector/draft` | `connector-plugin:bind` | 乐观锁保存完整流水线 |
-| POST | `/vendor/config/{configId}/connector/validate` | `connector-plugin:bind` | 校验步骤、能力、插件状态、Schema 和哈希 |
-| POST | `/vendor/config/{configId}/connector/test` | `connector-plugin:test` | Access 执行脱敏受控测试，不计费、不缓存、不写调用记录 |
-| POST | `/vendor/config/{configId}/connector/publish` | `connector-plugin:publish` | 发布不可变 PLUGIN 版本 |
+| GET | `/vendor/config/{configId}/connector/draft` | `connector-plugin:view` | 当前 Legacy 草稿/只读兼容投影 |
+| PUT | `/vendor/config/{configId}/connector/draft` | `connector-plugin:bind` | 仅 ADVANCED_LEGACY 可 CAS 保存完整流水线；SIMPLE 返回 409 |
+| POST | `/vendor/config/{configId}/connector/validate` | `connector-plugin:bind` | 只读兼容校验；SIMPLE 也可调用，但不写库、不调用 Access、不产生测试/发布事实 |
+| POST | `/vendor/config/{configId}/connector/test` | `connector-plugin:test` | 仅 ADVANCED_LEGACY；SIMPLE 在远程调用和事实写入前返回 409 |
+| POST | `/vendor/config/{configId}/connector/publish` | `connector-plugin:publish` | 仅发布 ADVANCED_LEGACY；SIMPLE 在任何写入前返回 409 |
 | GET | `/vendor/config/{configId}/connector/versions` | `connector-plugin:view` | 查询发布历史 |
-| POST | `/vendor/config/{configId}/connector/rollback/{version}` | `connector-plugin:rollback` | 复制历史快照生成新的活动版本 |
+| POST | `/vendor/config/{configId}/connector/rollback/{version}` | `connector-plugin:rollback` | 仅复制 Legacy 历史；SIMPLE 目标返回 409，应使用 connector-spec rollback |
 
-保存草稿请求的 `pipelineSnapshot` 最多 50 步，每个启用流水线必须恰好一个 `TRANSPORT`：
+除只读 `validate` 外，raw 变更接口遇到 SIMPLE 草稿/版本统一返回 HTTP 409 和
+`SIMPLE_CONNECTOR_REQUIRES_PRODUCT_API`，不得覆盖 `connector_spec`、编译哈希或快照事实。
+
+Legacy 保存草稿请求的 `pipelineSnapshot` 最多 50 步，每个启用流水线必须恰好一个 `TRANSPORT`：
 
 ```json
 {
@@ -183,7 +238,7 @@ JAR 上传；导入过程先完成 SHA-256、Ed25519、Manifest、Schema 和入�
 `{"params": {...}}`，结果只包含 `success/errorCategory/errorCode/safeMessage/normalizedData/stageTimings`，
 不返回原始厂商报文或解析后的秘密。
 
-每次受控测试都会追加一条不可修改/删除的安全事实，关联
+每次 Legacy 受控测试都会追加一条不可修改/删除的安全事实，关联
 `vendorConfigId + draftVersion + snapshotHash`，但不保存测试参数、原始响应或标准化数据。发布时若没有
 与当前草稿版本和快照哈希精确匹配的成功事实，返回 HTTP 409；修改草稿后必须重新测试。
 插件版本激活前也必须已有一条包含该 `pluginId + pluginVersion` 的成功草稿测试事实。
@@ -203,6 +258,12 @@ missing secretRef 和跨 vendor secretRef；测试和运行只解析当前阶段
 | GET | `/vendor/connector-migration?state={state}` | `connector-plugin:view` | 查询已完成迁移及观察事实 |
 
 旧 migration prepare/execute/policy 写端点已经删除，调用返回 404/405。
+
+V049/U049 增加 Manifest v2、SIMPLE Spec/编译投影和发布冻结约束；V050/U050 种入不可覆盖的
+`generic-http:2.0.0` 静态目录事实。隔离回归入口分别为
+`verify-v049-connector-product-spec.sh` 和 `verify-v050-generic-http.sh`；脚本通过只允许匹配
+`dataplatform_v049_*_regression`/`dataplatform_v050_*_regression` 的临时数据库验证 fresh、升级、重复、
+漂移/HALT 原子性、条件回滚和重新应用。该证据不表示迁移已在生产数据库执行。
 
 ### 3.4 扩展配置
 

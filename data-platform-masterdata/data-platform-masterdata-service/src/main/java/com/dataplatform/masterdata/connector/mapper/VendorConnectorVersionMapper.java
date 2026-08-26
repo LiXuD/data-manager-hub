@@ -11,6 +11,11 @@ public interface VendorConnectorVersionMapper extends BaseMapper<VendorConnector
     @Update("""
             UPDATE vendor_connector_version
             SET pipeline_snapshot = CAST(#{pipelineSnapshot} AS jsonb),
+                authoring_mode = 'ADVANCED_LEGACY',
+                connector_spec = NULL,
+                spec_hash = NULL,
+                compiler_version = NULL,
+                compile_hash = NULL,
                 security_version = #{securityVersion},
                 draft_version = #{nextDraftVersion},
                 updated_by = #{updatedBy},
@@ -18,6 +23,7 @@ public interface VendorConnectorVersionMapper extends BaseMapper<VendorConnector
             WHERE id = #{id}
               AND draft_version = #{expectedDraftVersion}
               AND status = 'DRAFT'
+              AND authoring_mode = 'ADVANCED_LEGACY'
             """)
     int updateDraft(@Param("id") Long id,
                     @Param("expectedDraftVersion") Integer expectedDraftVersion,

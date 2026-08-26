@@ -1,0 +1,20 @@
+# CI/CD and security controls
+/.github/ @LiXuD
+/.mvn/ @LiXuD
+/pom.xml @LiXuD
+/mvnw @LiXuD
+/ci/ @LiXuD
+/deploy/ @LiXuD
+/docker/ @LiXuD
+/nacos-config/ @LiXuD
+/observability/ @LiXuD
+/sql/changelog/ @LiXuD
+/sql/migrations/ @LiXuD
+/sql/rollbacks/ @LiXuD
+/migrate-db.sh @LiXuD
+/publish-nacos-config.sh @LiXuD
+/data-platform-web/package.json @LiXuD
+/data-platform-web/package-lock.json @LiXuD
+/ci/policy/coverage-baseline.json @LiXuD
+/ci/policy/coverage-waivers.yaml @LiXuD
+/ci/policy/security-waivers.yaml @LiXuD

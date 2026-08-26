@@ -21,6 +21,7 @@ import java.util.HexFormat;
 import java.util.Optional;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
+import com.dataplatform.plugin.spi.PluginContext;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PluginArtifactVerifierTest {
@@ -37,10 +38,12 @@ class PluginArtifactVerifierTest {
         VerifiedPluginArtifact verified = verifier.verify(coordinates(jar, sha, sign(pair, manifest, sha)));
 
         assertEquals("fixture-plugin", verified.manifest().pluginId());
-        PluginHandle handle = new PluginLoader(TestPluginContexts.context(), "2.1.0", "1.0")
+        PluginContext context = TestPluginContexts.context();
+        PluginHandle handle = new PluginLoader(context, "2.1.0", "1.0")
                 .load(verified);
         assertEquals("fixture-plugin", handle.key().pluginId());
         assertNotSame(FixtureConnectorPlugin.class.getClassLoader(), handle.classLoader());
+        assertSame(context, handle.pluginContext().orElseThrow());
         handle.retire();
         assertEquals(com.dataplatform.common.plugin.runtime.PluginHandleState.CLOSED, handle.state());
     }

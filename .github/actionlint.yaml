@@ -1,0 +1,9 @@
+self-hosted-runner:
+  labels:
+    - nonprod-deploy
+    - prod-deploy
+    - plugin-signing
+
+config-variables: null
+
+paths: {}

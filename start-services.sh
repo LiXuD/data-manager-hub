@@ -14,12 +14,22 @@ export INTERNAL_AUTH_PRIVATE_KEY_PATH="${INTERNAL_AUTH_PRIVATE_KEY_PATH:-$RUNTIM
 export INTERNAL_AUTH_PUBLIC_KEY_PATH="${INTERNAL_AUTH_PUBLIC_KEY_PATH:-$RUNTIME_DIR/internal-auth-public.pem}"
 export INTERNAL_AUTH_TOKEN_URI="${INTERNAL_AUTH_TOKEN_URI:-http://localhost:8086/internal-auth/v1/token}"
 export INTERNAL_AUTH_ENABLED="${INTERNAL_AUTH_ENABLED:-true}"
+export PLATFORM_ENCRYPTION_MASTER_KEY="${PLATFORM_ENCRYPTION_MASTER_KEY:-}"
 
 if [ ! -f "$INTERNAL_AUTH_PRIVATE_KEY_PATH" ] || [ ! -f "$INTERNAL_AUTH_PUBLIC_KEY_PATH" ]; then
     echo "生成开发环境内部服务认证密钥..."
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$INTERNAL_AUTH_PRIVATE_KEY_PATH" >/dev/null 2>&1
     openssl pkey -in "$INTERNAL_AUTH_PRIVATE_KEY_PATH" -pubout -out "$INTERNAL_AUTH_PUBLIC_KEY_PATH" >/dev/null 2>&1
     chmod 600 "$INTERNAL_AUTH_PRIVATE_KEY_PATH"
+fi
+
+if [ -z "$PLATFORM_ENCRYPTION_MASTER_KEY" ]; then
+    if [ ! -s "$RUNTIME_DIR/encryption-master-key.txt" ]; then
+        openssl rand -base64 32 > "$RUNTIME_DIR/encryption-master-key.txt"
+        chmod 600 "$RUNTIME_DIR/encryption-master-key.txt"
+    fi
+    PLATFORM_ENCRYPTION_MASTER_KEY="$(<"$RUNTIME_DIR/encryption-master-key.txt")"
+    export PLATFORM_ENCRYPTION_MASTER_KEY
 fi
 
 # SkyWalking Agent 配置

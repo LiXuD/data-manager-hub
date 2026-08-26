@@ -48,6 +48,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -151,7 +152,9 @@ public class DefaultConnectorVendorExecutor implements ConnectorVendorExecutor, 
                     try (CompiledConnectorPipeline pipeline = compiler.compile(definition)) {
                         ConnectorExecutionRequest request = new ConnectorExecutionRequest(
                                 parameters, vendorCode, clock.instant().plusMillis(deadlineMillis),
-                                () -> Thread.currentThread().isInterrupted());
+                                () -> Thread.currentThread().isInterrupted(),
+                                UUID.randomUUID().toString(), config.getId(), 1,
+                                com.dataplatform.common.plugin.runtime.HostIdempotencyContext.nonRetryable());
                         return executor.execute(pipeline, request);
                     }
                 } catch (ConnectorException exception) {
@@ -208,6 +211,16 @@ public class DefaultConnectorVendorExecutor implements ConnectorVendorExecutor, 
             String vendorCode,
             String dataTypeCode,
             Map<String, Object> parameters) {
+        return execute(config, vendorCode, dataTypeCode, parameters, UUID.randomUUID().toString());
+    }
+
+    @Override
+    public ConnectorExecutionResult execute(
+            VendorConfigDTO config,
+            String vendorCode,
+            String dataTypeCode,
+            Map<String, Object> parameters,
+            String platformRequestId) {
         if (config == null || config.getId() == null) {
             return failure(ErrorCategory.CONFIGURATION_ERROR, "VENDOR_CONFIG_ID_MISSING",
                     "Vendor connector configuration is incomplete", RequestDeliveryState.NOT_SENT,
@@ -218,7 +231,9 @@ public class DefaultConnectorVendorExecutor implements ConnectorVendorExecutor, 
             try (CompiledConnectorPipeline.RequestLease pipelineLease = acquirePipeline(config.getId(), snapshot)) {
                 Instant deadline = clock.instant().plusMillis(timeout(config));
                 ConnectorExecutionRequest request = new ConnectorExecutionRequest(
-                        parameters, vendorCode, deadline, () -> Thread.currentThread().isInterrupted());
+                        parameters, vendorCode, deadline, () -> Thread.currentThread().isInterrupted(),
+                        requirePlatformRequestId(platformRequestId), config.getId(), 1,
+                        com.dataplatform.common.plugin.runtime.HostIdempotencyContext.nonRetryable());
                 ConnectorExecutionResult result = executeWithRetry(
                         config, pipelineLease, request, parameters);
                 recordMetrics(result);
@@ -242,6 +257,13 @@ public class DefaultConnectorVendorExecutor implements ConnectorVendorExecutor, 
         }
     }
 
+    private String requirePlatformRequestId(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("platformRequestId is required");
+        }
+        return value;
+    }
+
     private ConnectorExecutionResult executeWithRetry(
             VendorConfigDTO config,
             CompiledConnectorPipeline.RequestLease pipelineLease,
@@ -253,9 +275,10 @@ public class DefaultConnectorVendorExecutor implements ConnectorVendorExecutor, 
         ConnectorExecutionResult result;
         int attempt = 0;
         do {
+            ConnectorExecutionRequest attemptRequest = request.withAttemptNo(attempt + 1);
             ConnectorPipelineExecutionOutcome outcome = secretResolver.withSecretProvider(
                     refs -> resolveSecrets(config.getId(), refs),
-                    () -> executor.executeWithOutcome(pipelineLease, request));
+                    () -> executor.executeWithOutcome(pipelineLease, attemptRequest));
             result = outcome.result();
             if (!outcome.requestRetryPermitted() || !retryable(result) || attempt >= maxRetries
                     || !clock.instant().isBefore(request.deadline())) {

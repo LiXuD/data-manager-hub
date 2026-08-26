@@ -1,0 +1,122 @@
+# Local-only development infrastructure for macOS Docker Desktop.
+#
+# This file intentionally binds every host port to 127.0.0.1. It is for the
+# backend/frontend running on this Mac, not for public or production use.
+# Keep the existing docker-compose.yml unchanged; it contains unrelated local
+# changes and also includes optional observability services.
+
+name: dmh-local-infra
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dmh-local-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DMH_POSTGRES_DB:-dataplatform}
+      POSTGRES_USER: ${DMH_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${DMH_POSTGRES_PASSWORD:-123456}
+    ports:
+      # 15432 avoids a stale local Compose container that reserves 5432 on
+      # this Mac. The backend is started with DB_PORT=15432 below.
+      - "127.0.0.1:${DMH_POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - dmh_local_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: dmh-local-redis
+    restart: unless-stopped
+    command:
+      [
+        "redis-server",
+        "--requirepass",
+        "${DMH_REDIS_PASSWORD:-redis_password}",
+        "--appendonly",
+        "yes",
+      ]
+    environment:
+      DMH_REDIS_PASSWORD: ${DMH_REDIS_PASSWORD:-redis_password}
+    ports:
+      - "127.0.0.1:${DMH_REDIS_PORT:-6379}:6379"
+    volumes:
+      - dmh_local_redis_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$${DMH_REDIS_PASSWORD}\" ping | grep -q PONG",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: dmh-local-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    ports:
+      - "127.0.0.1:${DMH_KAFKA_PORT:-9092}:9092"
+    volumes:
+      - dmh_local_kafka_data:/var/lib/kafka/data
+
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    platform: linux/amd64
+    container_name: dmh-local-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      NACOS_AUTH_ENABLE: "false"
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+    ports:
+      - "127.0.0.1:${DMH_NACOS_PORT:-8848}:8848"
+      - "127.0.0.1:${DMH_NACOS_GRPC_PORT:-9848}:9848"
+    volumes:
+      - dmh_local_nacos_logs:/home/nacos/logs
+      - dmh_local_nacos_data:/home/nacos/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8848/nacos/v1/console/health/readiness",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+
+volumes:
+  dmh_local_postgres_data:
+  dmh_local_redis_data:
+  dmh_local_kafka_data:
+  dmh_local_nacos_logs:
+  dmh_local_nacos_data:

@@ -10,6 +10,7 @@ import com.dataplatform.access.connector.mapper.ConnectorPluginActivationMapper;
 import com.dataplatform.api.Result;
 import com.dataplatform.masterdata.connector.api.dto.PluginArtifactDescriptorDTO;
 import com.dataplatform.masterdata.connector.api.feign.ConnectorPluginInternalFeignClient;
+import com.dataplatform.common.plugin.runtime.GenericHttpConnectorMetadata;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -93,6 +94,12 @@ public class ConnectorPluginActivationService {
             return unavailableSummary(pluginId, pluginVersion);
         }
         PluginArtifactDescriptorDTO artifact = requireArtifact(pluginId, pluginVersion);
+        // Idempotent for externally loaded plugins. For host built-ins this rebinds the
+        // signed catalogue descriptor to the static implementation before READY is trusted.
+        if (GenericHttpConnectorMetadata.PLUGIN_ID.equals(pluginId)
+                && runtime.isLoaded(pluginId, pluginVersion)) {
+            runtime.preload(artifact);
+        }
         LocalDateTime now = LocalDateTime.now();
         for (String instanceId : activeInstanceIds()) {
             ConnectorPluginActivation existing = find(instanceId, pluginId, pluginVersion);
@@ -303,11 +310,14 @@ public class ConnectorPluginActivationService {
             try {
                 PluginArtifactDescriptorDTO artifact = requireArtifact(
                         activation.getPluginId(), activation.getPluginVersion());
-                boolean newlyLoaded = false;
-                if (!runtime.isLoaded(activation.getPluginId(), activation.getPluginVersion())) {
+                boolean previouslyLoaded = runtime.isLoaded(
+                        activation.getPluginId(), activation.getPluginVersion());
+                if (!previouslyLoaded
+                        || GenericHttpConnectorMetadata.PLUGIN_ID.equals(activation.getPluginId())) {
                     runtime.preload(artifact);
-                    newlyLoaded = true;
                 }
+                boolean newlyLoaded = !previouslyLoaded && runtime.isLoaded(
+                        activation.getPluginId(), activation.getPluginVersion());
                 LocalDateTime now = LocalDateTime.now();
                 activation.setArtifactSha256(artifact.artifactSha256());
                 activation.setState(ConnectorActivationState.READY.name());

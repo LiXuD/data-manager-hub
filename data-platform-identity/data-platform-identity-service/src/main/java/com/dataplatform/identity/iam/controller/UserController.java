@@ -75,7 +75,7 @@ public class UserController {
         }
 
         String password = user.getPassword();
-        if (password.length() < 8 || !password.matches(".*[A-Za-z].*") || !password.matches(".*\\d.*")) {
+        if (!passwordService.isStrongEnough(password)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "密码至少8位，且包含数字和字母"));
         }
@@ -103,8 +103,7 @@ public class UserController {
         User existing = authorizationService.requireUserInScope(id);
         if (user.getPassword() != null) {
             String password = user.getPassword();
-            if (password.length() < 8 || !password.matches(".*[A-Za-z].*")
-                    || !password.matches(".*\\d.*")) {
+            if (!passwordService.isStrongEnough(password)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(Result.error(400, "密码至少8位，且包含数字和字母"));
             }
@@ -169,7 +168,7 @@ public class UserController {
                 .body(Result.error(400, "密码不能为空"));
         }
 
-        if (password.length() < 8 || !password.matches(".*[A-Za-z].*") || !password.matches(".*\\d.*")) {
+        if (!passwordService.isStrongEnough(password)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "密码至少8位，且包含数字和字母"));
         }
