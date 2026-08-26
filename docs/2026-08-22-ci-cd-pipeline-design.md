@@ -136,6 +136,10 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
 当前 CI 使用的第三方 Action 均锁定完整 commit SHA，默认只申请 `contents: read`；生产阶段重新启用
 构建、制品或 attestation 时，再按对应 Job 的最小权限要求开启额外权限。
 
+JaCoCo、Checkstyle 和 SpotBugs 已集中到根 POM 的 `quality` Profile；它们可通过
+`./mvnw -Pquality verify` 手工生成报告，当前不由开发阶段 `ci.yml` 自动执行，也不作为
+`CI / required-ci` 的成功条件。
+
 生产阶段重新启用上述能力时，需恢复对应的合同、矩阵和环境验证；当前开发阶段不以制品或部署
 矩阵作为提交成功条件。
 

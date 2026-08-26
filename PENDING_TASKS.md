@@ -26,6 +26,8 @@
 完整部署、制品和生产方案保留在 [生产前 CI/CD 设计](docs/2026-08-22-ci-cd-pipeline-design.md)，
 当前不自动触发。
 
+覆盖率、Checkstyle 和 SpotBugs 已移入根 POM 的 `quality` Profile，需要时手工执行，不属于基础 CI 门禁。
+
 当前阶段性成果：通过 `docker-compose.local-infra.yml`，Mac Docker 已提供 PostgreSQL 16、Redis 7、Kafka 3.7、Nacos 2.3.2；Mac
 本地可启动六个后端服务和 Vite 前端，六个后端健康检查均为 `UP`，数据库 V001—V050 已迁移并
 通过校验。该成果满足开发阶段执行目标，但不改变 staging/production 尚未真实发布的结论。

@@ -63,6 +63,7 @@
         <nimbus-jose-jwt.version>9.47</nimbus-jose-jwt.version>
         <byte-buddy.version>1.17.8</byte-buddy.version>
         <maven.enforcer.version>3.5.0</maven.enforcer.version>
+        <maven.surefire.version>3.5.4</maven.surefire.version>
         <jacoco.version>0.8.13</jacoco.version>
         <liquibase.version>4.29.2</liquibase.version>
         <postgresql.driver.version>42.7.13</postgresql.driver.version>
@@ -102,10 +103,81 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
-                        <version>3.5.4</version>
+                        <version>${maven.surefire.version}</version>
                         <configuration>
                             <skipTests>true</skipTests>
                         </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- Optional quality analysis. Keep normal development verify focused on
+             compilation and tests; enable this profile explicitly when reports
+             are needed or when the quality baseline is being advanced. -->
+        <profile>
+            <id>quality</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>${maven.surefire.version}</version>
+                        <configuration>
+                            <argLine>@{jacocoArgLine}</argLine>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <version>${jacoco.version}</version>
+                        <executions>
+                            <execution>
+                                <id>quality-prepare-agent</id>
+                                <goals><goal>prepare-agent</goal></goals>
+                                <configuration>
+                                    <propertyName>jacocoArgLine</propertyName>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>quality-report</id>
+                                <phase>verify</phase>
+                                <goals><goal>report</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-checkstyle-plugin</artifactId>
+                        <version>3.6.0</version>
+                        <configuration>
+                            <failOnViolation>false</failOnViolation>
+                            <includeTestSourceDirectory>false</includeTestSourceDirectory>
+                            <consoleOutput>false</consoleOutput>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>quality-checkstyle</id>
+                                <phase>verify</phase>
+                                <goals><goal>check</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <version>4.8.6.0</version>
+                        <configuration>
+                            <failOnError>false</failOnError>
+                            <effort>Max</effort>
+                            <threshold>Low</threshold>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>quality-spotbugs</id>
+                                <phase>verify</phase>
+                                <goals><goal>spotbugs</goal></goals>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>
@@ -493,26 +565,6 @@
                 <artifactId>maven-compiler-plugin</artifactId>
             </plugin>
             <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <version>${jacoco.version}</version>
-                <executions>
-                    <execution>
-                        <id>coverage-agent</id>
-                        <goals>
-                            <goal>prepare-agent</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>coverage-report</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>report</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
                 <groupId>org.liquibase</groupId>
                 <artifactId>liquibase-maven-plugin</artifactId>
                 <version>${liquibase.version}</version>
@@ -542,76 +594,6 @@
                 </dependencies>
             </plugin>
 
-            <!-- ===== 代码审查阶段 2：静态分析与覆盖率（报告模式，先不 fail；2.4 再转强制） ===== -->
-            <!-- 让 JaCoCo agent 注入测试 JVM（@{...} 为 late-eval，避免 argLine 被覆盖导致无覆盖率数据） -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <argLine>@{jacocoArgLine}</argLine>
-                </configuration>
-            </plugin>
-            <!-- JaCoCo：生成覆盖率报告（不阻断）。
-                 注意：report 必须绑到 verify（test 之后），否则跑在测试前导致 missing execution data。
-                 转强制(2.4)：在 report 执行内加 <rule> 设 failOnViolation。 -->
-            <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.12</version>
-                <executions>
-                    <execution>
-                        <id>prepare-agent</id>
-                        <goals><goal>prepare-agent</goal></goals>
-                        <configuration>
-                            <propertyName>jacocoArgLine</propertyName>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>report</id>
-                        <phase>verify</phase>
-                        <goals><goal>report</goal></goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- Checkstyle：仅执行检查生成报告，failOnViolation=false（不阻断）。
-                 checkstyle:check 才会真正执行；之前误用 checkstyle:checkstyle（site 报告目标，非 site 构建被跳过）。
-                 转强制(2.4)：保留 check goal 并设 failOnViolation=true。 -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>3.6.0</version>
-                <configuration>
-                    <failOnViolation>false</failOnViolation>
-                    <includeTestSourceDirectory>false</includeTestSourceDirectory>
-                    <consoleOutput>false</consoleOutput>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>checkstyle-check</id>
-                        <phase>verify</phase>
-                        <goals><goal>check</goal></goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- SpotBugs：仅生成报告（不阻断）。
-                 转强制(2.4)：将 goal 改为 check。 -->
-            <plugin>
-                <groupId>com.github.spotbugs</groupId>
-                <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.8.6.0</version>
-                <configuration>
-                    <failOnError>false</failOnError>
-                    <effort>Max</effort>
-                    <threshold>Low</threshold>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>spotbugs-report</id>
-                        <phase>verify</phase>
-                        <goals><goal>spotbugs</goal></goals>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
 

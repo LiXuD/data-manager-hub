@@ -11,6 +11,15 @@
 3. PR 或 push 到 `dev`/`master` 时，`.github/workflows/ci.yml` 自动执行后端和前端检查。
 4. 分支保护只要求 `CI / required-ci` 通过；任一编译或测试 Job 失败都不得合并。
 
+需要生成覆盖率、Checkstyle 或 SpotBugs 报告时，单独执行 `quality` Profile：
+
+```bash
+./mvnw -B -ntp -Pquality verify \
+  -pl '!data-platform-test/data-platform-test-api,!data-platform-test/data-platform-test-service,!data-platform-test/test-fixtures/external-connector-plugin'
+```
+
+该 Profile 当前仍是报告模式，不属于开发阶段必需门禁。
+
 ## 当前不要求
 
 - `data-platform-test` 的完整多服务集成验收；需要时手工启动环境后执行；

@@ -362,6 +362,8 @@ git diff --check
 
 任一步骤失败不可合入。
 
+覆盖率、Checkstyle 和 SpotBugs 需要时通过 `./mvnw -Pquality verify` 单独执行，当前不作为基础 CI 门禁。
+
 完整多服务集成、数据库迁移矩阵、Docker/Helm/Kubernetes、供应链、自动部署和生产回滚属于
 生产部署前置阶段，不是当前开发阶段提交门禁。
 
