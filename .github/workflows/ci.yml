@@ -271,6 +271,11 @@ jobs:
     needs: classify
     if: needs.classify.outputs.security == 'true' || needs.classify.outputs.plugin == 'true' || needs.classify.outputs.full == 'true'
     runs-on: ubuntu-24.04
+    # Dependabot pull_request jobs intentionally do not receive repository
+    # secrets.  They must still run the NVD scan, but use the public endpoint
+    # without a key; trusted and scheduled jobs remain fail-closed on the key.
+    env:
+      ALLOW_UNKEYED_NVD: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' }}
     permissions:
       contents: read
       security-events: write
