@@ -1,9 +1,8 @@
-name: Scheduled security and recovery checks
+name: 'Future: Scheduled security and recovery checks'
 
 on:
-  schedule:
-    - cron: '17 2 * * *'
-    - cron: '31 3 * * 0'
+  # Security/recovery automation is a production-stage concern for now.
+  # Keep it manually runnable without adding scheduled work to development.
   workflow_dispatch:
 
 permissions:

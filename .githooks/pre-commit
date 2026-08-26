@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Code Review Gate 本地拦截（辅助，仅对本地 clone 提交的 agent 生效）
-# 真正硬门禁：pr-review-gate.yml + 分支保护 + auto-merge.yml（见 CODE_REVIEW_GATE.md）
+# 真正硬门禁：.github/workflows/ci.yml + 分支保护（见 CODE_REVIEW_GATE.md）
 # 启用：git config core.hooksPath .githooks
 set -euo pipefail
 

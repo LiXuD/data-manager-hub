@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+# These contract tests cover the deferred production CI/CD blueprint. They are
+# not part of the current development required check; the active gate is the
+# small Java/Web workflow in .github/workflows/ci.yml.
+
 import datetime as dt
 import hashlib
 import http.server

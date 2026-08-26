@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Keep the CI and release image matrices in lockstep with the runtime contract.
+"""Validate the production image matrices when the production pipeline is enabled.
 
 The runtime contract is the single source of truth for deployable components.
-Both the no-push CI build and the GHCR release build must enumerate exactly the
-same set.  A missing matrix entry is otherwise easy to overlook: the workflow
-can remain green while a component is absent from the Build Manifest and only
-fail at a later deployment stage.
+The production no-push CI build and the GHCR release build must enumerate
+exactly the same set.  This check is intentionally not called by the current
+development CI, which only verifies Java/Web compilation and tests.
 """
 
 from __future__ import annotations

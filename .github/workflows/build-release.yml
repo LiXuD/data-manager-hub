@@ -1,9 +1,10 @@
-name: Build Release
+name: 'Future: Build Release (disabled during development)'
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  # Production build/publish is intentionally deferred until the project is
+  # ready for production deployment. Keep this blueprint for that phase, but
+  # never start it from the development CI result.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,7 +22,9 @@ env:
 jobs:
   guard:
     name: verify master CI result and source change
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.head_repository.full_name == github.repository
+    # This blueprint is intentionally inert while only workflow_dispatch is
+    # configured. Restore the workflow_run trigger before enabling it.
+    if: github.event_name == 'workflow_run'
     runs-on: ubuntu-24.04
     permissions:
       actions: read

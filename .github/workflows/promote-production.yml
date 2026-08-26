@@ -1,4 +1,4 @@
-name: Promote production
+name: 'Future: Promote production (production phase)'
 
 on:
   workflow_dispatch:

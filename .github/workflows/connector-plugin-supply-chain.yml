@@ -1,14 +1,8 @@
-name: Connector plugin supply-chain scan
+name: 'Future: Connector plugin supply-chain scan'
 
 on:
-  pull_request:
-    paths:
-      - 'data-platform-plugin-spi/**'
-      - 'data-platform-common-runtime/**'
-      - 'data-platform-access/**'
-      - 'data-platform-masterdata/**'
-      - 'pom.xml'
-      - '.github/workflows/connector-plugin-supply-chain.yml'
+  # Keep the production-stage scan available for a later rollout, but do not
+  # add a second blocking workflow to development PRs.
   workflow_dispatch:
 
 permissions:

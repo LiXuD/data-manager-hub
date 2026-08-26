@@ -1,4 +1,4 @@
-name: deploy reusable
+name: 'Future: deploy reusable (production phase)'
 
 on:
   workflow_call:

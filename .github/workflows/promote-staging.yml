@@ -1,4 +1,4 @@
-name: Promote staging
+name: 'Future: Promote staging (production phase)'
 
 on:
   workflow_dispatch:
