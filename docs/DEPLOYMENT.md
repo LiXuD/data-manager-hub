@@ -12,7 +12,7 @@
 |------|----------|------|
 | Java | 21+ | OpenJDK 或 Oracle JDK |
 | Maven | 3.9+ | 构建工具 |
-| Node.js | 20.19+、22.13+ 或 24+ | 前端构建 |
+| Node.js | `v22.19.0`（npm `10.9.3`） | 前端构建；由 `.nvmrc`/`.node-version` 固定 |
 | Docker | 24+ | 容器化部署 |
 | Docker Compose | 2.x | 容器编排 |
 | OpenSSL | 3.x | 本地生成服务间认证 RSA 密钥 |
@@ -83,7 +83,7 @@ V042 增加 Masterdata 所有的插件目录/连接器版本和不可变受控�
 
 后续连接器迁移必须连续应用到 V047：
 
-- V043：迁移计划和 Access/Billing 观察事实；完成后迁移控制面只读；
+- V043：迁移计划和 Access/Billing 观察事实；阶段 5 控制面通过 Masterdata 受保护接口推进，生产完成后才可转为历史只读；
 - V044：失败关闭地为存量配置建立活动连接器并强制 PLUGIN-only；
 - V045：删除旧适配器配置列；
 - V046：新增 `V1_DERIVED/V2_EMBEDDED` 完整性事实，不改写旧快照、调用或计费历史；
@@ -96,13 +96,25 @@ changeset。精确策略见 `sql/MIGRATIONS.md`。
 
 发布新审批节点时，将经过评审的 BPMN 作为 `data-platform-access-service/src/main/resources/processes/` 下的新版本资源发布。新申请使用最新版本，运行中实例继续原定义；禁止在线暴露 Flowable REST、引擎 Actuator 管理端点或 workflow schema。
 
-### 5. 构建项目
+### 5. 一键验收 dev MVP
+
+开发阶段的权威本地闭环入口是下面的夹具脚本。它从 fresh PostgreSQL 开始，启动本地基础设施，应用 V001—V052，构建并启动六个服务和 Web，创建隔离的 3 家厂商、2 个调用系统、2 类数据类型和三类连接器流程，并通过 Gateway 验证登录、权限审批、OpenAPI、CallRecord、Billing、审计和监控事实：
+
+```bash
+DEV_MVP_SKIP_BUILD=false rtk bash data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh
+```
+
+脚本成功时生成 `data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json`。报告不包含 Token、API Key、密钥或请求报文，必须满足 `status=passed`、`schemaVersion=V052`、`pendingMigrations=0`，并记录 `vendors=3`、`callers=2`、`dataTypes=2`、`connectorFlows` 和持久化观察事实。失败运行会保留精确的隔离数据库和日志；夹具数据不进入正式迁移或共享 dev 数据库。
+
+`DEV_MVP_SKIP_BUILD=true` 仅用于已有制品的快速排障，不可替代完整构建证据。前端工具链严格要求 Node.js `v22.19.0` 和 npm `10.9.3`。
+
+### 6. 构建项目
 
 ```bash
 mvn clean install -DskipTests
 ```
 
-### 6. 启动服务
+### 7. 启动服务
 
 **使用一键启动脚本 (推荐)**:
 
@@ -122,7 +134,7 @@ cd data-platform-governance/data-platform-governance-service && mvn spring-boot:
 cd data-platform-gateway && mvn spring-boot:run &
 ```
 
-### 7. 启动前端
+### 8. 启动前端
 
 ```bash
 cd data-platform-web
@@ -297,6 +309,7 @@ masterdata.connector-plugin:
   max-artifact-bytes: ${CONNECTOR_MAX_ARTIFACT_BYTES:52428800}
   max-manifest-bytes: ${CONNECTOR_MAX_MANIFEST_BYTES:262144}
   max-schema-bytes: ${CONNECTOR_MAX_SCHEMA_BYTES:131072}
+  legacy-write-retired: ${CONNECTOR_LEGACY_WRITE_RETIRED:false}
 
 connector.runtime:
   instance-id: ${CONNECTOR_INSTANCE_ID}
@@ -369,16 +382,51 @@ Thread/Executors 和 native load。扫描失败或签名/哈希/白名单不匹�
 
 ```bash
 E2E_DB_HOST=localhost \
-E2E_DB_PORT=5432 \
+E2E_DB_PORT=15432 \
 E2E_DB_USERNAME=postgres \
-E2E_DB_PASSWORD=postgres \
+E2E_DB_PASSWORD=123456 \
   ./data-platform-test/test-fixtures/connector-e2e/prepare-e2e.sh
 ```
 
-脚本输出 `E2E_STATE_FILE`、制品 URI/哈希/签名/`keyId`、两种公钥格式、TLS TrustStore、导入请求 JSON
-和 `FIXTURE_VENDOR_CONFIG_ID`。把输出值注入隔离服务进程后，按 `docs/API.md` 完成导入、stage、
-activate、草稿、validate、test、publish 和 OpenAPI 调用。`prepare-e2e.sh` 自身验证的是制品/TLS/迁移
-夹具，不代表六服务链路已经通过。
+脚本输出 `E2E_STATE_FILE`、制品 URI/哈希、两种公钥格式、TLS TrustStore、导入请求 JSON
+和 `FIXTURE_VENDOR_CONFIG_ID`；签名值、管理员密码和 TrustStore 密码只写入受限状态文件，不在终端回显。
+把状态文件安全加载到隔离服务进程后，按 `docs/API.md` 完成导入、stage、activate、草稿、validate、test、
+publish 和 OpenAPI 调用。需要一次可重复的登录态 API/多服务验收时，执行：
+
+```bash
+E2E_STATE_FILE=/absolute/path/to/fixture.env
+source "$E2E_STATE_FILE"
+export DB_HOST="$E2E_DB_HOST" DB_PORT="$E2E_DB_PORT"
+export DB_USERNAME="$E2E_DB_USERNAME" DB_PASSWORD="$E2E_DB_PASSWORD" DB_NAME="$E2E_DB_NAME"
+export NACOS_SERVER_ADDR=localhost:8848 NACOS_NAMESPACE="$E2E_NACOS_NAMESPACE" NACOS_GROUP=DEFAULT_GROUP
+export CONNECTOR_ARTIFACT_REPOSITORY_HOST=127.0.0.1
+export CONNECTOR_ARTIFACT_REPOSITORY_PATH=/e2e-signed-connector
+export CONNECTOR_ARTIFACT_REPOSITORY_PREFIX="${FIXTURE_ARTIFACT_URI%/1.1.0/connector-plugin.jar}"
+export CONNECTOR_VENDOR_ALLOWED_HOST=127.0.0.1 CONNECTOR_ALLOW_PRIVATE_NETWORKS=true
+export CONNECTOR_SIGNING_PUBLIC_KEY_BASE64="$FIXTURE_SIGNING_PUBLIC_KEY_BASE64"
+export CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE="$FIXTURE_ACCESS_SIGNING_KEY_RESOURCE"
+export CONNECTOR_JAVA_TLS_OPTIONS="-Djavax.net.ssl.trustStore=$FIXTURE_TLS_TRUSTSTORE -Djavax.net.ssl.trustStorePassword=$FIXTURE_TLS_TRUSTSTORE_PASSWORD"
+export CONNECTOR_PLUGIN_CACHE_DIR="$FIXTURE_OUTPUT_DIR/plugins-cache"
+export CONNECTOR_SECOND_ACCESS_ENABLED=true
+export CONNECTOR_SECOND_ACCESS_PORT=8083
+export CONNECTOR_SECOND_ACCESS_INSTANCE_ID=data-platform-access:e2e-8083
+./start-services.sh
+```
+
+`start-services.sh` 会在显式提供 `DB_*` 时绑定 `SPRING_DATASOURCE_*`，避免隔离数据库静默回落到默认库；
+`CONNECTOR_SECOND_ACCESS_*` 只为阶段 5 双实例观察验收启用，普通本地启动无需设置。
+
+    ./data-platform-test/test-fixtures/connector-e2e/run-api-e2e.sh "$E2E_STATE_FILE"
+
+它会在隔离库中验证 Legacy inventory 分类、单 HTTP、Token+业务请求、有限轮询、错误分类、缓存、计费、CallRecord 的接口身份、插件版本、
+流水线版本、快照摘要和主备实际厂商事实；脚本不输出 Token、API Key、SecretRef 值或请求/响应报文。`prepare-e2e.sh` 自身验证的是制品/TLS/迁移夹具，
+不代表六服务链路已经通过。
+需要记录一轮可重复的隔离容量基线时，可执行：
+
+    ./data-platform-test/test-fixtures/connector-e2e/observe-capacity.sh "$E2E_STATE_FILE" 8 32
+
+该命令只向隔离 Gateway 发起有界并发请求，并报告客户端 P50/P95、业务成功数、CallRecord 覆盖数及其接口身份/
+连接器版本事实；输出不能作为生产容量结论。
 
 验收结束必须使用脚本输出的精确状态文件清理；脚本会校验 PID、数据库名和目录归属后才删除：
 
@@ -386,11 +434,13 @@ activate、草稿、validate、test、publish 和 OpenAPI 调用。`prepare-e2e.
 ./data-platform-test/test-fixtures/connector-e2e/cleanup-e2e.sh "$E2E_STATE_FILE"
 ```
 
-2026-08-10 已按此隔离方式启动五域、Gateway、Web 和双 Access，完成签名插件、控制面、单条/批量
-OpenAPI、权限/限流/配额、缓存/契约、delivery/主备/计费、离线缓存/readiness、并发切换、卸载和浏览器
-验收。清理后数据库、Nacos、Redis、缓存、进程、端口和凭据残留为 0。精确验收结论见
-[外部请求连接器插件化升级设计第 0.1 节](2026-08-03-external-request-connector-plugin-upgrade-design.md#01-隔离运行环境与浏览器验收记录)；
-该隔离证据不替代生产容量和放量验收。
+2026-08-28 已按此隔离方式启动五域、Gateway、Web 和双 Access，完成签名单插件的导入、激活、Legacy 转换、
+Spec 保存/校验/受控测试/发布、单条/批量 OpenAPI、Token+业务请求、有限轮询、权限/缓存/计费、
+CallRecord/BillingEvent 和主备实际厂商事实验证；并以并发 8/32 完成隔离容量基线。管理员登录态浏览器已完成
+保存、校验、受控测试、发布、历史和 Simple/Legacy 回滚。生产厂商迁移、生产容量/滚动升级和观察窗口仍未完成。
+精确验收结论见
+[连接器产品模型设计第 20 节](2026-08-12-connector-product-model-simplification-design.md#20-真实运行验收)；
+该隔离证据不替代生产厂商迁移、生产容量和放量验收。
 
 ---
 
@@ -535,7 +585,13 @@ export CONNECTOR_SIGNING_PUBLIC_KEY_BASE64='<X.509 DER Base64>'
 export CONNECTOR_SIGNING_PUBLIC_KEY_RESOURCE=file:/run/secrets/connector-signing-public.pem
 export CONNECTOR_PLUGIN_CACHE_DIR=/var/lib/data-platform/plugins
 export CONNECTOR_INSTANCE_ID="${HOSTNAME}:8082"
+export CONNECTOR_LEGACY_WRITE_RETIRED=false
 ```
+
+`CONNECTOR_LEGACY_WRITE_RETIRED` 默认必须保持 `false`。只有生产 inventory、逐厂商迁移观察、
+容量/滚动升级和回滚演练均形成证据，且数据库事实确认活动 Legacy 绑定、Legacy 草稿和未结束迁移为 0
+后，才允许切换为 `true`。切换后 raw PUT/POST 写、测试、发布和回滚返回 HTTP 410；只读历史和
+`validate` 保留。切换前必须先完成真实登录态和多服务链路验收，不能用隔离 fixture 代替生产事实。
 
 ### Docker 部署
 

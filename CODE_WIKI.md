@@ -2,7 +2,7 @@
 
 > **项目名称**: 数据管理平台 (Data Management Platform)
 > **仓库地址**: https://github.com/LiXuD/data-manager-hub.git
-> **文档版本**: 2026-08-20
+> **文档版本**: 2026-08-28
 > **技术栈**: Java 21 + Spring Boot 3.4.13 + Spring Cloud 2024.0.3 + MyBatis-Plus 3.5.8 + Vue 3 + TypeScript
 
 ---
@@ -213,10 +213,13 @@ Access 对外部 JAR 进行 HTTPS 白名单下载并缓存到
 缓存/契约、NOT_SENT/SENT/MAYBE_SENT、计费/调用事实、离线缓存/readiness、并发版本切换和 release。
 V001—V047 fresh/upgrade/HALT/不变性矩阵通过；这证明隔离环境落地，不代表生产部署或生产容量。
 
-2026-08-20 的粗粒度产品模型阶段 0—4 已完成代码与隔离自动化验收：Manifest v2/高层 SDK、
+2026-08-28 的粗粒度产品模型阶段 0—4 已完成代码与隔离自动化验收：Manifest v2/高层 SDK、
 `connectorSpec` 确定性编译、V049/V050、Generic HTTP、Legacy 转换/分页清点和简化前端工作区均已落地。
-V049/V050 fresh/upgrade/repeat/HALT/条件回滚脚本以及 Node 24 前端测试通过；逐厂商生产迁移、完整登录态
-多服务 E2E、容量/滚动升级和旧 raw 接口最终退役仍未完成，不能据此宣称生产已发布。
+V049/V050 fresh/upgrade/repeat/HALT/条件回滚脚本、V051 错误码扩容、V052 接口身份绑定和 Node 22.19.0 前端测试通过；隔离环境已完成管理员
+登录态浏览器 E2E、双 Access 多服务 API 链路以及 8 并发/32 请求容量基线。逐厂商生产迁移、生产容量/滚动升级、
+观察窗口和旧 raw 接口最终退役仍未完成，不能据此宣称生产已发布。发布 acceptance 镜像已接入
+`ConnectorProductFlowTest`，由 `runtime-contract.v1.yaml` 约束完整 `dmh-acceptance` 验收向量，缺少配置时
+fail-closed；实际生产 Job 尚待目标环境 Secret 和运行证据。
 
 插件模式的六阶段顺序为 `REQUEST_BUILDER → REQUEST_PROCESSOR* → TRANSPORT →
 RESPONSE_PROCESSOR* → RESPONSE_PARSER* → RESPONSE_NORMALIZER`，启用步骤必须恰好有一个
@@ -465,7 +468,7 @@ com.dataplatform.masterdata/
 | `/vendor/config/{configId}/security-versions` | 查询版本历史，并通过 `/{versionId}/rollback` 回滚 |
 | `/connector-plugin/**` | 插件目录、签名导入、验证、预加载、逐实例状态、激活和禁用 |
 | `/vendor/config/{configId}/connector-spec/catalog`、`/catalog/{pluginId}/versions` | 当前 vendor/dataType 兼容的强类型 SIMPLE 插件与固定版本 |
-| `/vendor/config/{configId}/connector-spec/draft`、`/validate`、`/execution-plan` | SIMPLE Spec CAS 草稿、纯校验和脱敏只读计划 |
+| `/vendor/config/{configId}/connector-spec/draft`、`/validate`、`/execution-plan` | SIMPLE Spec CAS 草稿、纯校验和脱敏只读计划；执行计划仅由管理员诊断页展示 |
 | `/vendor/config/{configId}/connector-spec/test`、`/publish`、`/versions`、`/rollback/{version}` | 五元组测试事实、不可变发布、安全历史和复制式回滚 |
 | `/vendor/config/{configId}/connector-spec/upgrade-preview` | 同插件显式版本的只读 Schema/config/plan 差异与确定性摘要预检 |
 | `/vendor/config/{configId}/connector-spec/convert-preview`、`/convert` | Legacy 无损分类预检与 expectedDraftVersion CAS 转换 |
@@ -841,8 +844,8 @@ com.dataplatform.governance/
 
 接口管理的“配置”分为内部调用契约和厂商接入配置：前者以树形表格维护请求/响应字段、子字段、约束、
 示例和排序；后者在普通流程中只选择一个固定连接器插件版本并填写一份 Schema 产品表单。页面提供版本
-升级预检、响应字段映射、校验/测试/发布、历史/回滚和脱敏只读执行计划，不暴露
-`stageKey/capability/order/enabled/TRANSPORT` 编辑。Legacy 只读展示并在能证明无损时提供转换。
+升级预检、校验/测试/发布、历史/回滚；`stageKey/capability/order/enabled/TRANSPORT` 和摘要由独立的
+`/connector-diagnostics` 管理员只读页展示。Legacy 只读展示并在能证明无损时提供转换。
 产品 API 返回 403 时不会回退 raw API；只有非权限类兼容失败才使用 Legacy 只读 fallback。保存内部契约
 后，管理端文档页和调用方文档页会立即使用最新字段树与 Schema 快照生成示例和 OpenAPI 3.1。
 
@@ -929,6 +932,7 @@ data-platform-web/src/
 | `/role` | 角色管理 | 需登录 |
 | `/vendor` | 厂商管理 | 需登录 |
 | `/connector-plugin` | 连接器插件目录、版本和激活管理 | 需登录及任一 `connector-plugin:view/import/verify/activate/disable` 权限 |
+| `/connector-diagnostics` | 连接器阶段、能力、顺序、TRANSPORT 和摘要诊断 | 需登录及 `system:admin`、`connector-plugin:view` |
 | `/caller` | 调用方管理 | 需登录 |
 | `/datatype` | 数据类型 | 需登录 |
 | `/interface` | 接口管理 | 需登录 |
@@ -1054,12 +1058,14 @@ data-platform-web/src/
 | 43 | vendor_connector_version | 厂商连接器草稿和不可变发布快照 | masterdata |
 | 44 | vendor_connector_test_fact | 受控测试的不可变安全事实及发布门禁 | masterdata |
 | 45 | connector_plugin_activation | Access 各实例的插件加载事实 | access |
-| 46 | vendor_connector_migration | 已完成迁移计划与三域观察的只读历史 | masterdata |
+| 46 | vendor_connector_migration | 逐厂商迁移计划、CAS 状态和三域观察事实 | masterdata |
 
 V042 建立连接器控制面并种入 `legacy-http:1.0.0`；V043—V048 完成迁移观察、PLUGIN-only、旧列退役、
 完整性/不可变保护和主备用配置引用。V049 增加 Manifest v2 投影、SIMPLE Spec/编译事实和五元测试门禁；
-V050 种入与宿主静态 Metadata 精确一致的 `generic-http:2.0.0`。全新库使用
-`./migrate-db.sh update`，旧库先备份并按 `./migrate-db.sh baseline` 接管。V049/U049 与 V050/U050 的
+V050 种入与宿主静态 Metadata 精确一致的 `generic-http:2.0.0`，V051 将 `call_record.error_code` 扩展到
+`VARCHAR(64)` 以保存完整连接器错误码，V052 为 `call_record` 绑定规范 `api_interface.id` 并建立观察查询索引。全新库使用
+`./migrate-db.sh update`，旧库先备份并按
+`./migrate-db.sh baseline` 接管。V049/U049 与 V050/U050 的
 fresh、upgrade、repeat、HALT 原子性和条件回滚分别由 `verify-v049-connector-product-spec.sh`、
 `verify-v050-generic-http.sh` 在隔离临时库验证。已受保护或被引用的事实使用版本回滚、备份恢复或
 forward recovery，不执行破坏性逆迁移，详见 `sql/MIGRATIONS.md`。

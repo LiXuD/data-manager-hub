@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-08-26
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。外部请求连接器插件化阶段 0—5 已全部实现；连接器粗粒度产品模型阶段 0—4 已完成代码实现和隔离自动化验收，阶段 5—6 的生产迁移与旧入口退役仍未执行。当前开发阶段 CI/CD 已收敛为提交级 Java/Web 编译、单元测试、lint 和前端构建；自动部署、制品发布、制品升级及生产环境验证统一延期到生产部署前，不作为当前开发门禁。
+**最后更新**: 2026-08-29
+**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。当前主线目标已切换为“干净、可重复、业务可演示的 dev 闭环”：V049/V050 与 V051/V052 前向迁移隔离、V052 无待迁移、fresh 一键启动和 3/2/2 真实业务夹具优先收口；生产厂商 inventory/迁移/观察/容量/滚动升级和阶段 6 旧入口最终退役继续保留为后续生产门禁，不作为当前开发主线。
 
 ---
 
@@ -19,6 +19,15 @@
 - `generic-http:2.0.0` 是宿主内置的标准单次 HTTPS 产品插件；`platform-core:1.0.0` 承担平台 Transport、安全和响应映射，二者均受签名目录事实、SecretRef 所有权和 Access 网络策略约束。
 - `ADVANCED_LEGACY` 草稿和历史继续只读可解释；旧 raw 变更、测试、发布和回滚接口不能覆盖 SIMPLE 事实，Legacy 可通过只读预检和 CAS 转换进入 SIMPLE。
 
+## 当前开发里程碑：dev 环境跑通
+
+- [x] V049/V050 前向-only 迁移隔离修复；V049、V050、fresh V052、重复 update、Liquibase validate 已在隔离库通过。
+- [x] 本机 dev 数据库已升级至 V052，`migrate-db.sh status` 和数据库事实均为 0 pending。
+- [x] `data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh` 提供 fresh 基础设施、迁移、六服务、前端和业务验收入口，并输出机器可读报告。
+- [x] dev MVP 夹具与正式迁移分离，验证 3 家厂商、2 个调用系统、2 类数据类型、单 HTTP/Token+业务/主备三类连接器流程，以及审批、OpenAPI、CallRecord、Billing、审计和监控落库事实。
+- [x] 普通配置页收敛为插件、固定版本和一次 Schema 表单；阶段、能力、顺序、TRANSPORT 和摘要迁移到 `system:admin` 保护的“连接器运行诊断”页。
+- [ ] 按数据库、迁移控制面/Access 观察、E2E、前端、文档拆分小提交，推送后创建 PR；以最终 SHA 的 `CI / required-ci` 通过并合入 `dev` 作为完成证据。
+
 ## 开发阶段 CI/CD（当前生效）
 
 当前提交和 PR 只运行 [基础 CI](.github/workflows/ci.yml)：后端 Java 编译/单元测试，以及前端
@@ -29,7 +38,7 @@
 覆盖率、Checkstyle 和 SpotBugs 已移入根 POM 的 `quality` Profile，需要时手工执行，不属于基础 CI 门禁。
 
 当前阶段性成果：通过 `docker-compose.local-infra.yml`，Mac Docker 已提供 PostgreSQL 16、Redis 7、Kafka 3.7、Nacos 2.3.2；Mac
-本地可启动六个后端服务和 Vite 前端，六个后端健康检查均为 `UP`，数据库 V001—V050 已迁移并
+本地可启动六个后端服务和 Vite 前端，六个后端健康检查均为 `UP`，数据库 V001—V052 已迁移并
 通过校验。该成果满足开发阶段执行目标，但不改变 staging/production 尚未真实发布的结论。
 
 | 阶段 | 状态 | 当前边界 |
@@ -145,10 +154,10 @@ git diff --check
 的成功事实，插件激活也必须先有包含该固定版本的成功测试事实。隔离环境已验证成功事实、事实不可变、
 草稿版本冲突、发布/回滚和活动绑定禁用保护；管理页面的关键状态与交互已通过浏览器操作验收。
 
-## 连接器粗粒度插件与配置简化（阶段 0—4 已实现）
+## 连接器粗粒度插件与配置简化（阶段 0—4 已验收，阶段 5 控制面与隔离链路已验收）
 
 详细实施方案见 [连接器粗粒度插件模型与配置简化优化设计](docs/2026-08-12-connector-product-model-simplification-design.md)。
-本方案保留现有六阶段运行时和治理能力，把普通产品模型收敛为“选择一个连接器插件、固定一个版本、填写一份配置”。阶段 0—4 已完成代码和隔离自动化验收；阶段 5—6 是生产迁移与退役门禁，不能因代码存在而标记完成。
+本方案保留现有六阶段运行时和治理能力，把普通产品模型收敛为“选择一个连接器插件、固定一个版本、填写一份配置”。阶段 0—4 已完成代码和隔离自动化验收；阶段 5 的 inventory、逐厂商 CAS 控制、三域观察门禁、隔离真实链路和容量观察入口已验证，但生产迁移与观察仍未执行；阶段 6 已完成写入口保护和隔离回滚验证，最终退役仍是生产退役门禁，不能因代码存在而标记完成。
 
 | 阶段 | 状态 | 验收门槛 |
 |---|---|---|
@@ -156,11 +165,43 @@ git diff --check
 | 1. [Manifest v2 与插件开发 SDK](docs/2026-08-12-connector-product-model-simplification-design.md#172-阶段-1manifest-v2-与插件开发-sdk) | 已实现并通过模块测试 | v1/v2 双读、高层单入口 SDK、Managed Session、`platform-core`、TestKit 与真实 runtime 示例均通过 |
 | 2. [Masterdata Spec 控制面与 V049](docs/2026-08-12-connector-product-model-simplification-design.md#173-阶段-2masterdata-spec-控制面与-v049) | 已实现并通过隔离数据库验收 | Spec 草稿/校验/测试/发布/历史/回滚/升级预检、确定性编译及 V049/U049 fresh/upgrade/HALT 矩阵通过 |
 | 3. [Generic HTTP 2.0 与转换](docs/2026-08-12-connector-product-model-simplification-design.md#174-阶段-3generic-http-20-与转换) | 已实现并通过隔离数据库与模块测试 | `generic-http:2.0.0`、V050/U050、转换预检/CAS、Legacy inventory 和离线对等 fixture 已落地 |
-| 4. [前端简化工作区](docs/2026-08-12-connector-product-model-simplification-design.md#175-阶段-4前端简化工作区) | 已实现并通过 lint/typecheck/Vitest/build | 普通页面只展示插件、固定版本、单表单、响应映射和只读计划；真实登录态浏览器工作区仍待完整 E2E |
-| 5. [受控发布与逐厂商迁移](docs/2026-08-12-connector-product-model-simplification-design.md#176-阶段-5受控发布与逐厂商迁移) | 未实施 | 必须在目标环境先运行 inventory，再按厂商完成真实请求/响应/错误/缓存/计费/主备对等、容量和观察窗口 |
-| 6. [旧高级写入口收口](docs/2026-08-12-connector-product-model-simplification-design.md#177-阶段-6旧高级写入口收口) | 未实施 | 阶段 5、回滚窗口和真实浏览器/API E2E 全部完成后，才可删除 raw 变更入口；raw validate 保持只读例外 |
+| 4. [前端简化工作区](docs/2026-08-12-connector-product-model-simplification-design.md#175-阶段-4前端简化工作区) | 已实现并通过 lint/typecheck/Vitest/build 与管理员登录态浏览器验收 | 普通页面只展示插件、固定版本和一次 Schema 表单；阶段、能力、顺序、TRANSPORT 和摘要移至管理员诊断页；隔离浏览器已完成保存、校验、受控测试、发布、历史和回滚 |
+| 5. [受控发布与逐厂商迁移](docs/2026-08-12-connector-product-model-simplification-design.md#176-阶段-5受控发布与逐厂商迁移) | 控制面、隔离真实链路和容量基线已验证，生产验收未完成 | `/vendor/config/connector-spec/inventory`、prepare/start-observation/observe/complete/rollback 和 Access/Billing 聚合门禁已落地；`run-api-e2e.sh` 已验证单 HTTP、Token+业务请求、有限轮询、请求/响应/错误/缓存/计费和主备实际厂商事实，`observe-capacity.sh` 已验证 8 并发/32 请求；仍必须在目标环境逐厂商完成真实迁移、容量、滚动升级和观察窗口 |
+| 6. [旧高级写入口收口](docs/2026-08-12-connector-product-model-simplification-design.md#177-阶段-6旧高级写入口收口) | 已实现可切换退役门禁，生产最终切换未实施 | raw 写入口不再允许从空白创建新的 `ADVANCED_LEGACY` 草稿（返回 `LEGACY_DRAFT_REQUIRED`），继续阻止覆盖 SIMPLE；`CONNECTOR_LEGACY_WRITE_RETIRED=true` 且活动 Legacy、Legacy 草稿、未结束迁移均为 0 时，raw PUT/POST 写/测试/发布/回滚返回 410；门禁未满足返回 409，raw validate 保持只读例外 |
 
-迁移验收入口为 `verify-v049-connector-product-spec.sh` 和 `verify-v050-generic-http.sh`。两者只创建名称受限的临时 PostgreSQL 数据库，覆盖 fresh、前版本升级、重复执行、漂移/HALT 原子性、安全回滚与重新应用，并在退出时清理；这不是任何生产数据库的迁移记录。
+迁移数据库验收入口为 `verify-v049-connector-product-spec.sh` 和 `verify-v050-generic-http.sh`。两者只创建名称受限的临时 PostgreSQL 数据库，覆盖 fresh、前版本升级、重复执行、漂移/HALT 原子性、安全回滚与重新应用，并在退出时清理；这不是任何生产数据库的迁移记录。阶段 5 控制面还要求登录态调用新迁移 API，生产厂商事实仍需单独形成证据。
+
+### 2026-08-28 隔离真实链路证据
+
+当前隔离运行已启动 PostgreSQL、Redis、Kafka、Nacos、Identity、Masterdata、Access 双实例、
+Billing、Governance、Gateway、Web 和本地 TLS 制品/厂商 fixture。通过 Gateway 已验证：
+
+- 管理员登录、签名 Manifest v2 导入/校验/预加载/激活、Legacy 转换、Spec CAS 保存、校验、
+  受控测试和发布；
+- 管理员登录态浏览器已完成接口管理 → 主备厂商 → 简化连接器表单的真实操作，覆盖保存、校验、受控测试、发布、版本历史、Simple 回滚和 Legacy 回滚；页面未出现 stageKey/capability/order/enabled/TRANSPORT 编辑控件，两个 Access 实例均显示 READY；
+- Caller/Product/API Key/Scene、接口授权审批和缓存审批；
+- OpenAPI 单条/批量请求、真实厂商响应、HTTP 错误、响应解析错误、缓存命中不再访问厂商、
+  CallRecord/BillingEvent 实际接口身份、插件版本、流水线版本与快照摘要，以及主备配置/版本摘要对等；
+- `run-api-e2e.sh` 在一轮隔离 API 链路中验证 Legacy inventory 分类、单 HTTP、Token+业务请求、有限轮询和备用配置真实调用：
+  `apiE2e=passed`、22/22 条 CallRecord 具备接口身份和连接器版本事实、6/6 条 BillingEvent 具备接口身份、总额 1.25000000、缓存命中 1 次，
+  错误码覆盖 `BUSINESS_REJECTED`、`RESPONSE_PARSE_ERROR`、`TRANSPORT_HTTP_ERROR`、
+  `TRANSPORT_CONNECTION_ERROR`，备用路由返回 `READY` 且实际厂商事实已落库；迁移控制面按
+  `PREPARED → OBSERVING → READY → STABLE` 通过观察门禁，Legacy inventory 返回 3 个隔离配置且目标配置分类为
+  `LOSSLESS_CONVERTIBLE`；
+- 同一轮链路还直接读取 HTTPS 厂商 fixture 计数器：缓存未命中使主厂商请求增加 1，缓存命中计数保持不变；4 个错误向量均命中主厂商且备用计数增加 0；熔断后主厂商继续有错误请求并仅增加 1 次备用厂商请求，最终计数为 `vendor=24/echo=22/fallback=2/token=2/business=2/asyncSubmit=2/asyncPoll=4`；
+- 两个 Access 实例均 READY，单实例直接请求与服务发现状态可读，V051 已修复完整连接器错误码
+  在异步 CallRecord 落库时被旧列宽截断的问题，V052 已将真实调用的规范接口身份写入 CallRecord。
+- connector-e2e/observe-capacity.sh 已提供隔离容量观察入口；当前 fixture 以并发 8 发起
+  32 个真实 Gateway 请求，32/32 返回 HTTP 200 且业务成功、32/32 写入 CallRecord，且 32/32 具备接口身份、
+  插件版本、流水线版本和快照摘要事实，0 个错误记录，客户端 p95 为 183.2ms。这是单机隔离基线，不是生产容量结论。
+- acceptance 镜像已加入 `ConnectorProductFlowTest`，并由 `runtime-contract.v1.yaml` 强制
+  `dmh-acceptance` 提供完整的目标配置、请求向量、错误/缓存/主备断言和容量阈值；缺少任一键即
+  fail-closed，不会把只有旧 UAPI smoke 的 Job 当作连接器发布验收。该测试只读取预批准目标，已在
+  同一隔离多服务环境以完整 Secret 向量通过 `2/2`；生产仍需配置真实 Secret 并运行 Job。
+
+这证明的是一个签名单插件 fixture 的隔离 API/多服务/浏览器链路，不等于生产厂商迁移完成。仍缺生产
+inventory、生产观察窗口、生产容量/滚动升级和生产回滚演练；阶段 6 的可切换退役门禁已实现，但生产
+尚未满足事实门禁，因此当前仍保留既有 Legacy 兼容入口。raw validate 继续是只读例外。
 
 ## 仍需执行的生产发布门禁
 
@@ -172,8 +213,9 @@ git diff --check
 - 在生产制品库和部署 TrustStore 中配置经审批的签名公钥、仓库前缀、证书链和 Access 持久缓存卷；隔离验收使用的一次性凭据已经销毁。
 - 按生产 Access 实例规模执行容量、滚动升级、制品库故障和告警联动演练，并依据生产变更流程决定上线窗口；这些是环境/发布工作，不是待开发功能。
 - 在目标环境运行只读 `/vendor/config/connector-spec/inventory`，逐项确认 `LOSSLESS_CONVERTIBLE/REQUIRES_DEDICATED_PLUGIN/MUST_REMAIN_LEGACY`，不得用隔离 fixture 代替生产事实清点。
-- 对目标厂商完成真实登录态工作区的选择、升级预检、保存、校验、测试、发布、历史、回滚和 Legacy 转换，并核对 CallRecord/Billing/缓存/主备副作用；当前本地浏览器验收受登录态与完整服务环境限制。
+- 对目标厂商完成真实登录态工作区的选择、升级预检、保存、校验、测试、发布、历史、回滚和 Legacy 转换，并调用阶段 5 控制面核对 CallRecord/Billing/缓存/主备副作用；隔离 API/多服务链路和管理员浏览器交互已完成，目标环境生产事实仍需单独验收。
 - 阶段 5 观察窗口、生产容量和回滚演练完成前，不执行阶段 6 的 raw 入口物理删除。
+- 生产阶段 5 门禁完成后，将 `CONNECTOR_LEGACY_WRITE_RETIRED=true` 写入 Masterdata Secret/Nacos；服务会先读取活动 Legacy、Legacy 草稿和未结束迁移事实，只有三者均为 0 才返回 HTTP 410，事实查询异常或门禁未满足不会误报退役成功。
 - 生产部署阶段重新启用高级门禁后，才执行隔离数据库迁移回归、架构扫描、供应链、Helm/RBAC/Admission 和外部平台验证；开发阶段只执行上文基础 Java/Web CI。
 
 ## 文档职责
@@ -188,7 +230,7 @@ git diff --check
 | `docs/runbooks/database-recovery.md` | PostgreSQL 快照/PITR 恢复、角色、验证、演练和禁止自动 rollback 的事故流程 |
 | `docs/runbooks/release-deployment.md` | Manifest 晋级、Nacos/Helm/Access 发布顺序、门禁、回滚和发布证据 |
 | `docs/2026-07-23-deep-cleanup-review.md` | 本轮清理范围、架构决策和回归证据 |
-| `sql/MIGRATIONS.md` | V001—V050 的迁移、V049/U049、V050/U050 条件回滚与前向恢复要求 |
+| `sql/MIGRATIONS.md` | V001—V052 的迁移、V049/U049、V050/U050、V051/U051 和 V052/U052 前向恢复要求 |
 | `docs/2026-08-03-external-request-connector-plugin-upgrade-design.md` | Bumblebee 参考、实施前基线、现已落地架构和隔离验收边界 |
-| `docs/2026-08-12-connector-product-model-simplification-design.md` | 粗粒度插件产品模型、阶段 0—4 实现证据、阶段 5—6 生产迁移与退役门禁 |
+| `docs/2026-08-12-connector-product-model-simplification-design.md` | 粗粒度插件产品模型、阶段 0—5 控制面与隔离链路证据、阶段 5 生产迁移与阶段 6 退役门禁 |
 历史实施计划、已验收报告和过期性能样本不保留在当前知识库，需要追溯时请查阅 Git 历史。

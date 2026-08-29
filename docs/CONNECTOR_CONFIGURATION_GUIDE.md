@@ -5,8 +5,8 @@
 > 本文按当前代码行为编写；架构和供应链设计见
 > [外部请求连接器插件化升级设计](./2026-08-03-external-request-connector-plugin-upgrade-design.md)，
 > HTTP 接口清单见 [API 文档](./API.md#33-连接器插件与版本化厂商流水线)。
-> 粗粒度产品模型阶段 0—4 已完成代码和隔离自动化验收；普通用户只选择一个固定插件版本、填写
-> 一份配置，执行计划只读。阶段 5 的逐厂商生产迁移、完整登录态 E2E、容量/滚动升级和阶段 6 的
+> 粗粒度产品模型阶段 0—4 已完成代码、隔离自动化验收和管理员登录态浏览器验收，阶段 5 的迁移控制面、隔离多服务真实链路和容量基线已实现；普通用户只选择一个固定插件版本、填写
+> 一份 Schema 配置，执行计划由独立管理员诊断页只读展示。阶段 5 的逐厂商生产迁移、生产容量/滚动升级和观察窗口，以及阶段 6 的
 > raw 入口最终退役尚未完成，见
 > [连接器粗粒度插件模型与配置简化优化设计](./2026-08-12-connector-product-model-simplification-design.md)。
 
@@ -60,6 +60,7 @@ flowchart LR
 | 查看厂商、绑定列表和厂商配置 | `vendor:view` |
 | 绑定、编辑、启用或删除厂商配置 | `vendor:edit` |
 | 查看插件、草稿、活动版本和历史 | `connector-plugin:view` |
+| 查看阶段、能力、顺序、TRANSPORT 和摘要诊断 | `system:admin` + `connector-plugin:view` |
 | 保存草稿、校验 | `connector-plugin:bind` |
 | 受控测试 | `connector-plugin:test` |
 | 发布 | `connector-plugin:publish` |
@@ -178,7 +179,7 @@ Content-Type: application/json
 - 当前配置版本；
 - 活动连接器版本；
 - 草稿版本；
-- 当前创作模式；高级执行计划按需只读展开，不显示可编辑 Transport 数量。
+- 当前创作模式；工作区不展示阶段、能力、顺序、TRANSPORT 或摘要。管理员可进入“连接器运行诊断”页查看这些只读事实。
 
 ### 3.4 选择插件并填写一份产品配置
 
@@ -191,12 +192,11 @@ SIMPLE 插件。首次选择使用服务端推荐的最高 ACTIVE 版本；固�
 - 绝对 HTTPS endpoint、GET/POST/PUT/PATCH/DELETE/HEAD 方法和 JSON/form content type；
 - 固定非敏感 Header 和确定性请求字段映射；
 - NONE/Bearer/Basic/API Key 认证，凭据只能从当前厂商 SecretRef 下拉框选择；
-- 成功 HTTP 状态、可选业务码和 dataPath；
-- Spec 顶层的可选响应字段映射。
+- 成功 HTTP 状态、可选业务码和 dataPath。
 
 Schema 的 `x-ui-group/x-ui-advanced/x-ui-visible-if/x-platform-managed` 只执行固定声明式白名单；不执行
 脚本。响应映射只允许安全字段路径、固定 source/transform 枚举和唯一 target，不接受秘密或任意表达式。
-`stageKey/capability/order/enabled/TRANSPORT` 以及所有摘要都由服务端编译，普通页面不可编辑。
+`stageKey/capability/order/enabled/TRANSPORT` 以及所有摘要都由服务端编译，普通页面不可编辑；它们只在管理员“连接器运行诊断”页以脱敏摘要只读展示。普通配置页只保留插件、固定版本和一次 Schema 表单。
 
 ### 3.5 保存、校验、测试和发布
 
@@ -217,7 +217,12 @@ Schema 的 `x-ui-group/x-ui-advanced/x-ui-visible-if/x-platform-managed` 只执�
 
 旧 `/vendor/config/{id}/connector/**` raw 变更、测试、发布和回滚接口遇到 SIMPLE 均返回 409
 `SIMPLE_CONNECTOR_REQUIRES_PRODUCT_API`，不得覆盖产品事实。raw `validate` 是只读兼容例外：可检查
-已有快照，但不写数据库、不调用 Access，也不产生测试或发布事实。
+已有快照，但不写数据库、不调用 Access，也不产生测试或发布事实。raw PUT 不允许从空白创建新的
+`ADVANCED_LEGACY` 草稿，返回 409 `LEGACY_DRAFT_REQUIRED`；最终删除/410 退役仍需等待阶段 5、回滚窗口和真实 E2E 门禁。
+生产阶段 5 门禁完成后，Masterdata 可设置 `CONNECTOR_LEGACY_WRITE_RETIRED=true`。服务会核对活动 Legacy
+绑定、Legacy 草稿和未结束迁移均为 0，满足时 raw PUT/POST 写、测试、发布和回滚返回 410
+`CONNECTOR_LEGACY_WRITE_RETIRED`；不满足时返回 409 `CONNECTOR_LEGACY_WRITE_RETIREMENT_GATE_NOT_PASSED`，
+事实查询异常失败关闭。只读 GET 和 `validate` 保留。
 
 ### 3.6 固定入口请求与响应示例
 
@@ -819,7 +824,7 @@ Access 不按列表顺序、创建时间或灰度规则猜测厂商。`UNBOUND`�
 
 ### 9.6 插件控制面表与启动顺序
 
-`connector_plugin_activation` 由迁移 `V042__create_connector_plugin_control_plane.sql` 创建；当前连接器迁移链已到 V050，必须按 V042—V050 顺序执行。V049 增加 Manifest v2/SIMPLE Spec/compile 投影并前向扩展 V047 不可变保护；V050 种入与宿主静态事实逐字段一致的 `generic-http:2.0.0`。Access 启动同步器、待处理激活调度和心跳在访问 Mapper 前先检查该表；表不存在时 readiness 保持未就绪，并记录稳定安全错误码 `CONNECTOR_SCHEMA_NOT_READY`，不会把缺表误报成普通业务失败，也不会吞掉其他 SQL 错误。迁移完成、表恢复后，后续调度会自动继续同步。
+`connector_plugin_activation` 由迁移 `V042__create_connector_plugin_control_plane.sql` 创建；当前连接器迁移链已到 V052，必须按 V042—V052 顺序执行。V049 增加 Manifest v2/SIMPLE Spec/compile 投影并前向扩展 V047 不可变保护；V050 种入与宿主静态事实逐字段一致的 `generic-http:2.0.0`，V051 扩展连接器错误码存储，V052 绑定 CallRecord 的接口身份。Access 启动同步器、待处理激活调度和心跳在访问 Mapper 前先检查该表；表不存在时 readiness 保持未就绪，并记录稳定安全错误码 `CONNECTOR_SCHEMA_NOT_READY`，不会把缺表误报成普通业务失败，也不会吞掉其他 SQL 错误。迁移完成、表恢复后，后续调度会自动继续同步。
 
 部署顺序应为：先完成数据库迁移并确认迁移历史，再启动或放行 Access 的连接器运行时；若在升级窗口中先启动 Access，必须保持 readiness/流量门禁关闭，直到该表可见。
 
@@ -845,7 +850,7 @@ Access 不按列表顺序、创建时间或灰度规则猜测厂商。`UNBOUND`�
 | 配置主备返回 409 | 配置不属于当前接口、主备相同或目标配置已删除 | 只从当前接口的绑定卡片中选择；备用可以留空 |
 | 接口启用返回 409 | 主路由未配置，或主配置/连接器/必要配置未就绪 | 检查 `routingReadiness`，完成主配置的发布和启用后再启用接口 |
 | 页面显示“厂商名称未加载” | 后端返回的厂商名称缺失或详情加载失败 | 检查 Masterdata 查询权限和数据；不要用厂商 ID 代替名称 |
-| Access readiness 为 DOWN，错误码 `CONNECTOR_SCHEMA_NOT_READY` | `connector_plugin_activation` 尚未由迁移创建或当前不可见 | 先按迁移顺序执行 V042—V050，确认表和 Generic 目录静态事实一致后等待同步器恢复 |
+| Access readiness 为 DOWN，错误码 `CONNECTOR_SCHEMA_NOT_READY` | `connector_plugin_activation` 尚未由迁移创建或当前不可见 | 先按迁移顺序执行 V042—V052，确认表、Generic 目录静态事实和 CallRecord 接口身份列一致后等待同步器恢复 |
 
 ## 11. 当前实现限制
 
@@ -854,10 +859,10 @@ Access 不按列表顺序、创建时间或灰度规则猜测厂商。`UNBOUND`�
 ### 11.1 产品表单只支持声明式 Schema 子集
 
 当前 SIMPLE 工作区已支持明确 `properties/items.properties` 的对象/数组、分组、高级字段、白名单
-`x-ui-visible-if`、SecretRef 选择和独立响应映射。它不会执行脚本、远程引用或插件自定义前端代码，也不
-提供通用 JSON/流水线编辑器。因此：
+`x-ui-visible-if` 和 SecretRef 选择。它不会执行脚本、远程引用或插件自定义前端代码，也不提供独立响应映射、
+通用 JSON 或流水线编辑器。因此：
 
-- `generic-http:2.0.0` 的 Header、认证、请求映射和响应映射可以在产品页面编辑；
+- `generic-http:2.0.0` 的 Header、认证和请求映射通过唯一 Schema 表单编辑；既有 Spec 的响应映射仍按后端契约兼容读取，普通页面不再提供第二个映射编辑器；
 - SecretRef 只能从当前厂商已有引用中选择，页面和预检结果不显示秘密值；
 - 专用插件应提供结构化、严格且有限的 Manifest v2 Schema；任意动态对象应拆成明确字段；
 - 不能由声明式 Schema 表达的厂商协议应开发专用插件，而不是回退到 raw pipeline 或明文配置；

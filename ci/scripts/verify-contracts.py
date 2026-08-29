@@ -58,6 +58,35 @@ def main() -> int:
     if internal_auth.get("mountPath") != "/run/secrets/dmh/internal-auth" or internal_auth.get("mode") != "0440":
         errors.append("dmh-internal-auth mountPath/mode does not match the non-root Helm contract")
     components = contract.get("components", {})
+    expected_acceptance_keys = {
+        "GATEWAY_URL",
+        "TEST_USERNAME",
+        "TEST_PASSWORD",
+        "TEST_CONNECTOR_VENDOR_CONFIG_ID",
+        "TEST_CONNECTOR_API_KEY",
+        "TEST_CONNECTOR_API_CODE",
+        "TEST_CONNECTOR_PRODUCT_CODE",
+        "TEST_CONNECTOR_SCENE_CODE",
+        "TEST_CONNECTOR_EXPECTED_PLUGIN_ID",
+        "TEST_CONNECTOR_EXPECTED_PLUGIN_VERSION",
+        "TEST_CONNECTOR_EXPECTED_CAPABILITIES",
+        "TEST_CONNECTOR_CACHE_PARAMS_JSON",
+        "TEST_CONNECTOR_ERROR_PARAMS_JSON",
+        "TEST_CONNECTOR_ERROR_CODE",
+        "TEST_CONNECTOR_FALLBACK_PARAMS_JSON",
+        "TEST_CONNECTOR_EXPECTED_FALLBACK_CONFIG_ID",
+        "TEST_CONNECTOR_EXPECTED_FALLBACK_VENDOR_ID",
+        "TEST_CONNECTOR_FALLBACK_ATTEMPTS",
+        "TEST_CONNECTOR_RAW_TEST_EXPECTED_STATUS",
+        "TEST_CONNECTOR_RAW_TEST_EXPECTED_CODE",
+        "TEST_CONNECTOR_CAPACITY_REQUESTS",
+        "TEST_CONNECTOR_CAPACITY_CONCURRENCY",
+        "TEST_CONNECTOR_CAPACITY_P95_LIMIT_MS",
+        "TEST_CONNECTOR_CAPACITY_PARAMS_JSON",
+    }
+    acceptance_keys = (components.get("acceptance") or {}).get("requiredEnvKeys")
+    if set(acceptance_keys or []) != expected_acceptance_keys:
+        errors.append("acceptance.requiredEnvKeys must contain the complete connector release vector")
     chart_values_path = root / "deploy/helm/data-manager-hub/values.yaml"
     if chart_values_path.exists():
         chart_values = yaml.safe_load(chart_values_path.read_text(encoding="utf-8")) or {}

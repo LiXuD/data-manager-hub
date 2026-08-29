@@ -4,7 +4,7 @@
 >
 > 日期：2026-08-12
 >
-> 状态：**阶段 0—4 已完成代码实现和隔离自动化验收；阶段 5—6 与生产发布未完成**
+> 状态：**阶段 0—4、阶段 5 控制面与隔离 API/多服务/浏览器链路已完成验收；生产厂商迁移、生产容量/滚动观察、阶段 6 最终退役与生产发布未完成**
 >
 > 适用项目：`data-manager-hub`
 >
@@ -1186,9 +1186,9 @@ V049 只增加元数据列并将现有记录标记为 `ADVANCED_LEGACY`。
 | 1 | 已实现并通过模块测试 | Manifest v1/v2、高层 SDK、Managed Session、platform-core、TestKit |
 | 2 | 已实现并通过模块与 V049 隔离数据库验收 | Spec 控制面、确定性 compiler、测试/发布/历史/回滚/升级预检、V049/U049 |
 | 3 | 已实现并通过模块与 V050 隔离数据库验收 | generic-http:2.0.0、V050/U050、转换预检/CAS、Legacy inventory 与离线对等 fixture |
-| 4 | 已实现并通过 lint/typecheck/Vitest/build | 单表单、版本预检、响应映射、只读计划、Legacy 转换；登录态真实工作区 E2E 未完成 |
-| 5 | 未实施 | 逐厂商真实对等、生产发布、容量/滚动升级、观察窗口仍是前置工作 |
-| 6 | 未实施 | 回滚窗口和真实 E2E 完成前不删除 raw 入口；历史读取与 Access 六阶段运行时继续保留 |
+| 4 | 已实现并通过 lint/typecheck/Vitest/build 与管理员登录态浏览器验收 | 单表单、版本预检、响应映射、只读计划、Legacy 转换；隔离浏览器已完成保存、校验、受控测试、发布、历史和回滚 |
+| 5 | 控制面、单厂商隔离链路和容量基线已验证，生产验收未完成 | 已验证签名单 HTTP fixture 的双 Access/API/缓存/计费/主备摘要链路及 8 并发/32 请求基线；逐厂商真实对等、生产发布、生产容量/滚动升级、观察窗口仍是前置工作 |
+| 6 | 已实现可切换退役门禁，生产最终切换未实施 | 已禁止从空白创建新的 `ADVANCED_LEGACY` 草稿并阻止 SIMPLE 覆盖；`CONNECTOR_LEGACY_WRITE_RETIRED=true` 且活动 Legacy 绑定、Legacy 草稿、未结束迁移均为 0 时，raw 写/测试/发布/回滚返回 410，否则 409 或保留兼容；历史读取与 Access 六阶段运行时继续保留 |
 
 ### 17.1 阶段 0：基线与可转换性清点
 
@@ -1277,7 +1277,7 @@ V049 只增加元数据列并将现有记录标记为 `ADVANCED_LEGACY`。
 
 ### 17.5 阶段 4：前端简化工作区
 
-状态：**已实现并通过 Node 24 lint/typecheck/Vitest/build；真实登录态浏览器 E2E 尚未完成。**
+状态：**已实现并通过 Node 24 lint/typecheck/Vitest/build，以及隔离环境管理员登录态浏览器 E2E。**
 
 任务：
 
@@ -1299,10 +1299,11 @@ V049 只增加元数据列并将现有记录标记为 `ADVANCED_LEGACY`。
 
 ### 17.6 阶段 5：受控发布与逐厂商迁移
 
-状态：**未实施。不得以 fixture、Mock 或隔离迁移结果替代生产厂商对等和发布观察。**
+状态：**控制面、一个签名单 HTTP fixture 的隔离 API/多服务链路、管理员浏览器链路和 8 并发/32 请求容量基线已验证；生产厂商迁移、生产容量/滚动升级和观察未完成。不得以 fixture、Mock 或隔离迁移结果替代生产厂商对等和发布观察。**
 
 任务：
 
+- 通过受保护的迁移控制面记录单厂商源快照，按 CAS 推进准备、观察、完成或回滚；
 - 先迁移 Generic 可转换厂商；
 - 再为非标准厂商开发专用插件；
 - 每个厂商执行请求、响应、错误、缓存、计费和主备对等验证；
@@ -1310,8 +1311,17 @@ V049 只增加元数据列并将现有记录标记为 `ADVANCED_LEGACY`。
 - 保留 Legacy 回滚窗口；
 - 观察真实错误率、P95 和 Billing 覆盖率。
 
+隔离运行证据（2026-08-28）已覆盖 Identity 登录、Gateway、Masterdata、Access 双实例、Billing、
+Redis/Kafka/Nacos、签名制品库和厂商 HTTPS fixture；完成了 Manifest v2 导入/激活、Legacy 转换、
+Spec 保存/校验/受控测试/发布、单条/批量调用、缓存命中、HTTP/解析错误、CallRecord/BillingEvent
+落库和主备版本摘要对等；管理员浏览器已完成登录、主备厂商查看、简化表单保存/校验/受控测试/发布、版本
+历史、Simple 回滚和 Legacy 回滚，两个 Access 实例均显示 READY。该证据仍不替代目标环境的生产 inventory、
+真实厂商请求对等、观察窗口、容量/滚动升级和回滚演练。
+
 完成条件：
 
+- inventory 与迁移动作只返回版本/哈希/聚合事实，不保存请求、响应或密钥；
+- 开始观察前两个 Access 实例均为 READY，观察同时读取 Access CallRecord 和 BillingEvent；
 - 所有新建厂商默认 SIMPLE；
 - 目标存量厂商完成新版本发布；
 - 异常时只通过版本 rollback 回退，不双发生产请求；
@@ -1321,7 +1331,7 @@ V049 只增加元数据列并将现有记录标记为 `ADVANCED_LEGACY`。
 
 ### 17.7 阶段 6：旧高级写入口收口
 
-状态：**未实施。当前仅阻止 raw 变更/测试/发布/回滚覆盖 SIMPLE；raw validate 是无数据写入的只读例外。**
+状态：**已实现可切换退役门禁，生产最终切换未实施。当前阻止 raw 变更/测试/发布/回滚覆盖 SIMPLE，并阻止 raw PUT 从空白创建新的 `ADVANCED_LEGACY` 草稿；当退役开关开启且数据库事实满足门禁时，既有 raw 写/测试/发布/回滚返回 410；raw validate 是无数据写入的只读例外。**
 
 前置条件必须全部满足：
 
@@ -1337,6 +1347,11 @@ V049 只增加元数据列并将现有记录标记为 `ADVANCED_LEGACY`。
 - 删除前端步骤编辑代码；
 - 保留历史只读计划和 Access 六阶段运行时；
 - 更新 API、部署、Wiki 和迁移文档。
+
+当前实现将上述删除前置条件编码为运行时门禁：`CONNECTOR_LEGACY_WRITE_RETIRED=true` 时，先读取活动
+Legacy 绑定、Legacy 草稿和未结束迁移数量；三者均为 0 才返回 `410 CONNECTOR_LEGACY_WRITE_RETIRED`，
+否则返回 `409 CONNECTOR_LEGACY_WRITE_RETIREMENT_GATE_NOT_PASSED`。事实查询失败会失败关闭；只读历史、
+运行时和 `validate` 不受影响。该开关尚未在生产打开。
 
 ## 18. 实现拆分记录
 
@@ -1468,11 +1483,11 @@ V049 只增加元数据列并将现有记录标记为 `ADVANCED_LEGACY`。
 | 验收层 | 状态 | 当前证据/缺口 |
 |---|---|---|
 | 代码与契约 | 已完成 | SPI、runtime、Masterdata、Access、迁移和前端自动化测试覆盖阶段 0—4 |
-| 隔离 PostgreSQL 迁移 | 已完成 | V049/V050 fresh、upgrade、重复、漂移/HALT、条件 rollback/reapply；临时库退出清理 |
+| 隔离 PostgreSQL 迁移 | 已完成 | V049/V050 fresh、upgrade、重复、漂移/HALT、条件 rollback/reapply，V051 错误码扩容和 V052 CallRecord 接口身份列已在真实隔离库应用并复核；临时库退出清理 |
 | 前端静态与组件验收 | 已完成 | Node 24 lint、typecheck、Vitest、production build |
-| 新工作区登录态浏览器 E2E | 未完成 | 本地页面可渲染，但没有可用登录态和完整后端环境，不能验证真实保存/测试/发布交互 |
-| 本节完整多服务 E2E | 未完成 | PostgreSQL、Redis、Nacos、Identity、Masterdata、Access×2、Billing、Gateway、Web 和三类厂商 fixture 尚未按本节一次性联跑 |
-| 生产发布/容量 | 未完成 | 未迁移生产数据库、未切生产厂商、未执行生产容量、滚动升级或观察窗口 |
+| 新工作区登录态浏览器 E2E | 已完成（隔离环境） | 管理员真实登录后完成接口管理、主备厂商、插件固定版本、单表单保存/校验/受控测试/发布、历史、Simple/Legacy 回滚；未出现 stageKey/capability/order/enabled/TRANSPORT 编辑控件；生产厂商交互仍未执行 |
+| 本节核心多服务 API E2E | 已完成（隔离环境） | `run-api-e2e.sh` 已联跑 PostgreSQL、Redis、Nacos、Identity、Masterdata、Access×2、Billing、Gateway 与签名单插件 fixture，Web 由上方浏览器 E2E 覆盖；覆盖 Legacy inventory 分类（3 个配置、目标分类 `LOSSLESS_CONVERTIBLE`）、单 HTTP、Token+业务请求、有限轮询、错误/缓存/计费/主备实际厂商事实；22/22 条 CallRecord 具备接口身份、插件版本、流水线版本和快照摘要，6/6 条 BillingEvent 具备接口身份，总额 1.25000000、缓存命中 1 次，迁移状态通过 `PREPARED → OBSERVING → READY → STABLE`；fixture 计数器还证明缓存命中不增加主厂商请求、4 个错误不回退、熔断只增加 1 次备用请求，最终 `vendor=24/echo=22/fallback=2/token=2/business=2/asyncSubmit=2/asyncPoll=4`；`observe-capacity.sh` 的 8/32 基线已通过（32/32 CallRecord 事实完整，客户端 p95 183.2ms）。受保护的 `ConnectorProductFlowTest` 已在同一隔离环境以完整 Secret 向量通过 `2/2`；生产厂商对等和滚动升级仍未完成 |
+| 生产发布/容量 | 未完成 | 未迁移生产数据库、未切生产厂商、未执行生产容量、滚动升级或生产观察窗口 |
 
 至少启动：
 
@@ -1490,7 +1505,7 @@ V049 只增加元数据列并将现有记录标记为 `ADVANCED_LEGACY`。
 4. Gateway 单条和批量真实成功；
 5. CallRecord/BillingEvent 的实际版本和摘要一致；
 6. 缓存第二次命中且厂商 fixture 不增加请求；
-7. NOT_SENT 回退和 SENT/MAYBE_SENT 不回退；
+7. 已验证 HTTP 错误为 SENT 不回退、熔断打开为 NOT_SENT 的备用路由门禁，并补充备用配置真实成功和实际厂商 CallRecord 样本；
 8. Token+业务请求的 Session 子调用和总体交付状态正确；
 9. 双 Access 激活、滚动切换、离线缓存和 readiness；
 10. 浏览器无 stageKey/capability/order/Transport 编辑控件；
@@ -1541,16 +1556,16 @@ V049 只增加元数据列并将现有记录标记为 `ADVANCED_LEGACY`。
 
 以下条件全部满足才能将本方案标记为“全部实施并满足生产发布门禁”：
 
-当前分层判定：**阶段 0—4 的仓库实现和隔离自动化验收已完成，但本节整体仍未全部满足**。
-阶段 5、阶段 6、完整多服务/登录态浏览器 E2E 和生产发布门禁均未完成，因此不能宣称本方案已在
-生产上线，也不能关闭本节剩余条目。
+当前分层判定：**阶段 0—4 的仓库实现和隔离自动化验收已完成，阶段 5 控制面与隔离 API/多服务/浏览器验收已完成**。
+阶段 5 生产迁移/观察/容量/滚动升级、阶段 6 最终退役和生产发布门禁仍未完成，因此不能宣称本方案已在
+生产上线，也不能关闭本节剩余生产条目。
 
 | 条目组 | 当前状态 |
 |---|---|
 | 单插件单表单、隐藏计划、SDK/Generic、确定性编译、Manifest v2、V049/V050、模块/前端/架构检查 | 已完成代码与隔离自动化验收 |
 | v1/Legacy 历史零改写与条件回滚 | 已由迁移矩阵和单元/契约测试覆盖；生产回滚演练未执行 |
-| 双 Access、真实 Gateway、调用/计费/缓存副作用、登录态浏览器的本方案完整 E2E | 未完成 |
-| 逐厂商生产迁移、容量/滚动升级、观察窗口、旧 raw 入口最终退役 | 未完成 |
+| 双 Access、真实 Gateway、调用/计费/缓存副作用、登录态浏览器的本方案完整 E2E | 已完成单厂商隔离 API/浏览器验收；生产厂商链路未执行 |
+| 逐厂商生产迁移、生产容量/滚动升级、观察窗口、旧 raw 入口最终退役 | 未完成 |
 
 - 普通连接器页面只选择一个插件和一份配置；
 - 用户不能编辑任何运行步骤字段；
