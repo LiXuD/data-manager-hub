@@ -54,7 +54,7 @@ connector.runtime:
   network-allowed-protocols: [https]
   network-allowed-hosts:
     - ${CONNECTOR_VENDOR_ALLOWED_HOST:api.example.invalid}
-  allow-private-networks: false
+  allow-private-networks: ${CONNECTOR_ALLOW_PRIVATE_NETWORKS:false}
   max-connect-timeout-ms: 5000
   max-read-timeout-ms: 30000
   max-total-timeout-ms: 60000

@@ -50,4 +50,5 @@ masterdata.connector-plugin:
   max-artifact-bytes: ${CONNECTOR_MAX_ARTIFACT_BYTES:52428800}
   max-manifest-bytes: ${CONNECTOR_MAX_MANIFEST_BYTES:262144}
   max-schema-bytes: ${CONNECTOR_MAX_SCHEMA_BYTES:131072}
+  legacy-write-retired: ${CONNECTOR_LEGACY_WRITE_RETIRED:false}
 logging.pattern.console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [%X{traceId}] - %msg%n"
