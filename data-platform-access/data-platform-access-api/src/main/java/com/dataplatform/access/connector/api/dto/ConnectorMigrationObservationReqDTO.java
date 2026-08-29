@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 
 public record ConnectorMigrationObservationReqDTO(
         Long vendorId,
+        Long interfaceId,
         Integer pipelineVersion,
         String snapshotHash,
         LocalDateTime startedAt,

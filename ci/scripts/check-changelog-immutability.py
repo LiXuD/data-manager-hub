@@ -27,7 +27,13 @@ def changesets(content: bytes, path: str) -> dict[tuple[str, str], bytes]:
         key = (node.attrib.get("id", ""), node.attrib.get("author", ""))
         if not all(key):
             raise ValueError(f"{path}: changeset requires id and author")
-        result[key] = ET.tostring(node, encoding="utf-8")
+        # Appending a new sibling changes the previous changeset's indentation
+        # tail. That surrounding whitespace is not part of the published
+        # changeset body and must not make an immutable-history check fail.
+        original_tail = node.tail
+        node.tail = None
+        result[key] = ET.tostring(node, encoding="utf-8", short_empty_elements=True)
+        node.tail = original_tail
     return result
 
 

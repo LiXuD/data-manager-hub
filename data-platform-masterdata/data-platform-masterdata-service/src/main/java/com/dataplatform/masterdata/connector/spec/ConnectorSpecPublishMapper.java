@@ -142,7 +142,7 @@ public interface ConnectorSpecPublishMapper {
                   AND target.spec_hash IS NOT DISTINCT FROM #{row.specHash}
                   AND target.compiler_version IS NOT DISTINCT FROM #{row.compilerVersion}
                   AND target.compile_hash IS NOT DISTINCT FROM #{row.compileHash}
-                  AND (target.connector_spec IS NULL AND #{row.connectorSpec} IS NULL
+                  AND (target.connector_spec IS NULL AND CAST(#{row.connectorSpec} AS jsonb) IS NULL
                        OR target.connector_spec = CAST(#{row.connectorSpec} AS jsonb))
                   AND target.pipeline_snapshot = CAST(#{row.pipelineSnapshot} AS jsonb)
                 FOR KEY SHARE

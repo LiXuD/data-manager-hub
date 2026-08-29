@@ -1,26 +1,73 @@
 {
-  "manifestVersion": "1",
+  "manifestVersion": "2",
   "pluginId": "e2e-signed-connector",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "spiVersion": "1.0",
   "displayName": "E2E Signed Connector",
   "provider": "test-fixture",
   "entryClass": "com.example.dataplatform.fixture.SignedE2eConnectorPlugin",
+  "authoringModel": "SIMPLE_CONNECTOR",
+  "connectorKind": "DEDICATED_VENDOR",
+  "transportMode": "HOST_MANAGED_MULTI_HTTP",
+  "outputMode": "PLUGIN_NORMALIZED",
   "capabilities": [
     "REQUEST_BUILDER",
-    "RESPONSE_PARSER"
+    "TRANSPORT",
+    "RESPONSE_PARSER",
+    "RESPONSE_NORMALIZER"
   ],
+  "compatibility": {
+    "vendorCodes": ["*"],
+    "dataTypeCodes": ["*"]
+  },
   "minHostVersion": "1.0.0",
   "configSchema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "endpoint": {
-        "type": "string",
-        "pattern": "^https://localhost(?::[0-9]+)?/vendor/echo$",
-        "x-help-text": "隔离验收 HTTPS 厂商端点"
-      },
+    "flow": {
+      "type": "string",
+      "enum": ["single-http", "token-business", "async-polling"]
+    },
+    "endpoint": {
+      "type": "string",
+      "pattern": "^https://(localhost|127\\.0\\.0\\.1)(?::[0-9]+)?/vendor/(echo|primary|fallback|http-error|malformed|reject|connection-error|failover)$",
+      "x-help-text": "隔离验收 HTTPS 厂商端点"
+    },
+    "tokenEndpoint": {
+      "type": "string",
+      "pattern": "^https://(localhost|127\\.0\\.0\\.1)(?::[0-9]+)?/vendor/token$"
+    },
+    "businessEndpoint": {
+      "type": "string",
+      "pattern": "^https://(localhost|127\\.0\\.0\\.1)(?::[0-9]+)?/vendor/business$"
+    },
+    "clientId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "clientSecret": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-secret-ref": true,
+      "x-stage-scope": ["REQUEST_BUILDER"]
+    },
+    "submitEndpoint": {
+      "type": "string",
+      "pattern": "^https://(localhost|127\\.0\\.0\\.1)(?::[0-9]+)?/vendor/async/submit$"
+    },
+    "pollEndpointBase": {
+      "type": "string",
+      "pattern": "^https://(localhost|127\\.0\\.0\\.1)(?::[0-9]+)?/?$"
+    },
+    "maxPolls": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4
+    },
       "connectTimeoutMs": {"type": "integer", "minimum": 1, "maximum": 10000},
       "readTimeoutMs": {"type": "integer", "minimum": 1, "maximum": 10000},
       "totalTimeoutMs": {"type": "integer", "minimum": 1, "maximum": 15000},
@@ -29,6 +76,6 @@
   },
   "permissions": {
     "networkProtocols": ["https"],
-    "networkHosts": ["localhost"]
+    "networkHosts": ["localhost", "127.0.0.1"]
   }
 }

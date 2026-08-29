@@ -86,12 +86,12 @@ check_unique_migration_numbers() {
     duplicates="$(find sql/migrations -maxdepth 1 -type f -name 'V[0-9]*__*.sql' -exec basename {} \; \
         | sed 's/__.*//' | sort | uniq -d | grep -v '^V007$' || true)"
     [[ -z "$duplicates" ]] || \
-        fail "迁移编号重复: ${duplicates//$'\n'/ }。除历史 V007 外编号必须唯一，新迁移从 V051 起顺延，详见 sql/MIGRATIONS.md 的编号规则"
+        fail "迁移编号重复: ${duplicates//$'\n'/ }。除历史 V007 外编号必须唯一，新迁移从 V053 起顺延，详见 sql/MIGRATIONS.md 的编号规则"
 
     expected_v007_files=$'V007__add_permission_tables.sql\nV007__create_interface_param.sql'
     historical_v007_files="$(find sql/migrations -maxdepth 1 -type f -name 'V007__*.sql' -exec basename {} \; | sort)"
     [[ "$historical_v007_files" == "$expected_v007_files" ]] || \
-        fail "历史 V007 文件集合发生变化。只允许保留 V007__add_permission_tables.sql 和 V007__create_interface_param.sql；新迁移必须从 V051 起顺延"
+        fail "历史 V007 文件集合发生变化。只允许保留 V007__add_permission_tables.sql 和 V007__create_interface_param.sql；新迁移必须从 V053 起顺延"
 }
 
 run_liquibase() {

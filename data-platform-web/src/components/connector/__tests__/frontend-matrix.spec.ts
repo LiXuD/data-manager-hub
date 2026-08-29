@@ -3,6 +3,7 @@ import schemaField from '../JsonSchemaField.vue?raw'
 import pluginCenter from '../../../views/connector-plugin/index.vue?raw'
 import migrationHistory from '../../../views/connector-migration/index.vue?raw'
 import connectorWorkspace from '../../../views/interface/components/config/VendorConnectorWorkspace.vue?raw'
+import connectorDiagnostics from '../../../views/connector-diagnostics/index.vue?raw'
 import router from '../../../router/index.ts?raw'
 
 describe('connector frontend acceptance matrix', () => {
@@ -32,12 +33,15 @@ describe('connector frontend acceptance matrix', () => {
     expect(schemaField).toContain('writeSecretReference(secretRepresentation.value, value)')
   })
 
-  it('pins product draft CAS and confines engine facts to a read-only advanced plan', () => {
+  it('pins product draft CAS and confines engine facts to the admin diagnostic page', () => {
     expect(connectorWorkspace).toContain('draft.value.draftVersion')
     expect(connectorWorkspace).toContain('saveConnectorSpecDraft')
-    expect(connectorWorkspace).toContain('getConnectorExecutionPlan')
-    expect(connectorWorkspace).toContain('高级执行计划（只读）')
-    expect(connectorWorkspace).toContain('不返回阶段配置或密钥引用')
+    expect(connectorWorkspace).not.toContain('getConnectorExecutionPlan')
+    expect(connectorWorkspace).not.toContain('高级执行计划（只读）')
+    expect(connectorDiagnostics).toContain('getConnectorExecutionPlan')
+    expect(connectorDiagnostics).toContain('不展示连接器配置值、密钥或可编辑控件')
+    expect(connectorDiagnostics).toContain("userStore.hasPermission('system:admin')")
+    expect(router).toContain("path: '/connector-diagnostics'")
     expect(connectorWorkspace).not.toContain('normalizePipelineOrder')
   })
 

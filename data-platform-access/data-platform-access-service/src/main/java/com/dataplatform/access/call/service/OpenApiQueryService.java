@@ -303,6 +303,7 @@ public class OpenApiQueryService {
         record.setTenantId(context.getTenantId());
         record.setCallerId(context.getCallerId());
         record.setApiKeyId(context.getApiKeyId());
+        record.setInterfaceId(context.getInterfaceId());
         record.setVendorId(longValue(result.get("actualVendorId"), context.getVendorId()));
         record.setVendorCode(stringValue(result.get("actualVendorCode")) != null
                 ? stringValue(result.get("actualVendorCode")) : context.getVendorCode());
@@ -551,6 +552,7 @@ public class OpenApiQueryService {
         private Long callerId;
         private Long tenantId;
         private Long apiKeyId;
+        private Long interfaceId;
         private Long vendorId;
         private String vendorCode;
         private String fallbackVendorCode;
@@ -583,6 +585,8 @@ public class OpenApiQueryService {
         public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
         public Long getApiKeyId() { return apiKeyId; }
         public void setApiKeyId(Long apiKeyId) { this.apiKeyId = apiKeyId; }
+        public Long getInterfaceId() { return interfaceId; }
+        public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
         public Long getVendorId() { return vendorId; }
         public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
         public String getVendorCode() { return vendorCode; }

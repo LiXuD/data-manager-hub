@@ -19,9 +19,11 @@ import com.dataplatform.masterdata.connector.mapper.VendorConnectorVersionMapper
 import com.dataplatform.masterdata.connector.mapper.VendorConnectorTestFactMapper;
 import com.dataplatform.masterdata.connector.service.ConnectorConfigSchemaValidator;
 import com.dataplatform.masterdata.connector.service.ConnectorConflictException;
+import com.dataplatform.masterdata.connector.service.ConnectorLegacyWriteRetiredException;
 import com.dataplatform.masterdata.connector.service.ConnectorSecretReferenceService;
 import com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator;
 import com.dataplatform.masterdata.connector.service.VendorConnectorService;
+import com.dataplatform.masterdata.connector.config.ConnectorPluginProperties;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import com.dataplatform.access.connector.api.dto.ConnectorTestPipelineStepDTO;
@@ -35,6 +37,8 @@ import com.dataplatform.api.Result;
 import com.dataplatform.common.plugin.runtime.ConnectorPipelineDefinition;
 import com.dataplatform.common.plugin.runtime.ConnectorSnapshotIntegrity;
 import com.dataplatform.common.plugin.runtime.ConnectorStageDefinition;
+import com.dataplatform.common.plugin.legacy.LegacyHttpConnectorPlugin;
+import com.dataplatform.common.plugin.runtime.PlatformCoreConnectorMetadata;
 import com.dataplatform.plugin.spi.StageCapability;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -66,6 +70,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     private static final int MAX_STEP_CONFIG_BYTES = 64 * 1024;
     private static final String ADVANCED_LEGACY = "ADVANCED_LEGACY";
     private static final String PRODUCT_API_REQUIRED = "SIMPLE_CONNECTOR_REQUIRES_PRODUCT_API";
+    private static final String LEGACY_DRAFT_REQUIRED = "LEGACY_DRAFT_REQUIRED";
 
     private final VendorConnectorVersionMapper connectorMapper;
     private final ConnectorPluginVersionMapper pluginVersionMapper;
@@ -77,6 +82,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     private final ConnectorPluginActivationInternalFeignClient activationClient;
     private final VendorConnectorTestFactMapper testFactMapper;
     private final ObjectMapper objectMapper;
+    private final ConnectorPluginProperties connectorPluginProperties;
 
     public VendorConnectorServiceImpl(
             VendorConnectorVersionMapper connectorMapper,
@@ -88,7 +94,8 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
             VendorConnectorRuntimeInternalFeignClient runtimeClient,
             ConnectorPluginActivationInternalFeignClient activationClient,
             VendorConnectorTestFactMapper testFactMapper,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ConnectorPluginProperties connectorPluginProperties) {
         this.connectorMapper = connectorMapper;
         this.pluginVersionMapper = pluginVersionMapper;
         this.vendorConfigMapper = vendorConfigMapper;
@@ -101,6 +108,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         this.objectMapper = objectMapper.copy()
                 .configure(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY, true)
                 .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+        this.connectorPluginProperties = connectorPluginProperties;
     }
 
     @Override
@@ -129,6 +137,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     @Transactional
     public VendorConnectorDraftDTO saveDraft(Long vendorConfigId, VendorConnectorSaveDraftRequestDTO request,
                                               Long actorId) {
+        requireLegacyWriteEntryAvailable();
         VendorConfig config = requireConfig(vendorConfigId);
         VendorConnectorVersion draft = findDraft(vendorConfigId);
         requireLegacyWritable(draft);
@@ -183,6 +192,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     @Override
     public VendorConnectorTestResultDTO test(Long vendorConfigId, VendorConnectorTestRequestDTO request,
                                               Long actorId) {
+        requireLegacyWriteEntryAvailable();
         requireConfig(vendorConfigId);
         VendorConnectorVersion draft = requireDraft(vendorConfigId);
         requireLegacyWritable(draft);
@@ -216,6 +226,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     @Override
     @Transactional
     public VendorConnectorVersionDTO publish(Long vendorConfigId, Integer expectedDraftVersion, Long actorId) {
+        requireLegacyWriteEntryAvailable();
         VendorConfig config = requireConfig(vendorConfigId);
         VendorConnectorVersion draft = requireDraft(vendorConfigId);
         requireLegacyWritable(draft);
@@ -270,6 +281,7 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     @Transactional
     public VendorConnectorVersionDTO rollback(Long vendorConfigId, Integer targetVersion,
                                                Integer expectedConnectorVersion, Long actorId) {
+        requireLegacyWriteEntryAvailable();
         VendorConfig config = requireConfig(vendorConfigId);
         if (!expectedConnectorVersion.equals(defaultVersion(config.getConnectorVersion()))) {
             throw new ConnectorConflictException("厂商连接器活动版本已变化");
@@ -467,9 +479,28 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
     }
 
     private void requireLegacyWritable(VendorConnectorVersion version) {
-        if (version != null && !ADVANCED_LEGACY.equals(version.getAuthoringMode())) {
+        if (version == null) {
+            throw new ConnectorConflictException(LEGACY_DRAFT_REQUIRED);
+        }
+        if (!ADVANCED_LEGACY.equals(version.getAuthoringMode())) {
             throw new ConnectorConflictException(PRODUCT_API_REQUIRED);
         }
+    }
+
+    private void requireLegacyWriteEntryAvailable() {
+        if (!connectorPluginProperties.isLegacyWriteRetired()) return;
+        VendorConnectorVersionMapper.LegacyWriteRetirementFacts facts =
+                connectorMapper.legacyWriteRetirementFacts();
+        if (facts == null || facts.getActiveLegacyBindings() == null || facts.getActiveLegacyBindings() < 0
+                || facts.getLegacyDrafts() == null || facts.getLegacyDrafts() < 0
+                || facts.getOpenMigrations() == null || facts.getOpenMigrations() < 0) {
+            throw new IllegalStateException("CONNECTOR_LEGACY_WRITE_RETIREMENT_FACTS_INVALID");
+        }
+        if (facts.getActiveLegacyBindings() > 0 || facts.getLegacyDrafts() > 0
+                || facts.getOpenMigrations() > 0) {
+            throw new ConnectorConflictException("CONNECTOR_LEGACY_WRITE_RETIREMENT_GATE_NOT_PASSED");
+        }
+        throw new ConnectorLegacyWriteRetiredException("CONNECTOR_LEGACY_WRITE_RETIRED");
     }
 
     private VendorConnectorVersion findDraft(Long vendorConfigId) {
@@ -589,6 +620,18 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         Set<String> processed = new HashSet<>();
         for (ConnectorPipelineStepDTO step : pipeline) {
             if (Boolean.FALSE.equals(step.enabled())) continue;
+            if (PlatformCoreConnectorMetadata.PLUGIN_ID.equals(step.pluginId())) {
+                if (!PlatformCoreConnectorMetadata.VERSION.equals(step.pluginVersion())) {
+                    throw new ConnectorConflictException("CONNECTOR_PLUGIN_NOT_READY");
+                }
+                continue;
+            }
+            if (LegacyHttpConnectorPlugin.PLUGIN_ID.equals(step.pluginId())) {
+                if (!LegacyHttpConnectorPlugin.VERSION.equals(step.pluginVersion())) {
+                    throw new ConnectorConflictException("CONNECTOR_PLUGIN_NOT_READY");
+                }
+                continue;
+            }
             String key = step.pluginId() + ":" + step.pluginVersion();
             if (!processed.add(key)) continue;
             ConnectorPluginStageReqDTO request = new ConnectorPluginStageReqDTO();

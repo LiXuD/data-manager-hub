@@ -382,6 +382,7 @@ class OpenApiQueryServiceTest {
         context.setTenantId(1L);
         context.setCallerId(20L);
         context.setApiKeyId(10L);
+        context.setInterfaceId(30L);
         context.setVendorId(40L);
         context.setVendorCode("vendor-a");
         context.setDataTypeCode("personal");

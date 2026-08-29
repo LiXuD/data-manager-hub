@@ -30,7 +30,9 @@ import com.dataplatform.masterdata.connector.mapper.VendorConnectorVersionMapper
 import com.dataplatform.masterdata.connector.mapper.VendorConnectorTestFactMapper;
 import com.dataplatform.masterdata.connector.service.ConnectorConfigSchemaValidator;
 import com.dataplatform.masterdata.connector.service.ConnectorConflictException;
+import com.dataplatform.masterdata.connector.service.ConnectorLegacyWriteRetiredException;
 import com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator;
+import com.dataplatform.masterdata.connector.config.ConnectorPluginProperties;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,6 +54,7 @@ class VendorConnectorServiceImplTest {
     private VendorConnectorRuntimeInternalFeignClient runtimeClient;
     private ConnectorPluginReleaseCoordinator releaseCoordinator;
     private ConnectorPluginVersion pluginVersion;
+    private ConnectorPluginProperties connectorPluginProperties;
     private VendorConnectorServiceImpl service;
 
     @BeforeEach
@@ -59,12 +62,13 @@ class VendorConnectorServiceImplTest {
         activationClient = mock(ConnectorPluginActivationInternalFeignClient.class);
         runtimeClient = mock(VendorConnectorRuntimeInternalFeignClient.class);
         releaseCoordinator = mock(ConnectorPluginReleaseCoordinator.class);
+        connectorPluginProperties = new ConnectorPluginProperties();
         service = new VendorConnectorServiceImpl(connectorMapper, pluginMapper, vendorConfigMapper,
                 new ConnectorConfigSchemaValidator(objectMapper),
                 mock(com.dataplatform.masterdata.connector.service.ConnectorSecretReferenceService.class),
                 releaseCoordinator,
                 runtimeClient,
-                activationClient, testFactMapper, objectMapper);
+                activationClient, testFactMapper, objectMapper, connectorPluginProperties);
         VendorConfig vendorConfig = new VendorConfig();
         vendorConfig.setId(7L);
         vendorConfig.setSecurityVersion(3);
@@ -124,6 +128,17 @@ class VendorConnectorServiceImplTest {
     }
 
     @Test
+    void rawRollbackKeepsBuiltInLegacyHttpInProcessWithoutStagingIt() throws Exception {
+        ConnectorPipelineStepDTO transport = new ConnectorPipelineStepDTO(
+                "transport", "TRANSPORT", "legacy-http", "1.0.0", 100, true,
+                Map.of("endpoint", "https://api.example.com"), null);
+
+        ReflectionTestUtils.invokeMethod(service, "ensureRollbackPluginsReady", List.of(transport));
+
+        verify(activationClient, never()).stage(any());
+    }
+
+    @Test
     void nullOptionalConfigValueDoesNotBreakNormalization() throws Exception {
         Map<String, Object> config = new java.util.LinkedHashMap<>();
         config.put("endpoint", null);
@@ -176,6 +191,9 @@ class VendorConnectorServiceImplTest {
     @Test
     void savesDraftTwiceAndIncrementsVersionThroughJsonbSafeCasUpdate() throws Exception {
         AtomicReference<VendorConnectorVersion> stored = new AtomicReference<>();
+        VendorConnectorVersion existing = draft(List.of(step("transport-a", 100)));
+        existing.setId(11L);
+        stored.set(existing);
         when(connectorMapper.selectOne(any())).thenAnswer(invocation -> stored.get());
         doAnswer(invocation -> {
             VendorConnectorVersion inserted = invocation.getArgument(0);
@@ -200,15 +218,15 @@ class VendorConnectorServiceImplTest {
                 });
 
         var first = service.saveDraft(7L,
-                new VendorConnectorSaveDraftRequestDTO(0, List.of(step("transport-a", 100))), 99L);
+                new VendorConnectorSaveDraftRequestDTO(1, List.of(step("transport-a", 100))), 99L);
         ConnectorPipelineStepDTO modified = new ConnectorPipelineStepDTO(
                 "transport-a", "TRANSPORT", "demo-http", "1.0.0", 100,
                 true, Map.of("endpoint", "https://api.example.com/v2"), null);
         var second = service.saveDraft(7L,
-                new VendorConnectorSaveDraftRequestDTO(1, List.of(modified)), 99L);
+                new VendorConnectorSaveDraftRequestDTO(2, List.of(modified)), 99L);
 
-        assertEquals(1, first.draftVersion());
-        assertEquals(2, second.draftVersion());
+        assertEquals(2, first.draftVersion());
+        assertEquals(3, second.draftVersion());
         assertEquals("https://api.example.com/v2",
                 second.pipelineSnapshot().getFirst().config().get("endpoint"));
         assertEquals("ADVANCED_LEGACY", stored.get().getAuthoringMode());
@@ -217,6 +235,7 @@ class VendorConnectorServiceImplTest {
         assertNull(stored.get().getCompilerVersion());
         assertNull(stored.get().getCompileHash());
         verify(connectorMapper).updateDraft(eq(11L), eq(1), any(String.class), eq(3), eq(2), eq(99L));
+        verify(connectorMapper).updateDraft(eq(11L), eq(2), any(String.class), eq(3), eq(3), eq(99L));
     }
 
     @Test
@@ -267,6 +286,61 @@ class VendorConnectorServiceImplTest {
         assertEquals(compileHash, simple.getCompileHash());
         assertEquals(pipeline, simple.getPipelineSnapshot());
         assertEquals("SIMPLE_CONNECTOR", simple.getAuthoringMode());
+    }
+
+    @Test
+    void rawSaveCannotCreateAFromScratchLegacyDraft() {
+        when(connectorMapper.selectOne(any())).thenReturn(null);
+
+        ConnectorConflictException exception = assertThrows(ConnectorConflictException.class,
+                () -> service.saveDraft(7L,
+                        new VendorConnectorSaveDraftRequestDTO(0,
+                                List.of(step("transport-a", 100))), 99L));
+
+        assertEquals("LEGACY_DRAFT_REQUIRED", exception.getMessage());
+        verify(connectorMapper, never()).insert(any(VendorConnectorVersion.class));
+        verify(connectorMapper, never()).updateDraft(any(), any(), any(), any(), any(), any());
+        verifyNoInteractions(pluginMapper, runtimeClient, activationClient, testFactMapper, releaseCoordinator);
+    }
+
+    @Test
+    void rawWriteReturnsGoneAfterRetirementFactsPass() {
+        connectorPluginProperties.setLegacyWriteRetired(true);
+        VendorConnectorVersionMapper.LegacyWriteRetirementFacts facts =
+                new VendorConnectorVersionMapper.LegacyWriteRetirementFacts();
+        facts.setActiveLegacyBindings(0L);
+        facts.setLegacyDrafts(0L);
+        facts.setOpenMigrations(0L);
+        when(connectorMapper.legacyWriteRetirementFacts()).thenReturn(facts);
+
+        ConnectorLegacyWriteRetiredException exception = assertThrows(
+                ConnectorLegacyWriteRetiredException.class,
+                () -> service.saveDraft(7L,
+                        new VendorConnectorSaveDraftRequestDTO(0,
+                                List.of(step("transport-a", 100))), 99L));
+
+        assertEquals("CONNECTOR_LEGACY_WRITE_RETIRED", exception.getMessage());
+        verify(connectorMapper).legacyWriteRetirementFacts();
+        verify(vendorConfigMapper, never()).selectById(7L);
+    }
+
+    @Test
+    void rawWriteRemainsBlockedUntilRetirementFactsPass() {
+        connectorPluginProperties.setLegacyWriteRetired(true);
+        VendorConnectorVersionMapper.LegacyWriteRetirementFacts facts =
+                new VendorConnectorVersionMapper.LegacyWriteRetirementFacts();
+        facts.setActiveLegacyBindings(1L);
+        facts.setLegacyDrafts(0L);
+        facts.setOpenMigrations(0L);
+        when(connectorMapper.legacyWriteRetirementFacts()).thenReturn(facts);
+
+        ConnectorConflictException exception = assertThrows(ConnectorConflictException.class,
+                () -> service.saveDraft(7L,
+                        new VendorConnectorSaveDraftRequestDTO(0,
+                                List.of(step("transport-a", 100))), 99L));
+
+        assertEquals("CONNECTOR_LEGACY_WRITE_RETIREMENT_GATE_NOT_PASSED", exception.getMessage());
+        verify(vendorConfigMapper, never()).selectById(7L);
     }
 
     @Test

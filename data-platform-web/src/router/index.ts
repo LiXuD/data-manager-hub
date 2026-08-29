@@ -67,6 +67,15 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: '/connector-diagnostics',
+        name: 'ConnectorDiagnostics',
+        component: () => import('@/views/connector-diagnostics/index.vue'),
+        meta: {
+          title: '连接器运行诊断',
+          permissions: ['system:admin']
+        }
+      },
+      {
         path: '/caller',
         name: 'Caller',
         component: () => import('@/views/caller/index.vue'),

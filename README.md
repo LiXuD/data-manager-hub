@@ -115,7 +115,7 @@ V044/V045 已完成存量配置迁移与旧字段/静态适配器退役；内置
 | 连接器插件与产品配置 | `/api/v1/connector-plugin/**`、`/api/v1/vendor/config/{id}/connector-spec/**` |
 | Legacy 迁移清点 | `GET /api/v1/vendor/config/connector-spec/inventory` |
 | Legacy 高级流水线兼容 | `/api/v1/vendor/config/{id}/connector/**`（SIMPLE 只读校验；变更接口拒绝） |
-| 已完成迁移历史（只读） | `GET /api/v1/vendor/connector-migration` |
+| 连接器迁移清点与受控推进 | `GET/POST /api/v1/vendor/connector-migration/**` |
 | 接口契约 | `GET/PUT /api/v1/interface/{id}/contract` |
 | 调用方与 API Key | `/api/v1/caller/**`、`/api/v1/caller/apikey/**` |
 | 接口权限申请与审批 | `/api/v1/api-permission/applications/**`、`/api/v1/api-permission/tasks/**`、`/api/v1/api-permission/grants/**` |
@@ -134,7 +134,7 @@ V044/V045 已完成存量配置迁移与旧字段/静态适配器退役；内置
 ### 前置要求
 
 - Java 21+
-- Node.js 20.19+、22.13+ 或 24+
+- Node.js `v22.19.0`（npm `10.9.3`；版本由 `.nvmrc`/`.node-version` 固定）
 - Maven 3.9+
 - Docker (用于基础设施)
 - PostgreSQL 客户端（`psql`、`pg_dump`，用于迁移基线与备份恢复）
@@ -187,9 +187,9 @@ MIGRATION_CONFIRM_ROLLBACK=dataplatform ./migrate-db.sh rollback-count 1
 MIGRATION_CONFIRM_RESTORE=dataplatform ./migrate-db.sh restore path/to/backup.sql
 ```
 
-当前历史 SQL 被固化为 `baseline-2026-07-22` 单一基线，根变更日志最新为 V050。V042—V048 依次
+当前历史 SQL 被固化为 `baseline-2026-07-22` 单一基线，根变更日志最新为 V052。V042—V048 依次
 落地插件控制面、PLUGIN-only、完整性冻结和显式主备路由；V049 增加 Manifest v2、SIMPLE Spec 和
-编译事实；V050 以不可覆盖的静态事实种入 `generic-http:2.0.0`。后续变更必须追加独立 Liquibase
+编译事实；V050 以不可覆盖的静态事实种入 `generic-http:2.0.0`，V051 扩展 CallRecord 连接器错误码的持久化宽度，V052 绑定 CallRecord 的接口身份。后续变更必须追加独立 Liquibase
 changeset；U049/U050 仅在没有 SIMPLE/v2/Generic 引用时允许，其他情况 HALT 并使用前向恢复或备份。
 完整规则见 [数据库迁移说明](sql/MIGRATIONS.md)。
 
@@ -208,13 +208,23 @@ MIGRATION_CONFIRM_BASELINE=dataplatform ./migrate-db.sh baseline
 PGPASSWORD=postgres DB_PORT=15432 bash verify-db-bootstrap.sh
 ```
 
-### 4. 编译后端
+### 4. 一键验收 dev MVP
+
+从 fresh PostgreSQL 开始，脚本会启动本地基础设施，应用 V001—V052 迁移，构建并启动六个服务和前端，种入隔离的 3 家厂商/2 个调用系统/2 类数据场景，然后通过 Gateway 验证审批、OpenAPI、CallRecord、Billing、审计和监控事实：
+
+```bash
+DEV_MVP_SKIP_BUILD=false rtk bash data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh
+```
+
+成功后会在 `data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json` 生成不含密钥的机器可读报告，报告必须显示 `schemaVersion=V052`、`pendingMigrations=0` 和 `status=passed`。失败运行会保留精确的隔离数据库、日志和进程状态用于排查；该夹具不会写入正式迁移。
+
+### 5. 编译后端
 
 ```bash
 mvn clean install -DskipTests
 ```
 
-### 5. 启动微服务
+### 6. 启动微服务
 
 ```bash
 # 网关 (端口 8888)
@@ -229,7 +239,7 @@ mvn spring-boot:run
 ./start-services.sh
 ```
 
-### 6. 启动前端
+### 7. 启动前端
 
 ```bash
 cd data-platform-web
@@ -319,7 +329,8 @@ data-platform/
 | 跨域调用最小权限与领域数据边界整改 | ✅ 100% | 2026-07-14 |
 | 深度清理、契约收敛与知识库刷新 | ✅ 100% | 2026-07-23 |
 | 外部请求连接器插件化阶段 0—5 | ✅ 已实现并通过双 Access 隔离 OpenAPI/浏览器验收（未声称生产部署） | 2026-08-10 |
-| 粗粒度连接器产品模型阶段 0—4 | ✅ 代码与隔离自动化验收完成；逐厂商生产迁移和旧入口退役未完成 | 2026-08-20 |
+| 粗粒度连接器产品模型阶段 0—5 隔离验收 | ✅ 控制面、双 Access 多服务 API、管理员登录态浏览器和 8/32 容量基线已完成；生产迁移/观察、滚动升级和旧入口最终退役未完成 | 2026-08-28 |
+| dev MVP 一键业务闭环 | ✅ fresh V052、3/2/2 夹具、三类连接器流程和审批/OpenAPI/CallRecord/Billing/审计/监控事实已通过本地验收；待最终 SHA CI 与 PR 合入 dev | 2026-08-29 |
 
 ---
 
@@ -334,7 +345,7 @@ data-platform/
 - [发布与回滚 Runbook（生产启用前必须演练）](docs/runbooks/release-deployment.md)
 - [2026-07-23 深度清理审查](docs/2026-07-23-deep-cleanup-review.md)
 - [外部请求连接器插件化升级设计（已实现并通过隔离验收）](docs/2026-08-03-external-request-connector-plugin-upgrade-design.md)
-- [连接器粗粒度插件与配置简化设计（阶段 0—4 已实现，阶段 5—6 待生产门禁）](docs/2026-08-12-connector-product-model-simplification-design.md)
+- [连接器粗粒度插件与配置简化设计（阶段 0—5 隔离验收已完成，生产迁移与阶段 6 待门禁）](docs/2026-08-12-connector-product-model-simplification-design.md)
 - [当前任务清单](PENDING_TASKS.md)
 
 ---

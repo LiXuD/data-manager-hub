@@ -37,12 +37,12 @@ SERVER_PID="$(tr -d '\r\n' < "$PID_FILE")"
 printf 'FIXTURE_HTTPS_PORT=%q\n' "$PORT" >> "$STATE_FILE"
 printf 'FIXTURE_HTTPS_PID=%q\n' "$SERVER_PID" >> "$STATE_FILE"
 printf 'FIXTURE_ARTIFACT_URI=%q\n' \
-  "https://localhost:$PORT/e2e-signed-connector/1.0.0/connector-plugin.jar" >> "$STATE_FILE"
-printf 'FIXTURE_VENDOR_ENDPOINT=%q\n' "https://localhost:$PORT/vendor/echo" >> "$STATE_FILE"
+  "https://127.0.0.1:$PORT/e2e-signed-connector/1.1.0/connector-plugin.jar" >> "$STATE_FILE"
+printf 'FIXTURE_VENDOR_ENDPOINT=%q\n' "https://127.0.0.1:$PORT/vendor/echo" >> "$STATE_FILE"
 
 for attempt in {1..30}; do
   if curl --silent --show-error --fail --cacert "$FIXTURE_TLS_CERTIFICATE" \
-      "https://localhost:$PORT/health" >/dev/null 2>&1; then
+      "https://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
     echo "$SERVER_PID"
     exit 0
   fi

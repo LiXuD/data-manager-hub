@@ -11,7 +11,7 @@ TRUSTSTORE_PASSWORD="${E2E_TLS_TRUSTSTORE_PASSWORD:-changeit}"
 [[ -n "$OUTPUT_DIR" ]] || { echo "用法: $0 <isolated-output-directory>" >&2; exit 2; }
 OUTPUT_DIR="$(mkdir -p "$OUTPUT_DIR" && cd "$OUTPUT_DIR" && pwd)"
 REPOSITORY_DIR="$OUTPUT_DIR/repository"
-ARTIFACT_DIR="$REPOSITORY_DIR/e2e-signed-connector/1.0.0"
+ARTIFACT_DIR="$REPOSITORY_DIR/e2e-signed-connector/1.1.0"
 KEY_DIR="$OUTPUT_DIR/keys"
 TLS_DIR="$OUTPUT_DIR/tls"
 mkdir -p "$ARTIFACT_DIR" "$KEY_DIR" "$TLS_DIR"
@@ -24,7 +24,7 @@ for command_name in mvn java openssl keytool python3 jar; do
 done
 
 (cd "$PROJECT_ROOT" && mvn -q -pl :data-platform-external-connector-fixture -am -DskipTests package)
-SOURCE_JAR="$PROJECT_ROOT/data-platform-test/test-fixtures/external-connector-plugin/target/e2e-signed-connector-1.0.0.jar"
+SOURCE_JAR="$PROJECT_ROOT/data-platform-test/test-fixtures/external-connector-plugin/target/e2e-signed-connector-1.1.0.jar"
 [[ -s "$SOURCE_JAR" ]] || { echo "插件JAR构建失败: $SOURCE_JAR" >&2; exit 1; }
 install -m 0644 "$SOURCE_JAR" "$ARTIFACT_DIR/connector-plugin.jar"
 ARTIFACT_JAR="$ARTIFACT_DIR/connector-plugin.jar"
@@ -47,6 +47,7 @@ SIGNING_PUBLIC_KEY_BASE64="$(tr -d '\r\n' < "$KEY_DIR/ed25519-public.der.b64")"
 openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 2 \
   -config "$SCRIPT_DIR/localhost-openssl.cnf" -extensions extensions \
   -keyout "$TLS_DIR/localhost-key.pem" -out "$TLS_DIR/localhost-cert.pem" >/dev/null 2>&1
+rm -f -- "$TLS_DIR/localhost-truststore.p12"
 keytool -importcert -noprompt -storetype PKCS12 \
   -alias connector-fixture-localhost -file "$TLS_DIR/localhost-cert.pem" \
   -keystore "$TLS_DIR/localhost-truststore.p12" -storepass "$TRUSTSTORE_PASSWORD" >/dev/null

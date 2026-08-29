@@ -81,7 +81,7 @@ Gateway、Web、dbops 和 acceptance 运维/验收镜像。版本合同位于：
 
 - `ci/contracts/runtime-contract.v1.yaml`：九个组件、端口、模块、Nacos Data ID、Secret 引用、
   副本数和生产要求；
-- `ci/contracts/migration-policy.v1.yaml`：PostgreSQL 16、V048—V050 迁移模式和恢复边界；
+- `ci/contracts/migration-policy.v1.yaml`：PostgreSQL 16、V048—V052 迁移模式和恢复边界；
 - `ci/toolchain.lock.yaml`：Java 21、Maven 3.9.15、Node 22.19.0、npm 10.9.3、Helm 3.19.0、
   kubectl 1.33.0、actionlint 1.7.12、promtool 2.54.0 及基础镜像/校验工具 digest；
 - `.mvn/wrapper/maven-wrapper.properties`：Maven 分发 URL 和 SHA-256；`mvnw` 不信任 Runner 预装
@@ -303,7 +303,11 @@ docker run --rm --platform linux/arm64 --entrypoint mvn dmh-local-acceptance:ci 
 ```
 
 该预检只证明依赖闭包、编译和离线生命周期可运行；真实 acceptance 仍必须在 staging/production
-目标集群通过 Failsafe、服务健康、数据断言和 SLO gate，不能把预检当作环境验收。
+目标集群通过 Failsafe、服务健康、数据断言和 SLO gate，不能把预检当作环境验收。当前 acceptance
+镜像已包含 `ConnectorProductFlowTest`：它从受保护的 `dmh-acceptance` Secret 读取完整连接器验收
+向量，缺少任一 `components.acceptance.requiredEnvKeys` 即 fail-closed，并通过真实 Gateway 核对
+inventory、迁移稳定态、请求/响应/错误/缓存/计费、主备实际厂商、CallRecord 完整性事实和有界容量
+P95；该测试不会创建或修改厂商配置。生产仍需为具体厂商配置这些 Secret 并实际运行 Job。
 
 ### 5.2 Manifest 定稿和防 TOCTOU
 
@@ -592,8 +596,10 @@ fail-closed，dbops Job 复用同一运行时 Secret。
 Nacos。`private.pem` 只供 Identity 读取，Secret/RBAC 配置必须限制其 namespace 和读取主体。
 
 Job 的 Secret 注入也有固定边界：dbops 的迁移/Nacos Job 使用 `dmh-runtime`；acceptance Job 同时
-注入 `dmh-runtime,dmh-acceptance`，其中 `dmh-acceptance` 至少提供 `GATEWAY_URL`、`TEST_USERNAME`
-和 `TEST_PASSWORD`。`create-private-job.sh` 在 Job 创建时显式写入
+注入 `dmh-runtime,dmh-acceptance`，其中 `dmh-acceptance` 必须提供
+`runtime-contract.v1.yaml` 的 `components.acceptance.requiredEnvKeys` 全部键，包括 `GATEWAY_URL`、
+`TEST_USERNAME`、`TEST_PASSWORD` 以及连接器请求/错误/缓存/主备和容量向量。缺少任一键时
+`ConnectorProductFlowTest` fail-closed。`create-private-job.sh` 在 Job 创建时显式写入
 `serviceAccountName=dmh-runtime`、`automountServiceAccountToken=false` 和 `envFrom`，不继承
 namespace 的 `default` ServiceAccount，也不在 Job 已创建后修改不可变 PodTemplate；Runner 只负责
 创建/观察 Job，不把 `dmh-deployer` 身份传给迁移、Nacos 或 acceptance 进程。

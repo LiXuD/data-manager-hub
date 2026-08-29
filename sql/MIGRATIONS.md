@@ -5,7 +5,7 @@
 ## 编号规则
 
 - 迁移文件命名为 `V<编号>__<描述>.sql`，**编号必须唯一**，不得与已有文件重号。
-- 当前最新迁移为 **V050**；新迁移一律从 **V051** 起顺延编号。
+- 当前最新迁移为 **V052**；新迁移一律从 **V053** 起顺延编号。
 - **禁止重命名已执行的迁移文件**：文件路径参与 Liquibase changeset 的执行记录与校验（checksum），重命名会破坏已部署环境的校验。
 - 历史事实说明：`V007__add_permission_tables.sql` 与 `V007__create_interface_param.sql` 重号是既成历史，保持原样，不再新增任何重号。
 - 编号唯一性由 `migrate-db.sh` 在 `update`/`dry-run`/`validate`/`baseline` 时自动校验：除历史 V007 外若存在重号，迁移直接失败。
@@ -16,7 +16,7 @@
 - 每个新变更必须是 `db.changelog-master.xml` 中的**独立 changeset**，并带**显式 `<rollback>` 块**（与 changelog 文件头注释一致），rollback 脚本放在 `sql/rollbacks/U<编号>__<描述>.sql`。
 - 实际执行顺序以 **`db.changelog-master.xml` 中的声明顺序为准**，与文件编号或目录列表顺序无关。
 
-## 连接器迁移 V042—V050
+## 连接器迁移 V042—V052
 
 | 版本 | 事实与失败关闭边界 | 回退策略 |
 |---|---|---|
@@ -29,6 +29,8 @@
 | V048 | 校验存量接口/厂商绑定后，建立接口主/备用配置引用、有效绑定唯一性和删除保护 | U048 拒绝原地恢复旧路由约束 |
 | V049 | 增加 Manifest v2 索引投影、`SIMPLE_CONNECTOR` Spec/编译事实和测试门禁，并前向扩展 V047 不可变保护 | 仅无任何 SIMPLE/v2 事实时允许 U049；否则事务 HALT |
 | V050 | 种入与宿主静态事实逐字段一致的内置 `generic-http:2.0.0` 目录版本；不覆盖已有目录行 | 仅无目录漂移、其它版本及任何控制面/运行/调用/计费引用时允许 U050 |
+| V051 | 将 `call_record.error_code` 扩展到 `VARCHAR(64)`，保存完整连接器错误码 | U051 拒绝原地缩回列宽 |
+| V052 | 为 `call_record` 增加可空 `interface_id` 及观察查询索引，绑定调用事实与规范接口身份 | U052 始终拒绝删除已登记的接口身份事实 |
 
 V046 不改写既有 `pipeline_snapshot/snapshot_hash/call_record/billing_event`；V1 通过新增
 `hash_algorithm/integrity_hash` 派生解释，新发布 V2 在每个步骤固化 Artifact/Manifest/Schema 摘要。
@@ -84,3 +86,11 @@ V049→V050、重复执行、parent-only 补 version、目录漂移/其它版本
   HALT 且保留完整 V049 surface。存在产品事实时采用应用/版本回滚或前向修复。
 - U050 只删除 exact 未引用 seed；任何 connector Spec/快照、test binding、activation、call_record、
   billing_event、其它版本或目录漂移都会 HALT。已发布 Generic 事实不得通过删目录“回退”。
+
+V051 将 `call_record.error_code` 从 `VARCHAR(20)` 扩展到 `VARCHAR(64)`，覆盖完整平台连接器错误码（包括
+`TRANSPORT_CONNECTION_ERROR`），避免真实熔断/主备路径在异步调用记录落库时丢失证据。该迁移只扩容，不改写历史值；
+U051 拒绝原地缩回，必须通过经验证的备份恢复或新增前向迁移处理。
+
+V052 为 `call_record` 增加可空 `interface_id`，由 Access 从已解析的接口路由写入，并建立按厂商、接口、流水线、
+快照和时间过滤的观察索引。该迁移不改写历史调用；旧记录保持可读，新增真实调用必须携带规范接口身份，供阶段 5
+观察门禁避免跨接口聚合。U052 拒绝删除该列和索引，必须通过备份恢复或新的前向迁移处理。

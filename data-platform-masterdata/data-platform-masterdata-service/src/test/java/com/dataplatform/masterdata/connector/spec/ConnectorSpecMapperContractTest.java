@@ -195,7 +195,7 @@ class ConnectorSpecMapperContractTest {
         assertTrue(insert.contains("target.snapshot_hash is not distinct from #{row.snapshothash}"));
         assertTrue(insert.contains("target.hash_algorithm is not distinct from #{row.hashalgorithm}"));
         assertTrue(insert.contains("target.integrity_hash is not distinct from #{row.integrityhash}"));
-        assertTrue(insert.contains("target.connector_spec is null and #{row.connectorspec} is null"));
+        assertTrue(insert.contains("target.connector_spec is null and cast(#{row.connectorspec} as jsonb) is null"));
         assertTrue(insert.contains("target.connector_spec = cast(#{row.connectorspec} as jsonb)"));
         assertTrue(insert.contains("target.spec_hash is not distinct from #{row.spechash}"));
         assertTrue(insert.contains("target.compiler_version is not distinct from #{row.compilerversion}"));

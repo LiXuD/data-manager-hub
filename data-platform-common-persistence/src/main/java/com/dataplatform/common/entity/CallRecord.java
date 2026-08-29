@@ -20,6 +20,7 @@ public class CallRecord {
     private Long tenantId;
     private Long callerId;
     private Long apiKeyId;
+    private Long interfaceId;
     private Long vendorId;
     private String vendorCode;
     private String apiCode;
@@ -72,6 +73,8 @@ public class CallRecord {
     public void setCallerId(Long callerId) { this.callerId = callerId; }
     public Long getApiKeyId() { return apiKeyId; }
     public void setApiKeyId(Long apiKeyId) { this.apiKeyId = apiKeyId; }
+    public Long getInterfaceId() { return interfaceId; }
+    public void setInterfaceId(Long interfaceId) { this.interfaceId = interfaceId; }
     public Long getVendorId() { return vendorId; }
     public void setVendorId(Long vendorId) { this.vendorId = vendorId; }
     public String getVendorCode() { return vendorCode; }

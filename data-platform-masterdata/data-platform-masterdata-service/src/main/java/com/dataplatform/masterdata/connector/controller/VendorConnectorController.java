@@ -12,6 +12,7 @@ import com.dataplatform.masterdata.connector.api.dto.VendorConnectorTestRequestD
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorTestResultDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorVersionDTO;
 import com.dataplatform.masterdata.connector.service.ConnectorConflictException;
+import com.dataplatform.masterdata.connector.service.ConnectorLegacyWriteRetiredException;
 import com.dataplatform.masterdata.connector.service.VendorConnectorService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -98,6 +99,11 @@ public class VendorConnectorController {
     @ExceptionHandler(ConnectorConflictException.class)
     public ResponseEntity<Result<Void>> conflict(ConnectorConflictException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Result.error(409, exception.getMessage()));
+    }
+
+    @ExceptionHandler(ConnectorLegacyWriteRetiredException.class)
+    public ResponseEntity<Result<Void>> retired(ConnectorLegacyWriteRetiredException exception) {
+        return ResponseEntity.status(HttpStatus.GONE).body(Result.error(410, exception.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

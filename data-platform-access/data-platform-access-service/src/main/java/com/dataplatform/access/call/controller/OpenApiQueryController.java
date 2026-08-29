@@ -450,6 +450,7 @@ public class OpenApiQueryController {
         context.setCallerId(apiKey.getCallerId());
         context.setTenantId(caller.getTenantId());
         context.setApiKeyId(apiKey.getId());
+        context.setInterfaceId(route.interfaceId());
         context.setVendorId(route.vendorId());
         context.setVendorCode(route.vendorCode());
         context.setFallbackVendorCode(route.fallbackVendorCode());

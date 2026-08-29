@@ -200,15 +200,17 @@ inventory 只返回 config/version/分类/固定原因等摘要，不返回 pipe
 |---|---|---|---|
 | GET | `/vendor/config/{configId}/connector` | `connector-plugin:view` | 当前活动不可变版本；未发布时 `data` 可为空 |
 | GET | `/vendor/config/{configId}/connector/draft` | `connector-plugin:view` | 当前 Legacy 草稿/只读兼容投影 |
-| PUT | `/vendor/config/{configId}/connector/draft` | `connector-plugin:bind` | 仅 ADVANCED_LEGACY 可 CAS 保存完整流水线；SIMPLE 返回 409 |
+| PUT | `/vendor/config/{configId}/connector/draft` | `connector-plugin:bind` | 仅已有 ADVANCED_LEGACY 草稿可 CAS 保存完整流水线；空白创建返回 409 `LEGACY_DRAFT_REQUIRED`，SIMPLE 返回 409 |
 | POST | `/vendor/config/{configId}/connector/validate` | `connector-plugin:bind` | 只读兼容校验；SIMPLE 也可调用，但不写库、不调用 Access、不产生测试/发布事实 |
 | POST | `/vendor/config/{configId}/connector/test` | `connector-plugin:test` | 仅 ADVANCED_LEGACY；SIMPLE 在远程调用和事实写入前返回 409 |
 | POST | `/vendor/config/{configId}/connector/publish` | `connector-plugin:publish` | 仅发布 ADVANCED_LEGACY；SIMPLE 在任何写入前返回 409 |
 | GET | `/vendor/config/{configId}/connector/versions` | `connector-plugin:view` | 查询发布历史 |
-| POST | `/vendor/config/{configId}/connector/rollback/{version}` | `connector-plugin:rollback` | 仅复制 Legacy 历史；SIMPLE 目标返回 409，应使用 connector-spec rollback |
+| POST | `/vendor/config/{configId}/connector/rollback/{version}` | `connector-plugin:rollback` | 仅复制 Legacy 历史；SIMPLE 目标返回 409，应使用 connector-spec rollback；退役门禁通过后返回 410 |
 
 除只读 `validate` 外，raw 变更接口遇到 SIMPLE 草稿/版本统一返回 HTTP 409 和
 `SIMPLE_CONNECTOR_REQUIRES_PRODUCT_API`，不得覆盖 `connector_spec`、编译哈希或快照事实。
+raw PUT 也不再允许从空白创建新的高级草稿，返回 HTTP 409 `LEGACY_DRAFT_REQUIRED`；既有 Legacy 草稿在最终退役门禁前继续保留兼容编辑能力。
+当 Masterdata 的 `masterdata.connector-plugin.legacy-write-retired=true` 且数据库确认活动 Legacy 绑定、Legacy 草稿和未结束迁移均为 0 时，raw PUT/POST 写、测试、发布和回滚统一返回 HTTP 410 `CONNECTOR_LEGACY_WRITE_RETIRED`；事实未满足返回 HTTP 409 `CONNECTOR_LEGACY_WRITE_RETIREMENT_GATE_NOT_PASSED`，事实查询异常则失败关闭。只读 GET 和 `validate` 不受该开关影响。
 
 Legacy 保存草稿请求的 `pipelineSnapshot` 最多 50 步，每个启用流水线必须恰好一个 `TRANSPORT`：
 
@@ -251,16 +253,22 @@ Schema `type=string` 的 `x-secret-ref` 字段提交 secretRef 字符串；`x-se
 password/token/secret/privateKey/certificate 语义时提交 `{"secretRef":"..."}`。后端拒绝明文、
 missing secretRef 和跨 vendor secretRef；测试和运行只解析当前阶段实际引用的最小集合。
 
-迁移计划已经冻结为只读历史：
+迁移计划由 Masterdata 持有，普通查询和受保护的逐厂商控制动作分开：
 
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
 | GET | `/vendor/connector-migration?state={state}` | `connector-plugin:view` | 查询已完成迁移及观察事实 |
+| POST | `/vendor/connector-migration/{vendorConfigId}/prepare` | `connector-plugin:migrate` | 锁定当前 Legacy 活动版本哈希，创建或重置一条迁移记录 |
+| POST | `/vendor/connector-migration/{vendorConfigId}/start-observation` | `connector-plugin:migrate` | 校验当前 SIMPLE 活动版本和两个 Access 实例 READY 后开始观察窗口 |
+| POST | `/vendor/connector-migration/{vendorConfigId}/observe` | `connector-plugin:migrate` | 聚合 Access CallRecord 与 BillingEvent，更新错误率/P95/缓存/计费门禁 |
+| POST | `/vendor/connector-migration/{vendorConfigId}/complete` | `connector-plugin:migrate` | 仅在观察门禁通过后将记录置为 STABLE |
+| POST | `/vendor/connector-migration/{vendorConfigId}/rollback` | `connector-plugin:migrate` | 通过不可变历史版本回滚，并将迁移记录置为 ROLLED_BACK |
 
-旧 migration prepare/execute/policy 写端点已经删除，调用返回 404/405。
+所有写动作都要求 `expectedRecordVersion` CAS；响应只包含版本、哈希、状态和聚合事实，不包含请求/响应报文或密钥。阶段 5 这些控制动作不等于生产迁移完成，仍需在目标环境执行真实厂商对等和观察。
 
 V049/U049 增加 Manifest v2、SIMPLE Spec/编译投影和发布冻结约束；V050/U050 种入不可覆盖的
-`generic-http:2.0.0` 静态目录事实。隔离回归入口分别为
+`generic-http:2.0.0` 静态目录事实；V051 将 `call_record.error_code` 扩展到 `VARCHAR(64)`，
+覆盖完整平台连接器错误类别；V052 为 `call_record` 增加可空 `interface_id`，让观察聚合按规范接口身份过滤。隔离回归入口分别为
 `verify-v049-connector-product-spec.sh` 和 `verify-v050-generic-http.sh`；脚本通过只允许匹配
 `dataplatform_v049_*_regression`/`dataplatform_v050_*_regression` 的临时数据库验证 fresh、升级、重复、
 漂移/HALT 原子性、条件回滚和重新应用。该证据不表示迁移已在生产数据库执行。

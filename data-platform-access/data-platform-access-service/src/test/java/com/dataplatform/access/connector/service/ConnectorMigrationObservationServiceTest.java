@@ -34,7 +34,7 @@ class ConnectorMigrationObservationServiceTest {
         LocalDateTime startedAt = LocalDateTime.now().minusHours(1);
         LocalDateTime endedAt = LocalDateTime.now();
         var result = service.observe(new ConnectorMigrationObservationReqDTO(
-                7L, 3, "a".repeat(64), startedAt, endedAt));
+                7L, 8L, 3, "a".repeat(64), startedAt, endedAt));
 
         assertEquals(20, result.totalCalls());
         assertEquals(0.1D, result.errorRate());
@@ -44,17 +44,18 @@ class ConnectorMigrationObservationServiceTest {
         ArgumentCaptor<QueryWrapper<CallRecord>> query = (ArgumentCaptor) ArgumentCaptor.forClass(QueryWrapper.class);
         verify(mapper).selectMaps(query.capture());
         String sql = query.getValue().getCustomSqlSegment();
-        assertEquals(true, sql.contains("vendor_id") && sql.contains("pipeline_version")
+        assertEquals(true, sql.contains("vendor_id") && sql.contains("interface_id")
+                && sql.contains("pipeline_version")
                 && sql.contains("snapshot_hash") && sql.contains("call_time"));
         assertEquals(true, query.getValue().getParamNameValuePairs().values().containsAll(
-                List.of(7L, 3, "a".repeat(64), startedAt, endedAt)));
+                List.of(7L, 8L, 3, "a".repeat(64), startedAt, endedAt)));
     }
 
     @Test
     void rejectsMissingOrMalformedTraceIdentity() {
         assertThrows(IllegalArgumentException.class, () -> service.observe(
-                new ConnectorMigrationObservationReqDTO(7L, 3, "short", LocalDateTime.now(), null)));
+                new ConnectorMigrationObservationReqDTO(7L, 8L, 3, "short", LocalDateTime.now(), null)));
         assertThrows(IllegalArgumentException.class, () -> service.observe(
-                new ConnectorMigrationObservationReqDTO(7L, null, "a".repeat(64), LocalDateTime.now(), null)));
+                new ConnectorMigrationObservationReqDTO(7L, 8L, null, "a".repeat(64), LocalDateTime.now(), null)));
     }
 }

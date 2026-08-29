@@ -58,6 +58,34 @@ acceptance 因 Maven/Failsafe 会写多个 module-local `target`，仅允许 acc
 Maven mirror。两者仍禁止提权、特权、hostPath/CSI、任意 Secret 和 ServiceAccount token。失败 Job
 保留现场，不自动重试或复用名称。
 
+### 2.1 连接器产品模型验收合同
+
+staging/production 的 `dmh-acceptance` 必须提供
+[`runtime-contract.v1.yaml`](../../ci/contracts/runtime-contract.v1.yaml) 中
+`components.acceptance.requiredEnvKeys` 的全部键名。值只能存放在受保护 Secret 中，不得写入
+Workflow、ConfigMap、Job 参数或验收日志。`ConnectorProductFlowTest` 会在缺少任一键时于测试类
+初始化阶段失败，因此 acceptance 不会静默降级为只有旧 UAPI smoke。
+
+其中 `GATEWAY_URL` 必须是当前目标环境的内部 Gateway 地址，不能依赖测试基类的 localhost 默认值。
+该测试使用预先批准的合成/厂商安全目标，只读核对管理 API，不创建或修改厂商配置；通过真实 Gateway
+完成以下闭环：
+
+- 受控容量请求全部成功，客户端 P95 不超过 `TEST_CONNECTOR_CAPACITY_P95_LIMIT_MS`，并等待每条
+  CallRecord 的接口身份、实际厂商、插件版本、流水线版本和快照/完整性摘要落库；
+- 核对 Simple 草稿、固定插件版本、只读执行计划、Legacy inventory 排除目标以及
+  `PREPARED → OBSERVING → READY → STABLE` 迁移事实；
+- 真实请求/响应、错误码、缓存 miss/hit、失败零计费、Billing 聚合以及 SENT 不回退和熔断后
+  FALLBACK 的实际厂商事实；
+- 调用旧 raw test 入口，状态码和错误码由 Secret 中的
+  `TEST_CONNECTOR_RAW_TEST_EXPECTED_STATUS/TEST_CONNECTOR_RAW_TEST_EXPECTED_CODE` 绑定，既能验证
+  当前 409 收口边界，也能在最终退役后验证 410；
+- 主备路由和备用配置 ID/厂商 ID 对等，所有向量的参数必须指向该验收目标；缓存参数必须包含
+  `${RUN_ID}`，避免复用上一次运行的缓存。
+
+验收输出只保留状态、计数、延迟和事实摘要，不输出 API Key、密码、SecretRef 或请求/响应正文。
+本合同落地不等于生产已通过：仍需在目标环境用真实 Secret 执行 acceptance Job，并归档当前
+source SHA、Manifest digest、Job 日志摘要、CallRecord/Billing 证据、容量和回滚 receipt。
+
 ## 3. 失败处置
 
 | 失败阶段 | 自动动作 | 人工动作 |

@@ -30,6 +30,7 @@ public class ConnectorMigrationObservationService {
                 "SUM(CASE WHEN cache_hit THEN 1 ELSE 0 END) AS cache_hit_calls",
                 "SUM(CASE WHEN NOT cache_hit THEN 1 ELSE 0 END) AS realtime_calls")
                 .eq("vendor_id", request.vendorId())
+                .eq("interface_id", request.interfaceId())
                 .eq("pipeline_version", request.pipelineVersion())
                 .eq("snapshot_hash", request.snapshotHash())
                 .ge("call_time", request.startedAt())
@@ -46,9 +47,11 @@ public class ConnectorMigrationObservationService {
     }
 
     private void validate(ConnectorMigrationObservationReqDTO request) {
-        if (request == null || request.vendorId() == null || request.pipelineVersion() == null
+        if (request == null || request.vendorId() == null || request.interfaceId() == null
+                || request.pipelineVersion() == null
                 || !StringUtils.hasText(request.snapshotHash()) || request.startedAt() == null) {
-            throw new IllegalArgumentException("vendorId, pipelineVersion, snapshotHash and startedAt are required");
+            throw new IllegalArgumentException(
+                    "vendorId, interfaceId, pipelineVersion, snapshotHash and startedAt are required");
         }
         if (request.snapshotHash().length() != 64) {
             throw new IllegalArgumentException("snapshotHash must be a SHA-256 value");

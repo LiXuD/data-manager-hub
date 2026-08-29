@@ -34,6 +34,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.dataplatform.access.connector.api.dto.ConnectorPluginActivationSummaryDTO;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.plugin.runtime.PlatformCoreConnectorMetadata;
+import com.dataplatform.common.plugin.legacy.LegacyHttpConnectorPlugin;
 import java.util.List;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.mockito.ArgumentCaptor;
@@ -87,6 +88,29 @@ class ConnectorPluginCatalogServiceImplTest {
 
         assertTrue(result.getReady());
         assertEquals("STAGING", version.getStatus());
+        assertNull(version.getSafeErrorCode());
+        assertNull(version.getSafeErrorDigest());
+        assertClearsSafeErrors(captureLastUpdate(versionMapper));
+    }
+
+    @Test
+    void activeVersionCanBeRestagedWithoutDowngradingCatalogStatus() {
+        ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        ConnectorPluginVersion version = failedVersion("ACTIVE");
+        when(versionMapper.selectOne(any())).thenReturn(version);
+        ConnectorPluginActivationInternalFeignClient activationClient =
+                mock(ConnectorPluginActivationInternalFeignClient.class);
+        ConnectorPluginActivationSummaryDTO ready = new ConnectorPluginActivationSummaryDTO();
+        ready.setReady(true);
+        ready.setInstances(List.of(new ConnectorPluginActivationDTO()));
+        when(activationClient.stage(any())).thenReturn(Result.success(ready));
+        ConnectorPluginCatalogServiceImpl service = service(versionMapper,
+                mock(VendorConnectorTestFactMapper.class), mock(PluginArtifactVerifier.class), activationClient);
+
+        ConnectorPluginActivationSummaryDTO result = service.stage("demo", "1.0.0");
+
+        assertTrue(result.getReady());
+        assertEquals("ACTIVE", version.getStatus());
         assertNull(version.getSafeErrorCode());
         assertNull(version.getSafeErrorDigest());
         assertClearsSafeErrors(captureLastUpdate(versionMapper));
@@ -245,7 +269,7 @@ class ConnectorPluginCatalogServiceImplTest {
     }
 
     @Test
-    void requiredArtifactsSkipsOnlyExactPlatformCoreAndKeepsVendorArtifact() {
+    void requiredArtifactsSkipsBuiltInsAndKeepsVendorArtifact() {
         VendorConfigMapper configMapper = mock(VendorConfigMapper.class);
         VendorConnectorVersionMapper connectorMapper = mock(VendorConnectorVersionMapper.class);
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
@@ -258,8 +282,10 @@ class ConnectorPluginCatalogServiceImplTest {
                    "pluginId":"platform-core","pluginVersion":"1.0.0","order":2,"enabled":true,"config":{}},
                   {"stageKey":"platform.response-normalizer","capability":"RESPONSE_NORMALIZER",
                    "pluginId":"platform-core","pluginVersion":"1.0.0","order":3,"enabled":true,"config":{}}
+                  ,{"stageKey":"connector.response-parser","capability":"RESPONSE_PARSER",
+                   "pluginId":"%s","pluginVersion":"%s","order":4,"enabled":true,"config":{}}
                 ]
-                """);
+                """.formatted(LegacyHttpConnectorPlugin.PLUGIN_ID, LegacyHttpConnectorPlugin.VERSION));
         when(configMapper.selectList(any())).thenReturn(List.of(config));
         when(connectorMapper.selectById(88L)).thenReturn(connector);
         when(versionMapper.selectOne(any())).thenReturn(catalogVersion("vendor-http", "2.0.0"));
@@ -271,6 +297,26 @@ class ConnectorPluginCatalogServiceImplTest {
         assertEquals(1, artifacts.size());
         assertEquals("vendor-http", artifacts.getFirst().pluginId());
         verify(versionMapper, org.mockito.Mockito.times(1)).selectOne(any());
+    }
+
+    @Test
+    void requiredArtifactsRejectsWrongLegacyHttpVersionWithoutCatalogLookup() {
+        VendorConfigMapper configMapper = mock(VendorConfigMapper.class);
+        VendorConnectorVersionMapper connectorMapper = mock(VendorConnectorVersionMapper.class);
+        ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        when(configMapper.selectList(any())).thenReturn(List.of(activeConfig(77L, 88L)));
+        when(connectorMapper.selectById(88L)).thenReturn(activePipeline(77L, """
+                [{"stageKey":"connector.response-parser","capability":"RESPONSE_PARSER",
+                  "pluginId":"legacy-http","pluginVersion":"1.0.1","order":1,"enabled":true,"config":{}}]
+                """));
+        ConnectorPluginCatalogServiceImpl service = catalogService(
+                versionMapper, connectorMapper, configMapper);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                service::requiredArtifacts);
+
+        assertEquals("LEGACY_HTTP_VERSION_INVALID", error.getMessage());
+        verify(versionMapper, never()).selectOne(any());
     }
 
     @Test
