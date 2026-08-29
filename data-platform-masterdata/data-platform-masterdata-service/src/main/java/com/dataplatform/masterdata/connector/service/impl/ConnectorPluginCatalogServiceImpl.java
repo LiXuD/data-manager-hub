@@ -30,6 +30,7 @@ import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.plugin.artifact.PluginManifest;
 import com.dataplatform.common.plugin.artifact.PluginManifestReader;
 import com.dataplatform.common.plugin.runtime.PlatformCoreConnectorMetadata;
+import com.dataplatform.common.plugin.legacy.LegacyHttpConnectorPlugin;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
@@ -159,10 +160,14 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
     @Override
     public ConnectorPluginActivationSummaryDTO stage(String pluginId, String version) {
         ConnectorPluginVersion current = requireVersion(pluginId, version);
-        if (!List.of(VERIFIED, STAGING_FAILED, STAGING).contains(current.getStatus())) {
+        boolean active = ACTIVE.equals(current.getStatus());
+        if (!active && !List.of(VERIFIED, STAGING_FAILED, STAGING).contains(current.getStatus())) {
             throw new ConnectorConflictException("只有已验证或预加载失败的插件版本可以进入STAGING");
         }
-        persistSuccessfulState(current, STAGING, null, null);
+        // An ACTIVE catalogue version can be released from an Access runtime while it has
+        // no published binding yet. Publishing that first binding must be able to preload it
+        // again without moving the catalogue version backwards to STAGING.
+        persistSuccessfulState(current, active ? ACTIVE : STAGING, null, null);
         ConnectorPluginStageReqDTO request = new ConnectorPluginStageReqDTO();
         request.setPluginId(pluginId);
         request.setPluginVersion(version);
@@ -170,14 +175,14 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
             ConnectorPluginActivationSummaryDTO summary = requireSuccess(activationClient.stage(request));
             if (Boolean.FALSE.equals(summary.getReady()) && summary.getInstances().stream()
                     .anyMatch(instance -> "FAILED".equals(instance.getState()))) {
-                current.setStatus(STAGING_FAILED);
+                current.setStatus(active ? ACTIVE : STAGING_FAILED);
                 current.setSafeErrorCode("ACCESS_PRELOAD_FAILED");
                 current.setSafeErrorDigest("至少一个Access实例预加载失败");
                 versionMapper.updateById(current);
             }
             return summary;
         } catch (RuntimeException exception) {
-            current.setStatus(STAGING_FAILED);
+            current.setStatus(active ? ACTIVE : STAGING_FAILED);
             current.setSafeErrorCode("ACCESS_PRELOAD_UNAVAILABLE");
             current.setSafeErrorDigest(safeDigest(exception.getMessage()));
             versionMapper.updateById(current);
@@ -285,6 +290,12 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
                 if (PlatformCoreConnectorMetadata.PLUGIN_ID.equals(step.pluginId())) {
                     if (!PlatformCoreConnectorMetadata.VERSION.equals(step.pluginVersion())) {
                         throw new IllegalStateException("PLATFORM_CORE_VERSION_INVALID");
+                    }
+                    continue;
+                }
+                if (LegacyHttpConnectorPlugin.PLUGIN_ID.equals(step.pluginId())) {
+                    if (!LegacyHttpConnectorPlugin.VERSION.equals(step.pluginVersion())) {
+                        throw new IllegalStateException("LEGACY_HTTP_VERSION_INVALID");
                     }
                     continue;
                 }

@@ -11,6 +11,7 @@ import com.dataplatform.access.connector.api.feign.VendorConnectorRuntimeInterna
 import com.dataplatform.api.Result;
 import com.dataplatform.common.plugin.artifact.PluginManifest;
 import com.dataplatform.common.plugin.artifact.PluginManifestReader;
+import com.dataplatform.common.plugin.legacy.LegacyHttpConnectorPlugin;
 import com.dataplatform.common.plugin.runtime.ConnectorSnapshotIntegrity;
 import com.dataplatform.common.plugin.runtime.ConnectorStageDefinition;
 import com.dataplatform.common.plugin.runtime.PlatformCoreConnectorMetadata;
@@ -1093,6 +1094,12 @@ public class ConnectorSpecServiceImpl implements ConnectorSpecService {
                 }
                 continue;
             }
+            if (LegacyHttpConnectorPlugin.PLUGIN_ID.equals(pluginId)) {
+                if (!LegacyHttpConnectorPlugin.VERSION.equals(pluginVersion)) {
+                    throw new ConnectorConflictException("CONNECTOR_PLUGIN_NOT_READY");
+                }
+                continue;
+            }
             coordinates.putIfAbsent(pluginId + ":" + pluginVersion,
                     new PluginCoordinate(pluginId, pluginVersion));
         }
@@ -1404,9 +1411,9 @@ public class ConnectorSpecServiceImpl implements ConnectorSpecService {
                     || !Objects.equals(entity.getMinHostVersion(), manifest.minHostVersion())
                     || !Objects.equals(entity.getManifestVersion(), manifest.manifestVersion())
                     || !Objects.equals(entity.getAuthoringModel(), manifest.authoringModel().name())
-                    || !Objects.equals(entity.getConnectorKind(), manifest.connectorKind().name())
-                    || !Objects.equals(entity.getTransportMode(), manifest.transportMode().name())
-                    || !Objects.equals(entity.getOutputMode(), manifest.outputMode().name())
+                    || !Objects.equals(entity.getConnectorKind(), enumName(manifest.connectorKind()))
+                    || !Objects.equals(entity.getTransportMode(), enumName(manifest.transportMode()))
+                    || !Objects.equals(entity.getOutputMode(), enumName(manifest.outputMode()))
                     || !jsonEquals(entity.getCompatibilityManifest(), compatibility)
                     || !jsonEquals(entity.getConfigSchemaJson(), manifest.configSchema().toString())
                     || !readStrings(entity.getCapabilities()).equals(manifest.capabilities().stream()
@@ -1430,6 +1437,14 @@ public class ConnectorSpecServiceImpl implements ConnectorSpecService {
     private VerifiedPluginArtifact artifact(ConnectorPluginVersion entity, PluginManifest manifest) {
         JsonNode root = readTree(entity.getManifestJson());
         String description = root.path("description").isTextual() ? root.path("description").asText() : null;
+        String compatibilityJson;
+        try {
+            compatibilityJson = "2".equals(manifest.manifestVersion())
+                    ? canonicalCompatibility(new PluginManifestReader(objectMapper), entity.getManifestJson())
+                    : "{}";
+        } catch (Exception exception) {
+            throw new IllegalStateException("PLUGIN_SIGNED_PROJECTION_DRIFT", exception);
+        }
         return new VerifiedPluginArtifact(entity.getPluginId(), entity.getVersion(), entity.getSpiVersion(),
                 manifest.displayName(), manifest.provider(), description, entity.getEntryClass(),
                 entity.getArtifactUri(), entity.getArtifactSha256(), entity.getDetachedSignature(),
@@ -1437,7 +1452,7 @@ public class ConnectorSpecServiceImpl implements ConnectorSpecService {
                 readStrings(entity.getCapabilities()), entity.getPermissionManifest(), entity.getMinHostVersion(),
                 manifest.configSchema(), entity.getManifestVersion(), manifest.authoringModel(),
                 manifest.connectorKind(), manifest.transportMode(), manifest.outputMode(),
-                manifest.compatibility(), entity.getCompatibilityManifest());
+                manifest.compatibility(), compatibilityJson);
     }
 
     private ConnectorSpecDraftViewDTO view(VendorConnectorVersion draft, TransactionFacts facts) {
@@ -1680,6 +1695,10 @@ public class ConnectorSpecServiceImpl implements ConnectorSpecService {
     private ConnectorSpecCatalogDTO.Compatibility compatibility(PluginManifest manifest) {
         return new ConnectorSpecCatalogDTO.Compatibility(manifest.compatibility().vendorCodes().stream()
                 .sorted().toList(), manifest.compatibility().dataTypeCodes().stream().sorted().toList());
+    }
+
+    private String enumName(Enum<?> value) {
+        return value == null ? null : value.name();
     }
 
     private List<String> readStrings(String json) {

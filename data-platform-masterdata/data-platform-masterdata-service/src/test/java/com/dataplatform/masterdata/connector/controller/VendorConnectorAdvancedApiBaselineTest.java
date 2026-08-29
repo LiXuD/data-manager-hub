@@ -15,6 +15,7 @@ import com.dataplatform.masterdata.connector.api.dto.VendorConnectorRollbackRequ
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorSaveDraftRequestDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorTestRequestDTO;
 import com.dataplatform.masterdata.connector.service.VendorConnectorService;
+import com.dataplatform.masterdata.connector.service.ConnectorLegacyWriteRetiredException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
@@ -78,6 +79,17 @@ class VendorConnectorAdvancedApiBaselineTest {
             assertSame(expected, result.getData());
             verify(service).saveDraft(42L, request, 99L);
         }
+    }
+
+    @Test
+    void retiredRawWriteSurfaceUsesHttpGone() {
+        VendorConnectorController controller = new VendorConnectorController(mock(VendorConnectorService.class));
+
+        var response = controller.retired(new ConnectorLegacyWriteRetiredException(
+                "CONNECTOR_LEGACY_WRITE_RETIRED"));
+
+        assertEquals(410, response.getStatusCode().value());
+        assertEquals(410, response.getBody().getCode());
     }
 
     private void assertGet(String name, Class<?>[] parameters, String path) throws Exception {

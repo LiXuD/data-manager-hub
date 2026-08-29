@@ -16,6 +16,7 @@ public class ConnectorPluginProperties {
     private int maxArtifactBytes = 50 * 1024 * 1024;
     private int maxManifestBytes = 256 * 1024;
     private int maxSchemaBytes = 128 * 1024;
+    private boolean legacyWriteRetired;
 
     public List<String> getArtifactAllowedHosts() { return artifactAllowedHosts; }
     public void setArtifactAllowedHosts(List<String> artifactAllowedHosts) {
@@ -35,4 +36,8 @@ public class ConnectorPluginProperties {
     public void setMaxManifestBytes(int maxManifestBytes) { this.maxManifestBytes = maxManifestBytes; }
     public int getMaxSchemaBytes() { return maxSchemaBytes; }
     public void setMaxSchemaBytes(int maxSchemaBytes) { this.maxSchemaBytes = maxSchemaBytes; }
+    public boolean isLegacyWriteRetired() { return legacyWriteRetired; }
+    public void setLegacyWriteRetired(boolean legacyWriteRetired) {
+        this.legacyWriteRetired = legacyWriteRetired;
+    }
 }

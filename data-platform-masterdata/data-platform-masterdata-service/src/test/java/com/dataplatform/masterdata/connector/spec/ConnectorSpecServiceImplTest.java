@@ -219,6 +219,9 @@ class ConnectorSpecServiceImplTest {
     @Test
     void conversionCasWritesOneSimpleDraftAndPreservesActiveBinding() throws Exception {
         ConnectorPluginVersion generic = genericPlugin();
+        // PostgreSQL JSONB retrieval is not a canonical serialization; the compiler must
+        // compare signed compatibility facts semantically while passing canonical JSON onward.
+        generic.setCompatibilityManifest("{\"vendorCodes\":[\"*\"], \"dataTypeCodes\":[\"*\"]}");
         stubGenericPlugin(generic);
         ConnectorSpecFactsMapper.VendorFacts vendor = vendorFacts();
         vendor.setActiveConnectorVersionId(77L);
@@ -1003,7 +1006,7 @@ class ConnectorSpecServiceImplTest {
         target.setPublishedAt(java.time.LocalDateTime.now());
         target.setPipelineSnapshot(mapper.writeValueAsString(List.of(
                 step("legacy.builder", "REQUEST_BUILDER", "legacy-vendor", 100),
-                step("platform.transport", "TRANSPORT", "platform-core", 200),
+                step("legacy.transport", "TRANSPORT", "legacy-http", 200),
                 step("legacy.parser", "RESPONSE_PARSER", "legacy-vendor", 300))));
         VendorConnectorVersion current = activeVersion(77L, "ADVANCED_LEGACY");
         ConnectorSpecPublishMapper.ControlFacts control = control(3, 77L);
@@ -1040,6 +1043,7 @@ class ConnectorSpecServiceImplTest {
         verify(activationClient).stage(stage.capture());
         assertEquals("legacy-vendor", stage.getValue().getPluginId());
         assertEquals("2.0.0", stage.getValue().getPluginVersion());
+        verify(activationClient, times(1)).stage(any());
         verify(publishMapper).supersedeActive(eq(77L), eq(CONFIG_ID), eq(99L), any());
         verify(publishMapper).casActivePointer(eq(CONFIG_ID), eq(3), eq(77L), eq(601L), any());
         verify(releaseCoordinator).reconcileAfterCommit();
@@ -1410,7 +1414,8 @@ class ConnectorSpecServiceImplTest {
 
     private ConnectorPipelineStepDTO step(String key, String capability, String pluginId, int order) {
         return new ConnectorPipelineStepDTO(key, capability, pluginId,
-                "platform-core".equals(pluginId) ? "1.0.0" : "2.0.0", order, true,
+                "platform-core".equals(pluginId) || "legacy-http".equals(pluginId)
+                        ? "1.0.0" : "2.0.0", order, true,
                 Map.of("secretRef", "top-secret"), "c".repeat(64), "a".repeat(64),
                 "b".repeat(64), "d".repeat(64));
     }
