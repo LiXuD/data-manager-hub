@@ -25,6 +25,6 @@
     </dependencies>
 
     <build>
-        <finalName>e2e-signed-connector-1.0.0</finalName>
+        <finalName>e2e-signed-connector-1.1.0</finalName>
     </build>
 </project>
