@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import connectorWorkspace from '../../../views/interface/components/config/VendorConnectorWorkspace.vue?raw'
+import connectorDiagnostics from '../../../views/connector-diagnostics/index.vue?raw'
 
 describe('advanced connector workspace baseline', () => {
   it('removes editable engine stages from the ordinary product workflow', () => {
@@ -19,7 +20,12 @@ describe('advanced connector workspace baseline', () => {
     }
     expect(connectorWorkspace).toContain('选择一个固定插件版本，只填写一次业务配置')
     expect(connectorWorkspace).toContain('v-model="formConfig"')
-    expect(connectorWorkspace).toContain('高级执行计划（只读）')
+    expect(connectorWorkspace).not.toContain('高级执行计划（只读）')
+    expect(connectorDiagnostics).toContain('getConnectorExecutionPlan')
+    for (const field of ['prop="stageKey"', 'prop="capability"', 'prop="order"', 'TRANSPORT']) {
+      expect(connectorDiagnostics).toContain(field)
+      expect(connectorWorkspace).not.toContain(field)
+    }
   })
 
   it('uses product CAS and keeps Legacy and raw pipeline access read-only', () => {
@@ -36,5 +42,6 @@ describe('advanced connector workspace baseline', () => {
     expect(connectorWorkspace).not.toContain('testVendorConnector')
     expect(connectorWorkspace).not.toContain('publishVendorConnector')
     expect(connectorWorkspace).toContain('不可变发布版本')
+    expect(connectorDiagnostics).toContain("userStore.hasPermission('system:admin')")
   })
 })

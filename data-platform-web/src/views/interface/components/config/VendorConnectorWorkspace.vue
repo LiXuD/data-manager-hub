@@ -5,7 +5,6 @@ import { useUserStore } from '@/stores/user'
 import { getConfigByVendor } from '@/api/config'
 import {
   convertLegacyConnectorSpec,
-  getConnectorExecutionPlan,
   getConnectorSpecCatalog,
   getConnectorSpecCatalogVersions,
   getConnectorSpecDraft,
@@ -26,14 +25,12 @@ import {
 import JsonEditor from '@/components/common/JsonEditor.vue'
 import JsonSchemaForm from '@/components/connector/JsonSchemaForm.vue'
 import type {
-  ConnectorExecutionPlan,
   ConnectorSpec,
   ConnectorSpecCatalogEntry,
   ConnectorSpecCatalogVersion,
   ConnectorSpecConversionPreview,
   ConnectorSpecDraftView,
   ConnectorSpecHistoryVersion,
-  ConnectorSpecResponseMapping,
   ConnectorSpecUpgradePreview,
   ConnectorSpecValidationResult,
   ConnectorTestResult,
@@ -56,8 +53,6 @@ const catalog = ref<ConnectorSpecCatalogEntry[]>([])
 const catalogVersions = ref<ConnectorSpecCatalogVersion[]>([])
 const draft = ref<ConnectorSpecDraftView | null>(null)
 const history = ref<ConnectorSpecHistoryVersion[]>([])
-const plan = ref<ConnectorExecutionPlan | null>(null)
-const planVersion = ref<number | undefined>()
 const validation = ref<ConnectorSpecValidationResult | null>(null)
 const testResult = ref<ConnectorTestResult | null>(null)
 const conversionPreview = ref<ConnectorSpecConversionPreview | null>(null)
@@ -66,13 +61,11 @@ const pendingPluginVersion = ref('')
 const selectedPluginId = ref('')
 const selectedPluginVersion = ref('')
 const formConfig = ref<Record<string, unknown>>({})
-const responseMapping = ref<ConnectorSpecResponseMapping[] | null>(null)
 const secretRefs = ref<string[]>(['vendor.secretKey'])
 const testVisible = ref(false)
 const testParams = ref('{}')
 const historyVisible = ref(false)
 const upgradeVisible = ref(false)
-const advancedPlanExpanded = ref<string[]>([])
 
 const allowed = (permission: string) => userStore.hasPermission(permission)
 const isSimple = computed(() => draft.value?.authoringMode === 'SIMPLE_CONNECTOR')
@@ -83,51 +76,9 @@ const selectedVersion = computed(() => catalogVersions.value.find(item => item.p
 const configSchema = computed<JsonSchemaNode>(() => selectedVersion.value?.configSchema || selectedCatalog.value?.configSchema || { type: 'object', properties: {} })
 const canEdit = computed(() => allowed('connector-plugin:bind') && !isLegacy.value && !rawReadOnlyFallback.value)
 const canSave = computed(() => canEdit.value && Boolean(selectedPluginId.value && selectedPluginVersion.value))
-const hostMapping = computed(() => (selectedVersion.value || selectedCatalog.value)?.outputMode === 'HOST_MAPPING')
-const mappingSegment = /^[A-Za-z_][A-Za-z0-9_-]{0,127}$/
-const sensitiveMappingSegment = /^(?:auth|authorization|token|secret|password|credential|api[-_]?key)$/i
 
 function cloneJson<T>(value: T): T {
   return value == null ? value : JSON.parse(JSON.stringify(value)) as T
-}
-
-function addResponseMapping() {
-  if (!canEdit.value || (responseMapping.value?.length || 0) >= 100) return
-  responseMapping.value = [...(responseMapping.value || []), {
-    targetField: '', sourcePath: '', sourceType: 'field', transformType: 'none'
-  }]
-}
-
-function removeResponseMapping(index: number) {
-  if (!canEdit.value || !responseMapping.value) return
-  const next = responseMapping.value.filter((_, itemIndex) => itemIndex !== index)
-  responseMapping.value = next.length ? next : null
-}
-
-function safeMappingPath(value: string, sourceType = 'field') {
-  if (!value || value !== value.trim() || value.length > 256) return false
-  const normalized = sourceType === 'jsonPath' && value.startsWith('$.') ? value.slice(2) : value
-  if (sourceType === 'jsonPath' && !value.startsWith('$.')) return false
-  const segments = normalized.split('.')
-  return segments.length > 0 && segments.length <= 32 && segments.every(segment =>
-    mappingSegment.test(segment) && !['__proto__', 'prototype', 'constructor'].includes(segment.toLowerCase())
-      && !sensitiveMappingSegment.test(segment)
-  )
-}
-
-function responseMappingValid() {
-  if (!hostMapping.value || responseMapping.value == null) return true
-  if (!responseMapping.value.length) return false
-  const targets = new Set<string>()
-  return responseMapping.value.every(mapping =>
-    safeMappingPath(mapping.targetField)
-      && !mapping.targetField.includes('.')
-      && safeMappingPath(mapping.sourcePath, mapping.sourceType || 'field')
-      && ['field', 'jsonPath'].includes(mapping.sourceType || 'field')
-      && ['none', 'toString', 'toNumber'].includes(mapping.transformType || 'none')
-      && !targets.has(mapping.targetField)
-      && Boolean(targets.add(mapping.targetField))
-  )
 }
 
 function resetState() {
@@ -138,8 +89,6 @@ function resetState() {
   catalogVersions.value = []
   draft.value = null
   history.value = []
-  plan.value = null
-  planVersion.value = undefined
   validation.value = null
   testResult.value = null
   conversionPreview.value = null
@@ -148,7 +97,6 @@ function resetState() {
   selectedPluginId.value = ''
   selectedPluginVersion.value = ''
   formConfig.value = {}
-  responseMapping.value = null
 }
 
 async function load() {
@@ -173,7 +121,7 @@ async function load() {
     } else if (!draft.value?.present && catalog.value.length) {
       await choosePlugin(catalog.value[0].pluginId)
     }
-    await Promise.all([loadPlan(), loadSecretRefs()])
+    await loadSecretRefs()
   } catch (error: any) {
     if (error?.response?.status === 403) {
       accessDenied.value = true
@@ -218,7 +166,6 @@ async function hydrateSpec(spec: ConnectorSpec) {
   await loadCatalogVersions(spec.plugin.pluginId)
   selectedPluginVersion.value = spec.plugin.pluginVersion
   formConfig.value = cloneJson(spec.config || {})
-  responseMapping.value = cloneJson(spec.responseMapping || null)
 }
 
 async function loadCatalogVersions(pluginId: string) {
@@ -233,7 +180,6 @@ async function choosePlugin(pluginId: string) {
   selectedPluginId.value = pluginId
   selectedPluginVersion.value = ''
   formConfig.value = {}
-  responseMapping.value = null
   await loadCatalogVersions(pluginId)
   const entry = catalog.value.find(item => item.pluginId === pluginId)
   const recommended = catalogVersions.value.find(item => item.pluginVersion === entry?.recommendedVersion)
@@ -296,16 +242,12 @@ function currentSpec(): ConnectorSpec {
     specVersion: '1',
     plugin: { pluginId: selectedPluginId.value, pluginVersion: selectedPluginVersion.value },
     config: cloneJson(formConfig.value),
-    responseMapping: hostMapping.value ? cloneJson(responseMapping.value) : null
+    responseMapping: null
   }
 }
 
 async function saveDraft() {
   if (!props.config || !canSave.value) return
-  if (!responseMappingValid()) {
-    ElMessage.error('响应字段映射不合法；请使用安全字段路径且目标字段不得重复')
-    return
-  }
   saving.value = true
   try {
     draft.value = (await saveConnectorSpecDraft(
@@ -314,7 +256,6 @@ async function saveDraft() {
       currentSpec()
     )).data
     validation.value = null
-    await loadPlan()
     ElMessage.success('产品配置草稿已保存')
   } finally {
     saving.value = false
@@ -362,20 +303,6 @@ async function rollback(version: ConnectorSpecHistoryVersion) {
   await load()
 }
 
-async function loadPlan(version?: number) {
-  if (!props.config || (!draft.value?.present && history.value.length === 0)) {
-    plan.value = null
-    return
-  }
-  try {
-    plan.value = (await getConnectorExecutionPlan(props.config.id, version)).data
-    planVersion.value = version
-  } catch (error) {
-    plan.value = null
-    console.warn('加载只读执行计划失败', error)
-  }
-}
-
 async function previewConversion() {
   if (!props.config || !isLegacy.value) return
   conversionPreview.value = null
@@ -394,14 +321,6 @@ async function convertLegacy() {
   await convertLegacyConnectorSpec(props.config.id, draft.value.draftVersion)
   ElMessage.success('Legacy 草稿已转换为产品配置，请重新测试并发布')
   await load()
-}
-
-function transportLabel(value?: string) {
-  return value === 'HOST_MANAGED_MULTI_HTTP' ? '插件管理的多请求' : '平台管理的单次请求'
-}
-
-function outputLabel(value?: string) {
-  return value === 'PLUGIN_NORMALIZED' ? '插件标准化输出' : '平台响应映射'
 }
 
 function shortHash(value?: string) {
@@ -498,41 +417,11 @@ watch(() => props.modelValue, visible => { if (visible) void load() })
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-descriptions v-if="selectedCatalog" :column="3" size="small" border class="product-facts">
-              <el-descriptions-item label="类型">{{ selectedCatalog.connectorKind }}</el-descriptions-item>
-              <el-descriptions-item label="请求方式">{{ transportLabel(selectedCatalog.transportMode) }}</el-descriptions-item>
-              <el-descriptions-item label="输出治理">{{ outputLabel(selectedCatalog.outputMode) }}</el-descriptions-item>
-            </el-descriptions>
             <JsonSchemaForm v-if="selectedPluginVersion" v-model="formConfig" :schema="configSchema" :secret-options="secretRefs" :disabled="!canEdit" />
-            <div v-if="selectedPluginVersion && hostMapping" class="response-mapping-editor">
-              <div class="mapping-header"><div><strong>响应字段映射（可选）</strong><p>未配置时透传插件解析结果；仅接受安全字段路径，不支持密钥或脚本。</p></div><el-button v-if="canEdit" plain @click="addResponseMapping">添加映射</el-button></div>
-              <el-alert v-if="!responseMapping?.length" type="info" :closable="false">当前使用响应透传。</el-alert>
-              <div v-for="(mapping, index) in responseMapping || []" :key="index" class="mapping-row">
-                <el-input v-model="mapping.targetField" :disabled="!canEdit" placeholder="目标字段，如 companyName" />
-                <el-input v-model="mapping.sourcePath" :disabled="!canEdit" placeholder="来源路径，如 data.companyName" />
-                <el-select v-model="mapping.sourceType" :disabled="!canEdit"><el-option label="字段路径" value="field" /><el-option label="JSONPath" value="jsonPath" /></el-select>
-                <el-select v-model="mapping.transformType" :disabled="!canEdit"><el-option label="不转换" value="none" /><el-option label="转字符串" value="toString" /><el-option label="转数字" value="toNumber" /></el-select>
-                <el-button v-if="canEdit" type="danger" link @click="removeResponseMapping(index)">删除</el-button>
-              </div>
-            </div>
             <el-empty v-if="!selectedPluginVersion" description="选择插件和固定版本后填写配置" />
           </el-form>
         </section>
 
-        <el-collapse v-if="plan" v-model="advancedPlanExpanded" class="advanced-plan">
-          <el-collapse-item name="plan">
-            <template #title><strong>高级执行计划（只读）</strong><span class="plan-summary">{{ plan.stages.length }} 个平台编译步骤 · {{ planVersion ? `历史 V${planVersion}` : '当前选择' }}</span></template>
-            <el-alert type="info" :closable="false">该区域仅供排障，不可编辑，也不返回阶段配置或密钥引用。</el-alert>
-            <el-table :data="plan.stages" size="small">
-              <el-table-column prop="order" label="顺序" width="70" />
-              <el-table-column prop="stageKey" label="阶段标识" min-width="190" />
-              <el-table-column prop="capability" label="能力" min-width="150" />
-              <el-table-column label="固定插件" min-width="180"><template #default="{ row }">{{ row.pluginId }}@{{ row.pluginVersion }}</template></el-table-column>
-              <el-table-column prop="source" label="来源" min-width="170" />
-              <el-table-column prop="configHash" label="配置摘要" min-width="180"><template #default="{ row }"><span class="hash">{{ shortHash(row.configHash) }}</span></template></el-table-column>
-            </el-table>
-          </el-collapse-item>
-        </el-collapse>
       </template>
     </div>
 
@@ -583,7 +472,7 @@ watch(() => props.modelValue, visible => { if (visible) void load() })
         <el-table-column prop="status" label="状态" width="110" />
         <el-table-column prop="snapshotHash" label="快照摘要" min-width="220"><template #default="{ row }"><span class="hash">{{ row.snapshotHash || 'Legacy 原始摘要' }}</span></template></el-table-column>
         <el-table-column prop="publishedAt" label="发布时间" min-width="180" />
-        <el-table-column label="操作" width="190"><template #default="{ row }"><el-button link @click="loadPlan(row.version)">查看计划</el-button><el-button v-if="allowed('connector-plugin:rollback') && row.status !== 'ACTIVE'" type="warning" link @click="rollback(row)">回滚</el-button></template></el-table-column>
+        <el-table-column label="操作" width="100"><template #default="{ row }"><el-button v-if="allowed('connector-plugin:rollback') && row.status !== 'ACTIVE'" type="warning" link @click="rollback(row)">回滚</el-button></template></el-table-column>
       </el-table>
     </el-drawer>
   </el-drawer>
@@ -592,8 +481,7 @@ watch(() => props.modelValue, visible => { if (visible) void load() })
 <style scoped>
 .workspace-header { width:100%; display:flex; justify-content:space-between; align-items:flex-end; }.workspace-header h3 { margin:3px 0; font-size:20px; }.workspace-header p { margin:0; color:var(--color-text-secondary); }.eyebrow { color:#00a896; font:600 10px var(--font-mono); letter-spacing:.14em; }.runtime-state { display:flex; gap:12px; align-items:center; color:var(--color-text-secondary); font-size:12px; }
 .connector-workspace { display:grid; gap:16px; }.workspace-toolbar { position:sticky; top:0; z-index:2; display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px; border:1px solid var(--color-border); border-radius:10px; background:var(--color-bg-card); }.workspace-toolbar>div { display:flex; align-items:center; gap:10px; }.workspace-toolbar span { color:var(--color-text-secondary); font-size:12px; }.toolbar-actions { flex-wrap:wrap; justify-content:flex-end; }
-.product-card,.legacy-panel,.advanced-plan { border:1px solid var(--color-border); border-radius:12px; padding:16px; background:var(--color-bg-card); }.panel-title { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }.panel-title p { margin:5px 0 0; color:var(--color-text-secondary); font-size:12px; }.product-facts { margin-bottom:18px; }.legacy-panel,.conversion-result { display:grid; gap:14px; }.legacy-actions { display:flex; gap:8px; }.plan-summary { margin-left:12px; color:var(--color-text-secondary); font-size:12px; font-weight:400; }
-.response-mapping-editor { display:grid; gap:10px; margin-top:18px; padding-top:16px; border-top:1px solid var(--color-border); }.mapping-header { display:flex; justify-content:space-between; gap:12px; }.mapping-header p { margin:4px 0 0; color:var(--color-text-secondary); font-size:12px; }.mapping-row { display:grid; grid-template-columns:1fr 1.3fr 120px 120px auto; gap:8px; align-items:center; }.upgrade-facts { margin:14px 0; }.plan-diff-summary { margin-top:14px; padding:10px; border-radius:8px; background:var(--color-bg-light); color:var(--color-text-secondary); }
+.product-card,.legacy-panel { border:1px solid var(--color-border); border-radius:12px; padding:16px; background:var(--color-bg-card); }.panel-title { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }.panel-title p { margin:5px 0 0; color:var(--color-text-secondary); font-size:12px; }.legacy-panel,.conversion-result { display:grid; gap:14px; }.legacy-actions { display:flex; gap:8px; }.upgrade-facts { margin:14px 0; }.plan-diff-summary { margin-top:14px; padding:10px; border-radius:8px; background:var(--color-bg-light); color:var(--color-text-secondary); }
 .hash { font:11px var(--font-mono); color:var(--color-text-secondary); word-break:break-all; }.test-editor { margin:16px 0; }.test-editor label { display:block; margin-bottom:8px; font-weight:600; }.test-output { max-height:240px; overflow:auto; background:var(--color-bg-light); color:var(--color-text-primary); border-radius:8px; padding:12px; }
-@media(max-width:900px){.workspace-header,.workspace-toolbar,.mapping-header { align-items:flex-start; flex-direction:column; }.toolbar-actions { justify-content:flex-start; }.runtime-state { flex-wrap:wrap; }.mapping-row { grid-template-columns:1fr 1fr; }}
+@media(max-width:900px){.workspace-header,.workspace-toolbar { align-items:flex-start; flex-direction:column; }.toolbar-actions { justify-content:flex-start; }.runtime-state { flex-wrap:wrap; }}
 </style>

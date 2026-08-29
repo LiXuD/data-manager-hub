@@ -105,6 +105,7 @@ const allMenuItems = [
           'connector-plugin:rollback'
         ]
       },
+      { path: '/connector-diagnostics', title: '连接器运行诊断', permission: 'system:admin' },
       { path: '/caller', title: '内部系统管理', permission: 'caller:view' },
       { path: '/call-scene', title: '场景管理', permission: 'call-scene:view' },
       { path: '/datatype', title: '数据类型', permission: 'datatype:view' },
