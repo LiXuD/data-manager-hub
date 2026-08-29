@@ -83,6 +83,15 @@ services:
       - "127.0.0.1:${DMH_KAFKA_PORT:-9092}:9092"
     volumes:
       - dmh_local_kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   nacos:
     image: nacos/nacos-server:v2.3.2

@@ -5,22 +5,118 @@ import argparse
 import json
 import os
 import pathlib
+import socket
 import ssl
 import sys
+import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
+
+
+FAILOVER_LOCK = threading.Lock()
+FAILOVER_TRIGGERED = False
+CONNECTION_FAILURE_TRIGGERED = False
+FLOW_LOCK = threading.Lock()
+NEXT_TOKEN = 1
+NEXT_JOB = 1
+TOKENS: set[str] = set()
+JOBS: dict[str, dict[str, object]] = {}
+FLOW_COUNTERS = {
+    "singleHttpRequests": 0,
+    "vendorRequests": 0,
+    "vendorEchoRequests": 0,
+    "vendorFallbackRequests": 0,
+    "tokenRequests": 0,
+    "businessRequests": 0,
+    "asyncSubmissions": 0,
+    "asyncPolls": 0,
+}
+
+
+def increment(counter: str) -> None:
+    with FLOW_LOCK:
+        FLOW_COUNTERS[counter] += 1
+
+
+def record_vendor_request(path: str) -> None:
+    with FLOW_LOCK:
+        FLOW_COUNTERS["vendorRequests"] += 1
+        counter = {
+            "/vendor/echo": "vendorEchoRequests",
+            "/vendor/fallback": "vendorFallbackRequests",
+        }.get(path)
+        if counter is not None:
+            FLOW_COUNTERS[counter] += 1
+
+
+def issue_token() -> str:
+    global NEXT_TOKEN
+    with FLOW_LOCK:
+        token = f"fixture-token-{NEXT_TOKEN}"
+        NEXT_TOKEN += 1
+        TOKENS.add(token)
+        FLOW_COUNTERS["tokenRequests"] += 1
+        return token
+
+
+def submit_job(payload: object) -> str:
+    global NEXT_JOB
+    with FLOW_LOCK:
+        job_id = f"fixture-job-{NEXT_JOB}"
+        NEXT_JOB += 1
+        JOBS[job_id] = {"payload": payload, "polls": 0}
+        FLOW_COUNTERS["asyncSubmissions"] += 1
+        return job_id
+
+
+def poll_job(job_id: str) -> dict[str, object] | None:
+    with FLOW_LOCK:
+        job = JOBS.get(job_id)
+        if job is None:
+            return None
+        job["polls"] = int(job["polls"]) + 1
+        FLOW_COUNTERS["asyncPolls"] += 1
+        if job["polls"] < 2:
+            return {"jobId": job_id, "status": "PENDING"}
+        return {
+            "jobId": job_id,
+            "status": "SUCCEEDED",
+            "success": True,
+            "flow": "async-polling",
+            "received": job["payload"],
+        }
+
+
+def flow_state() -> dict[str, int]:
+    with FLOW_LOCK:
+        return dict(FLOW_COUNTERS)
 
 
 class FixtureHandler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/health":
+        path = urlparse(self.path).path
+        if path == "/health":
             self._json(200, {"status": "UP", "fixture": "connector-e2e"})
+            return
+        if path == "/state":
+            self._json(200, flow_state())
+            return
+        async_prefix = "/vendor/async/jobs/"
+        if path.startswith(async_prefix):
+            result = poll_job(path[len(async_prefix):])
+            self._json(200, result) if result is not None else self._json(
+                404, {"error": "job_not_found"})
             return
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/vendor/echo":
+        path = urlparse(self.path).path
+        if path in {"/vendor/token", "/vendor/business", "/vendor/async/submit"}:
+            self._handle_managed_flow(path)
+            return
+        if path not in {"/vendor/echo", "/vendor/primary", "/vendor/fallback"}:
             self._json(404, {"error": "not_found"})
             return
         length = int(self.headers.get("Content-Length", "0"))
@@ -30,10 +126,97 @@ class FixtureHandler(SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             self._json(400, {"error": "invalid_json"})
             return
+        probe = received.get("probe") if isinstance(received, dict) else None
+        record_vendor_request(path)
+        global CONNECTION_FAILURE_TRIGGERED, FAILOVER_TRIGGERED
+        with FAILOVER_LOCK:
+            failover = probe == "failover" and not FAILOVER_TRIGGERED
+            if failover:
+                FAILOVER_TRIGGERED = True
+            connection_error = probe == "connection-error" and not CONNECTION_FAILURE_TRIGGERED
+            if connection_error:
+                CONNECTION_FAILURE_TRIGGERED = True
+        if connection_error:
+            self.close_connection = True
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            self.connection.close()
+            return
+        if failover:
+            self._json(503, {
+                "success": False,
+                "errorCode": "FIXTURE_TRANSIENT_HTTP_ERROR",
+                "errorMessage": "Fixture vendor returned a transient HTTP error",
+            })
+            return
+        if probe == "http-error" and path == "/vendor/echo":
+            self._json(503, {
+                "success": False,
+                "errorCode": "FIXTURE_HTTP_ERROR",
+                "errorMessage": "Fixture vendor returned an HTTP error",
+            })
+            return
+        if probe == "malformed":
+            self._json(200, ["fixture", "response", "is", "not", "an", "object"])
+            return
+        if probe == "reject":
+            self._json(200, {
+                "success": False,
+                "errorCode": "FIXTURE_VENDOR_REJECTED",
+                "errorMessage": "Fixture vendor rejected the request",
+                "received": received,
+            })
+            return
+        increment("singleHttpRequests")
         self._json(200, {
             "success": True,
             "fixture": "e2e-signed-connector",
             "received": received,
+        })
+
+    def _handle_managed_flow(self, path: str) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(min(length, 1024 * 1024))
+        try:
+            received = json.loads(raw or b"{}")
+        except json.JSONDecodeError:
+            self._json(400, {"error": "invalid_json"})
+            return
+        if not isinstance(received, dict):
+            self._json(400, {"error": "json_object_required"})
+            return
+        if path == "/vendor/token":
+            if not received.get("clientId") or not received.get("clientSecret"):
+                self._json(400, {"error": "credentials_required"})
+                return
+            self._json(200, {
+                "accessToken": issue_token(),
+                "tokenType": "Bearer",
+                "expiresIn": 300,
+            })
+            return
+        if path == "/vendor/business":
+            token = self.headers.get("Authorization", "").removeprefix("Bearer ")
+            with FLOW_LOCK:
+                valid = token in TOKENS
+            if not valid:
+                self._json(401, {"error": "invalid_token"})
+                return
+            increment("businessRequests")
+            self._json(200, {
+                "success": True,
+                "fixture": "e2e-signed-connector",
+                "flow": "token-business",
+                "received": received,
+            })
+            return
+        job_id = submit_job(received)
+        self._json(202, {
+            "jobId": job_id,
+            "status": "PENDING",
+            "pollPath": f"/vendor/async/jobs/{job_id}",
         })
 
     def log_message(self, message: str, *args: object) -> None:
