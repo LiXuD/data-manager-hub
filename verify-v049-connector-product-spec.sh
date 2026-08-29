@@ -77,6 +77,15 @@ clone_database() {
   "${PSQL[@]}" -d postgres -c "DROP DATABASE IF EXISTS \"$db_name\" WITH (FORCE)" >/dev/null
   "${PSQL[@]}" -d postgres -c \
     "CREATE DATABASE \"$db_name\" OWNER \"$DB_USERNAME\" TEMPLATE \"$template_db\"" >/dev/null
+  # V049 assertions stop before V050. V051 and V052 are independent
+  # forward-only repairs, so remove both history rows in this isolated clone
+  # before using rollback-count to target U050/U049.
+  delete_forward_only_history "$db_name"
+}
+
+delete_forward_only_history() {
+  local db_name="$1"
+  psql_db "$db_name" -c "DELETE FROM databasechangelog WHERE author = 'data-platform' AND id IN ('widen-call-record-error-code-2026-08-27', 'bind-call-record-interface-identity-2026-08-28')" >/dev/null
 }
 
 drop_database() {
@@ -119,7 +128,7 @@ run_rollback() {
   fi
 }
 
-# The repository changelog now continues through V050. A V049 regression must
+# The repository changelog now continues through V052. A V049 regression must
 # finish on the exact V049 surface, so apply the current changelog and then
 # transactionally remove only the unreferenced built-in V050 seed. This keeps
 # the V049 assertions strict (including rejecting every pre-existing v2 row)
@@ -128,6 +137,7 @@ run_v049_update() {
   local db_name="$1"
   assert_regression_db_name "$db_name"
   run_migration "$db_name" update
+  delete_forward_only_history "$db_name"
   if [[ "$(psql_db "$db_name" -Atq -c \
       "SELECT count(*) FROM databasechangelog WHERE id = 'seed-generic-http-connector-2026-08-20' AND author = 'data-platform'")" != "0" ]]; then
     run_rollback "$db_name"

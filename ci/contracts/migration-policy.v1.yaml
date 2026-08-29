@@ -23,6 +23,14 @@ migrations:
     mode: ONLINE_COMPATIBLE
     transactional: true
     rollback: FORWARD_RECOVERY
+  V051:
+    mode: ONLINE_COMPATIBLE
+    transactional: true
+    rollback: FORWARD_RECOVERY
+  V052:
+    mode: ONLINE_COMPATIBLE
+    transactional: true
+    rollback: FORWARD_RECOVERY
 rules:
   - publishedSqlIsImmutable
   - newMigrationMustBeIndexed

@@ -580,4 +580,43 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="widen-call-record-error-code-2026-08-27"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="call_record"/>
+            <columnExists schemaName="public" tableName="call_record" columnName="error_code"/>
+        </preConditions>
+        <sqlFile path="../migrations/V051__widen_call_record_error_code.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U051__refuse_call_record_error_code_narrowing.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="bind-call-record-interface-identity-2026-08-28"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="call_record"/>
+        </preConditions>
+        <sqlFile path="../migrations/V052__bind_call_record_interface_identity.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U052__refuse_call_record_interface_identity_removal.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>

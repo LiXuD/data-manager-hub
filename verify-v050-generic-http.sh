@@ -83,6 +83,14 @@ clone_v050_database() {
   "${V050_PSQL[@]}" -d postgres -c "DROP DATABASE IF EXISTS \"$database_name\" WITH (FORCE)" >/dev/null
   "${V050_PSQL[@]}" -d postgres -c \
     "CREATE DATABASE \"$database_name\" OWNER \"$DB_USERNAME\" TEMPLATE \"$template_name\"" >/dev/null
+  # V050 rollback/HALT assertions target U050. V051 and V052 are separate
+  # forward-only repairs, so remove both history rows in this isolated clone.
+  delete_v050_forward_only_history "$database_name"
+}
+
+delete_v050_forward_only_history() {
+  local database_name="$1"
+  psql_v050 "$database_name" -c "DELETE FROM databasechangelog WHERE author = 'data-platform' AND id IN ('widen-call-record-error-code-2026-08-27', 'bind-call-record-interface-identity-2026-08-28')" >/dev/null
 }
 
 drop_v050_database() {
