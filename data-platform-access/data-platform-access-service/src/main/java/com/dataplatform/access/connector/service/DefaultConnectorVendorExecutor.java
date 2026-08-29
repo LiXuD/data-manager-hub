@@ -49,6 +49,8 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -56,6 +58,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class DefaultConnectorVendorExecutor implements ConnectorVendorExecutor, ConnectorPipelineRetirement,
         AutoCloseable {
+
+    private static final Logger log = LoggerFactory.getLogger(DefaultConnectorVendorExecutor.class);
 
     private final VendorConnectorInternalFeignClient connectorClient;
     private final VendorSecurityInternalFeignClient securityClient;
@@ -158,6 +162,12 @@ public class DefaultConnectorVendorExecutor implements ConnectorVendorExecutor, 
                         return executor.execute(pipeline, request);
                     }
                 } catch (ConnectorException exception) {
+                    Throwable root = rootCause(exception);
+                    log.warn("连接器草稿受控测试失败: category={}, code={}, delivery={}, causeType={}, causeMessage={}",
+                            exception.category(), exception.errorCode(), exception.deliveryState(),
+                            root.getClass().getSimpleName(),
+                            com.dataplatform.common.plugin.runtime.ConnectorSafeMessageSanitizer.sanitize(
+                                    root.getMessage(), secretResolver.sensitiveValues()));
                     return failure(exception.category(), exception.errorCode(),
                             exception.safeMessage(), exception.deliveryState(),
                             null, null, "draft", null);
@@ -203,6 +213,12 @@ public class DefaultConnectorVendorExecutor implements ConnectorVendorExecutor, 
             current = current.getCause();
         }
         return null;
+    }
+
+    private Throwable rootCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) current = current.getCause();
+        return current;
     }
 
     @Override

@@ -11,6 +11,7 @@ import com.dataplatform.api.Result;
 import com.dataplatform.masterdata.connector.api.dto.PluginArtifactDescriptorDTO;
 import com.dataplatform.masterdata.connector.api.feign.ConnectorPluginInternalFeignClient;
 import com.dataplatform.common.plugin.runtime.GenericHttpConnectorMetadata;
+import com.dataplatform.common.plugin.runtime.ConnectorSafeMessageSanitizer;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -384,6 +385,14 @@ public class ConnectorPluginActivationService {
     }
 
     private void markFailed(ConnectorPluginActivation activation, RuntimeException ex) {
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        log.error("连接器插件加载失败: pluginId={}, pluginVersion={}, errorType={}, errorMessage={}",
+                activation.getPluginId(), activation.getPluginVersion(),
+                root.getClass().getSimpleName(),
+                ConnectorSafeMessageSanitizer.sanitize(root.getMessage(), java.util.List.of()));
         LocalDateTime now = LocalDateTime.now();
         activation.setState(ConnectorActivationState.FAILED.name());
         activation.setLastHeartbeatAt(now);
