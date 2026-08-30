@@ -135,8 +135,18 @@ class CiContractTests(unittest.TestCase):
             capture_output=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("10 files", result.stdout)
-        self.assertIn("97 run blocks", result.stdout)
+        self.assertIn("workflows valid:", result.stdout)
+        self.assertIn("run blocks", result.stdout)
+
+    def test_dev_security_sync_and_ci_boundary(self) -> None:
+        result = subprocess.run(
+            ["python3", str(SCRIPTS / "verify-dev-security-sync.py")],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("dev security sync passed", result.stdout)
 
     def test_ci_and_release_matrices_match_runtime_contract(self) -> None:
         result = subprocess.run(
@@ -348,15 +358,14 @@ class CiContractTests(unittest.TestCase):
 
     def test_actionlint_is_digest_locked_and_required(self) -> None:
         lock = (ROOT / "ci/toolchain.lock.yaml").read_text(encoding="utf-8")
-        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("actionlint:\n    version: 1.7.12", lock)
         self.assertIn("rhysd/actionlint", lock)
         self.assertIn("promtool:\n    version: 2.54.0", lock)
         self.assertIn("prom/prometheus", lock)
-        self.assertIn("rhysd/actionlint@sha256:", workflow)
-        self.assertIn("Validate workflows with locked actionlint", workflow)
-        self.assertIn("prom/prometheus@sha256:", workflow)
-        self.assertIn("Validate Prometheus rules with locked promtool", workflow)
+        run_script("verify-toolchain-lock.py")
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertNotIn("rhysd/actionlint@sha256:", workflow)
+        self.assertNotIn("prom/prometheus@sha256:", workflow)
 
     def test_toolchain_lock_covers_every_runtime_tool_version(self) -> None:
         lock = (ROOT / "ci/toolchain.lock.yaml").read_text(encoding="utf-8")
@@ -436,7 +445,10 @@ class CiContractTests(unittest.TestCase):
         staging = (ROOT / ".github" / "workflows" / "promote-staging.yml").read_text(encoding="utf-8")
         self.assertIn("  attestations: read\n  deployments: write", staging)
         ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn("permissions:\n      contents: read\n      security-events: write", ci)
+        self.assertIn("permissions:\n  contents: read", ci)
+        self.assertNotIn("security-events: write", ci)
+        scheduled = (ROOT / ".github" / "workflows" / "scheduled-security.yml").read_text(encoding="utf-8")
+        self.assertIn("permissions:\n      contents: read\n      security-events: write", scheduled)
 
     def test_scheduled_security_runs_full_codeql_scan(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "scheduled-security.yml").read_text(encoding="utf-8")
@@ -476,8 +488,9 @@ class CiContractTests(unittest.TestCase):
 
     def test_docker_ci_verifies_base_image_platforms(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn("Verify locked base image platforms", workflow)
-        self.assertIn("check-base-image-platforms.py", workflow)
+        self.assertNotIn("name: CI / docker", workflow)
+        release = (ROOT / ".github" / "workflows" / "build-release.yml").read_text(encoding="utf-8")
+        self.assertIn("platforms: linux/amd64,linux/arm64", release)
 
     def test_dependency_manifests_trigger_security_gate(self) -> None:
         classifier = (SCRIPTS / "classify-changes.sh").read_text(encoding="utf-8")
@@ -668,15 +681,9 @@ class CiContractTests(unittest.TestCase):
         self.assertIn("CI / required-ci", workflow)
         self.assertIn("matrix.component }}@${{ steps.build.outputs.digest }}", workflow)
         ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn("name: CI / docker", ci)
-        self.assertIn("docker buildx build", ci)
-        for component in ("gateway", "masterdata", "access", "billing", "identity", "governance", "web", "dbops", "acceptance"):
-            self.assertIn(f"- component: {component}", ci)
-        self.assertIn("bash verify-v048-routing.sh", ci)
-        self.assertIn("bash verify-v049-connector-product-spec.sh", ci)
-        self.assertIn("bash verify-v050-generic-http.sh", ci)
-        self.assertIn("needs: [classify, meta, backend, frontend, migration, security, deployability, docker]", ci)
-        self.assertIn("source changes cannot mark every substantive gate not-applicable", ci)
+        self.assertNotIn("name: CI / docker", ci)
+        self.assertIn("python3 ci/scripts/verify-dev-security-sync.py", ci)
+        self.assertIn("needs: [backend, frontend]", ci)
         self.assertIn('"verification": evidence', (SCRIPTS / "manifest.py").read_text(encoding="utf-8"))
         self.assertIn('verify-oci-references.py', workflow)
         publisher = (SCRIPTS / "publish-immutable-manifest.sh").read_text(encoding="utf-8")
@@ -688,8 +695,6 @@ class CiContractTests(unittest.TestCase):
         deploy = (ROOT / ".github" / "workflows" / "_deploy-reusable.yml").read_text(encoding="utf-8")
         self.assertIn("name: Plan Nacos bundle offline", deploy)
         self.assertIn("--env NACOS_MODE=plan -- nacos", deploy)
-        self.assertIn("base_ref: ${{ steps.classify.outputs.base_ref }}", ci)
-        self.assertGreaterEqual(ci.count("BASE_REF: ${{ needs.classify.outputs.base_ref }}"), 4)
         self.assertIn("--env NACOS_MODE=apply -- nacos", deploy)
         self.assertIn("--env NACOS_MODE=verify -- nacos", deploy)
         self.assertIn('job="dmh-nacos-plan-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"', deploy)

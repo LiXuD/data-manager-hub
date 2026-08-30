@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Validate the production image matrices when the production pipeline is enabled.
+"""Validate enabled production image matrices against the runtime contract.
 
 The runtime contract is the single source of truth for deployable components.
-The production no-push CI build and the GHCR release build must enumerate
-exactly the same set.  This check is intentionally not called by the current
-development CI, which only verifies Java/Web compilation and tests.
+The current development branch keeps image build jobs outside required CI, so
+only the retained release blueprint is validated here.  If production image
+CI is enabled later, its matrix must be added to ``WORKFLOWS`` explicitly.
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "ci/contracts/runtime-contract.v1.yaml"
 WORKFLOWS = {
-    ROOT / ".github/workflows/ci.yml": "docker",
     ROOT / ".github/workflows/build-release.yml": "build",
 }
 
