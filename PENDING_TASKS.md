@@ -28,7 +28,7 @@
 - [x] 普通配置页收敛为插件、固定版本和一次 Schema 表单；阶段、能力、顺序、TRANSPORT 和摘要迁移到 `system:admin` 保护的“连接器运行诊断”页。
 - [x] `--demo` 可在命令返回后保留隔离运行态，真实浏览器已验证登录、连接器诊断、2 条有效授权、12 条调用、¥1/3 次计费、54 条成功审计和 6/6 服务健康；受保护清理可停止进程并删除隔离库/目录。
 - [x] `dev` 分支保护要求 `CI / required-ci`，启用管理员约束、stale approval 失效、线性历史并禁止 force-push/删除。
-- [x] 从 `master` 选择性同步当前 Maven/npm/Action 安全版本，并用 `ci/contracts/dev-security-sync.v1.json` 明确禁止把生产 CI 作业误并入 dev required CI。
+- [x] 从 `master` 选择性同步当前 Maven/npm/Action 安全版本，并用 `ci/contracts/dev-security-sync.v1.json` 明确禁止把生产 CI 作业误并入 dev required CI；远端新发现的 Spring Kafka 1 high/2 moderate 告警使用 Boot 3.5.16 BOM 兼容的 3.3.16 独立修复。
 - [x] `.github/workflows/dev-mvp-e2e.yml` 提供工作日定时和手工 full-build 验收，明确 checkout `dev`，不在 push/PR 上运行，不作为 required check；同一调度文件须以独立小 PR 镜像到默认分支 `master` 后定时器才真正生效。
 - [ ] 清理 `data-platform-web/src/views/layout/index.vue` 运行时图标模板造成的 Vue runtime compiler warning，并增加登录后 console warning 烟雾断言。
 

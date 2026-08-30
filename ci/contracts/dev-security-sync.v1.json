@@ -2,11 +2,12 @@
   "schemaVersion": 1,
   "sourceBranch": "master",
   "sourceTipAudited": "d05d47a65e68fc4110a80641633e2fecba6ec679",
-  "decision": "Selectively backport security and dependency updates while retaining the development-stage CI boundary.",
+  "decision": "Selectively backport master security updates, record dev-only alert remediation, and retain the development-stage CI boundary.",
   "dependencies": {
     "maven": {
       "bcprov-jdk18on": "1.84",
-      "nimbus-jose-jwt": "10.0.2"
+      "nimbus-jose-jwt": "10.0.2",
+      "spring-kafka": "3.3.16"
     },
     "npmDev": {
       "@vitest/coverage-v8": "4.1.11",
@@ -16,6 +17,16 @@
     },
     "npmLockPackages": {},
     "npmLockAbsent": ["node_modules/js-yaml"]
+  },
+  "devRemediations": {
+    "spring-kafka": {
+      "source": "Spring Boot 3.5.16 BOM compatible patch line",
+      "alerts": [
+        "GHSA-53w6-v7cv-fc9h",
+        "GHSA-xq69-5h5v-x9x4",
+        "GHSA-xvfq-4q6q-gxx7"
+      ]
+    }
   },
   "actions": {
     "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
