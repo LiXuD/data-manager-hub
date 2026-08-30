@@ -5,12 +5,18 @@ set -euo pipefail
 STATE_FILE="${1:-}"
 [[ -f "$STATE_FILE" ]] || { echo "用法: $0 <fixture.env>" >&2; exit 2; }
 KEEP_OUTPUT=false
-if [[ "${2:-}" == "--keep-output" ]]; then
-  KEEP_OUTPUT=true
-elif [[ "$#" -gt 1 ]]; then
-  echo "用法: $0 <fixture.env> [--keep-output]" >&2
-  exit 2
-fi
+STOP_RUNTIME=false
+shift
+for option in "$@"; do
+  case "$option" in
+    --keep-output) KEEP_OUTPUT=true ;;
+    --stop-runtime) STOP_RUNTIME=true ;;
+    *)
+      echo "用法: $0 <fixture.env> [--keep-output] [--stop-runtime]" >&2
+      exit 2
+      ;;
+  esac
+done
 # shellcheck disable=SC1090
 source "$STATE_FILE"
 
@@ -27,6 +33,33 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
   echo "拒绝删除非 Dev MVP 运行目录: ${DEV_MVP_OUTPUT_DIR:-}" >&2
   exit 1
 }
+
+if [[ "$STOP_RUNTIME" == true ]]; then
+  if [[ "${DEV_MVP_DEMO_MODE:-false}" != true ]]; then
+    echo "状态文件不是 Dev MVP demo 运行，拒绝停止共享运行时" >&2
+    exit 1
+  fi
+  "$PROJECT_ROOT/stop-services.sh" >"$DEV_MVP_OUTPUT_DIR/stop-demo-services.log" 2>&1 || true
+  if [[ -n "${DEV_MVP_WEB_PID:-}" ]] \
+      && [[ "$DEV_MVP_WEB_PID" =~ ^[0-9]+$ ]] \
+      && kill -0 "$DEV_MVP_WEB_PID" >/dev/null 2>&1; then
+    web_command="$(ps -p "$DEV_MVP_WEB_PID" -o command= 2>/dev/null || true)"
+    if [[ "$web_command" == *"$PROJECT_ROOT/data-platform-web"* || "$web_command" == *"vite"* ]]; then
+      kill "$DEV_MVP_WEB_PID" >/dev/null 2>&1 || true
+    else
+      echo "PID 不属于当前 Dev MVP 前端，拒绝终止: $DEV_MVP_WEB_PID" >&2
+      exit 1
+    fi
+  fi
+  if command -v lsof >/dev/null 2>&1 && [[ "${DEV_MVP_WEB_PORT:-}" =~ ^[0-9]+$ ]]; then
+    for listener_pid in $(lsof -t -iTCP:"$DEV_MVP_WEB_PORT" -sTCP:LISTEN 2>/dev/null || true); do
+      web_command="$(ps -p "$listener_pid" -o command= 2>/dev/null || true)"
+      if [[ "$web_command" == *"$PROJECT_ROOT/data-platform-web"* || "$web_command" == *"vite"* ]]; then
+        kill "$listener_pid" >/dev/null 2>&1 || true
+      fi
+    done
+  fi
+fi
 
 if [[ -n "${FIXTURE_HTTPS_PID:-}" ]] \
     && [[ "$FIXTURE_HTTPS_PID" =~ ^[0-9]+$ ]] \

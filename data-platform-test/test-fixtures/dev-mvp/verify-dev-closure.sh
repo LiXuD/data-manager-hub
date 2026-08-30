@@ -13,7 +13,7 @@ GATEWAY_URL="${DEV_MVP_GATEWAY_URL:-http://127.0.0.1:8888}"
 WEB_PORT="${DEV_MVP_WEB_PORT:-3000}"
 NODE_VERSION="v22.19.0"
 NPM_VERSION="10.9.3"
-STATE_FILE="${1:-}"
+STATE_FILE=""
 OWNED_STATE=0
 SERVICES_STARTED=0
 SERVICES_PID=""
@@ -21,6 +21,64 @@ WEB_PID=""
 WEB_HTTP_CODE="000"
 PREPARE_LOG=""
 LATEST_REPORT="$RUNTIME_ROOT/dev-mvp-latest-report.json"
+RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+RUN_STARTED_EPOCH="$(date +%s)"
+KEEP_RUNNING="${DEV_MVP_KEEP_RUNNING:-false}"
+
+usage() {
+  cat <<USAGE
+用法: $0 [fixture.env] [--keep-running|--demo]
+
+默认在验收成功后停止服务并清理隔离数据库。--keep-running（--demo 别名）
+会保留六服务、前端、HTTPS 夹具和隔离数据库，供浏览器产品演示。
+USAGE
+}
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --keep-running|--demo)
+      KEEP_RUNNING=true
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "未知选项: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      if [[ -n "$STATE_FILE" ]]; then
+        echo "只能提供一个 fixture 状态文件" >&2
+        exit 2
+      fi
+      STATE_FILE="$1"
+      ;;
+  esac
+  shift
+done
+
+case "$KEEP_RUNNING" in
+  true|false) ;;
+  *)
+    echo "DEV_MVP_KEEP_RUNNING 必须为 true 或 false" >&2
+    exit 2
+    ;;
+esac
+
+case "${DEV_MVP_SKIP_BUILD:-false}" in
+  true) BUILD_MODE=skip-build ;;
+  false) BUILD_MODE=full-build ;;
+  *)
+    echo "DEV_MVP_SKIP_BUILD 必须为 true 或 false" >&2
+    exit 2
+    ;;
+esac
 
 for command_name in curl jq psql python3; do
   command -v "$command_name" >/dev/null 2>&1 || {
@@ -191,6 +249,10 @@ stop_services() {
 cleanup() {
   local status=$?
   trap - EXIT
+  if [[ "$status" -eq 0 && "$KEEP_RUNNING" == true ]]; then
+    [[ -z "$PREPARE_LOG" ]] || rm -f -- "$PREPARE_LOG"
+    exit 0
+  fi
   stop_web || true
   stop_services || true
   if [[ "$OWNED_STATE" == "1" && -f "$STATE_FILE" ]]; then
@@ -228,7 +290,8 @@ FIXTURE_REPOSITORY_PREFIX="${FIXTURE_ARTIFACT_URI%/1.1.0/connector-plugin.jar}"
 
 start_services() {
   : > "$SERVICES_LOG"
-  (
+  SERVICES_STARTED=1
+  if ! (
     cd "$PROJECT_ROOT"
     export SPRING_PROFILES_ACTIVE=dev
     export START_LOCAL_INFRA=true
@@ -257,11 +320,18 @@ start_services() {
     export CONNECTOR_INSTANCE_ID=data-platform-access:8082
     export CONNECTOR_HOST_VERSION=1.0.0
     export SKIP_BUILD="${DEV_MVP_SKIP_BUILD:-false}"
-    ./start-services.sh
-  ) >"$SERVICES_LOG" 2>&1 &
-  SERVICES_PID=$!
-  SERVICES_STARTED=1
-  if ! wait "$SERVICES_PID"; then
+    if [[ "$KEEP_RUNNING" == true ]]; then
+      python3 - <<'PY'
+import subprocess
+import sys
+
+result = subprocess.run(["./start-services.sh"], start_new_session=True, check=False)
+sys.exit(result.returncode)
+PY
+    else
+      ./start-services.sh
+    fi
+  ) >"$SERVICES_LOG" 2>&1; then
     # start-services.sh performs a fixed 45-second check. Access may still be
     # completing Flowable/plugin initialization when that check expires.
     local ready=0 attempt port code
@@ -284,7 +354,6 @@ start_services() {
       exit 1
     fi
   fi
-  SERVICES_PID=""
 }
 
 check_services() {
@@ -321,9 +390,38 @@ start_frontend() {
     export NPM_CONFIG_USERCONFIG="$NPM_USER_CONFIG"
     export npm_config_engine_strict=true
     "$NODE_BIN_DIR/npm" ci --no-audit --no-fund
-    exec "$NODE_BIN_DIR/npm" run dev -- --host 127.0.0.1 --port "$WEB_PORT"
-  ) >"$FRONTEND_LOG" 2>&1 &
-  WEB_PID=$!
+  ) >"$FRONTEND_LOG" 2>&1
+  if [[ "$KEEP_RUNNING" == true ]]; then
+    WEB_PID="$(
+      cd "$WEB_ROOT"
+      export PATH="$NODE_BIN_DIR:$PATH"
+      export VITE_PROXY_TARGET="$GATEWAY_URL"
+      python3 - "$FRONTEND_LOG" "$NODE_BIN_DIR/node" \
+        "$WEB_ROOT/node_modules/vite/bin/vite.js" "$WEB_PORT" <<'PY'
+import os
+import subprocess
+import sys
+
+with open(sys.argv[1], "ab", buffering=0) as log:
+    process = subprocess.Popen(
+        [sys.argv[2], sys.argv[3], "--host", "127.0.0.1", "--port", sys.argv[4]],
+        env=os.environ.copy(),
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+print(process.pid)
+PY
+    )"
+  else
+    (
+      cd "$WEB_ROOT"
+      export PATH="$NODE_BIN_DIR:$PATH"
+      export VITE_PROXY_TARGET="$GATEWAY_URL"
+      exec "$NODE_BIN_DIR/npm" run dev -- --host 127.0.0.1 --port "$WEB_PORT"
+    ) >>"$FRONTEND_LOG" 2>&1 &
+    WEB_PID=$!
+  fi
   for attempt in $(seq 1 120); do
     WEB_HTTP_CODE="$(curl --noproxy '*' -sS --connect-timeout 3 --max-time 5 \
       -o "$FRONTEND_CHECK" -w '%{http_code}' \
@@ -363,12 +461,32 @@ BUSINESS_REPORT="$(sed -n 's/^DEV_MVP_REPORT=//p' "$BUSINESS_LOG" | tail -1)"
 check_services
 
 TEMP_REPORT="$BUSINESS_REPORT.with-runtime.json"
+RUN_FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+RUN_FINISHED_EPOCH="$(date +%s)"
+SOURCE_GIT_SHA="$(git -C "$PROJECT_ROOT" rev-parse HEAD)"
+SOURCE_GIT_DIRTY=false
+if [[ -n "$(git -C "$PROJECT_ROOT" status --porcelain --untracked-files=normal)" ]]; then
+  SOURCE_GIT_DIRTY=true
+fi
 jq --arg frontendUrl "http://127.0.0.1:$WEB_PORT" \
   --arg httpCode "$WEB_HTTP_CODE" \
   --arg nodeVersion "$NODE_RUNTIME_VERSION" \
   --arg npmVersion "$NPM_RUNTIME_VERSION" \
+  --arg gitSha "$SOURCE_GIT_SHA" \
+  --argjson gitDirty "$SOURCE_GIT_DIRTY" \
+  --arg startedAt "$RUN_STARTED_AT" \
+  --arg finishedAt "$RUN_FINISHED_AT" \
+  --arg buildMode "$BUILD_MODE" \
+  --argjson durationSeconds "$((RUN_FINISHED_EPOCH - RUN_STARTED_EPOCH))" \
+  --argjson keepRunning "$KEEP_RUNNING" \
   --slurpfile services "$SERVICE_HEALTH" \
-  '. + {frontend:{url:$frontendUrl,httpCode:$httpCode,nodeVersion:$nodeVersion,npmVersion:$npmVersion},services:$services[0]}' \
+  '. + {
+    reportVersion:2,
+    source:{gitSha:$gitSha,gitDirty:$gitDirty},
+    execution:{startedAt:$startedAt,finishedAt:$finishedAt,durationSeconds:$durationSeconds,buildMode:$buildMode,keepRunning:$keepRunning},
+    frontend:{url:$frontendUrl,httpCode:$httpCode,nodeVersion:$nodeVersion,npmVersion:$npmVersion},
+    services:$services[0]
+  }' \
   "$BUSINESS_REPORT" > "$TEMP_REPORT"
 mv -- "$TEMP_REPORT" "$BUSINESS_REPORT"
 chmod 600 "$BUSINESS_REPORT"
@@ -377,3 +495,17 @@ install -m 600 "$BUSINESS_REPORT" "$LATEST_REPORT"
 
 echo "DEV_MVP_REPORT=$LATEST_REPORT"
 echo "Dev MVP dev 闭环通过：V052 无待迁移、六服务健康、前端可访问、3/2/2 业务事实和审批/调用/计费/审计/监控均已验收。"
+
+if [[ "$KEEP_RUNNING" == true ]]; then
+  {
+    printf 'DEV_MVP_DEMO_MODE=%q\n' true
+    printf 'DEV_MVP_WEB_PID=%q\n' "$WEB_PID"
+    printf 'DEV_MVP_WEB_PORT=%q\n' "$WEB_PORT"
+    printf 'DEV_MVP_GATEWAY_URL=%q\n' "$GATEWAY_URL"
+  } >> "$STATE_FILE"
+  chmod 600 "$STATE_FILE"
+  echo "DEV_MVP_STATE_FILE=$STATE_FILE"
+  echo "DEV_MVP_DEMO_URL=http://127.0.0.1:$WEB_PORT"
+  echo "DEV_MVP_DEMO_CLEANUP=rtk bash $CLEANUP_SCRIPT $STATE_FILE --stop-runtime"
+  echo "Dev MVP demo 模式已保留；登录凭据仅保存在权限为 600 的状态文件中。"
+fi
