@@ -41,6 +41,14 @@ def main() -> int:
     expected_nimbus = contract["dependencies"]["maven"]["nimbus-jose-jwt"]
     if f"<nimbus-jose-jwt.version>{expected_nimbus}</nimbus-jose-jwt.version>" not in root_pom:
         errors.append(f"pom.xml nimbus-jose-jwt must be {expected_nimbus}")
+    expected_spring_kafka = contract["dependencies"]["maven"]["spring-kafka"]
+    if f"<spring-kafka.version>{expected_spring_kafka}</spring-kafka.version>" not in root_pom:
+        errors.append(f"pom.xml spring-kafka must be {expected_spring_kafka}")
+    if not re.search(
+        r"<artifactId>spring-kafka</artifactId>\s*<version>\$\{spring-kafka\.version}</version>",
+        root_pom,
+    ):
+        errors.append("pom.xml spring-kafka dependency must use the audited spring-kafka.version property")
     expected_bc = contract["dependencies"]["maven"]["bcprov-jdk18on"]
     bc_pattern = re.compile(
         r"<artifactId>bcprov-jdk18on</artifactId>\s*<version>" + re.escape(expected_bc) + r"</version>"
@@ -93,8 +101,8 @@ def main() -> int:
             print(f"dev security sync failed: {error}", file=sys.stderr)
         return 2
     print(
-        "dev security sync passed: Maven/npm/action pins match master audit snapshot; "
-        "required CI remains backend/frontend only and E2E is scheduled/manual"
+        "dev security sync passed: Maven/npm/action pins match the master audit snapshot plus "
+        "recorded dev remediations; required CI remains backend/frontend only and E2E is scheduled/manual"
     )
     return 0
 

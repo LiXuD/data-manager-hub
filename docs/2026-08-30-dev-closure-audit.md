@@ -16,7 +16,7 @@ staging/production 已发布，也不外推为真实厂商、生产容量、滚�
 | 产品页面 | 真实浏览器登录后读取连接器诊断、授权台账、调用记录、计费、审计和监控；各页面无 console error | confirmed |
 | 可重复演示 | `--demo` 返回后，前端和六服务仍监听；状态文件为 600；`--stop-runtime` 后七个监听、隔离库和运行目录均清理 | confirmed |
 | 开发合并门禁 | `dev` 要求 `CI / required-ci`，管理员同样受约束，禁止 force-push 和删除 | confirmed |
-| 安全依赖同步 | `ci/contracts/dev-security-sync.v1.json` 固化从 `master` 选择性回合并的 Maven、npm 和 Action 版本，并明确 dev CI 与生产 CI 的差异 | confirmed |
+| 安全依赖同步 | `ci/contracts/dev-security-sync.v1.json` 固化从 `master` 选择性回合并的 Maven、npm 和 Action 版本，并将远端 1 high/2 moderate Spring Kafka 告警单独修复到 Boot 3.5.16 BOM 兼容的 3.3.16 | confirmed |
 
 机器报告由 `data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh` 生成，报告 v2 记录源码 SHA、
 dirty 状态、UTC 起止时间、耗时、`full-build`/`skip-build` 和 `keepRunning`，因此不能再把旧制品复用
