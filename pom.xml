@@ -50,6 +50,7 @@
         <httpcore5.version>5.4.3</httpcore5.version>
         <commons-lang3.version>3.18.0</commons-lang3.version>
         <kafka.clients.version>3.9.2</kafka.clients.version>
+        <spring-kafka.version>3.3.16</spring-kafka.version>
         <log4j.version>2.25.5</log4j.version>
         <commons-fileupload.version>1.6.0</commons-fileupload.version>
         <nacos.logback-adapter.version>1.1.5</nacos.logback-adapter.version>
@@ -356,7 +357,7 @@
             <dependency>
                 <groupId>org.springframework.kafka</groupId>
                 <artifactId>spring-kafka</artifactId>
-                <version>3.2.0</version>
+                <version>${spring-kafka.version}</version>
             </dependency>
 
             <!-- Lombok -->
