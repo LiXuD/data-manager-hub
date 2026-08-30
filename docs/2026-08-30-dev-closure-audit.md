@@ -17,7 +17,7 @@ staging/production 已发布，也不外推为真实厂商、生产容量、滚�
 | 可重复演示 | `--demo` 返回后，前端和六服务仍监听；状态文件为 600；`--stop-runtime` 后七个监听、隔离库和运行目录均清理 | confirmed |
 | 开发合并门禁 | `dev` 和 `master` 均要求 `CI / required-ci`，管理员同样受约束，禁止 force-push 和删除 | confirmed |
 | 安全依赖同步 | `ci/contracts/dev-security-sync.v1.json` 固化从 `master` 选择性回合并的 Maven、npm 和 Action 版本；Spring Kafka 3.3.16、Netty 4.1.137.Final、Tomcat 10.1.59 已通过依赖扫描 | confirmed |
-| 默认分支调度 | PR #27 已合入 `master`（merge SHA `e7a317f5dfb92dec827300ab2f7b47e4c6ee6167`）；工作日调度已 active，手工 run `33289826840` 从 `dev` SHA `b3a7343be809e245d2696dd7200f96698693bad4` full-build 通过并上传报告 artifact | confirmed |
+| 默认分支调度 | PR #27 已合入 `master`（merge SHA `e7a317f5dfb92dec827300ab2f7b47e4c6ee6167`）；工作日调度已 active，最新手工 run `33290240743` 从 `dev` SHA `db998205061beeb8a148d99949bc98d34525ce2d` full-build 通过并上传报告 artifact | confirmed |
 
 机器报告由 `data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh` 生成，报告 v2 记录源码 SHA、
 dirty 状态、UTC 起止时间、耗时、`full-build`/`skip-build` 和 `keepRunning`，因此不能再把旧制品复用
