@@ -218,6 +218,19 @@ DEV_MVP_SKIP_BUILD=false rtk bash data-platform-test/test-fixtures/dev-mvp/verif
 
 成功后会在 `data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json` 生成不含密钥的机器可读报告，报告必须显示 `schemaVersion=V052`、`pendingMigrations=0` 和 `status=passed`。失败运行会保留精确的隔离数据库、日志和进程状态用于排查；该夹具不会写入正式迁移。
 
+报告 v2 还记录源码 SHA、工作树 dirty 状态、UTC 起止时间、耗时和 `full-build`/`skip-build`，避免把
+旧制品复用误报为 fresh 构建。需要保留一套隔离环境做浏览器演示时使用：
+
+```bash
+DEV_MVP_SKIP_BUILD=true rtk bash data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh --demo
+# 使用命令输出的状态文件执行受保护清理
+rtk bash data-platform-test/test-fixtures/dev-mvp/cleanup-dev-mvp.sh <fixture.env> --stop-runtime
+```
+
+`--demo` 仅用于已完成 full build 后的快速重复演示；最终验收仍必须使用
+`DEV_MVP_SKIP_BUILD=false`。工作日定时或手工运行的
+[Dev MVP E2E](.github/workflows/dev-mvp-e2e.yml) 也固定使用 full build，但不是 PR required check。
+
 ### 5. 编译后端
 
 ```bash
@@ -330,7 +343,7 @@ data-platform/
 | 深度清理、契约收敛与知识库刷新 | ✅ 100% | 2026-07-23 |
 | 外部请求连接器插件化阶段 0—5 | ✅ 已实现并通过双 Access 隔离 OpenAPI/浏览器验收（未声称生产部署） | 2026-08-10 |
 | 粗粒度连接器产品模型阶段 0—5 隔离验收 | ✅ 控制面、双 Access 多服务 API、管理员登录态浏览器和 8/32 容量基线已完成；生产迁移/观察、滚动升级和旧入口最终退役未完成 | 2026-08-28 |
-| dev MVP 一键业务闭环 | ✅ fresh V052、3/2/2 夹具、三类连接器流程和审批/OpenAPI/CallRecord/Billing/审计/监控事实已通过本地验收；待最终 SHA CI 与 PR 合入 dev | 2026-08-29 |
+| dev MVP 一键业务闭环 | ✅ fresh V052、3/2/2 夹具、持久 demo、真实浏览器、受保护清理和机器报告 v2 已通过；工作日定时 E2E 持续观察 | 2026-08-30 |
 
 ---
 
@@ -340,6 +353,7 @@ data-platform/
 - [API 文档](docs/API.md)
 - [部署文档](docs/DEPLOYMENT.md)
 - [开发阶段 CI 门禁](CODE_REVIEW_GATE.md)
+- [2026-08-30 Dev 环境闭环审查](docs/2026-08-30-dev-closure-audit.md)
 - [生产部署前 CI/CD 设计蓝图（当前不自动触发）](docs/2026-08-22-ci-cd-pipeline-design.md)
 - [数据库恢复 Runbook（生产启用前必须演练）](docs/runbooks/database-recovery.md)
 - [发布与回滚 Runbook（生产启用前必须演练）](docs/runbooks/release-deployment.md)
@@ -355,11 +369,15 @@ data-platform/
 PR 合入受保护主分支前，当前 CI 自动执行以下基础检查：
 
 ```bash
-# 1. 后端编译和单元测试（使用仓库锁定的 Maven Wrapper）
+# 1. 安全同步、CI 边界与仓库合同
+python3 ci/scripts/verify-dev-security-sync.py
+python3 -m unittest discover -s ci/tests -p 'test_*.py'
+
+# 2. 后端编译和单元测试（使用仓库锁定的 Maven Wrapper）
 ./mvnw -B -ntp verify \
   -pl '!data-platform-test/data-platform-test-api,!data-platform-test/data-platform-test-service,!data-platform-test/test-fixtures/external-connector-plugin'
 
-# 2. 前端依赖、规范、单元测试和构建
+# 3. 前端依赖、规范、单元测试和构建
 cd data-platform-web
 npm ci
 npm run lint
@@ -367,7 +385,7 @@ npm test
 npm run build
 cd ..
 
-# 3. 检查工作树格式
+# 4. 检查工作树格式
 git diff --check
 ```
 
