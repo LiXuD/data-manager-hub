@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-08-29
-**当前状态**: `dev` 已完成五域收敛、OpenAPI 与单一接口契约整改、服务间最小权限认证、接口调用权限审批闭环和版本化计费。当前主线目标已切换为“干净、可重复、业务可演示的 dev 闭环”：V049/V050 与 V051/V052 前向迁移隔离、V052 无待迁移、fresh 一键启动和 3/2/2 真实业务夹具优先收口；生产厂商 inventory/迁移/观察/容量/滚动升级和阶段 6 旧入口最终退役继续保留为后续生产门禁，不作为当前开发主线。
+**最后更新**: 2026-08-30
+**当前状态**: `dev` 的 fresh V052、六服务、前端和 3/2/2 真实业务夹具已经形成可重复闭环；本地 full build、持久 demo、真实浏览器和受保护清理均有直接证据。当前主线转为保持 Dev MVP 可重复、定时发现回归和清理非阻断前端债务；生产厂商 inventory/迁移/观察/容量/滚动升级和阶段 6 旧入口最终退役继续保留为后续生产门禁，不作为当前开发主线。
 
 ---
 
@@ -23,15 +23,21 @@
 
 - [x] V049/V050 前向-only 迁移隔离修复；V049、V050、fresh V052、重复 update、Liquibase validate 已在隔离库通过。
 - [x] 本机 dev 数据库已升级至 V052，`migrate-db.sh status` 和数据库事实均为 0 pending。
-- [x] `data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh` 提供 fresh 基础设施、迁移、六服务、前端和业务验收入口，并输出机器可读报告。
+- [x] `data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh` 提供 fresh 基础设施、迁移、六服务、前端和业务验收入口；报告 v2 记录源码 SHA、dirty 状态、时间、耗时和构建模式。
 - [x] dev MVP 夹具与正式迁移分离，验证 3 家厂商、2 个调用系统、2 类数据类型、单 HTTP/Token+业务/主备三类连接器流程，以及审批、OpenAPI、CallRecord、Billing、审计和监控落库事实。
 - [x] 普通配置页收敛为插件、固定版本和一次 Schema 表单；阶段、能力、顺序、TRANSPORT 和摘要迁移到 `system:admin` 保护的“连接器运行诊断”页。
-- [ ] 按数据库、迁移控制面/Access 观察、E2E、前端、文档拆分小提交，推送后创建 PR；以最终 SHA 的 `CI / required-ci` 通过并合入 `dev` 作为完成证据。
+- [x] `--demo` 可在命令返回后保留隔离运行态，真实浏览器已验证登录、连接器诊断、2 条有效授权、12 条调用、¥1/3 次计费、54 条成功审计和 6/6 服务健康；受保护清理可停止进程并删除隔离库/目录。
+- [x] `dev` 分支保护要求 `CI / required-ci`，启用管理员约束、stale approval 失效、线性历史并禁止 force-push/删除。
+- [x] 从 `master` 选择性同步当前 Maven/npm/Action 安全版本，并用 `ci/contracts/dev-security-sync.v1.json` 明确禁止把生产 CI 作业误并入 dev required CI。
+- [x] `.github/workflows/dev-mvp-e2e.yml` 提供工作日定时和手工 full-build 验收，明确 checkout `dev`，不在 push/PR 上运行，不作为 required check；同一调度文件须以独立小 PR 镜像到默认分支 `master` 后定时器才真正生效。
+- [ ] 清理 `data-platform-web/src/views/layout/index.vue` 运行时图标模板造成的 Vue runtime compiler warning，并增加登录后 console warning 烟雾断言。
 
 ## 开发阶段 CI/CD（当前生效）
 
-当前提交和 PR 只运行 [基础 CI](.github/workflows/ci.yml)：后端 Java 编译/单元测试，以及前端
-依赖安装、lint、单元测试和构建。`CI / required-ci` 是唯一的开发阶段必需检查，失败不得合并。
+当前提交和 PR 只运行 [基础 CI](.github/workflows/ci.yml)：安全同步/CI 边界验证、65 个仓库合同测试、
+后端 Java 编译/单元测试，以及前端依赖安装、lint、单元测试和构建。`CI / required-ci` 是唯一的
+开发阶段必需检查，失败不得合并。Dev MVP fresh E2E 按工作日定时或手工执行，只用于持续观察，
+不阻塞每个 PR。
 完整部署、制品和生产方案保留在 [生产前 CI/CD 设计](docs/2026-08-22-ci-cd-pipeline-design.md)，
 当前不自动触发。
 
@@ -43,7 +49,8 @@
 
 | 阶段 | 状态 | 当前边界 |
 |---|---|---|
-| 开发阶段基础 CI | 已实现，待当前提交的远端 CI 验证 | 后端 `verify`（排除 `data-platform-test` 的 API、测试服务和 E2E fixture）、前端 `npm ci/lint/test/build`、`CI / required-ci` |
+| 开发阶段基础 CI | 已实现；每个 PR 仍须等待最终 SHA 远端 CI | 安全同步与仓库合同、后端 `verify`（排除 `data-platform-test` 的 API、测试服务和 E2E fixture）、前端 `npm ci/lint/test/build`、`CI / required-ci` |
+| Dev MVP 定时 E2E | 已实现，非 required check | 工作日和手工 full-build、fresh V052、六服务、前端、3/2/2 业务事实及安全报告 artifact |
 | 生产前置能力 | 保留设计和代码蓝图，当前不自动执行 | 部署、GHCR/OCI、签名、Helm/Kubernetes、Nacos、快照、生产发布和回滚 |
 
 ### 生产部署前置方案（当前延期，不作为开发门禁）
