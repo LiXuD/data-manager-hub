@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
 **最后更新**: 2026-08-30
-**当前状态**: `dev` 的 fresh V052、六服务、前端和 3/2/2 真实业务夹具已经形成可重复闭环；本地 full build、持久 demo、真实浏览器和受保护清理均有直接证据。默认分支已镜像并激活 Dev MVP 工作日调度，Ubuntu 手工 run `33289826840` 已用 `dev` SHA `b3a7343be809e245d2696dd7200f96698693bad4` full-build 通过并上传报告。当前主线转为保持 Dev MVP 可重复、定时发现回归和清理非阻断前端债务；生产厂商 inventory/迁移/观察/容量/滚动升级和阶段 6 旧入口最终退役继续保留为后续生产门禁，不作为当前开发主线。
+**当前状态**: `dev` 的 fresh V052、六服务、前端和 3/2/2 真实业务夹具已经形成可重复闭环；本地 full build、持久 demo、真实浏览器和受保护清理均有直接证据。默认分支已镜像并激活 Dev MVP 工作日调度，最新 Ubuntu 手工 run `33290240743` 已用 `dev` SHA `db998205061beeb8a148d99949bc98d34525ce2d` full-build 通过并上传报告。当前主线转为保持 Dev MVP 可重复、定时发现回归和清理非阻断前端债务；生产厂商 inventory/迁移/观察/容量/滚动升级和阶段 6 旧入口最终退役继续保留为后续生产门禁，不作为当前开发主线。
 
 ---
 
@@ -29,7 +29,7 @@
 - [x] `--demo` 可在命令返回后保留隔离运行态，真实浏览器已验证登录、连接器诊断、2 条有效授权、12 条调用、¥1/3 次计费、54 条成功审计和 6/6 服务健康；受保护清理可停止进程并删除隔离库/目录。
 - [x] `dev` 分支保护要求 `CI / required-ci`，启用管理员约束、stale approval 失效、线性历史并禁止 force-push/删除。
 - [x] 从 `master` 选择性同步当前 Maven/npm/Action 安全版本，并用 `ci/contracts/dev-security-sync.v1.json` 明确禁止把生产 CI 作业误并入 dev required CI；远端新发现的 Spring Kafka 1 high/2 moderate 告警使用 Boot 3.5.16 BOM 兼容的 3.3.16 独立修复。
-- [x] `.github/workflows/dev-mvp-e2e.yml` 已通过 PR #27 镜像到默认分支 `master` 并处于 active，提供工作日定时和手工 full-build 验收，明确 checkout `dev`，不在 push/PR 上运行，不作为 required check；Ubuntu 手工 run `33289826840` 已成功，artifact 保留 14 天。
+- [x] `.github/workflows/dev-mvp-e2e.yml` 已通过 PR #27 镜像到默认分支 `master` 并处于 active，提供工作日定时和手工 full-build 验收，明确 checkout `dev`，不在 push/PR 上运行，不作为 required check；最新 Ubuntu 手工 run `33290240743` 已成功，artifact 保留 14 天。
 - [ ] 清理 `data-platform-web/src/views/layout/index.vue` 运行时图标模板造成的 Vue runtime compiler warning，并增加登录后 console warning 烟雾断言。
 
 ## 开发阶段 CI/CD（当前生效）
