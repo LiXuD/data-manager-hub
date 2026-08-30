@@ -15,8 +15,9 @@ staging/production 已发布，也不外推为真实厂商、生产容量、滚�
 | 业务运行态 | 3 家厂商、2 个调用系统、2 类数据、2 个接口、3 个连接器配置；2 个审批授权、12 条调用记录、3 条计费事件、计费金额 ¥1 | confirmed |
 | 产品页面 | 真实浏览器登录后读取连接器诊断、授权台账、调用记录、计费、审计和监控；各页面无 console error | confirmed |
 | 可重复演示 | `--demo` 返回后，前端和六服务仍监听；状态文件为 600；`--stop-runtime` 后七个监听、隔离库和运行目录均清理 | confirmed |
-| 开发合并门禁 | `dev` 要求 `CI / required-ci`，管理员同样受约束，禁止 force-push 和删除 | confirmed |
-| 安全依赖同步 | `ci/contracts/dev-security-sync.v1.json` 固化从 `master` 选择性回合并的 Maven、npm 和 Action 版本，并将远端 1 high/2 moderate Spring Kafka 告警单独修复到 Boot 3.5.16 BOM 兼容的 3.3.16 | confirmed |
+| 开发合并门禁 | `dev` 和 `master` 均要求 `CI / required-ci`，管理员同样受约束，禁止 force-push 和删除 | confirmed |
+| 安全依赖同步 | `ci/contracts/dev-security-sync.v1.json` 固化从 `master` 选择性回合并的 Maven、npm 和 Action 版本；Spring Kafka 3.3.16、Netty 4.1.137.Final、Tomcat 10.1.59 已通过依赖扫描 | confirmed |
+| 默认分支调度 | PR #27 已合入 `master`（merge SHA `e7a317f5dfb92dec827300ab2f7b47e4c6ee6167`）；工作日调度已 active，手工 run `33289826840` 从 `dev` SHA `b3a7343be809e245d2696dd7200f96698693bad4` full-build 通过并上传报告 artifact | confirmed |
 
 机器报告由 `data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh` 生成，报告 v2 记录源码 SHA、
 dirty 状态、UTC 起止时间、耗时、`full-build`/`skip-build` 和 `keepRunning`，因此不能再把旧制品复用
@@ -29,10 +30,10 @@ dirty 状态、UTC 起止时间、耗时、`full-build`/`skip-build` 和 `keepRu
    根因位于 `data-platform-web/src/views/layout/index.vue` 的运行时 `template` 图标对象；当前构建使用
    runtime-only Vue。最小修复是把图标改为编译期 SFC、render function 或现成图标组件，并给登录后的
    布局烟雾测试增加 console warning 断言。
-2. **远端重复性必须持续观察**：`.github/workflows/dev-mvp-e2e.yml` 只按工作日定时或手工执行，故意不作为
-   PR required check。仓库默认分支是 `master`，所以同一调度文件还必须通过独立小 PR 镜像到 `master`，
-   并明确 checkout `dev`；否则 GitHub 不会触发定时任务。每次运行必须 full-build，并只上传不含凭据的
-   报告；首次合入后应手工触发一次作为 Ubuntu 运行证据。
+2. **远端重复性必须持续观察**：`.github/workflows/dev-mvp-e2e.yml` 已通过 PR #27 镜像到默认分支
+   `master`，状态为 active，明确 checkout `dev`；首次 Ubuntu 手工 run 已成功。它只按工作日定时或手工执行，
+   故意不作为 PR required check；每次运行必须 full-build，并只上传不含凭据的报告。后续需观察成功率、耗时和
+   artifact 保留情况，不能把一次成功外推为长期稳定性。
 3. **生产能力未验证**：真实厂商 inventory/CAS 迁移、观察窗口、生产容量、双 Access 滚动升级、旧入口
    最终退役、staging/production 发布、PITR/快照、制品签名和具体 digest 回滚仍是后续门禁。
 
