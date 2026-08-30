@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "sourceBranch": "master",
+  "sourceTipAudited": "d05d47a65e68fc4110a80641633e2fecba6ec679",
+  "decision": "Selectively backport security and dependency updates while retaining the development-stage CI boundary.",
+  "dependencies": {
+    "maven": {
+      "bcprov-jdk18on": "1.84",
+      "nimbus-jose-jwt": "10.0.2"
+    },
+    "npmDev": {
+      "@vitest/coverage-v8": "4.1.11",
+      "sass-embedded": "^1.103.1",
+      "unplugin-auto-import": "^21.1.0",
+      "vitest": "4.1.11"
+    },
+    "npmLockPackages": {},
+    "npmLockAbsent": ["node_modules/js-yaml"]
+  },
+  "actions": {
+    "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "actions/cache": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+    "actions/download-artifact": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+    "docker/login-action": "dbcb813823bdd20940b903addbd779551569679f",
+    "docker/setup-buildx-action": "37fe631027851001ddb9b187196cc803df7f5f0e"
+  },
+  "ciBoundary": {
+    "requiredJobs": ["backend", "frontend", "required-ci"],
+    "scheduledWorkflow": ".github/workflows/dev-mvp-e2e.yml",
+    "productionJobsDeferred": ["classify", "meta", "migration", "security", "deployability", "docker"]
+  }
+}

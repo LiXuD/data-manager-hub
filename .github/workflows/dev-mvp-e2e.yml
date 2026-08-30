@@ -1,0 +1,56 @@
+name: Dev MVP scheduled E2E
+
+on:
+  schedule:
+    - cron: '0 18 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-mvp-e2e
+  cancel-in-progress: false
+
+jobs:
+  dev-mvp-e2e:
+    name: Dev MVP / fresh closure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: dev
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Java
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.19.0'
+          cache: npm
+          cache-dependency-path: data-platform-web/package-lock.json
+      - name: Install runtime clients
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client jq lsof
+      - name: Verify selective security sync and CI boundary
+        run: python3 ci/scripts/verify-dev-security-sync.py
+      - name: Run fresh Dev MVP closure
+        env:
+          DEV_MVP_SKIP_BUILD: 'false'
+        run: bash data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh
+      - name: Upload machine-readable acceptance report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dev-mvp-e2e-${{ github.run_id }}
+          path: data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json
+          if-no-files-found: warn
+          retention-days: 14
