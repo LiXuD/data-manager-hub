@@ -67,7 +67,7 @@
         <jacoco.version>0.8.13</jacoco.version>
         <liquibase.version>4.29.2</liquibase.version>
         <postgresql.driver.version>42.7.13</postgresql.driver.version>
-        <flowable.version>7.1.0</flowable.version>
+        <flowable.version>8.0.0</flowable.version>
         <profiles.active>dev</profiles.active>
     </properties>
 
