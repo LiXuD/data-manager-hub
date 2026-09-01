@@ -60,7 +60,7 @@
         <redisson.version>3.27.2</redisson.version>
         <hutool.version>5.8.47</hutool.version>
         <lombok.version>1.18.46</lombok.version>
-        <resilience4j.version>2.2.0</resilience4j.version>
+        <resilience4j.version>2.4.0</resilience4j.version>
         <nimbus-jose-jwt.version>10.0.2</nimbus-jose-jwt.version>
         <byte-buddy.version>1.17.8</byte-buddy.version>
         <maven.enforcer.version>3.5.0</maven.enforcer.version>
