@@ -29,7 +29,7 @@
     "@eslint/js": "^10.0.1",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vitest/coverage-v8": "4.1.11",
-    "eslint": "^10.8.0",
+    "eslint": "^10.9.1",
     "eslint-plugin-vue": "^10.10.0",
     "globals": "^17.7.0",
     "sass-embedded": "^1.103.1",
