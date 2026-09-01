@@ -101,7 +101,7 @@ jobs:
         working-directory: data-platform-web
         run: npm ci --ignore-scripts
       - name: CodeQL initialize (nightly full scan)
-        uses: github/codeql-action/init@60168efe1c415ce0f5521ea06d5c2062adbeed1b
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938
         with:
           languages: java,javascript-typescript
       - name: CodeQL autobuild (nightly full scan)
