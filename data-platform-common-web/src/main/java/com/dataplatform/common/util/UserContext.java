@@ -105,12 +105,16 @@ public final class UserContext {
      */
     public static void login(Long userId, String username, Long tenantId, List<String> permissions) {
         StpUtil.login(userId);
-        StpUtil.getSession().set(USERNAME_KEY, username);
+        SaSession session = StpUtil.getSession();
+        session.delete(USERNAME_KEY);
+        session.delete(TENANT_ID_KEY);
+        session.delete(PERMISSIONS_KEY);
+        session.set(USERNAME_KEY, username);
         if (tenantId != null) {
-            StpUtil.getSession().set(TENANT_ID_KEY, tenantId);
+            session.set(TENANT_ID_KEY, tenantId);
         }
-        if (permissions != null && !permissions.isEmpty()) {
-            StpUtil.getSession().set(PERMISSIONS_KEY, permissions);
+        if (permissions != null) {
+            session.set(PERMISSIONS_KEY, new ArrayList<>(permissions));
         }
     }
 

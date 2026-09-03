@@ -188,6 +188,65 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void shouldReturn503WhenRateLimitConfigIsNotAValidPositiveInteger() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:rate_limit:1"))
+                .thenReturn(Mono.just(Map.of("windowSec", 1.5D, "maxReqs", 100)));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test").build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        exchange.getAttributes().put("keyId", 1L);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(503, exchange.getResponse().getStatusCode().value());
+        verifyNoInteractions(chain);
+        verify(redisTemplate, never()).execute(any(), anyList(), any(Object[].class));
+    }
+
+    @Test
+    void shouldReturn503WhenRateLimitScriptReturnsNoDecision() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:rate_limit:1"))
+                .thenReturn(Mono.just(Map.of("windowSec", 60, "maxReqs", 100)));
+        when(redisTemplate.execute(any(), anyList(), any(Object[].class)))
+                .thenReturn(Flux.empty());
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test").build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        exchange.getAttributes().put("keyId", 1L);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(503, exchange.getResponse().getStatusCode().value());
+        verifyNoInteractions(chain);
+    }
+
+    @Test
+    void shouldPropagateDownstreamFailureAfterSuccessfulRateLimitCheck() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:rate_limit:1"))
+                .thenReturn(Mono.just(Map.of("windowSec", 60, "maxReqs", 100)));
+        when(redisTemplate.execute(any(), anyList(), any(Object[].class)))
+                .thenReturn(Flux.just(1L));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test").build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        exchange.getAttributes().put("keyId", 1L);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+        IllegalStateException downstreamFailure = new IllegalStateException("downstream failed");
+        when(chain.filter(exchange)).thenReturn(Mono.error(downstreamFailure));
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> filter.filter(exchange, chain).block());
+
+        assertSame(downstreamFailure, thrown);
+        assertNull(exchange.getResponse().getStatusCode());
+    }
+
+    @Test
     void shouldRejectOpenapiRequestWithoutAuthenticatedKeyId() {
         MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test").build();
         ServerWebExchange exchange = MockServerWebExchange.from(request);

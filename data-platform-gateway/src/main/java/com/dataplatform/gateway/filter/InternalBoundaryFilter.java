@@ -21,7 +21,8 @@ public class InternalBoundaryFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
-        if (path.startsWith("/internal/") || path.contains("/internal/")) {
+        if (path.startsWith("/internal/") || path.contains("/internal/")
+                || path.startsWith("/internal-auth/") || path.contains("/internal-auth/")) {
             exchange.getResponse().setStatusCode(HttpStatus.NOT_FOUND);
             return exchange.getResponse().setComplete();
         }

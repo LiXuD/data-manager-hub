@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -62,10 +63,17 @@ public class RoleController {
     public ResponseEntity<Result<Role>> create(@RequestBody Role role) {
         authorizationService.requirePermission("role:add");
         authorizationService.requirePlatformAdmin();
+        if (role == null) {
+            return badRequest("请求体不能为空");
+        }
         role.setRoleCode(authorizationService.canonicalRoleCode(role.getRoleCode()));
         if (role.getRoleName() == null || role.getRoleName().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "角色名称不能为空"));
+        }
+        role.setRoleName(role.getRoleName().trim());
+        if (role.getDescription() != null) {
+            role.setDescription(role.getDescription().trim());
         }
 
         Role existing = roleService.getByRoleCode(role.getRoleCode());
@@ -76,7 +84,14 @@ public class RoleController {
 
         role.setId(null);
         role.setStatus(CommonStatus.ACTIVE);
-        roleService.save(role);
+        role.setDeleted(false);
+        role.setCreatedBy(null);
+        role.setCreatedAt(null);
+        role.setUpdatedBy(null);
+        role.setUpdatedAt(null);
+        if (!roleService.save(role)) {
+            return conflict("角色创建失败，请重试");
+        }
         return ResponseEntity.ok(Result.success(role));
     }
 
@@ -85,22 +100,39 @@ public class RoleController {
     public ResponseEntity<Result<Role>> update(@PathVariable Long id, @RequestBody Role role) {
         authorizationService.requirePermission("role:edit");
         authorizationService.requirePlatformAdmin();
+        if (role == null) {
+            return badRequest("请求体不能为空");
+        }
         Role existing = roleService.getById(id);
         if (existing == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Result.error(404, "角色不存在"));
         }
         if (role.getRoleCode() != null) {
-            role.setRoleCode(authorizationService.canonicalRoleCode(role.getRoleCode()));
-            Role duplicate = roleService.getByRoleCode(role.getRoleCode());
-            if (duplicate != null && !id.equals(duplicate.getId())) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(Result.error(409, "角色代码已存在"));
+            String requestedRoleCode = authorizationService.canonicalRoleCode(role.getRoleCode());
+            if (!requestedRoleCode.equals(existing.getRoleCode())) {
+                return badRequest("角色代码不可修改");
             }
         }
-        authorizationService.invalidateUsersWithRole(id);
+        if (role.getRoleName() == null || role.getRoleName().trim().isEmpty()) {
+            return badRequest("角色名称不能为空");
+        }
+        role.setRoleCode(existing.getRoleCode());
+        role.setRoleName(role.getRoleName().trim());
+        if (role.getDescription() != null) {
+            role.setDescription(role.getDescription().trim());
+        }
+        role.setStatus(existing.getStatus());
+        role.setDeleted(null);
+        role.setCreatedBy(null);
+        role.setCreatedAt(null);
+        role.setUpdatedBy(null);
+        role.setUpdatedAt(null);
         role.setId(id);
-        roleService.updateById(role);
+        if (!roleService.updateById(role)) {
+            return conflict("角色已被其他请求修改，请刷新后重试");
+        }
+        authorizationService.invalidateUsersWithRole(id);
         return ResponseEntity.ok(Result.success(roleService.getById(id)));
     }
 
@@ -115,7 +147,10 @@ public class RoleController {
                 .body(Result.error(404, "角色不存在"));
         }
         authorizationService.requireRoleNotAssigned(id);
-        roleService.removeById(id);
+        if (!roleService.removeById(id)) {
+            return conflict("角色删除失败，请重试");
+        }
+        authorizationService.invalidateUsersWithRole(id);
         return ResponseEntity.ok(Result.success(null));
     }
 
@@ -124,9 +159,13 @@ public class RoleController {
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         authorizationService.requirePermission("role:edit");
         authorizationService.requirePlatformAdmin();
+        if (body == null) {
+            return badRequest("请求体不能为空");
+        }
         String status = body.get("status");
 
-        CommonStatus statusEnum = CommonStatus.fromCode(status);
+        CommonStatus statusEnum = CommonStatus.fromCode(
+                status == null ? null : status.trim().toLowerCase(Locale.ROOT));
         if (statusEnum == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "无效的状态值，必须是active或inactive"));
@@ -137,12 +176,17 @@ public class RoleController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Result.error(404, "角色不存在"));
         }
+        if (statusEnum.equals(existing.getStatus())) {
+            return ResponseEntity.ok(Result.success(null));
+        }
 
         Role role = new Role();
         role.setId(id);
         role.setStatus(statusEnum);
+        if (!roleService.updateById(role)) {
+            return conflict("角色状态已被其他请求修改，请刷新后重试");
+        }
         authorizationService.invalidateUsersWithRole(id);
-        roleService.updateById(role);
         return ResponseEntity.ok(Result.success(null));
     }
 
@@ -175,13 +219,25 @@ public class RoleController {
     public ResponseEntity<Result<Void>> assignPermissions(@PathVariable Long id, @RequestBody List<Long> permissionIds) {
         authorizationService.requirePermission("role:edit");
         authorizationService.requirePlatformAdmin();
+        if (permissionIds == null || permissionIds.stream().anyMatch(java.util.Objects::isNull)) {
+            return badRequest("权限ID列表不能为空且不能包含空值");
+        }
         Role role = roleService.getById(id);
         if (role == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Result.error(404, "角色不存在"));
         }
-        authorizationService.preparePermissionAssignment(id, permissionIds);
-        rolePermissionService.assignPermissions(id, permissionIds);
+        List<Long> distinctPermissionIds = permissionIds.stream().distinct().toList();
+        authorizationService.preparePermissionAssignment(id, distinctPermissionIds);
+        rolePermissionService.assignPermissions(id, distinctPermissionIds);
         return ResponseEntity.ok(Result.success(null));
+    }
+
+    private <T> ResponseEntity<Result<T>> badRequest(String message) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Result.error(400, message));
+    }
+
+    private <T> ResponseEntity<Result<T>> conflict(String message) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Result.error(409, message));
     }
 }

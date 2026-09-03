@@ -11,5 +11,7 @@ import com.dataplatform.identity.tenant.entity.TenantInfo;
 public interface TenantService extends IService<TenantInfo> {
     Page<TenantInfo> listPage(int page, int pageSize, String keyword, String status);
 
+    Page<TenantInfo> listPage(int page, int pageSize, String keyword, String status, Long tenantId);
+
     TenantInfo getByTenantCode(String tenantCode);
 }

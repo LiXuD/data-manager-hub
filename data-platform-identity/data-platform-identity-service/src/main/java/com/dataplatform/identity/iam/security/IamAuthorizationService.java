@@ -48,7 +48,8 @@ public class IamAuthorizationService {
     }
 
     public void requirePermission(String permission) {
-        if (!UserContext.hasPermission(permission)) {
+        if (!UserContext.hasPermission(permission)
+                && !UserContext.hasPermission(PLATFORM_ADMIN_PERMISSION)) {
             throw forbidden("PERMISSION_DENIED", "缺少权限：" + permission);
         }
     }
@@ -67,15 +68,25 @@ public class IamAuthorizationService {
             throw new IamAuthorizationException(
                     HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "用户不存在");
         }
-        if (!isPlatformAdmin()
-                && !Objects.equals(UserContext.getCurrentTenantId(), user.getTenantId())) {
-            throw forbidden("USER_TENANT_DENIED", "不能访问其他租户用户");
+        if (!isPlatformAdmin()) {
+            Long currentTenantId = UserContext.getCurrentTenantId();
+            if (currentTenantId == null || user.getTenantId() == null
+                    || !currentTenantId.equals(user.getTenantId())) {
+                throw forbidden("USER_TENANT_DENIED", "不能访问其他租户用户");
+            }
         }
         return user;
     }
 
     public Long tenantFilter() {
-        return isPlatformAdmin() ? null : UserContext.getCurrentTenantId();
+        if (isPlatformAdmin()) {
+            return null;
+        }
+        Long tenantId = UserContext.getCurrentTenantId();
+        if (tenantId == null) {
+            throw forbidden("TENANT_SCOPE_REQUIRED", "当前用户没有租户作用域");
+        }
+        return tenantId;
     }
 
     public void prepareRoleAssignment(Long targetUserId, Collection<Long> roleIds) {
@@ -87,8 +98,12 @@ public class IamAuthorizationService {
         List<Role> roles = distinctRoleIds.isEmpty()
                 ? List.of()
                 : roleService.listByIds(distinctRoleIds);
+        if (roles == null) {
+            throw dependencyUnavailable("IAM_ROLE_LOOKUP_UNAVAILABLE", "角色数据暂不可用");
+        }
         if (roles.size() != distinctRoleIds.size()
-                || roles.stream().anyMatch(role -> Boolean.TRUE.equals(role.getDeleted())
+                || roles.stream().anyMatch(role -> role == null
+                        || Boolean.TRUE.equals(role.getDeleted())
                         || !CommonStatus.ACTIVE.equals(role.getStatus()))) {
             throw new IamAuthorizationException(
                     HttpStatus.BAD_REQUEST,
@@ -97,12 +112,19 @@ public class IamAuthorizationService {
         }
         if (!isPlatformAdmin()) {
             Set<String> actorPermissions = new HashSet<>(UserContext.getCurrentPermissions());
-            Set<String> grantedPermissions = roles.stream()
-                    .flatMap(role -> rolePermissionService
-                            .getPermissionsByRoleId(role.getId()).stream())
-                    .filter(permission -> "active".equalsIgnoreCase(permission.getStatus()))
-                    .map(Permission::getPermissionCode)
-                    .collect(java.util.stream.Collectors.toSet());
+            Set<String> grantedPermissions = new HashSet<>();
+            for (Role role : roles) {
+                List<Permission> rolePermissions = rolePermissionService.getPermissionsByRoleId(role.getId());
+                if (rolePermissions == null || rolePermissions.stream().anyMatch(Objects::isNull)) {
+                    throw dependencyUnavailable(
+                            "IAM_PERMISSION_LOOKUP_UNAVAILABLE", "角色权限数据暂不可用");
+                }
+                rolePermissions.stream()
+                        .filter(permission -> "active".equalsIgnoreCase(permission.getStatus()))
+                        .map(Permission::getPermissionCode)
+                        .filter(Objects::nonNull)
+                        .forEach(grantedPermissions::add);
+            }
             if (!actorPermissions.containsAll(grantedPermissions)) {
                 throw forbidden(
                         "ROLE_PRIVILEGE_ESCALATION_FORBIDDEN",
@@ -155,9 +177,12 @@ public class IamAuthorizationService {
         List<Permission> permissions = distinctPermissionIds.isEmpty()
                 ? List.of()
                 : permissionService.listByIds(distinctPermissionIds);
+        if (permissions == null) {
+            throw dependencyUnavailable("IAM_PERMISSION_LOOKUP_UNAVAILABLE", "权限数据暂不可用");
+        }
         if (permissions.size() != distinctPermissionIds.size()
-                || permissions.stream().anyMatch(permission ->
-                        !"active".equalsIgnoreCase(permission.getStatus())
+                || permissions.stream().anyMatch(permission -> permission == null
+                        || !"active".equalsIgnoreCase(permission.getStatus())
                                 || Boolean.TRUE.equals(permission.getDeleted()))) {
             throw new IamAuthorizationException(
                     HttpStatus.BAD_REQUEST,
@@ -168,7 +193,11 @@ public class IamAuthorizationService {
     }
 
     public void requireRoleNotAssigned(Long roleId) {
-        if (!userRoleService.getUserIdsByRoleId(roleId).isEmpty()) {
+        List<Long> userIds = userRoleService.getUserIdsByRoleId(roleId);
+        if (userIds == null) {
+            throw dependencyUnavailable("IAM_USER_ROLE_LOOKUP_UNAVAILABLE", "角色关联数据暂不可用");
+        }
+        if (!userIds.isEmpty()) {
             throw new IamAuthorizationException(
                     HttpStatus.CONFLICT,
                     "ROLE_IN_USE",
@@ -195,7 +224,17 @@ public class IamAuthorizationService {
         userService.listUserIds().forEach(this::invalidateUser);
     }
 
+    public void invalidateUsersInTenant(Long tenantId) {
+        if (tenantId != null) {
+            userService.listUserIdsByTenant(tenantId).forEach(this::invalidateUser);
+        }
+    }
+
     private IamAuthorizationException forbidden(String code, String message) {
         return new IamAuthorizationException(HttpStatus.FORBIDDEN, code, message);
+    }
+
+    private IamAuthorizationException dependencyUnavailable(String code, String message) {
+        return new IamAuthorizationException(HttpStatus.SERVICE_UNAVAILABLE, code, message);
     }
 }

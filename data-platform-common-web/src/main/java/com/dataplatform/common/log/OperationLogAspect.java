@@ -101,6 +101,7 @@ public class OperationLogAspect {
     private void populateUser(OperationLogRecord record) {
         try {
             Long userId = UserContext.getCurrentUserId();
+            record.setTenantId(UserContext.getCurrentTenantId());
             if (userId != null) {
                 record.setUserId(userId);
                 record.setUsername(UserContext.getCurrentUsername());

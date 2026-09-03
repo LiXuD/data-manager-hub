@@ -32,6 +32,21 @@ class InternalBoundaryFilterTest {
     }
 
     @Test
+    void blocksInternalTokenIssuanceAtGateway() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/internal-auth/v1/token").build());
+        AtomicBoolean invoked = new AtomicBoolean();
+
+        filter.filter(exchange, ignored -> {
+            invoked.set(true);
+            return Mono.empty();
+        }).block();
+
+        assertEquals(HttpStatus.NOT_FOUND, exchange.getResponse().getStatusCode());
+        assertTrue(!invoked.get());
+    }
+
+    @Test
     void removesCallerSuppliedTrustedHeaders() {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/openapi/v1/query")
                 .header("X-Actor-Id", "forged")

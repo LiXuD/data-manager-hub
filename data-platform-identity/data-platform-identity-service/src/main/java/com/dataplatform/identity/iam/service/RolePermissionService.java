@@ -6,7 +6,9 @@ import com.dataplatform.identity.iam.entity.Permission;
 import com.dataplatform.identity.iam.entity.RolePermission;
 import com.dataplatform.identity.iam.mapper.RolePermissionMapper;
 import com.dataplatform.identity.iam.mapper.PermissionMapper;
+import com.dataplatform.identity.iam.security.IamAuthorizationException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +59,8 @@ public class RolePermissionService extends ServiceImpl<RolePermissionMapper, Rol
     public void assignPermissions(Long roleId, List<Long> permissionIds) {
         LambdaQueryWrapper<RolePermission> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(RolePermission::getRoleId, roleId);
+        // A zero-row delete is a valid first assignment/clear operation, so its
+        // boolean result cannot be used as a persistence-failure signal.
         remove(wrapper);
         if (permissionIds != null && !permissionIds.isEmpty()) {
             List<RolePermission> rolePermissions = permissionIds.stream()
@@ -67,7 +71,13 @@ public class RolePermissionService extends ServiceImpl<RolePermissionMapper, Rol
                         return rp;
                     })
                     .collect(Collectors.toList());
-            saveBatch(rolePermissions);
+            if (!saveBatch(rolePermissions)) {
+                throw assignmentConflict("ROLE_PERMISSION_CREATE_FAILED", "角色权限关联更新失败，请重试");
+            }
         }
+    }
+
+    private IamAuthorizationException assignmentConflict(String code, String message) {
+        return new IamAuthorizationException(HttpStatus.CONFLICT, code, message);
     }
 }

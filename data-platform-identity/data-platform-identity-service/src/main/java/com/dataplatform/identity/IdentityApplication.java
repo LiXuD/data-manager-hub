@@ -1,5 +1,6 @@
 package com.dataplatform.identity;
 
+import com.dataplatform.access.caller.api.feign.CallerInternalFeignClient;
 import com.dataplatform.governance.log.api.LogClient;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
@@ -16,7 +17,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableDiscoveryClient
 @EnableScheduling
-@EnableFeignClients(clients = LogClient.class)
+@EnableFeignClients(clients = {LogClient.class, CallerInternalFeignClient.class})
 @MapperScan({
         "com.dataplatform.identity.tenant.mapper",
         "com.dataplatform.identity.iam.mapper",

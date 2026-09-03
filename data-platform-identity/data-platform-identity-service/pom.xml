@@ -21,6 +21,11 @@
         </dependency>
         <dependency>
             <groupId>com.dataplatform</groupId>
+            <artifactId>data-platform-access-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.dataplatform</groupId>
             <artifactId>data-platform-common-web</artifactId>
         </dependency>
         <dependency>

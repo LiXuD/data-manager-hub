@@ -4,8 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.identity.iam.entity.UserRole;
 import com.dataplatform.identity.iam.mapper.UserRoleMapper;
+import com.dataplatform.identity.iam.security.IamAuthorizationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
@@ -35,6 +37,8 @@ public class UserRoleService extends ServiceImpl<UserRoleMapper, UserRole> {
 
     @Transactional
     public void assignRoles(Long userId, List<Long> roleIds) {
+        // A zero-row delete is a valid first assignment/clear operation, so its
+        // boolean result cannot be used as a persistence-failure signal.
         this.remove(new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, userId));
         if (roleIds != null && !roleIds.isEmpty()) {
             List<UserRole> userRoles = roleIds.stream()
@@ -45,7 +49,13 @@ public class UserRoleService extends ServiceImpl<UserRoleMapper, UserRole> {
                         return userRole;
                     })
                     .toList();
-            this.saveBatch(userRoles);
+            if (!this.saveBatch(userRoles)) {
+                throw assignmentConflict("USER_ROLE_CREATE_FAILED", "用户角色关联更新失败，请重试");
+            }
         }
+    }
+
+    private IamAuthorizationException assignmentConflict(String code, String message) {
+        return new IamAuthorizationException(HttpStatus.CONFLICT, code, message);
     }
 }
