@@ -2,7 +2,7 @@
 
 > 日期：2026-09-01  
 > 适用基线：`dev` / `d4d56bf6954a2827c8d86223ecc211039debf7a9` 及其后续修复分支  
-> 状态：截至 2026-09-03，代码、前端、V059 前向迁移、测试和本地 Dev 运行态整改已实施并复审；最终精确 SHA 的远端 `CI / required-ci`、调用场景产品决策及 staging/production 门禁仍未宣称完成
+> 状态：截至 2026-09-03，代码、前端、V060 前向迁移、测试和本地 Dev 运行态整改已实施并复审；合并后对抗性审查发现的四类缺陷已按功能点修复，远端交付仍以最终 PR 精确 SHA 的 `CI / required-ci` 为门禁，调用场景产品决策及 staging/production 门禁仍未宣称完成
 > 证据入口：[验收结果](2026-08-31-real-browser-end-to-end-acceptance-results.md) / [历史执行计划](2026-08-30-real-browser-end-to-end-acceptance-inventory-plan.md)  
 > 全局待办：以 [`PENDING_TASKS.md`](../PENDING_TASKS.md) 为准；本文是本轮问题的唯一详细整改设计
 
@@ -41,7 +41,7 @@
 | 结论类型 | 当前证据 | 使用边界 |
 |---|---|---|
 | 源码事实 | 当前工作树的 Controller、Service、Vue、TypeScript、fixture 与迁移代码 | 可用于定位候选根因；实现前仍须重新执行 GitNexus impact |
-| 运行态事实 | 2026-08-31 与 2026-09-03 隔离 Dev-MVP 的浏览器、HTTP、脱敏数据库和清理证据 | 2026-09-03 当前工作树的 fresh V059/P6 已重新运行并通过；不代表 staging/production 已验证 |
+| 运行态事实 | 2026-08-31 与 2026-09-03 隔离 Dev-MVP 的浏览器、HTTP、脱敏数据库和清理证据 | 2026-09-03 当前工作树的 fresh V060/P6 已重新运行并通过；不代表 staging/production 已验证 |
 | 高置信推断 | 计费发布 500 与区间冲突的异常映射，现由领域异常、预检、事务锁和回归测试覆盖 | 未保留服务端生产堆栈；仍需在目标环境观察真实错误率和并发行为 |
 | 未验证 | 最终精确 SHA 的远端 required CI、调用场景产品决策、生产环境与真实付费厂商 | 只能作为当前残余门禁，不能写成已通过 |
 
@@ -65,16 +65,27 @@
 | UX-01 | P2 | 正确的保护性 409 只能在提交后看到 | Web | 保留后端拒绝语义 |
 | OBS-01 | P2 | CallRecord 最终一致只由测试轮询兜底 | Access + Governance | 生产阈值需观测数据决定 |
 | ROLE-01 | 已闭合/回归 | 历史 fixture 把管理员和审批人耦合 | Test fixture | 保持四角色分离，不重新引入自审 |
-| TEST-01 | 验收门禁 | 当前安全收尾版 P6 已在 fresh V059 隔离环境完整回放 | Test fixture | 仍需在最终精确 SHA 上等待远端 `CI / required-ci` |
+| TEST-01 | 验收门禁 | 当前安全收尾版 P6 已在 fresh V060 隔离环境完整回放 | Test fixture | 远端交付仍以最终精确 SHA 的 `CI / required-ci` 为合并门禁 |
 
 ### 3.1 2026-09-03 实施与对抗性复审结论
 
 - SEC-01/SEC-02/AUTH-01、NAV-01/NAV-02、PERM-01、STATE-01/02、CONN-01、MIG-01 和 BILL-01 的技术整改已落地；路由机器校验为 286 个 Controller mapping、255 个 policy entry、30 个 public/internal 排除项。
 - UI-01、UX-01 和 OBS-01 已落地并通过前端/运行态断言；`api_process_admin` 采用只读流程诊断，流程写管理仍等待产品决策。
 - SCENE-01 已采用安全的编码不可变、元数据可维护、停用代替物理删除实现；是否将其作为最终产品生命周期仍等待产品确认，未把该停点伪装成完成。
-- V058 以前向迁移修复 API Key 权限目录的历史 ID 父级错误，V059 为调用场景补齐租户所有权并在无法明确归属存量行时原子 HALT；两者都不改写已执行历史事实，fresh/upgrade/repeat/负向断言均纳入验证。
+- V058 以前向迁移修复 API Key 权限目录的历史 ID 父级错误，V059 为调用场景补齐租户所有权并在无法明确归属存量行时原子 HALT，V060 分离精确缓存重放载荷和脱敏审计响应；三者都不改写已执行历史事实，fresh/upgrade/repeat/负向断言均纳入验证。
 - 对 V053 的对抗性复审发现 `ON CONFLICT DO UPDATE` 会重写既有权限事实，已改为只补齐缺失词汇；对计费发布复审发现候选行锁早于业务键锁，已调整为“业务键锁 → 候选行锁 → 业务键范围行锁”，并补充并发顺序和并发修改回归测试。
-- 对抗性复审重点检查了权限绕过、跨租户对象、Secret 明文/引用、Schema 条件字段、Redis 不可用、计费冲突部分写入、迁移脏状态、前端二次反转、控制台噪声和证据泄露；当前 Dev 证据未发现新增已知缺陷。
+- 对抗性复审重点检查了权限绕过、跨租户对象、Secret 明文/引用、Schema 条件字段、Redis 不可用、计费冲突部分写入、迁移脏状态、前端二次反转、控制台噪声和证据泄露；合并后 PR 评论复审又发现四个缺陷，已在后续提交中闭环，见下一节。
+
+### 3.2 合并后 PR 评论的逐条整改
+
+PR #45 合并后重新审查其目标评论，发现此前“已通过”的判断仍遗漏以下边界；每条都已独立修复并补充回归证据：
+
+- `3920046732`：缓存候选的 `responseData` 已脱敏，直接重放会向调用方返回不完整数据。`5fcdfe5` 增加 V060 `cache_response_data`，精确成功响应只供授权缓存重放，普通 CallRecord 查询通过 `select=false` 排除该列，旧行不回填；新增精确重放和事件载荷测试。
+- `3920046735`：浏览器敏感字段扫描使用了无效的 `rg -E -i` 参数，且错误可能被当作无匹配。`9bb4442` 修正参数并对 ripgrep 执行错误 fail-closed；`2723ea3` 又补齐凭据扫描和禁止文件扫描的错误路径，新增缺失证据目录负向 harness。
+- `3920046738`：条件 Schema 的另一分支 `required` 不能推断当前分支禁止字段，否则会误删合法可选值。`23f1b4f` 仅依据显式 `not`/禁止字段处理，新增 `pruneSchemaValue` 可选字段回归测试。
+- `3920046742`：`Number.longValue()` 会截断小数和超范围浮点数，可能查询错误 CallRecord。`edfeb82` 使用精确整数解析并拒绝小数、NaN、无穷和越界值，新增 Controller 400/无服务调用测试。
+
+上述提交保持功能边界拆分；对应 targeted backend/frontend 测试、shell harness 和 fresh V060 运行态复验均在最终交付门禁前重新执行。
 
 ## 4. 详细修复设计
 
@@ -293,9 +304,9 @@ Kafka 异步落库导致成功响应后短暂查不到 CallRecord 是设计行�
 
 ### 4.16 TEST-01：安全收尾脚本的 fresh 完整回放
 
-最终 P6 通过后，脚本移除了 tracing start/stop 以避免保留凭据。整改前该安全收尾版本只执行过 `bash -n` 和 `--help`；2026-09-03 已在 fresh V059 隔离环境完成以下回放：
+最终 P6 通过后，脚本移除了 tracing start/stop 以避免保留凭据。整改前该安全收尾版本只执行过 `bash -n` 和 `--help`；2026-09-03 已在 fresh V060 隔离环境完成以下回放：
 
-1. 从 fresh 隔离数据库、最新迁移且 `pendingMigrations=0` 启动六服务、Gateway、Web 和 HTTPS fixture。
+1. 从 fresh 隔离数据库、V060 最新迁移且 `pendingMigrations=0` 启动六服务、Gateway、Web 和 HTTPS fixture。
 2. 使用四个分离角色和真实用户名密码，不注入 Token/storage state/mock。
 3. 执行登录、菜单/直接 URL 权限、申请、分离审批、契约加载、真实查询、CallRecord/Billing、撤销后旧 Key 403、服务端登出旧 Token 401，以及本方案涉及的代表性 CRUD/负向路径。
 4. 对当前 `run-browser-e2e.sh` 运行完整 P6，确认成功证据目录不产生 trace/profile，敏感扫描为 0。
@@ -331,19 +342,20 @@ Kafka 异步落库导致成功响应后短暂查不到 CallRecord 是设计行�
 | 单元/组件 | 权限 resolver、状态转换、Schema default/prune、Secret 判定、异常映射、并发规则、Vue 组件 | 正负向断言齐全，不靠快照掩盖错误 |
 | 模块集成 | 五域 Controller/Service、Feign 契约、Liquibase fresh/upgrade/repeat、数据库并发 | 401/403/409 语义稳定，无跨域直读和部分写入 |
 | 基础 CI | 后端 `verify`，前端 `npm ci/lint/test/build`，仓库合同与 `git diff --check` | 本地通过，但不替代远端检查 |
-| 隔离运行态 | fresh 最新迁移、四角色真实浏览器、Gateway、CallRecord/Billing/审计、敏感扫描与清理 | 当前修复问题逐项闭合，未验证项明确保留 |
+| 隔离运行态 | fresh V060、四角色真实浏览器、Gateway、CallRecord/Billing/审计、敏感扫描与清理 | 当前修复问题逐项闭合，未验证项明确保留 |
 | 远端交付 | 最终精确 SHA 的 `CI / required-ci` | backend/frontend/contracts/required-ci 均明确成功后才可交付 |
 | 生产门禁 | staging/production、真实厂商、容量/长稳、DR/回滚、通知渠道 | 仍按既有发布 Runbook 单独执行，不属于本轮 Dev 修复通过条件 |
 
 ## 7. 完成定义与残余边界
 
-本整改专题只有同时满足以下条件才能标记完成；截至 2026-09-02，远端 required CI 和产品停点尚未满足，因此本文不把专题标记为最终完成：
+本整改专题的本地整改与验证条件已满足；远端交付仍须以最终 PR 精确 SHA 的 required CI 记录为准，产品停点和生产门禁仍不得被本专题代替：
 
 - P0/P1 项有代码、测试、迁移和运行态证据，产品停点已得到明确决策；
 - 约 212 个已盘点路由的机器可读授权矩阵无未知受保护路径，跨租户负向通过；
 - 普通申请人无需 `interface:view` 即可安全加载已授权契约，仍不能读取任意管理契约；
 - 登出后旧 Token 跨实例重放为 401；
 - 三类连接器表单、迁移资格和计费发布均无通用 500/不可推进脏状态；
+- 缓存重放使用未脱敏的精确载荷而普通 CallRecord/审计查询不暴露该载荷，证据扫描遇到读取错误时 fail-closed，数值过滤不发生有损转换，条件 Schema 不误删可选字段；
 - 当前安全版 P6 在 fresh 环境完整通过，warning/error、敏感扫描和清理断言通过；
 - 最终 SHA 的远端 required CI 成功，文档与 `PENDING_TASKS.md` 同步到相同事实。
 

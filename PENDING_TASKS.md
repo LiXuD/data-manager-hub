@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
 **最后更新**: 2026-09-03
-**当前状态**: 本轮整改已完成代码、前端、V059 前向迁移、测试和本地 Dev 运行态复审。fresh V059 六服务/前端/3/2/2 业务事实、四角色真实浏览器 P6、权限矩阵、敏感扫描和受保护清理均已通过；最终精确 SHA 的远端 `CI / required-ci` 尚未执行，调用场景产品决策和 staging/production 门禁仍保留为明确边界。详细设计与证据继续以 [真实浏览器验收问题整改方案](docs/2026-09-01-real-browser-acceptance-remediation-plan.md) 为准。
+**当前状态**: 本轮整改已完成代码、前端、V060 前向迁移、测试和本地 Dev 运行态复审。fresh V060 六服务/前端/3/2/2 业务事实、四角色真实浏览器 P6、权限矩阵、敏感扫描和受保护清理均已通过；合并后对抗性审查发现的缓存重放、扫描器 fail-open、数值截断和条件字段误删问题已按功能点拆分修复。远端交付以最终 PR 精确 SHA 的 `CI / required-ci` 为门禁，调用场景产品决策和 staging/production 门禁仍保留为明确边界。详细设计与证据继续以 [真实浏览器验收问题整改方案](docs/2026-09-01-real-browser-acceptance-remediation-plan.md) 为准。
 
 ---
 
@@ -24,7 +24,8 @@
 - [x] V049/V050 前向-only 迁移隔离修复；V049、V050、fresh V052、重复 update、Liquibase validate 已在隔离库通过。
 - [x] 本轮新增 V058 API Key 权限目录父级前向修复；fresh V058、重复 update、Liquibase validate、V058 父级断言均通过。
 - [x] 本轮新增 V059 调用场景租户所有权前向迁移；fresh V059、存量无法归属 HALT、复合唯一性和重复 update 断言均通过。
-- [x] 本机 fresh Dev MVP 已升级至 V059，`migrate-db.sh status` 和数据库事实均为 0 pending。
+- [x] 本轮新增 V060 CallRecord 精确缓存重放载荷与脱敏审计响应分离；旧行不从可能已脱敏的 `response_data` 回填，普通查询默认不读取缓存载荷，精确重放回归通过。
+- [x] 本机 fresh Dev MVP 已升级至 V060，`migrate-db.sh status` 和数据库事实均为 0 pending。
 - [x] `data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh` 提供 fresh 基础设施、迁移、六服务、前端和业务验收入口；报告 v2 记录源码 SHA、dirty 状态、时间、耗时和构建模式。
 - [x] dev MVP 夹具与正式迁移分离，验证 3 家厂商、2 个调用系统、2 类数据类型、单 HTTP/Token+业务/主备三类连接器流程，以及审批、OpenAPI、CallRecord、Billing、审计和监控落库事实。
 - [x] 普通配置页收敛为插件、固定版本和一次 Schema 表单；阶段、能力、顺序、TRANSPORT 和摘要迁移到 `system:admin` 保护的“连接器运行诊断”页。
@@ -33,10 +34,10 @@
 - [x] 从 `master` 选择性同步当前 Maven/npm/Action 安全版本，并用 `ci/contracts/dev-security-sync.v1.json` 明确禁止把生产 CI 作业误并入 dev required CI；远端新发现的 Spring Kafka 1 high/2 moderate 告警使用 Boot 3.5.16 BOM 兼容的 3.3.16 独立修复。
 - [x] `.github/workflows/dev-mvp-e2e.yml` 已通过 PR #27 镜像到默认分支 `master` 并处于 active，提供工作日定时和手工 full-build 验收，明确 checkout `dev`，不在 push/PR 上运行，不作为 required check；最新 Ubuntu 手工 run `33290240743` 已成功，artifact 保留 14 天。
 - [x] 完成四角色真实浏览器代表性验收：真实用户名密码登录、申请、分离审批、授权、调用、CallRecord/BillingEvent、撤销后 403、计费冲正、P6 回放、敏感证据处置和隔离环境清理均有脱敏证据。
-- [x] 按 [2026-09-01 真实浏览器验收问题整改方案](docs/2026-09-01-real-browser-acceptance-remediation-plan.md) 完成 P0/P1 技术整改，并以当前安全版浏览器脚本重新执行 fresh 全链路回放；仍待最终 SHA 远端 required CI。
+- [x] 按 [2026-09-01 真实浏览器验收问题整改方案](docs/2026-09-01-real-browser-acceptance-remediation-plan.md) 完成 P0/P1 技术整改，并以当前安全版浏览器脚本重新执行 fresh V060 全链路回放；远端交付继续以最终 PR SHA 的 required CI 为门禁。
 - [x] 清理 `data-platform-web/src/views/layout/index.vue` 运行时图标模板造成的 Vue runtime compiler warning，并增加登录后 console warning 烟雾断言。
 
-## 真实浏览器验收整改（2026-09-02 复审状态）
+## 真实浏览器验收整改（2026-09-03 复审状态）
 
 详细根因、目标设计、迁移策略、测试矩阵、提交边界和完成定义只维护在 [整改方案](docs/2026-09-01-real-browser-acceptance-remediation-plan.md)，本节只维护全局优先级和完成状态。
 
@@ -52,6 +53,7 @@
 - [x] 用 forward-only 迁移统一配置中心 `config:*` 权限并补 config-only/vendor-only 正负向测试。
 - [x] 统一租户 `active/inactive/suspended` 状态并修复租户、配置开关的二次反转和失败回滚。
 - [x] 修复简单连接器可选空字段、条件必填、SecretRef 误判/硬编码选项和结构化字段错误，覆盖三种 flow 与 Secret 所有权负向用例。
+- [x] 合并后对抗性审查修复精确缓存响应与脱敏审计分离、浏览器证据扫描全路径 fail-closed、CallRecord 数值过滤拒绝有损转换，以及条件 Schema 可选字段保留；对应提交 `5fcdfe5`、`9bb4442`、`2723ea3`、`edfeb82`、`23f1b4f`。
 - [x] 把连接器迁移资格校验前移到 prepare；不可迁移对象不新增任务，已有无效 PREPARED 事实只允许 dry-run 后 CAS 转为可解释阻断状态。
 - [x] 统一计费发布预检、400/404/409 领域错误和同业务键并发串行化；冲突路径无通用 500 且无部分状态。
 
@@ -60,7 +62,7 @@
 - [x] 移除 Vue 运行时模板 warning；调用场景技术侧采用编码不可变、名称/描述/状态可维护、停用代替物理删除，产品仍需确认最终生命周期语义。
 - [x] 保留重复发布、活动插件禁用、重复导入的后端 409 保护，前端表达禁用原因并覆盖无状态变化断言。
 - [x] 保留 CallRecord 有界轮询并补 Kafka lag/DLT/落库延迟观测；生产阈值仍由目标环境 SLO 决定。
-- [x] fresh V059、四角色真实浏览器、当前安全版 P6、敏感扫描和受保护清理已通过；最终精确 SHA 的远端 `CI / required-ci` 仍待执行。
+- [x] fresh V060、四角色真实浏览器、当前安全版 P6、敏感扫描和受保护清理已通过；远端交付以最终 PR 精确 SHA 的 `CI / required-ci` 为合并门禁。
 
 ## 开发阶段 CI/CD（当前生效）
 
@@ -74,13 +76,13 @@
 覆盖率、Checkstyle 和 SpotBugs 已移入根 POM 的 `quality` Profile，需要时手工执行，不属于基础 CI 门禁。
 
 当前阶段性成果：通过 `docker-compose.local-infra.yml`，Mac Docker 已提供 PostgreSQL 16、Redis 7、Kafka 3.7、Nacos 2.3.2；Mac
-本地可启动六个后端服务和 Vite 前端，六个后端健康检查均为 `UP`，数据库 V001—V059 已迁移并
+本地可启动六个后端服务和 Vite 前端，六个后端健康检查均为 `UP`，数据库 V001—V060 已迁移并
 通过校验。该成果满足开发阶段执行目标，但不改变 staging/production 尚未真实发布的结论。
 
 | 阶段 | 状态 | 当前边界 |
 |---|---|---|
 | 开发阶段基础 CI | 已实现；每个 PR 仍须等待最终 SHA 远端 CI | 安全同步与仓库合同、后端 `verify`（排除 `data-platform-test` 的 API、测试服务和 E2E fixture）、前端 `npm ci/lint/test/build`、`CI / required-ci` |
-| Dev MVP 定时 E2E | 已实现，非 required check | 工作日和手工 full-build、fresh V059、六服务、前端、3/2/2 业务事实及安全报告 artifact |
+| Dev MVP 定时 E2E | 已实现，非 required check | 工作日和手工 full-build、fresh V060、六服务、前端、3/2/2 业务事实及安全报告 artifact |
 | 生产前置能力 | 保留设计和代码蓝图，当前不自动执行 | 部署、GHCR/OCI、签名、Helm/Kubernetes、Nacos、快照、生产发布和回滚 |
 
 ### 生产部署前置方案（当前延期，不作为开发门禁）
@@ -267,7 +269,7 @@ inventory、生产观察窗口、生产容量/滚动升级和生产回滚演练�
 | `docs/runbooks/database-recovery.md` | PostgreSQL 快照/PITR 恢复、角色、验证、演练和禁止自动 rollback 的事故流程 |
 | `docs/runbooks/release-deployment.md` | Manifest 晋级、Nacos/Helm/Access 发布顺序、门禁、回滚和发布证据 |
 | `docs/2026-07-23-deep-cleanup-review.md` | 本轮清理范围、架构决策和回归证据 |
-| `sql/MIGRATIONS.md` | V001—V059 的迁移、V049/U049、V050/U050、V051/U051、V052/U052、V058/U058 和 V059/U059 前向恢复要求 |
+| `sql/MIGRATIONS.md` | V001—V060 的迁移、V049/U049、V050/U050、V051/U051、V052/U052、V058/U058、V059/U059 和 V060/U060 前向恢复要求 |
 | `docs/2026-08-03-external-request-connector-plugin-upgrade-design.md` | Bumblebee 参考、实施前基线、现已落地架构和隔离验收边界 |
 | `docs/2026-08-12-connector-product-model-simplification-design.md` | 粗粒度插件产品模型、阶段 0—5 控制面与隔离链路证据、阶段 5 生产迁移与阶段 6 退役门禁 |
 | `docs/2026-08-30-real-browser-end-to-end-acceptance-inventory-plan.md` | 真实浏览器验收前的历史盘点、角色/菜单/旅程与执行边界；不再作为当前实施依据 |
