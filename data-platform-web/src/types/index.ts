@@ -34,12 +34,14 @@ export interface AlertRecord {
 }
 
 // 租户相关类型
+export type TenantStatus = 'active' | 'inactive' | 'suspended'
+
 export interface Tenant {
   id: number
   tenantCode: string
   tenantName: string
   tenantType: 'enterprise' | 'personal'
-  status: 'active' | 'disabled'
+  status: TenantStatus
   contactPerson: string
   contactPhone?: string
   contactEmail: string
