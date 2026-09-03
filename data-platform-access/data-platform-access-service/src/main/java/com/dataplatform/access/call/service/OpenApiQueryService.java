@@ -93,7 +93,7 @@ public class OpenApiQueryService {
             if (cachedRecord != null && !Boolean.FALSE.equals(cachedRecord.getResponseContractValid())) {
                 LocalDateTime responseTime = LocalDateTime.now();
                 long duration = System.currentTimeMillis() - startTime;
-                Map<String, Object> cachedResult = readResponseData(cachedRecord.getResponseData());
+                Map<String, Object> cachedResult = readResponseData(cachedRecord.getCacheResponseData());
                 if (cachedResult != null && cachedResult.get("success") instanceof Boolean) {
                     cachedResult.putIfAbsent("actualVendorId", cachedRecord.getVendorId());
                     cachedResult.putIfAbsent("actualVendorCode", cachedRecord.getVendorCode());
@@ -396,11 +396,15 @@ public class OpenApiQueryService {
             record.setRequestParams(objectMapper.writeValueAsString(sanitizeForRecord(context.getParams())));
             Map<String, Object> responseForRecord = sanitizeForRecord(result);
             record.setResponseData(objectMapper.writeValueAsString(responseForRecord));
+            if (!cacheHit && success && Boolean.TRUE.equals(record.getUseCache())) {
+                record.setCacheResponseData(objectMapper.writeValueAsString(result));
+            }
         } catch (Exception e) {
             log.warn("Failed to serialize call record payload: requestId={}, type={}",
                     platformRequestId, e.getClass().getSimpleName());
             record.setRequestParams("{}");
             record.setResponseData("{}");
+            record.setCacheResponseData(null);
         }
         return record;
     }

@@ -55,6 +55,7 @@ class CallRecordServiceImplCacheTest {
                 .contains("tenant_id")
                 .contains("caller_id")
                 .contains("cache_hit")
+                .contains("cache_response_data IS NOT NULL")
                 .contains("response_contract_valid IS NULL")
                 .contains("OR response_contract_valid =")
                 .contains("call_time");
@@ -84,5 +85,28 @@ class CallRecordServiceImplCacheTest {
         assertThat(sql).doesNotContain("caller_id");
         assertThat(wrapperCaptor.getValue().getParamNameValuePairs().values())
                 .contains(7L, false, true);
+    }
+
+    @Test
+    void loadsTheUnmodifiedCachePayloadOnlyForReusableCache() {
+        LocalDateTime callTime = LocalDateTime.now().minusMinutes(1);
+        CallRecord record = new CallRecord();
+        record.setId(100L);
+        record.setCallTime(callTime);
+        String payload = "{\"success\":true,\"data\":{\"name\":\"Alice\"}}";
+        when(mapper.selectOne(any(), eq(false))).thenReturn(record);
+        when(mapper.selectCacheResponseData(100L, callTime)).thenReturn(payload);
+
+        CallRecord result = service.findLatestReusableCache(
+                "PERSONAL_QUERY", "hash", 7L, 20L, LocalDateTime.now().minusDays(2), "CALLER");
+
+        assertThat(result).isSameAs(record);
+        assertThat(result.getCacheResponseData()).isEqualTo(payload);
+    }
+
+    @Test
+    void excludesTheReplayPayloadFromDefaultCallRecordSelects() {
+        assertThat(TableInfoHelper.getTableInfo(CallRecord.class).getAllSqlSelect())
+                .doesNotContain("cache_response_data");
     }
 }

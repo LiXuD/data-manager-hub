@@ -133,8 +133,8 @@ validate_state() {
     echo "fixture 状态文件不属于当前项目" >&2
     exit 1
   }
-  [[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V059" ]] || {
-    echo "Dev MVP fixture 必须基于 V059: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
+  [[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V060" ]] || {
+    echo "Dev MVP fixture 必须基于 V060: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
     exit 1
   }
   [[ "${DEV_MVP_DB_NAME:-}" =~ ^dataplatform_dev_mvp_[0-9]{14}_[0-9]+_regression$ ]] || {
@@ -496,7 +496,7 @@ mkdir -p "$RUNTIME_ROOT"
 install -m 600 "$BUSINESS_REPORT" "$LATEST_REPORT"
 
 echo "DEV_MVP_REPORT=$LATEST_REPORT"
-echo "Dev MVP dev 闭环通过：V059 无待迁移、六服务健康、前端可访问、3/2/2 业务事实和审批/调用/计费/审计/监控均已验收。"
+echo "Dev MVP dev 闭环通过：V060 无待迁移、六服务健康、前端可访问、3/2/2 业务事实和审批/调用/计费/审计/监控均已验收。"
 
 if [[ "$KEEP_RUNNING" == true ]]; then
   {
