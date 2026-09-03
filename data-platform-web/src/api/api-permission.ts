@@ -250,6 +250,28 @@ export const getProcessHistory = (applicationId: number) =>
     endedAt?: string
   }> }>(`/api-permission/applications/${applicationId}/process-history`)
 
+export interface ProcessDiagnosticNode {
+  id: string
+  name?: string
+  type: string
+  candidateGroups: string[]
+}
+
+export interface ProcessDiagnostic {
+  id: string
+  key: string
+  name?: string
+  version: number
+  suspended: boolean
+  nodes: ProcessDiagnosticNode[]
+  boundRoles: string[]
+  activeInstances: number
+  totalInstances: number
+}
+
+export const getProcessDiagnostics = () =>
+  request.get<{ data: ProcessDiagnostic[] }>('/api-permission/process-diagnostics')
+
 export const getGrants = (status?: string) =>
   request.get<{ data: Grant[] }>('/api-permission/grants', { params: { status } })
 

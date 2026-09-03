@@ -5,7 +5,7 @@
         <h2>场景字典</h2>
         <p class="header-desc">维护统一调用入口使用的公共业务场景</p>
       </div>
-      <el-button type="primary" @click="dialogVisible = true">
+      <el-button v-if="canAdd" type="primary" @click="openCreate">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
@@ -28,18 +28,28 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" />
+        <el-table-column label="操作" width="180" fixed="right">
+          <template #default="{ row }">
+            <el-button v-if="canEdit" link type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button v-if="canDisable" link :type="row.status === 'active' ? 'danger' : 'success'"
+                       @click="handleStatusChange(row)">
+              {{ row.status === 'active' ? '停用' : '启用' }}
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" title="新增场景" width="520px" class="form-dialog" @closed="resetForm">
+    <el-dialog v-model="dialogVisible" :title="editing ? '编辑场景' : '新增场景'" width="520px"
+               class="form-dialog" @closed="resetForm">
       <el-form :model="form" label-width="90px">
-        <el-form-item label="场景编码" required>
+        <el-form-item v-if="!editing" label="场景编码" required>
           <el-input v-model="form.sceneCode" placeholder="pre-loan-review" />
         </el-form-item>
         <el-form-item label="场景名称" required>
           <el-input v-model="form.sceneName" placeholder="贷前审批" />
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item v-if="!editing" label="状态">
           <el-select v-model="form.status" class="full-width">
             <el-option label="启用" value="active" />
             <el-option label="禁用" value="inactive" />
@@ -58,14 +68,25 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { createCallScene, getCallSceneList } from '@/api/call-scene'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  createCallScene,
+  getCallSceneList,
+  updateCallScene,
+  updateCallSceneStatus
+} from '@/api/call-scene'
 import type { CallScene } from '@/api/call-scene'
+import { useUserStore } from '@/stores/user'
 
+const userStore = useUserStore()
+const canAdd = computed(() => userStore.hasPermission('call-scene:add'))
+const canEdit = computed(() => userStore.hasPermission('call-scene:edit'))
+const canDisable = computed(() => userStore.hasPermission('call-scene:disable'))
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
+const editing = ref(false)
 const tableData = ref<CallScene[]>([])
 const form = reactive<CallScene>({
   sceneCode: '',
@@ -75,10 +96,27 @@ const form = reactive<CallScene>({
 })
 
 const resetForm = () => {
+  editing.value = false
+  form.id = undefined
   form.sceneCode = ''
   form.sceneName = ''
   form.status = 'active'
   form.description = ''
+}
+
+const openCreate = () => {
+  resetForm()
+  dialogVisible.value = true
+}
+
+const openEdit = (scene: CallScene) => {
+  editing.value = true
+  form.id = scene.id
+  form.sceneCode = scene.sceneCode
+  form.sceneName = scene.sceneName
+  form.status = scene.status
+  form.description = scene.description || ''
+  dialogVisible.value = true
 }
 
 const loadData = async () => {
@@ -91,6 +129,11 @@ const loadData = async () => {
   }
 }
 
+const actionErrorMessage = (error: unknown, fallback: string) => {
+  const response = (error as { response?: { data?: { msg?: string; message?: string } } })?.response
+  return response?.data?.msg || response?.data?.message || fallback
+}
+
 const handleSubmit = async () => {
   if (!form.sceneCode.trim() || !form.sceneName.trim()) {
     ElMessage.warning('请填写场景编码和场景名称')
@@ -98,17 +141,43 @@ const handleSubmit = async () => {
   }
   submitting.value = true
   try {
-    await createCallScene({
-      sceneCode: form.sceneCode.trim(),
-      sceneName: form.sceneName.trim(),
-      status: form.status,
-      description: form.description?.trim()
-    })
-    ElMessage.success('场景创建成功')
+    if (editing.value && form.id) {
+      await updateCallScene(form.id, {
+        sceneName: form.sceneName.trim(),
+        description: form.description?.trim()
+      })
+      ElMessage.success('场景更新成功')
+    } else {
+      await createCallScene({
+        sceneCode: form.sceneCode.trim(),
+        sceneName: form.sceneName.trim(),
+        status: form.status,
+        description: form.description?.trim()
+      })
+      ElMessage.success('场景创建成功')
+    }
     dialogVisible.value = false
     await loadData()
+  } catch (error) {
+    ElMessage.error(actionErrorMessage(error, '场景保存失败，请稍后重试'))
   } finally {
     submitting.value = false
+  }
+}
+
+const handleStatusChange = async (scene: CallScene) => {
+  const nextStatus = scene.status === 'active' ? 'inactive' : 'active'
+  const action = nextStatus === 'active' ? '启用' : '停用'
+  try {
+    await ElMessageBox.confirm(`确认${action}场景“${scene.sceneName}”吗？`, `${action}场景`, {
+      type: nextStatus === 'active' ? 'info' : 'warning'
+    })
+    await updateCallSceneStatus(scene.id!, nextStatus)
+    ElMessage.success(`场景已${action}`)
+    await loadData()
+  } catch (error: any) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(actionErrorMessage(error, `场景${action}失败，请稍后重试`))
   }
 }
 

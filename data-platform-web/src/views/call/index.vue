@@ -54,7 +54,7 @@
         <div class="search-btn-group">
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
-          <el-button type="success" :loading="exporting" @click="handleExport">导出</el-button>
+          <el-button v-if="canExport" type="success" :loading="exporting" @click="handleExport">导出</el-button>
         </div>
       </div>
     </el-card>
@@ -122,6 +122,7 @@ import { exportCallRecords, getCallRecordList, getCallDimensionStats } from '@/a
 import type { CallRecord } from '@/types'
 import { useCacheStore } from '@/stores/cache'
 import { extractPageData } from '@/utils/pagination'
+import { useUserStore } from '@/stores/user'
 // StatCard is globally registered by unplugin-vue-components
 
 const loading = ref(false)
@@ -143,6 +144,8 @@ const pagination = reactive({
 })
 
 const cacheStore = useCacheStore()
+const userStore = useUserStore()
+const canExport = computed(() => userStore.hasPermission('call:export'))
 const dataTypeOptions = computed(() =>
   cacheStore.dataTypeOptions.map(dt => ({
     label: dt.dataTypeName,

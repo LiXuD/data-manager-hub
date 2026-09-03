@@ -8,7 +8,7 @@
           {{ caller ? `${caller.callerName}（${caller.callerCode}）` : '加载内部系统信息中…' }}
         </p>
       </div>
-      <el-button type="primary" :disabled="!caller" @click="handleAdd">新增产品</el-button>
+      <el-button v-if="canAdd" type="primary" :disabled="!caller" @click="handleAdd">新增产品</el-button>
     </div>
 
     <el-card class="system-card" shadow="never">
@@ -83,7 +83,7 @@
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-if="canEdit" type="primary" link @click="handleEdit(row)">编辑</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -126,7 +126,7 @@
       </el-form>
       <template #footer>
         <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <el-button v-if="productForm.id ? canEdit : canAdd" type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -144,9 +144,13 @@ import {
 } from '@/api/caller'
 import type { Caller, CallerProduct } from '@/api/caller'
 import { COMMON_STATUS } from '@/constants'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
+const canAdd = computed(() => userStore.hasPermission('caller:add'))
+const canEdit = computed(() => userStore.hasPermission('caller:edit'))
 const callerId = Number(route.params.callerId)
 
 const caller = ref<Caller | null>(null)

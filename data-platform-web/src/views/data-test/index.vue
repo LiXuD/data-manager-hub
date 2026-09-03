@@ -6,6 +6,11 @@
         <h2>数据查询测试</h2>
         <p class="header-desc">测试数据接口调用，验证接口配置正确性</p>
       </div>
+      <div v-if="optionsLoading" class="header-desc">正在加载可用测试选项...</div>
+      <div v-else-if="optionsLoadError" class="api-key-hint warning">
+        测试选项加载失败，请稍后重试。
+        <el-link type="primary" :underline="false" @click="reloadDataTestOptions">重新加载</el-link>
+      </div>
     </div>
 
     <!-- 查询配置区域 -->
@@ -65,6 +70,7 @@
             v-model="selectedVendorId"
             placeholder="请选择厂商"
             clearable
+            :disabled="!selectedApiKeyId || optionsLoading"
             class="selector-input"
             @change="handleVendorChange"
           >
@@ -195,6 +201,9 @@
         <div v-else-if="paramsLoading" class="params-empty">
           正在加载接口参数...
         </div>
+        <div v-else-if="contractLoadError" class="params-empty params-error">
+          {{ contractErrorMessage }}
+        </div>
         <div v-else-if="interfaceParams.length === 0" class="params-empty">
           当前接口未配置调用参数，可直接执行查询
         </div>
@@ -269,7 +278,7 @@
         <el-button
           type="primary"
           :loading="loading"
-          :disabled="paramsLoading"
+          :disabled="paramsLoading || contractLoadError || !selectedApiKeyId"
           @click="handleExecute"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="btn-icon">
@@ -336,32 +345,38 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getVendorList } from '@/api/vendor'
-import { getDataTypeList } from '@/api/datatype'
-import { getInterfaceOptions, getInterfaceParams } from '@/api/interface'
+import { getDataTestOptions } from '@/api/data-test'
+import { getDataTestInterfaceContract } from '@/api/interface'
 import { executeDataTestQuery } from '@/api/data-query'
-import { getApiKeyProducts, getCallerProducts, getCurrentUserApiKeyOptions } from '@/api/caller'
+import { getCurrentUserApiKeyOptions } from '@/api/caller'
 import type { CurrentUserApiKeyOption } from '@/api/caller'
-import { getCallSceneList } from '@/api/call-scene'
 import { useUserStore } from '@/stores/user'
-import { filterGrantedActiveProducts } from './product-options'
 import { toQueryFailure } from './query-error'
-import type { Vendor, DataType, ApiInterface, InterfaceParam, DataQueryResponse, CallerProductDTO, CallSceneDTO } from '@/types'
+import type { InterfaceParam, DataQueryResponse } from '@/types'
+import type { DataTestOptions } from '@/api/data-test'
 
 type ParamInputType = 'string' | 'number' | 'boolean' | 'object' | 'array'
+type DataTestVendorOption = DataTestOptions['vendors'][number]
+type DataTestDataTypeOption = DataTestOptions['dataTypes'][number]
+type DataTestInterfaceOption = DataTestOptions['interfaces'][number]
+type DataTestSceneOption = DataTestOptions['scenes'][number]
+type DataTestProductOption = DataTestOptions['products'][number]
 
 const EMPTY_PARAMS_JSON = '{}'
 const router = useRouter()
 const userStore = useUserStore()
 
 // 选择器数据
-const vendorList = ref<Vendor[]>([])
-const dataTypeList = ref<DataType[]>([])
-const interfaceList = ref<ApiInterface[]>([])
-const vendorInterfaceOptions = ref<ApiInterface[]>([])
+const vendorList = ref<DataTestVendorOption[]>([])
+const dataTypeList = ref<DataTestDataTypeOption[]>([])
+const interfaceList = ref<DataTestInterfaceOption[]>([])
+const vendorInterfaceOptions = ref<DataTestInterfaceOption[]>([])
+const allDataTestInterfaceOptions = ref<DataTestInterfaceOption[]>([])
 const apiKeyOptions = ref<CurrentUserApiKeyOption[]>([])
-const productList = ref<CallerProductDTO[]>([])
-const sceneList = ref<CallSceneDTO[]>([])
+const productList = ref<DataTestProductOption[]>([])
+const sceneList = ref<DataTestSceneOption[]>([])
+const optionsLoading = ref(false)
+const optionsLoadError = ref(false)
 const apiKeyLoading = ref(false)
 const apiKeyOptionsLoaded = ref(false)
 const apiKeyLoadError = ref(false)
@@ -371,7 +386,6 @@ const hasAssociatedCaller = ref(false)
 const selectedVendorId = ref<number | null>(null)
 const selectedDataTypeId = ref<number | null>(null)
 const selectedInterfaceId = ref<number | null>(null)
-const selectedCallerId = ref<number | null>(null)
 const selectedApiKeyId = ref<number | null>(null)
 const productCode = ref('')
 const sceneCode = ref('')
@@ -382,10 +396,13 @@ const cacheDays = ref(3)
 const interfaceParams = ref<InterfaceParam[]>([])
 const paramValues = ref<Record<string, any>>({})
 const paramsLoading = ref(false)
+const contractLoadError = ref(false)
+const contractErrorMessage = ref('')
 const advancedJsonVisible = ref(false)
 const requestParams = ref(EMPTY_PARAMS_JSON)
 const jsonError = ref('')
 let paramsLoadSeq = 0
+let optionsLoadSeq = 0
 
 // 执行状态
 const loading = ref(false)
@@ -507,6 +524,8 @@ const buildParamsSnapshot = () => {
 const syncAdvancedJsonFromValues = () => {
   requestParams.value = JSON.stringify(buildParamsSnapshot(), null, 2)
   jsonError.value = ''
+  contractLoadError.value = false
+  contractErrorMessage.value = ''
 }
 
 const resetRequestParams = (invalidateLoad = true) => {
@@ -539,7 +558,11 @@ const loadInterfaceParams = async (interfaceId: number) => {
   jsonError.value = ''
 
   try {
-    const requestFields = await getInterfaceParams(interfaceId)
+    if (!selectedApiKeyId.value) {
+      throw new Error('请选择 API Key 后再读取接口契约')
+    }
+    const contract = await getDataTestInterfaceContract(selectedApiKeyId.value, interfaceId)
+    const requestFields = contract.requestFields || []
     if (currentSeq !== paramsLoadSeq) return
 
     const params = [...requestFields].sort((a, b) => {
@@ -553,8 +576,15 @@ const loadInterfaceParams = async (interfaceId: number) => {
     initParamValues(params)
   } catch (error) {
     if (currentSeq !== paramsLoadSeq) return
-    console.error('加载接口参数失败:', error)
-    ElMessage.error('加载接口参数失败')
+    console.error('加载接口参数失败')
+    contractLoadError.value = true
+    const status = (error as { response?: { status?: number } })?.response?.status
+    contractErrorMessage.value = status === 403
+      ? '当前 API Key 未获得该接口的有效授权，无法读取契约。'
+      : status === 404
+        ? '接口契约不存在，请联系接口管理员。'
+        : '接口契约加载失败，请修复连接后重试。'
+    ElMessage.error(contractErrorMessage.value)
     resetRequestParams(false)
   } finally {
     if (currentSeq === paramsLoadSeq) {
@@ -609,25 +639,42 @@ const buildParamsFromForm = (source?: Record<string, any>) => {
   return { params }
 }
 
-// 加载厂商列表
-const loadVendors = async () => {
+const loadDataTestOptions = async (apiKeyId?: number | null) => {
+  const currentSeq = ++optionsLoadSeq
+  optionsLoading.value = true
+  optionsLoadError.value = false
   try {
-    const res = await getVendorList({ page: 1, pageSize: 1000, status: 'active' })
-    vendorList.value = res.data || []
-  } catch (error) {
-    console.error('加载厂商列表失败:', error)
+    const res = await getDataTestOptions(apiKeyId)
+    if (currentSeq !== optionsLoadSeq) return
+    const options: DataTestOptions = res.data
+    vendorList.value = options.vendors
+    dataTypeList.value = options.dataTypes
+    allDataTestInterfaceOptions.value = options.interfaces
+    vendorInterfaceOptions.value = options.interfaces
+    sceneList.value = options.scenes
+    productList.value = options.products || []
+    if (selectedVendorId.value) {
+      interfaceList.value = vendorInterfaceOptions.value.filter(
+        apiInterface => apiInterface.vendorId === selectedVendorId.value)
+    }
+  } catch {
+    if (currentSeq !== optionsLoadSeq) return
+    console.error('加载数据测试选项失败')
+    vendorList.value = []
+    dataTypeList.value = []
+    allDataTestInterfaceOptions.value = []
+    vendorInterfaceOptions.value = []
+    interfaceList.value = []
+    sceneList.value = []
+    optionsLoadError.value = true
+  } finally {
+    if (currentSeq === optionsLoadSeq) {
+      optionsLoading.value = false
+    }
   }
 }
 
-// 加载数据类型列表
-const loadDataTypes = async () => {
-  try {
-    const res = await getDataTypeList({ page: 1, pageSize: 1000, status: 'active' })
-    dataTypeList.value = res.data || []
-  } catch (error) {
-    console.error('加载数据类型列表失败:', error)
-  }
-}
+const reloadDataTestOptions = () => loadDataTestOptions(selectedApiKeyId.value)
 
 const loadApiKeyOptions = async () => {
   apiKeyLoading.value = true
@@ -637,23 +684,14 @@ const loadApiKeyOptions = async () => {
     const res = await getCurrentUserApiKeyOptions()
     apiKeyOptions.value = res.data?.options || []
     hasAssociatedCaller.value = Boolean(res.data?.hasAssociatedCaller)
-  } catch (error) {
-    console.error('加载当前用户 API Key 失败:', error)
+  } catch {
+    console.error('加载当前用户 API Key 失败')
     apiKeyOptions.value = []
     hasAssociatedCaller.value = false
     apiKeyLoadError.value = true
   } finally {
     apiKeyLoading.value = false
     apiKeyOptionsLoaded.value = true
-  }
-}
-
-const loadScenes = async () => {
-  try {
-    const res = await getCallSceneList()
-    sceneList.value = (res.data || []).filter(scene => scene.status === 'active')
-  } catch (error) {
-    console.error('加载场景列表失败:', error)
   }
 }
 
@@ -667,12 +705,8 @@ const handleVendorChange = async () => {
   result.value = null
 
   if (!selectedVendorId.value) return
-  try {
-    const res = await getInterfaceOptions({ vendorId: selectedVendorId.value, status: 'active' })
-    vendorInterfaceOptions.value = res.data || []
-  } catch (error) {
-    console.error('加载厂商接口选项失败:', error)
-  }
+  vendorInterfaceOptions.value = allDataTestInterfaceOptions.value.filter(
+    apiInterface => apiInterface.vendorId === selectedVendorId.value)
 }
 
 // 数据类型变更处理
@@ -682,17 +716,8 @@ const handleDataTypeChange = async () => {
   result.value = null
 
   if (selectedDataTypeId.value) {
-    try {
-      const res = await getInterfaceOptions({
-        vendorId: selectedVendorId.value || undefined,
-        dataTypeId: selectedDataTypeId.value,
-        status: 'active'
-      })
-      interfaceList.value = res.data || []
-    } catch (error) {
-      console.error('加载接口列表失败:', error)
-      interfaceList.value = []
-    }
+    interfaceList.value = vendorInterfaceOptions.value.filter(
+      apiInterface => apiInterface.dataTypeId === selectedDataTypeId.value)
   } else {
     interfaceList.value = []
   }
@@ -708,21 +733,17 @@ const handleInterfaceChange = async () => {
 }
 
 const handleApiKeyChange = async () => {
+  const requestedApiKeyId = selectedApiKeyId.value
+  selectedVendorId.value = null
+  selectedDataTypeId.value = null
+  selectedInterfaceId.value = null
+  vendorInterfaceOptions.value = []
+  interfaceList.value = []
+  resetRequestParams()
   productCode.value = ''
   productList.value = []
   result.value = null
-  selectedCallerId.value = selectedApiKeyOption.value?.callerId || null
-  if (!selectedCallerId.value || !selectedApiKeyId.value) return
-  try {
-    const [productsRes, grantsRes] = await Promise.all([
-      getCallerProducts(selectedCallerId.value),
-      getApiKeyProducts(selectedApiKeyId.value)
-    ])
-    productList.value = filterGrantedActiveProducts(productsRes.data || [], grantsRes.data || [])
-  } catch (error) {
-    console.error('加载产品列表失败:', error)
-    ElMessage.error('加载 API Key 产品授权失败')
-  }
+  await loadDataTestOptions(requestedApiKeyId)
 }
 
 // 格式化JSON
@@ -805,7 +826,7 @@ const handleExecute = async () => {
       ElMessage.error(res.errorMsg || '查询失败')
     }
   } catch (error: unknown) {
-    console.error('查询失败:', error)
+    console.error('查询失败')
     const failure = toQueryFailure(error)
     result.value = {
       success: false,
@@ -821,7 +842,6 @@ const handleClear = () => {
   selectedVendorId.value = null
   selectedDataTypeId.value = null
   selectedInterfaceId.value = null
-  selectedCallerId.value = null
   selectedApiKeyId.value = null
   productCode.value = ''
   sceneCode.value = ''
@@ -835,10 +855,8 @@ const handleClear = () => {
 }
 
 onMounted(() => {
-  loadVendors()
-  loadDataTypes()
   loadApiKeyOptions()
-  loadScenes()
+  loadDataTestOptions()
 })
 </script>
 
