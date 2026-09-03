@@ -67,7 +67,6 @@
               <el-button v-if="canManage && editable(row)" type="primary" link @click="openEdit(row)">编辑草稿</el-button>
               <el-button v-if="canManage && (editable(row) || row.status === 'NEEDS_REVIEW')" type="success" link @click="handlePublish(row)">{{ row.status === 'NEEDS_REVIEW' ? '复核发布' : '发布' }}</el-button>
               <el-button link @click="openSimulation(row)">模拟</el-button>
-              <el-button v-if="canManage && editable(row)" type="danger" link @click="handleDelete(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -249,6 +248,7 @@
           <span>{{ planForm.metering.conditions.length }} 个收费条件 · {{ quantityTypeName(planForm.metering.quantity.type) }}</span>
           <span class="pricing-equation">{{ billingPricingPreview(planForm) }}</span>
         </div>
+        <el-alert v-if="publishError" :title="publishError" type="error" :closable="false" show-icon class="review-warning" />
         <el-alert v-for="warning in reviewPricingWarnings" :key="warning" :title="warning"
           type="warning" :closable="false" show-icon class="review-warning" />
       </el-form>
@@ -292,7 +292,7 @@ import { useUserStore } from '@/stores/user'
 import { extractPageData } from '@/utils/pagination'
 import type { ApiInterface, InterfaceParam } from '@/types'
 import {
-  accrueBillingPlans, createBillingPlan, createBillingPlanVersion, deleteBillingPlan,
+  accrueBillingPlans, createBillingPlan, createBillingPlanVersion,
   getBillingEvents, getBillingPlans, getBillingTemplates, publishBillingPlan,
   reviewBillingContracts, reverseBillingEvent, simulateBillingPlan, updateBillingPlan,
   validateBillingPlan, type BillingCondition, type BillingEvent, type BillingPlan,
@@ -315,6 +315,7 @@ const reviewing = ref(false)
 const accruing = ref(false)
 const saving = ref(false)
 const publishing = ref(false)
+const publishError = ref('')
 const simulating = ref(false)
 const plans = ref<BillingPlan[]>([])
 const templates = ref<BillingTemplate[]>([])
@@ -373,6 +374,16 @@ const quantityFields = computed(() => responseFields.value.filter(field =>
 const planGroups = computed(() => groupBillingPlans(plans.value))
 const reviewPricingWarnings = computed(() => billingPricingWarnings(planForm))
 
+const isDialogCancelled = (error: unknown) => error === 'cancel' || error === 'close'
+const actionErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error === 'object' && error !== null) {
+    const response = (error as { response?: { data?: { msg?: string; message?: string } } }).response
+    const message = response?.data?.msg || response?.data?.message
+    if (message) return message
+  }
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
 const fetchPlans = async () => {
   loading.value = true
   try { plans.value = (await getBillingPlans()).data || [] } catch { plans.value = [] } finally { loading.value = false }
@@ -412,6 +423,7 @@ const loadContract = async (interfaceId?: number) => {
 
 const openCreate = () => {
   Object.assign(planForm, defaultPlan())
+  publishError.value = ''
   interfaces.value = []
   responseFields.value = []
   step.value = 0
@@ -419,6 +431,7 @@ const openCreate = () => {
 }
 
 const openEdit = async (row: BillingPlan) => {
+  publishError.value = ''
   await loadInterfaces(row.vendorId)
   await loadContract(row.interfaceId)
   const copy = normalizeBillingPlanForSubmit(row)
@@ -530,6 +543,7 @@ const saveDraft = async (quiet: boolean) => {
 
 const saveAndPublish = async () => {
   publishing.value = true
+  publishError.value = ''
   try {
     const saved = await saveDraft(true)
     if (!saved?.id) return
@@ -540,17 +554,38 @@ const saveAndPublish = async () => {
     ElMessage.success('方案已发布并按生效时间解析')
     wizardVisible.value = false
     await fetchPlans()
+  } catch (error: any) {
+    if (error?.response?.status === 409) {
+      const message = error.response.data?.msg || error.response.data?.message || '发布条件已变化，请刷新后重新检查'
+      publishError.value = message
+      ElMessage.warning(message)
+      await fetchPlans()
+      return
+    }
+    if (!isDialogCancelled(error)) ElMessage.error(actionErrorMessage(error, '方案发布失败，请稍后重试'))
   } finally { publishing.value = false }
 }
 
 const handlePublish = async (row: BillingPlan) => {
   if (!row.id) return
-  const validation = await validateBillingPlan(row.id)
-  if (!validation.data.valid) return ElMessage.error(validation.data.errors.join('；'))
-  await confirmPublish(row)
-  await publishBillingPlan(row.id)
-  ElMessage.success('发布成功')
-  fetchPlans()
+  publishError.value = ''
+  try {
+    const validation = await validateBillingPlan(row.id)
+    if (!validation.data.valid) return ElMessage.error(validation.data.errors.join('；'))
+    await confirmPublish(row)
+    await publishBillingPlan(row.id)
+    ElMessage.success('发布成功')
+    await fetchPlans()
+  } catch (error: any) {
+    if (error?.response?.status === 409) {
+      const message = error.response.data?.msg || error.response.data?.message || '发布条件已变化，请刷新后重新检查'
+      publishError.value = message
+      ElMessage.warning(message)
+      await fetchPlans()
+      return
+    }
+    if (!isDialogCancelled(error)) ElMessage.error(actionErrorMessage(error, '方案发布失败，请稍后重试'))
+  }
 }
 
 const handleNextVersion = async (row: BillingPlan) => {
@@ -570,12 +605,16 @@ const handleAdjustPlan = async (group: BillingPlanGroup) => {
     await openEdit(existingDraft)
     return
   }
-  await ElMessageBox.confirm(
-    `将基于 ${source.planCode} v${source.version} 创建可编辑草稿；原版本及历史账单保持不变。`,
-    '调整计费方案',
-    { type: 'info', confirmButtonText: '创建调整草稿' }
-  )
-  await handleNextVersion(source)
+  try {
+    await ElMessageBox.confirm(
+      `将基于 ${source.planCode} v${source.version} 创建可编辑草稿；原版本及历史账单保持不变。`,
+      '调整计费方案',
+      { type: 'info', confirmButtonText: '创建调整草稿' }
+    )
+    await handleNextVersion(source)
+  } catch (error) {
+    if (!isDialogCancelled(error)) ElMessage.error(actionErrorMessage(error, '创建调整草稿失败，请稍后重试'))
+  }
 }
 
 const confirmPublish = (plan: BillingPlan) => {
@@ -590,14 +629,6 @@ const confirmPublish = (plan: BillingPlan) => {
     confirmButtonText: '确认发布',
     cancelButtonText: '返回检查'
   })
-}
-
-const handleDelete = async (row: BillingPlan) => {
-  if (!row.id) return
-  await ElMessageBox.confirm('只会删除当前草稿，已发布版本和历史账本不会受影响。', '删除草稿', { type: 'warning' })
-  await deleteBillingPlan(row.id)
-  ElMessage.success('草稿已删除')
-  fetchPlans()
 }
 
 const openSimulation = (row: BillingPlan) => {
@@ -632,10 +663,20 @@ const handleAccrue = async () => {
   try { const { data } = await accrueBillingPlans(); ElMessage.success(`已生成 ${data.created} 条周期费用事件`); fetchEvents() } finally { accruing.value = false }
 }
 const handleReverse = async (event: BillingEvent) => {
-  const { value } = await ElMessageBox.prompt('请输入冲正原因。原始事件不会删除，将追加一条负向事件。', '冲正计费事件', { inputValidator: value => Boolean(value?.trim()) || '冲正原因不能为空', type: 'warning' })
-  await reverseBillingEvent(event.id, { requestId: `REVERSAL-${event.requestId}-${Date.now()}`, reason: value })
-  ElMessage.success('冲正事件已入账')
-  fetchEvents()
+  try {
+    const { value } = await ElMessageBox.prompt('请输入冲正原因。原始事件不会删除，将追加一条负向事件。', '冲正计费事件', { inputValidator: value => Boolean(value?.trim()) || '冲正原因不能为空', type: 'warning' })
+    await reverseBillingEvent(event.id, { requestId: `REVERSAL-${event.requestId}-${Date.now()}`, reason: value })
+    ElMessage.success('冲正事件已入账')
+    await fetchEvents()
+  } catch (error: any) {
+    if (isDialogCancelled(error)) return
+    if (error?.response?.status === 409) {
+      ElMessage.warning(error.response.data?.msg || error.response.data?.message || '该账单事件已被处理，请刷新后重试')
+      await fetchEvents()
+      return
+    }
+    ElMessage.error(actionErrorMessage(error, '冲正失败，请稍后重试'))
+  }
 }
 
 const templateName = (code: string) => templates.value.find(item => item.templateCode === code)?.templateName || code
