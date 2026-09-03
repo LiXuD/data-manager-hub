@@ -99,9 +99,9 @@
                 </el-form-item>
                 <el-form-item label="主题">
                   <el-radio-group v-model="preferenceForm.theme">
-                    <el-radio label="dark">深色</el-radio>
-                    <el-radio label="light">浅色</el-radio>
-                    <el-radio label="auto">跟随系统</el-radio>
+                    <el-radio value="dark">深色</el-radio>
+                    <el-radio value="light">浅色</el-radio>
+                    <el-radio value="auto">跟随系统</el-radio>
                   </el-radio-group>
                 </el-form-item>
                 <el-form-item label="邮件通知">
