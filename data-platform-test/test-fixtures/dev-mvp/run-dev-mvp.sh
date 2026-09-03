@@ -26,8 +26,8 @@ source "$STATE_FILE"
   echo "拒绝使用非 Dev MVP 运行目录: ${DEV_MVP_OUTPUT_DIR:-}" >&2
   exit 1
 }
-[[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V052" ]] || {
-  echo "Dev MVP fixture 必须基于 V052: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
+[[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V058" ]] || {
+  echo "Dev MVP fixture 必须基于 V058: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
   exit 1
 }
 
@@ -41,11 +41,31 @@ done
 WORK_DIR="$DEV_MVP_OUTPUT_DIR/api-work"
 mkdir -p "$WORK_DIR"
 chmod 700 "$WORK_DIR"
+redact_json_diagnostics() {
+  local json_file redacted_file
+  while IFS= read -r -d '' json_file; do
+    redacted_file="${json_file}.redacted"
+    if jq 'walk(
+        if type == "object" then
+          with_entries(
+            if (.key | ascii_downcase | test("apikey|apisecret|token|password|secret"))
+            then .value = "<redacted-sensitive-value>"
+            else .
+            end)
+        else .
+        end)' "$json_file" >"$redacted_file" 2>/dev/null; then
+      mv -f -- "$redacted_file" "$json_file"
+    else
+      rm -f -- "$redacted_file"
+    fi
+  done < <(find "$WORK_DIR" -type f -name '*.json' -print0)
+}
 cleanup() {
   local status=$?
   if [[ "$status" -eq 0 ]]; then
     rm -rf -- "$WORK_DIR"
   else
+    redact_json_diagnostics
     echo "Dev MVP API 失败诊断目录已保留: $WORK_DIR" >&2
   fi
   exit "$status"
@@ -72,6 +92,9 @@ TRACE_PREFIX="dev-mvp-api-${DEV_MVP_RUN_TOKEN}-$$"
 PUBLIC_TRACE_IDS=""
 PLUGIN_ACTIVATED=false
 BUSINESS_FAILOVER_TRACE_ID=""
+LOGOUT_REPLAY_PASSED=false
+RISK_GRANT_REVOKED=false
+REVOKED_KEY_FORBIDDEN=false
 
 api_call() {
   local method="$1"
@@ -102,6 +125,14 @@ expect_result() {
   local label="$1"
   [[ "$HTTP_CODE" == "200" && "$(result_code)" == "200" ]] || {
     echo "${label}失败: HTTP=$HTTP_CODE code=$(result_code)" >&2
+    exit 1
+  }
+}
+
+expect_forbidden() {
+  local label="$1"
+  [[ "$HTTP_CODE" == "403" && "$(result_code)" == "403" ]] || {
+    echo "${label}未按预期拒绝: HTTP=$HTTP_CODE code=$(result_code)" >&2
     exit 1
   }
 }
@@ -149,11 +180,15 @@ run_migration_gate() {
   fi
   if ! grep -Eiq 'up to date|no changesets|没有.*待(执行|更新)' "$status_log"; then
     cat "$status_log" >&2
-    echo "Dev MVP 数据库仍有待执行迁移，要求 V052 pending=0" >&2
+    echo "Dev MVP 数据库仍有待执行迁移，要求 V058 pending=0" >&2
     exit 1
   fi
-  [[ "$(sql "SELECT count(*) FROM databasechangelog WHERE id IN ('widen-call-record-error-code-2026-08-27', 'bind-call-record-interface-identity-2026-08-28') AND author = 'data-platform' AND exectype = 'EXECUTED'")" == "2" ]] || {
-    echo "V051/V052 未同时记录为 EXECUTED" >&2
+  [[ "$(sql "SELECT count(*) FROM databasechangelog WHERE id IN ('widen-call-record-error-code-2026-08-27', 'bind-call-record-interface-identity-2026-08-28', 'management-permission-matrix-2026-09-01', 'serialize-billing-plan-publish-2026-09-01', 'complete-operation-log-tenant-scope-2026-09-02', 'preserve-config-version-encryption-2026-09-02', 'widen-alert-record-type-2026-09-02', 'repair-api-key-permission-parent-links-2026-09-02') AND author = 'data-platform' AND exectype = 'EXECUTED'")" == "8" ]] || {
+    echo "V051—V058 整改迁移未全部记录为 EXECUTED" >&2
+    exit 1
+  }
+  [[ "$(sql "SELECT count(*) FROM permission child JOIN permission parent ON parent.permission_code = 'caller:view' AND child.parent_id = parent.id WHERE child.permission_code IN ('apikey:view', 'apikey:add', 'apikey:edit', 'apikey:delete')")" == "4" ]] || {
+    echo "V058 API Key 权限目录父级未按 permission_code 正确修复" >&2
     exit 1
   }
 }
@@ -196,6 +231,11 @@ load_seed_facts() {
   require_value backup-config "$BACKUP_CONFIG_ID"
   require_value personal-config "$PERSONAL_CONFIG_ID"
 
+  [[ "$(sql "SELECT count(*) FROM user_role ur JOIN role_info r ON r.id = ur.role_id WHERE ur.user_id = $ADMIN_USER_ID AND ur.deleted = false AND r.role_code IN ('api_interface_approver', 'platform_security_admin') AND r.deleted = false")" == "0" ]] || {
+    echo "Dev MVP 管理员与审批/安全角色发生耦合" >&2
+    exit 1
+  }
+
   local counts
   counts="$(sql "SELECT
       (SELECT count(*) FROM vendor_info WHERE vendor_code IN ('dev-mvp-risk-primary-$token', 'dev-mvp-risk-backup-$token', 'dev-mvp-personal-$token') AND deleted = false),
@@ -231,11 +271,66 @@ login_as() {
     exit 1
   }
   AUTH_TOKEN="$token"
-  if [[ "$role" == "admin" ]]; then
-    ADMIN_TOKEN="$token"
-  else
-    APPLICANT_TOKEN="$token"
-  fi
+  case "$role" in
+    admin) ADMIN_TOKEN="$token" ;;
+    applicant) APPLICANT_TOKEN="$token" ;;
+    approver) APPROVER_TOKEN="$token" ;;
+    security) SECURITY_TOKEN="$token" ;;
+    *) echo "未知 Dev MVP 角色: $role" >&2; exit 1 ;;
+  esac
+}
+
+logout_replay_check() {
+  local login_response="$WORK_DIR/logout-replay-login.json"
+  local logout_response="$WORK_DIR/logout-replay-logout.json"
+  local userinfo_response="$WORK_DIR/logout-replay-userinfo.json"
+  local protected_response="$WORK_DIR/logout-replay-protected.json"
+  local login_error="$WORK_DIR/logout-replay-login.err"
+  local logout_error="$WORK_DIR/logout-replay-logout.err"
+  local userinfo_error="$WORK_DIR/logout-replay-userinfo.err"
+  local protected_error="$WORK_DIR/logout-replay-protected.err"
+  local login_http replay_token logout_http userinfo_http protected_http
+  local login_body
+
+  login_body="$(jq -nc \
+    --arg username "$DEV_MVP_APPLICANT_USERNAME" \
+    --arg password "$DEV_MVP_APPLICANT_PASSWORD" \
+    '{username:$username,password:$password}')"
+  login_http="$(curl -skS --connect-timeout 5 --max-time 30 \
+    -H 'Content-Type: application/json' -X POST "$GATEWAY_URL/api/v1/auth/login" \
+    --data-binary "$login_body" -o "$login_response" -w '%{http_code}' \
+    2>"$login_error" || true)"
+  replay_token="$(jq -r '.data.token // .data.accessToken // empty' "$login_response" 2>/dev/null || true)"
+  [[ "$login_http" == "200" && -n "$replay_token" ]] || {
+    echo "登出回放登录失败: HTTP=$login_http" >&2
+    exit 1
+  }
+
+  logout_http="$(curl -skS --connect-timeout 5 --max-time 30 \
+    -H "Authorization: Bearer $replay_token" -X POST "$GATEWAY_URL/api/v1/auth/logout" \
+    -o "$logout_response" -w '%{http_code}' 2>"$logout_error" || true)"
+  [[ "$logout_http" == "200" ]] && jq -e '.code == 200' "$logout_response" >/dev/null 2>&1 || {
+    echo "服务端登出失败: HTTP=$logout_http" >&2
+    exit 1
+  }
+
+  userinfo_http="$(curl -skS --connect-timeout 5 --max-time 30 \
+    -H "Authorization: Bearer $replay_token" -X GET "$GATEWAY_URL/api/v1/auth/userinfo" \
+    -o "$userinfo_response" -w '%{http_code}' 2>"$userinfo_error" || true)"
+  [[ "$userinfo_http" == "401" ]] && jq -e '.code == 401' "$userinfo_response" >/dev/null 2>&1 || {
+    echo "登出后旧 token 访问 userinfo 未返回 401: HTTP=$userinfo_http" >&2
+    exit 1
+  }
+
+  protected_http="$(curl -skS --connect-timeout 5 --max-time 30 \
+    -H "Authorization: Bearer $replay_token" -X GET \
+    "$GATEWAY_URL/api/v1/vendor/list?page=1&pageSize=1" \
+    -o "$protected_response" -w '%{http_code}' 2>"$protected_error" || true)"
+  [[ "$protected_http" == "401" ]] && jq -e '.code == 401' "$protected_response" >/dev/null 2>&1 || {
+    echo "登出后旧 token 访问受保护资源未返回 401: HTTP=$protected_http" >&2
+    exit 1
+  }
+  LOGOUT_REPLAY_PASSED=true
 }
 
 catalog_checks() {
@@ -706,16 +801,54 @@ observation_checks() {
   MONITOR_API_PASSED=true
 }
 
+revoke_risk_grant_and_verify_old_key() {
+  local grant_id
+  local records_before billing_before records_after billing_after
+
+  api_call GET /api/v1/api-permission/grants
+  expect_result "安全角色读取撤销前授权台账"
+  grant_id="$(jq -r --argjson apiKeyId "$RISK_API_KEY_ID" \
+    '.data[] | select(.apiKeyId == $apiKeyId and .status == "ACTIVE") | .id' \
+    "$RESPONSE_FILE" 2>/dev/null | head -1)"
+  require_value "风控 API Key 活跃授权" "$grant_id"
+
+  api_call POST "/api/v1/api-permission/grants/$grant_id/revoke" \
+    '{"reason":"Dev MVP 安全角色撤销旧授权"}'
+  expect_result "安全角色撤销风控授权"
+  assert_response "安全角色撤销风控授权" \
+    --argjson grantId "$grant_id" \
+    '.data.id == $grantId and .data.status == "REVOKED"'
+  RISK_GRANT_REVOKED=true
+
+  records_before="$(sql "SELECT count(*) FROM call_record WHERE trace_id LIKE '$TRACE_PREFIX-%'")"
+  billing_before="$(sql "SELECT count(*) FROM billing_event WHERE request_id IN (SELECT request_id FROM call_record WHERE trace_id LIKE '$TRACE_PREFIX-%')")"
+  public_call_maybe_failed "$RISK_API_KEY_VALUE" "$BUSINESS_INTERFACE_CODE" \
+    "$RISK_PRODUCT_CODE" '{"companyName":"dev-mvp-revoked-key"}' revoked-key
+  [[ "$HTTP_CODE" == "403" ]] && jq -e '.code == 403' "$PUBLIC_RESPONSE_FILE" >/dev/null 2>&1 || {
+    echo "撤销后的旧 API Key 未被拒绝: HTTP=$HTTP_CODE" >&2
+    exit 1
+  }
+  REVOKED_KEY_FORBIDDEN=true
+  records_after="$(sql "SELECT count(*) FROM call_record WHERE trace_id LIKE '$TRACE_PREFIX-%'")"
+  billing_after="$(sql "SELECT count(*) FROM billing_event WHERE request_id IN (SELECT request_id FROM call_record WHERE trace_id LIKE '$TRACE_PREFIX-%')")"
+  [[ "$records_after" == "$records_before" && "$billing_after" == "$billing_before" ]] || {
+    echo "撤销后的旧 API Key 不应新增 CallRecord/BillingEvent: records=$records_before->$records_after billing=$billing_before->$billing_after" >&2
+    exit 1
+  }
+}
+
 write_report() {
-  local counts call_facts billing_facts application_facts
+  local counts call_facts billing_facts application_facts grant_facts
   counts="$(sql "SELECT count(DISTINCT vendor_id), count(DISTINCT caller_id), count(DISTINCT data_type_code), count(DISTINCT interface_id), count(*) FROM call_record WHERE trace_id LIKE '$TRACE_PREFIX-%'")"
   call_facts="$(sql "SELECT count(*) FILTER (WHERE interface_id IS NOT NULL), count(*) FILTER (WHERE plugin_id = 'e2e-signed-connector' AND plugin_version = '1.1.0' AND pipeline_version IS NOT NULL AND length(trim(snapshot_hash)) = 64), count(*) FILTER (WHERE vendor_id = $PRIMARY_VENDOR_ID), count(*) FILTER (WHERE vendor_id = $BACKUP_VENDOR_ID), count(*) FILTER (WHERE vendor_id = $PERSONAL_VENDOR_ID) FROM call_record WHERE trace_id LIKE '$TRACE_PREFIX-%'")"
   billing_facts="$(sql "SELECT count(*), coalesce(sum(final_amount), 0), count(*) FILTER (WHERE interface_id IN ($BUSINESS_INTERFACE_ID, $PERSONAL_INTERFACE_ID)) FROM billing_event WHERE request_id IN (SELECT request_id FROM call_record WHERE trace_id LIKE '$TRACE_PREFIX-%')")"
   application_facts="$(sql "SELECT count(*) FILTER (WHERE status = 'EFFECTIVE'), count(*) FILTER (WHERE status <> 'EFFECTIVE'), count(*) FROM api_permission_application WHERE id IN ($RISK_APPLICATION_ID, $CREDIT_APPLICATION_ID)")"
+  grant_facts="$(sql "SELECT count(*) FILTER (WHERE status = 'ACTIVE' AND grant_source = 'APPROVAL'), count(*) FILTER (WHERE status = 'REVOKED' AND grant_source = 'APPROVAL') FROM api_key_interface WHERE api_key_id IN ($RISK_API_KEY_ID, $CREDIT_API_KEY_ID) AND interface_id IN ($BUSINESS_INTERFACE_ID, $PERSONAL_INTERFACE_ID)")"
   IFS='|' read -r observed_vendors observed_callers observed_data_types observed_interfaces observed_records <<< "$counts"
   IFS='|' read -r interface_facts connector_facts primary_records backup_records personal_records <<< "$call_facts"
   IFS='|' read -r observed_billing billing_amount billing_interface_facts <<< "$billing_facts"
   IFS='|' read -r effective_applications non_effective_applications total_applications <<< "$application_facts"
+  IFS='|' read -r active_approval_grants revoked_approval_grants <<< "$grant_facts"
 
   [[ "$observed_vendors" == "3" && "$observed_callers" == "2" && "$observed_data_types" == "2" \
       && "$observed_interfaces" == "2" && "$observed_records" -ge 3 ]] || {
@@ -739,8 +872,13 @@ write_report() {
     echo "权限审批未全部 EFFECTIVE" >&2
     exit 1
   }
-  [[ "$(sql "SELECT count(*) FROM api_key_interface WHERE api_key_id IN ($RISK_API_KEY_ID, $CREDIT_API_KEY_ID) AND status = 'ACTIVE' AND grant_source = 'APPROVAL' AND interface_id IN ($BUSINESS_INTERFACE_ID, $PERSONAL_INTERFACE_ID)")" == "2" ]] || {
-    echo "审批授权事实不完整" >&2
+  [[ "$active_approval_grants" == "1" && "$revoked_approval_grants" == "1" \
+      && "$RISK_GRANT_REVOKED" == true && "$REVOKED_KEY_FORBIDDEN" == true ]] || {
+    echo "审批授权及撤销事实不完整: active=$active_approval_grants revoked=$revoked_approval_grants" >&2
+    exit 1
+  }
+  [[ "$LOGOUT_REPLAY_PASSED" == true ]] || {
+    echo "登出后旧 token 回放事实不完整" >&2
     exit 1
   }
 
@@ -765,6 +903,10 @@ write_report() {
     --argjson billingAmount "$billing_amount" \
     --argjson permissionApplications "$total_applications" \
     --argjson effectiveGrants "$effective_applications" \
+    --argjson activeApprovalGrants "$active_approval_grants" \
+    --argjson revokedApprovalGrants "$revoked_approval_grants" \
+    --argjson logoutReplay401 "$LOGOUT_REPLAY_PASSED" \
+    --argjson revokedKeyForbidden "$REVOKED_KEY_FORBIDDEN" \
     --argjson auditApi "$AUDIT_API_PASSED" \
     --argjson monitorApi "$MONITOR_API_PASSED" \
     '{
@@ -775,8 +917,10 @@ write_report() {
         callRecords:$callRecords,billingEvents:$billingEvents,billingAmount:$billingAmount},
       connectorFlows:["single-http","token-business","primary-backup"],
       permissionApplications:$permissionApplications,effectiveGrants:$effectiveGrants,
+      activeApprovalGrants:$activeApprovalGrants,revokedApprovalGrants:$revokedApprovalGrants,
+      logoutReplay401:$logoutReplay401,revokedKeyForbidden:$revokedKeyForbidden,
       auditApi:$auditApi,monitorApi:$monitorApi
-    }' > "$DEV_MVP_OUTPUT_DIR/report.json"
+      }' > "$DEV_MVP_OUTPUT_DIR/report.json"
   chmod 600 "$DEV_MVP_OUTPUT_DIR/report.json"
   echo "DEV_MVP_REPORT=$DEV_MVP_OUTPUT_DIR/report.json"
 }
@@ -794,7 +938,7 @@ applicant_option_checks
 REQUESTED_EXPIRE_AT="$(python3 -c 'from datetime import datetime, timedelta; print((datetime.now() + timedelta(days=7)).replace(microsecond=0).isoformat())')"
 create_and_submit_application "$RISK_CALLER_ID" "$RISK_API_KEY_ID" "$BUSINESS_INTERFACE_ID" risk
 create_and_submit_application "$CREDIT_CALLER_ID" "$CREDIT_API_KEY_ID" "$PERSONAL_INTERFACE_ID" credit
-login_as admin "$DEV_MVP_ADMIN_USERNAME" "$DEV_MVP_ADMIN_PASSWORD"
+login_as approver "$DEV_MVP_APPROVER_USERNAME" "$DEV_MVP_APPROVER_PASSWORD"
 approve_application "$RISK_APPLICATION_ID" risk
 approve_application "$CREDIT_APPLICATION_ID" credit
 login_as applicant "$DEV_MVP_APPLICANT_USERNAME" "$DEV_MVP_APPLICANT_PASSWORD"
@@ -804,6 +948,17 @@ primary_backup_call
 public_call "$CREDIT_API_KEY_VALUE" "$PERSONAL_INTERFACE_CODE" "$CREDIT_PRODUCT_CODE" \
   '{"idCard":"dev-mvp-token-business"}' personal-token-business
 wait_for_records_and_billing
+logout_replay_check
 login_as admin "$DEV_MVP_ADMIN_USERNAME" "$DEV_MVP_ADMIN_PASSWORD"
 observation_checks
+login_as security "$DEV_MVP_SECURITY_USERNAME" "$DEV_MVP_SECURITY_PASSWORD"
+api_call GET "/api/v1/vendor/list?page=1&pageSize=20"
+expect_forbidden "安全角色访问厂商管理目录"
+api_call GET /api/v1/api-permission/grants
+expect_result "安全角色读取授权台账"
+assert_response "安全角色读取授权台账" '.data | length == 2'
+api_call GET /api/v1/api-permission/process-diagnostics
+expect_result "安全角色读取流程诊断"
+assert_response "安全角色读取流程诊断" '.data | type == "array"'
+revoke_risk_grant_and_verify_old_key
 write_report

@@ -53,6 +53,10 @@ chmod 700 "$OUTPUT_DIR"
   printf 'DEV_MVP_ADMIN_PASSWORD=%q\n' "$ADMIN_PASSWORD"
   printf 'DEV_MVP_APPLICANT_USERNAME=%q\n' "dev-mvp-applicant-$RUN_TOKEN"
   printf 'DEV_MVP_APPLICANT_PASSWORD=%q\n' "$ADMIN_PASSWORD"
+  printf 'DEV_MVP_APPROVER_USERNAME=%q\n' "dev-mvp-approver-$RUN_TOKEN"
+  printf 'DEV_MVP_APPROVER_PASSWORD=%q\n' "$ADMIN_PASSWORD"
+  printf 'DEV_MVP_SECURITY_USERNAME=%q\n' "dev-mvp-security-$RUN_TOKEN"
+  printf 'DEV_MVP_SECURITY_PASSWORD=%q\n' "$ADMIN_PASSWORD"
 } > "$STATE_FILE"
 chmod 600 "$STATE_FILE"
 
@@ -116,8 +120,12 @@ fi
   printf 'DEV_MVP_ADMIN_PASSWORD=%q\n' "$ADMIN_PASSWORD"
   printf 'DEV_MVP_APPLICANT_USERNAME=%q\n' "dev-mvp-applicant-$RUN_TOKEN"
   printf 'DEV_MVP_APPLICANT_PASSWORD=%q\n' "$ADMIN_PASSWORD"
+  printf 'DEV_MVP_APPROVER_USERNAME=%q\n' "dev-mvp-approver-$RUN_TOKEN"
+  printf 'DEV_MVP_APPROVER_PASSWORD=%q\n' "$ADMIN_PASSWORD"
+  printf 'DEV_MVP_SECURITY_USERNAME=%q\n' "dev-mvp-security-$RUN_TOKEN"
+  printf 'DEV_MVP_SECURITY_PASSWORD=%q\n' "$ADMIN_PASSWORD"
   printf 'DEV_MVP_DB_READY=%q\n' 'true'
-  printf 'DEV_MVP_SCHEMA_VERSION=%q\n' 'V052'
+  printf 'DEV_MVP_SCHEMA_VERSION=%q\n' 'V058'
 } >> "$STATE_FILE"
 
 # shellcheck disable=SC1090

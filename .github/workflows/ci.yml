@@ -41,6 +41,8 @@ jobs:
         run: python3 -m pip install --requirement ci/requirements.txt
       - name: Exercise repository contract scripts
         run: python3 -m unittest discover -s ci/tests -p 'test_*.py'
+      - name: Verify user route permission matrix
+        run: python3 ci/scripts/verify-user-route-permission-matrix.py
       - name: Compile and run backend tests
         run: >-
           ./mvnw -B -ntp verify
