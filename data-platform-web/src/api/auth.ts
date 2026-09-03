@@ -30,6 +30,10 @@ export const getProfile = () => {
   return request.get<{ data: ProfileInfo }>('/auth/userinfo')
 }
 
+export const logout = () => {
+  return request.post<void>('/auth/logout')
+}
+
 export const updateProfile = (data: { nickname?: string; email?: string; phone?: string }) => {
   return request.put<{ data: ProfileInfo }>('/auth/profile', data)
 }

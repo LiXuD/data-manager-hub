@@ -50,7 +50,7 @@ instance.interceptors.response.use(
       }
     }
 
-    const msg = res.message || res.msg || '请求失败'
+    const msg = res?.message || res?.msg || '请求失败'
     ElMessage.error(msg)
     return Promise.reject(new Error(msg))
   },

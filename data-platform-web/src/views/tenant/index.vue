@@ -6,7 +6,7 @@
         <h2>租户管理</h2>
         <p class="header-desc">管理多租户配置与数据隔离</p>
       </div>
-      <el-button type="primary" @click="handleAdd">
+      <el-button v-if="canAdd" type="primary" @click="handleAdd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
@@ -26,8 +26,9 @@
             @keyup.enter="handleSearch"
           />
           <el-select v-model="searchForm.status" placeholder="状态" clearable class="search-select">
-            <el-option label="启用" value="enabled" />
-            <el-option label="禁用" value="disabled" />
+            <el-option label="启用" value="active" />
+            <el-option label="停用" value="inactive" />
+            <el-option label="暂停" value="suspended" />
           </el-select>
         </div>
         <div class="search-btn-group">
@@ -56,11 +57,22 @@
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
             <el-switch
-              v-model="row.status"
-              active-value="active"
-              inactive-value="disabled"
-              @change="handleToggleStatus(row)"
+              v-if="canEdit && row.status !== 'suspended'"
+              :model-value="row.status === 'active'"
+              :disabled="statusUpdating === row.id"
+              @change="handleToggleStatus(row, $event)"
             />
+            <el-tag v-else-if="row.status === 'suspended'" type="warning" size="small">暂停</el-tag>
+            <el-tag v-else :type="row.status === 'active' ? 'success' : 'info'" size="small">
+              {{ row.status === 'active' ? '启用' : '停用' }}
+            </el-tag>
+            <el-button
+              v-if="canEdit && row.status === 'suspended'"
+              type="warning"
+              link
+              :disabled="statusUpdating === row.id"
+              @click="handleStatusChange(row, 'active')"
+            >恢复</el-button>
           </template>
         </el-table-column>
         <el-table-column prop="contactPerson" label="联系人" width="100" />
@@ -74,8 +86,8 @@
         </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canEdit" type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-if="canDelete" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -108,11 +120,15 @@
             <el-option label="个人" value="personal" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态" prop="status">
-          <el-radio-group v-model="formData.status">
-            <el-radio value="active">启用</el-radio>
-            <el-radio value="disabled">禁用</el-radio>
-          </el-radio-group>
+        <el-form-item v-if="!isEdit" label="状态">
+          <el-tag type="success">创建后启用</el-tag>
+          <span class="form-tip">新建租户默认启用，状态请在列表中变更</span>
+        </el-form-item>
+        <el-form-item v-else label="状态">
+          <el-tag :type="formData.status === 'suspended' ? 'warning' : formData.status === 'active' ? 'success' : 'info'">
+            {{ formData.status === 'suspended' ? '暂停' : formData.status === 'active' ? '启用' : '停用' }}
+          </el-tag>
+          <span class="form-tip">状态请在列表中通过启停或恢复操作变更</span>
         </el-form-item>
         <el-form-item label="联系人" prop="contactPerson">
           <el-input v-model="formData.contactPerson" placeholder="请输入联系人" />
@@ -135,18 +151,23 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitting">确定</el-button>
+        <el-button v-if="isEdit ? canEdit : canAdd" type="primary" @click="handleSubmit" :loading="submitting">确定</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getTenantList, createTenant, updateTenant, deleteTenant } from '@/api/tenant'
-import type { Tenant } from '@/types'
+import { getTenantList, createTenant, updateTenant, deleteTenant, updateTenantStatus } from '@/api/tenant'
+import type { Tenant, TenantStatus } from '@/types'
+import { useUserStore } from '@/stores/user'
 
+const userStore = useUserStore()
+const canAdd = computed(() => userStore.hasPermission('tenant:add'))
+const canEdit = computed(() => userStore.hasPermission('tenant:edit'))
+const canDelete = computed(() => userStore.hasPermission('tenant:delete'))
 const tableData = ref<Tenant[]>([])
 const loading = ref(false)
 const searchForm = reactive({ keyword: '', status: '' })
@@ -155,6 +176,7 @@ const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const isEdit = ref(false)
 const submitting = ref(false)
+const statusUpdating = ref<number | undefined>(undefined)
 const formRef = ref()
 const formData = reactive<Partial<Tenant>>({
   id: undefined, tenantCode: '', tenantName: '', tenantType: 'enterprise',
@@ -164,7 +186,6 @@ const formRules = {
   tenantCode: [{ required: true, message: '请输入租户编码', trigger: 'blur' }],
   tenantName: [{ required: true, message: '请输入租户名称', trigger: 'blur' }],
   tenantType: [{ required: true, message: '请选择租户类型', trigger: 'change' }],
-  status: [{ required: true, message: '请选择状态', trigger: 'change' }]
 }
 
 const fetchData = async () => {
@@ -172,7 +193,7 @@ const fetchData = async () => {
   try {
     const res = await getTenantList({
       page: pagination.page, pageSize: pagination.pageSize,
-      keyword: searchForm.keyword || undefined, status: searchForm.status as 'active' | 'disabled' | undefined
+      keyword: searchForm.keyword || undefined, status: searchForm.status as TenantStatus | undefined
     })
     tableData.value = res.data || []
     pagination.total = res.total || 0
@@ -198,20 +219,35 @@ const handleEdit = (row: Tenant) => {
 }
 
 const handleDelete = async (row: Tenant) => {
-  await ElMessageBox.confirm(`确定要删除租户 "${row.tenantName}" 吗？`, '警告', { type: 'warning' })
   try {
+    await ElMessageBox.confirm(`确定要删除租户 "${row.tenantName}" 吗？`, '警告', { type: 'warning' })
     await deleteTenant(String(row.id))
     ElMessage.success('删除成功')
     fetchData()
-  } catch { /* 错误已在拦截器中处理 */ }
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error('删除失败，请稍后重试')
+  }
 }
 
-const handleToggleStatus = async (row: Tenant) => {
-  const newStatus = row.status === 'active' ? 'disabled' : 'active'
+const handleStatusChange = async (row: Tenant, newStatus: TenantStatus) => {
+  const previousStatus = row.status
   try {
-    await updateTenant(String(row.id), { ...row, status: newStatus })
+    statusUpdating.value = row.id
+    await updateTenantStatus(String(row.id), newStatus)
+    await fetchData()
     ElMessage.success(newStatus === 'active' ? '已启用' : '已禁用')
-  } catch { row.status = row.status === 'active' ? 'disabled' : 'active' }
+  } catch {
+    row.status = previousStatus
+    await fetchData()
+    ElMessage.error('状态更新失败，请稍后重试')
+  } finally {
+    statusUpdating.value = undefined
+  }
+}
+
+const handleToggleStatus = async (row: Tenant, enabled: string | number | boolean) => {
+  const isEnabled = enabled === true || enabled === 1 || enabled === 'true'
+  await handleStatusChange(row, isEnabled ? 'active' : 'inactive')
 }
 
 const handleSubmit = async () => {
@@ -227,7 +263,9 @@ const handleSubmit = async () => {
     ElMessage.success(isEdit.value ? '修改成功' : '新增成功')
     dialogVisible.value = false
     fetchData()
-  } catch { /* 错误已在拦截器中处理 */ }
+  } catch {
+    ElMessage.error('保存失败，请稍后重试')
+  }
   finally { submitting.value = false }
 }
 
@@ -254,5 +292,6 @@ onMounted(() => { fetchData() })
 .search-btn-group { display: flex; gap: 10px; }
 .code-tag { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); background: var(--color-bg-light); padding: 4px 10px; border-radius: 6px; }
 .time-cell { font-family: var(--font-mono); font-size: 13px; color: var(--color-text-secondary); }
+.form-tip { margin-left: 10px; color: var(--color-text-tertiary); font-size: 12px; }
 .pagination-container { margin-top: 20px; display: flex; justify-content: flex-end; }
 </style>

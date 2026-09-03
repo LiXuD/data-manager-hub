@@ -6,7 +6,7 @@
         <h2>操作日志</h2>
         <p class="header-desc">系统操作审计与日志查询</p>
       </div>
-      <el-button type="primary" :loading="exporting" @click="handleExport">导出日志</el-button>
+      <el-button v-if="canView" type="primary" :loading="exporting" @click="handleExport">导出日志</el-button>
     </div>
 
     <el-row :gutter="16" class="stats-row">
@@ -131,11 +131,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { exportLogs, getLogById, getLogList, getLogStats } from '@/api/log'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 import { extractPageData } from '@/utils/pagination'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
+const canView = computed(() => userStore.hasPermission('audit:view'))
 
 interface OperationLog {
   id: number

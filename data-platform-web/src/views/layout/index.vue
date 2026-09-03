@@ -2,12 +2,26 @@
 import { RouterView, useRouter, useRoute } from 'vue-router'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import { ElConfigProvider, ElMenu, ElMenuItem, ElSubMenu, ElDropdown, ElDropdownItem, ElDropdownMenu, ElBadge } from 'element-plus'
+import { ElConfigProvider, ElMenu, ElMenuItem, ElSubMenu, ElDropdown, ElDropdownItem, ElDropdownMenu, ElBadge, ElMessage } from 'element-plus'
+import type { Component } from 'vue'
+import {
+  Bell,
+  Connection,
+  DataAnalysis,
+  Document,
+  Grid,
+  Promotion,
+  SetUp,
+  Setting,
+  Wallet
+} from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getAlertRecordList } from '@/api/monitor'
+import { logout as logoutRequest } from '@/api/auth'
 import { STORAGE_KEYS, THEME_MODE } from '@/constants'
 import { applyTheme, getStoredTheme } from '@/composables/useTheme'
 import { extractPageData } from '@/utils/pagination'
+import { hasNavigationPermission, navigationManifest } from '@/router/navigation'
 
 const router = useRouter()
 const route = useRoute()
@@ -57,121 +71,10 @@ onUnmounted(() => {
 
 const activeMenu = computed(() => route.path)
 
-// 菜单配置，包含权限
-const allMenuItems = [
-  {
-    path: '/dashboard',
-    title: '数据概览',
-    icon: 'dashboard',
-    permission: 'dashboard:view'
-  },
-  {
-    path: 'system',
-    title: '系统管理',
-    icon: 'setting',
-    permission: 'system:view',
-    children: [
-      { path: '/tenant', title: '租户管理', permission: 'tenant:view' },
-      { path: '/user', title: '用户管理', permission: 'user:view' },
-      { path: '/role', title: '角色管理', permission: 'role:view' }
-    ]
-  },
-  {
-    path: 'business',
-    title: '业务管理',
-    icon: 'component',
-    permission: 'business:view',
-    children: [
-      { path: '/vendor', title: '厂商管理', permission: 'vendor:view' },
-      {
-        path: '/connector-plugin',
-        title: '连接器插件',
-        permissions: [
-          'connector-plugin:view',
-          'connector-plugin:import',
-          'connector-plugin:verify',
-          'connector-plugin:activate',
-          'connector-plugin:disable'
-        ]
-      },
-      {
-        path: '/connector-migration',
-        title: '厂商连接器迁移',
-        permissions: [
-          'connector-plugin:view',
-          'connector-plugin:migrate',
-          'connector-plugin:test',
-          'connector-plugin:publish',
-          'connector-plugin:rollback'
-        ]
-      },
-      { path: '/connector-diagnostics', title: '连接器运行诊断', permission: 'system:admin' },
-      { path: '/caller', title: '内部系统管理', permission: 'caller:view' },
-      { path: '/call-scene', title: '场景管理', permission: 'call-scene:view' },
-      { path: '/datatype', title: '数据类型', permission: 'datatype:view' },
-      { path: '/interface', title: '接口管理', permission: 'interface:view' }
-    ]
-  },
-  {
-    path: '/call',
-    title: '调用记录',
-    icon: 'connection',
-    permission: 'call:view'
-  },
-  {
-    path: '/api-permission',
-    title: '接口权限审批',
-    icon: 'document',
-    permissions: [
-      'api-permission:view',
-      'api-permission:approve',
-      'api-permission:grant-view',
-      'api-permission:process-view',
-      'api-permission:emergency-grant'
-    ]
-  },
-  {
-    path: '/billing',
-    title: '计费管理',
-    icon: 'wallet',
-    permission: 'billing:view'
-  },
-  {
-    path: '/monitor',
-    title: '监控告警',
-    icon: 'alarm',
-    permission: 'monitor:view'
-  },
-  {
-    path: '/config',
-    title: '配置中心',
-    icon: 'config',
-    permission: 'config:view'
-  },
-  {
-    path: '/graylog',
-    title: '灰度发布',
-    icon: 'release',
-    permission: 'graylog:view'
-  },
-  {
-    path: '/audit',
-    title: '操作日志',
-    icon: 'document',
-    permission: 'audit:view'
-  },
-  {
-    path: '/data-test',
-    title: '数据查询测试',
-    icon: 'play'
-  }
-]
+const allMenuItems = navigationManifest
 
-// 判断是否为管理员（拥有admin角色）
-const isAdmin = computed(() => {
-  const roles = userStore.userInfo?.roles || []
-  return roles.some(role => role.trim().toLowerCase() === 'admin')
-})
+// 管理员是显式能力，不依赖角色名称。
+const isAdmin = computed(() => userStore.hasPermission('system:admin'))
 
 const canViewNotifications = computed(() => isAdmin.value || userStore.hasPermission('monitor:view'))
 
@@ -193,17 +96,10 @@ const handleNotificationClick = () => {
   router.push({ path: '/monitor', query: { tab: 'record', status: 'pending' } })
 }
 
-// 过滤菜单 - 根据用户权限
-const menuItems = computed(() => {
-  // 管理员显示所有菜单
-  if (isAdmin.value) {
-    return allMenuItems
-  }
-  // 普通用户根据权限过滤
-  return filterMenuItems(allMenuItems)
-})
+// 菜单和路由共用同一份 page-permission manifest。
+const menuItems = computed(() => filterMenuItems(allMenuItems))
 
-function filterMenuItems(items: any[]): any[] {
+function filterMenuItems(items: readonly typeof navigationManifest[number][]): typeof navigationManifest[number][] {
   return items
     .map(item => {
       if (item.children) {
@@ -211,71 +107,24 @@ function filterMenuItems(items: any[]): any[] {
         if (filteredChildren.length > 0) {
           return { ...item, children: filteredChildren }
         }
-        // 如果没有子菜单，检查是否有父权限
-        if (hasPermission(item.permission, item.permissions)) {
-          return { ...item, children: [] }
-        }
         return null
       }
-      if (hasPermission(item.permission, item.permissions)) {
-        return item
-      }
-      return null
+      return hasNavigationPermission(item, userStore.permissions) ? item : null
     })
-    .filter((item): item is any => item !== null)
+    .filter((item): item is typeof navigationManifest[number] => item !== null)
 }
 
-function hasPermission(permission?: string, permissions?: string[]): boolean {
-  if (permissions?.length) {
-    return permissions.some(candidate => userStore.hasPermission(candidate))
-  }
-  if (!permission) return true
-  return userStore.hasPermission(permission)
-}
-
-// SVG 图标组件
-const IconDashboard = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`
-}
-const IconSetting = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`
-}
-const IconComponent = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`
-}
-const IconConnection = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`
-}
-const IconWallet = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2-2H4a2 2 0 0 0 0 4h12"/></svg>`
-}
-const IconAlarm = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`
-}
-const IconConfig = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`
-}
-const IconRelease = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>`
-}
-const IconDocument = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`
-}
-const IconPlay = {
-  template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`
-}
-
-const icons: Record<string, { template: string }> = {
-  dashboard: IconDashboard,
-  setting: IconSetting,
-  component: IconComponent,
-  connection: IconConnection,
-  wallet: IconWallet,
-  alarm: IconAlarm,
-  config: IconConfig,
-  release: IconRelease,
-  document: IconDocument,
-  play: IconPlay
+const icons: Record<string, Component> = {
+  dashboard: DataAnalysis,
+  setting: Setting,
+  component: Grid,
+  connection: Connection,
+  wallet: Wallet,
+  alarm: Bell,
+  config: SetUp,
+  release: Promotion,
+  document: Document,
+  play: Promotion
 }
 
 const handleMenuSelect = (path: string) => {
@@ -284,10 +133,16 @@ const handleMenuSelect = (path: string) => {
   }
 }
 
-const handleCommand = (command: string) => {
+const handleCommand = async (command: string) => {
   if (command === 'logout') {
-    userStore.logout()
-    router.push('/login')
+    try {
+      await logoutRequest()
+    } catch {
+      ElMessage.warning('服务端注销未确认，本地会话已清理')
+    } finally {
+      userStore.logout()
+      await router.push('/login')
+    }
   } else if (command === 'profile') {
     router.push('/profile')
   }
@@ -321,7 +176,7 @@ const handleCommand = (command: string) => {
           <template v-for="item in menuItems" :key="item.path">
             <el-sub-menu v-if="item.children && item.children.length > 0" :index="String(item.path)">
               <template #title>
-                <component :is="icons[item.icon]" class="menu-icon" />
+                <component :is="icons[item.icon || 'document']" class="menu-icon" />
                 <span class="menu-title">{{ item.title }}</span>
               </template>
               <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
@@ -329,7 +184,7 @@ const handleCommand = (command: string) => {
               </el-menu-item>
             </el-sub-menu>
             <el-menu-item v-else :index="item.path">
-              <component :is="icons[item.icon]" class="menu-icon" />
+              <component :is="icons[item.icon || 'document']" class="menu-icon" />
               <span class="menu-title">{{ item.title }}</span>
             </el-menu-item>
           </template>
@@ -412,13 +267,6 @@ const handleCommand = (command: string) => {
                       <circle cx="12" cy="7" r="4"/>
                     </svg>
                     个人中心
-                  </el-dropdown-item>
-                  <el-dropdown-item command="settings">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="3"/>
-                      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-                    </svg>
-                    系统设置
                   </el-dropdown-item>
                   <el-dropdown-item divided command="logout">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

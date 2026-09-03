@@ -6,7 +6,7 @@
         <h2>用户管理</h2>
         <p class="header-desc">管理系统用户账户与权限</p>
       </div>
-      <el-button type="primary" @click="handleAdd">
+      <el-button v-if="canAddUser" type="primary" @click="handleAdd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
@@ -48,7 +48,7 @@
         <el-table-column prop="phone" label="手机号" width="130" />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-switch v-model="row.status" active-value="active" inactive-value="inactive" @change="handleStatusChange(row)" />
+            <el-switch v-model="row.status" active-value="active" inactive-value="inactive" :disabled="!canEditUser" @change="handleStatusChange(row)" />
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170">
@@ -58,10 +58,10 @@
         </el-table-column>
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleRole(row)">配置角色</el-button>
-            <el-button type="primary" link @click="handleCaller(row)">关联调用方</el-button>
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canConfigureRoles" type="primary" link @click="handleRole(row)">配置角色</el-button>
+            <el-button v-if="canConfigureCallers" type="primary" link @click="handleCaller(row)">关联调用方</el-button>
+            <el-button v-if="canEditUser" type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-if="canDeleteUser" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -82,7 +82,7 @@
     <el-dialog v-model="dialogVisible" :title="form.id ? '编辑用户' : '新增用户'" width="500px" class="form-dialog">
       <el-form :model="form" label-width="80px">
         <el-form-item label="用户名" required>
-          <el-input v-model="form.username" placeholder="请输入用户名" />
+          <el-input v-model="form.username" :disabled="Boolean(form.id)" placeholder="请输入用户名" />
         </el-form-item>
         <el-form-item v-if="!form.id" label="初始密码" required>
           <el-input v-model="form.password" type="password" show-password placeholder="至少8位，且包含数字和字母" />
@@ -96,7 +96,7 @@
         <el-form-item label="手机号">
           <el-input v-model="form.phone" placeholder="请输入手机号" />
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item v-if="!form.id" label="状态">
           <el-select v-model="form.status" style="width: 100%">
             <el-option label="启用" value="active" />
             <el-option label="禁用" value="inactive" />
@@ -105,7 +105,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button v-if="form.id ? canEditUser : canAddUser" type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
 
@@ -123,7 +123,7 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="roleVisible = false" size="large">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="handleSaveRoles" size="large">确定</el-button>
+          <el-button v-if="canEditUser" type="primary" :loading="submitting" @click="handleSaveRoles" size="large">确定</el-button>
         </div>
       </template>
     </el-dialog>
@@ -142,7 +142,7 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="callerVisible = false" size="large">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="handleSaveCallers" size="large">确定</el-button>
+          <el-button v-if="canEditUser" type="primary" :loading="submitting" @click="handleSaveCallers" size="large">确定</el-button>
         </div>
       </template>
     </el-dialog>
@@ -150,15 +150,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUserList, createUser, updateUser, deleteUser, updateUserStatus, getUserRoles, assignUserRoles, getRoleList, getUserCallers, assignUserCallers, getCallerList } from '@/api/user'
 import type { UserDTO } from '@/types'
 import { COMMON_STATUS } from '@/constants/status'
 import { extractPageData } from '@/utils/pagination'
+import { useUserStore } from '@/stores/user'
 
 interface Role { id: number; roleCode: string; roleName: string }
 interface Caller { id: number; callerCode: string; callerName: string }
+
+const userStore = useUserStore()
+const canAddUser = computed(() => userStore.hasPermission('user:add'))
+const canEditUser = computed(() => userStore.hasPermission('user:edit'))
+const canDeleteUser = computed(() => userStore.hasPermission('user:delete'))
+const canConfigureRoles = computed(() => canEditUser.value && userStore.hasPermission('role:view'))
+const canConfigureCallers = computed(() => canEditUser.value && userStore.hasPermission('caller:view'))
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -185,8 +193,8 @@ const fetchList = async () => {
     const page = extractPageData<UserDTO>(res)
     tableData.value = page.list
     total.value = page.total
-  } catch (e: unknown) {
-    console.error('加载用户列表失败:', e)
+  } catch {
+    console.error('加载用户列表失败')
     tableData.value = []
     total.value = 0
   } finally { loading.value = false }
