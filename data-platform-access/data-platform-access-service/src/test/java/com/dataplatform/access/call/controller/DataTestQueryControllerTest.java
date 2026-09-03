@@ -154,6 +154,7 @@ class DataTestQueryControllerTest {
         scene.setSceneName("浏览器测试");
         scene.setStatus("active");
         scene.setDeleted(false);
+        scene.setTenantId(20L);
 
         when(vendorConfigInternalFeignClient.list(null, null, null, "active"))
                 .thenReturn(Result.success(List.of(config)));
@@ -164,7 +165,7 @@ class DataTestQueryControllerTest {
         when(optionService.listOptions(10L, 20L)).thenReturn(new CurrentUserApiKeyOptionsVO(
                 true, List.of(new CurrentUserApiKeyOptionVO(11L, 12L, "caller", "Caller", "key", "dp****ret"))));
         when(apiKeyInterfaceService.listEffectiveGrants(11L)).thenReturn(List.of(grant));
-        when(callSceneService.list()).thenReturn(List.of(scene));
+        when(callSceneService.listManagedScenes(20L)).thenReturn(List.of(scene));
 
         try (MockedStatic<UserContext> userContext = org.mockito.Mockito.mockStatic(UserContext.class)) {
             userContext.when(() -> UserContext.hasPermission("system:admin")).thenReturn(false);
@@ -211,6 +212,7 @@ class DataTestQueryControllerTest {
         scene.setSceneName("浏览器测试");
         scene.setStatus("active");
         scene.setDeleted(false);
+        scene.setTenantId(20L);
 
         CallerProduct active = product(21L, 12L, "active");
         active.setProductCode("credit");
@@ -221,7 +223,7 @@ class DataTestQueryControllerTest {
         when(vendorConfigInternalFeignClient.list(null, null, null, "active"))
                 .thenReturn(Result.success(List.of(config)));
         when(apiInterfaceFeignClient.getOptions(null)).thenReturn(Result.success(List.of(apiInterface)));
-        when(callSceneService.list()).thenReturn(List.of(scene));
+        when(callSceneService.listManagedScenes(20L)).thenReturn(List.of(scene));
 
         try (MockedStatic<UserContext> userContext = org.mockito.Mockito.mockStatic(UserContext.class)) {
             userContext.when(() -> UserContext.hasPermission("system:admin")).thenReturn(false);

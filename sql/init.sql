@@ -211,17 +211,21 @@ CREATE INDEX idx_apikey_product_product ON api_key_product(product_id);
 
 CREATE TABLE IF NOT EXISTS call_scene (
     id BIGSERIAL PRIMARY KEY,
-    scene_code VARCHAR(64) NOT NULL UNIQUE,
+    tenant_id BIGINT NOT NULL,
+    scene_code VARCHAR(64) NOT NULL,
     scene_name VARCHAR(100) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     description VARCHAR(500),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted BOOLEAN NOT NULL DEFAULT false
+    deleted BOOLEAN NOT NULL DEFAULT false,
+    CONSTRAINT fk_call_scene_tenant FOREIGN KEY (tenant_id) REFERENCES tenant_info(id),
+    CONSTRAINT uk_call_scene_tenant_code UNIQUE (tenant_id, scene_code)
 );
 
 CREATE INDEX idx_call_scene_code ON call_scene(scene_code);
 CREATE INDEX idx_call_scene_status ON call_scene(status);
+CREATE INDEX idx_call_scene_tenant_status ON call_scene(tenant_id, status);
 
 -- 7. 调用记录表 (分区表)
 CREATE TABLE IF NOT EXISTS call_record (

@@ -8,6 +8,7 @@ import com.dataplatform.access.call.vo.CallSceneStatusUpdateReqVO;
 import com.dataplatform.access.call.vo.CallSceneUpdateReqVO;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
+import com.dataplatform.common.util.UserContext;
 import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -38,13 +39,14 @@ public class CallSceneController {
 
     @GetMapping("/list")
     public Result<List<CallScene>> list() {
-        return Result.success(callSceneService.listManagedScenes());
+        return Result.success(callSceneService.listManagedScenes(UserContext.getCurrentTenantId()));
     }
 
     @OperationLog(module = "调用场景管理", operation = "新增调用场景")
     @PostMapping
     public ResponseEntity<Result<CallScene>> create(@RequestBody CallScene scene) {
-        return ResponseEntity.ok(Result.success(callSceneService.createScene(scene)));
+        return ResponseEntity.ok(Result.success(callSceneService.createScene(
+                UserContext.getCurrentTenantId(), scene)));
     }
 
     @OperationLog(module = "调用场景管理", operation = "编辑调用场景")
@@ -52,7 +54,8 @@ public class CallSceneController {
     public ResponseEntity<Result<CallScene>> update(
             @PathVariable Long id, @RequestBody CallSceneUpdateReqVO request) {
         return ResponseEntity.ok(Result.success(callSceneService.updateMetadata(
-                id, request == null ? null : request.getSceneName(),
+                UserContext.getCurrentTenantId(), id,
+                request == null ? null : request.getSceneName(),
                 request == null ? null : request.getDescription())));
     }
 
@@ -61,7 +64,8 @@ public class CallSceneController {
     public ResponseEntity<Result<CallScene>> updateStatus(
             @PathVariable Long id, @RequestBody CallSceneStatusUpdateReqVO request) {
         return ResponseEntity.ok(Result.success(callSceneService.changeStatus(
-                id, request == null ? null : request.getStatus())));
+                UserContext.getCurrentTenantId(), id,
+                request == null ? null : request.getStatus())));
     }
 
     @ExceptionHandler(CallSceneException.class)

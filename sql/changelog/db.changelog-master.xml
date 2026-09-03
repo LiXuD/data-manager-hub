@@ -735,4 +735,24 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="scope-call-scene-by-tenant-2026-09-03"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="call_scene"/>
+            <tableExists schemaName="public" tableName="tenant_info"/>
+        </preConditions>
+        <sqlFile path="../migrations/V059__scope_call_scene_by_tenant.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U059__refuse_call_scene_tenant_scope_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>

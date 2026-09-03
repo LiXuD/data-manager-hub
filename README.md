@@ -187,9 +187,9 @@ MIGRATION_CONFIRM_ROLLBACK=dataplatform ./migrate-db.sh rollback-count 1
 MIGRATION_CONFIRM_RESTORE=dataplatform ./migrate-db.sh restore path/to/backup.sql
 ```
 
-当前历史 SQL 被固化为 `baseline-2026-07-22` 单一基线，根变更日志最新为 V058。V042—V048 依次
+当前历史 SQL 被固化为 `baseline-2026-07-22` 单一基线，根变更日志最新为 V059。V042—V048 依次
 落地插件控制面、PLUGIN-only、完整性冻结和显式主备路由；V049 增加 Manifest v2、SIMPLE Spec 和
-编译事实；V050 以不可覆盖的静态事实种入 `generic-http:2.0.0`，V051 扩展 CallRecord 连接器错误码的持久化宽度，V052 绑定 CallRecord 的接口身份；V053—V057 分别固化管理权限、计费发布锁、操作日志租户范围、配置版本加密元数据和告警类型宽度，V058 修复 API Key 权限目录父级引用。后续变更必须追加独立 Liquibase
+编译事实；V050 以不可覆盖的静态事实种入 `generic-http:2.0.0`，V051 扩展 CallRecord 连接器错误码的持久化宽度，V052 绑定 CallRecord 的接口身份；V053—V057 分别固化管理权限、计费发布锁、操作日志租户范围、配置版本加密元数据和告警类型宽度，V058 修复 API Key 权限目录父级引用，V059 固化调用场景租户所有权。后续变更必须追加独立 Liquibase
 changeset；U049/U050 仅在没有 SIMPLE/v2/Generic 引用时允许，其他情况 HALT 并使用前向恢复或备份。
 完整规则见 [数据库迁移说明](sql/MIGRATIONS.md)。
 
@@ -210,13 +210,13 @@ PGPASSWORD=postgres DB_PORT=15432 bash verify-db-bootstrap.sh
 
 ### 4. 一键验收 dev MVP
 
-从 fresh PostgreSQL 开始，脚本会启动本地基础设施，应用 V001—V058 迁移，构建并启动六个服务和前端，种入隔离的 3 家厂商/2 个调用系统/2 类数据场景，然后通过 Gateway 验证审批、OpenAPI、CallRecord、Billing、审计和监控事实：
+从 fresh PostgreSQL 开始，脚本会启动本地基础设施，应用 V001—V059 迁移，构建并启动六个服务和前端，种入隔离的 3 家厂商/2 个调用系统/2 类数据场景，然后通过 Gateway 验证审批、OpenAPI、CallRecord、Billing、审计和监控事实：
 
 ```bash
 DEV_MVP_SKIP_BUILD=false rtk bash data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh
 ```
 
-成功后会在 `data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json` 生成不含密钥的机器可读报告，报告必须显示 `schemaVersion=V058`、`pendingMigrations=0` 和 `status=passed`。失败运行会保留精确的隔离数据库、日志和进程状态用于排查；该夹具不会写入正式迁移。
+成功后会在 `data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json` 生成不含密钥的机器可读报告，报告必须显示 `schemaVersion=V059`、`pendingMigrations=0` 和 `status=passed`。失败运行会保留精确的隔离数据库、日志和进程状态用于排查；该夹具不会写入正式迁移。
 
 报告 v2 还记录源码 SHA、工作树 dirty 状态、UTC 起止时间、耗时和 `full-build`/`skip-build`，避免把
 旧制品复用误报为 fresh 构建。需要保留一套隔离环境做浏览器演示时使用：
@@ -345,7 +345,7 @@ data-platform/
 | 深度清理、契约收敛与知识库刷新 | ✅ 100% | 2026-07-23 |
 | 外部请求连接器插件化阶段 0—5 | ✅ 已实现并通过双 Access 隔离 OpenAPI/浏览器验收（未声称生产部署） | 2026-08-10 |
 | 粗粒度连接器产品模型阶段 0—5 隔离验收 | ✅ 控制面、双 Access 多服务 API、管理员登录态浏览器和 8/32 容量基线已完成；生产迁移/观察、滚动升级和旧入口最终退役未完成 | 2026-08-28 |
-| dev MVP 一键业务闭环 | ✅ fresh V058、3/2/2 夹具、持久 demo、真实浏览器、受保护清理和机器报告 v2 已通过；工作日定时 E2E 持续观察 | 2026-09-02 |
+| dev MVP 一键业务闭环 | ✅ fresh V059、3/2/2 夹具、持久 demo、真实浏览器、受保护清理和机器报告 v2 已通过；工作日定时 E2E 持续观察 | 2026-09-03 |
 | 四角色真实浏览器整改复审 | ✅ P0/P1 技术整改、P6、敏感扫描和受保护清理已通过；最终 SHA 远端 required CI、产品停点和生产门禁未宣称完成 | 2026-09-02 |
 
 ---

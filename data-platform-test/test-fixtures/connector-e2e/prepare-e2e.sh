@@ -238,9 +238,9 @@ INSERT INTO api_key_product (api_key_id, product_id)
 VALUES ($FIXTURE_API_KEY_ID, $FIXTURE_PRODUCT_ID)
 ON CONFLICT (api_key_id, product_id) DO NOTHING;
 
-INSERT INTO call_scene (scene_code, scene_name, status, deleted)
-VALUES ('$FIXTURE_SCENE_CODE', 'Connector E2E Scene', 'active', FALSE)
-ON CONFLICT (scene_code) DO UPDATE SET status = 'active', deleted = FALSE;
+INSERT INTO call_scene (tenant_id, scene_code, scene_name, status, deleted)
+VALUES ($FIXTURE_TENANT_ID, '$FIXTURE_SCENE_CODE', 'Connector E2E Scene', 'active', FALSE)
+ON CONFLICT (tenant_id, scene_code) DO UPDATE SET status = 'active', deleted = FALSE;
 
 INSERT INTO api_key_interface (
   api_key_id, interface_id, created_by, grant_source, status, cache_enabled,

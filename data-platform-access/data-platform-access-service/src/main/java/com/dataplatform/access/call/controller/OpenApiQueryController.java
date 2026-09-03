@@ -141,7 +141,7 @@ public class OpenApiQueryController {
         if (!hasProductPermission(apiKeyEntity.getId(), product.getId())) {
             return error(403, "API Key没有访问该产品的权限");
         }
-        CallScene scene = loadActiveScene(sceneCode);
+        CallScene scene = loadActiveScene(caller.getTenantId(), sceneCode);
         if (scene == null) {
             return error(403, "调用场景不存在或未启用");
         }
@@ -242,7 +242,7 @@ public class OpenApiQueryController {
         if (!hasProductPermission(apiKeyEntity.getId(), product.getId())) {
             return error(403, "API Key没有访问该产品的权限");
         }
-        CallScene scene = loadActiveScene(sceneCode);
+        CallScene scene = loadActiveScene(caller.getTenantId(), sceneCode);
         if (scene == null) {
             return error(403, "调用场景不存在或未启用");
         }
@@ -403,9 +403,9 @@ public class OpenApiQueryController {
         }
     }
 
-    private CallScene loadActiveScene(String sceneCode) {
+    private CallScene loadActiveScene(Long tenantId, String sceneCode) {
         try {
-            return callSceneService.getActiveScene(sceneCode);
+            return callSceneService.getActiveScene(tenantId, sceneCode);
         } catch (RuntimeException exception) {
             throw OpenApiQueryException.serviceUnavailable(
                     "OPENAPI_SCENE_UNAVAILABLE", "调用场景服务暂不可用");
