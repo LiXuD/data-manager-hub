@@ -8,7 +8,7 @@
 
 关键脱敏证据保存在本地 `output/playwright/br-full-dev-mvp-20260831030337-33237-admin/` 运行目录中，包括最终数据库汇总、计费发布 500 响应、连接器第一次 400 请求/响应、敏感扫描和清理核验。这些文件只支持 2026-08-31 隔离运行结论，不包含已删除的原始凭据、profile 或 trace；运行证据不随源代码提交。
 
-本轮复审证据由本地 `data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json` 和 `output/playwright/dmh-p6-dev_mvp_20260902100949_4309-1788343918/browser-e2e-summary.txt` 提供：报告显示 `status=passed`、`pendingMigrations=0`、六服务健康和 3/2/2 业务事实；浏览器摘要显示四角色真实登录、参数化调用、CallRecord/Billing 增量、UI 登出、console error/warning 为 0，敏感扫描和受保护清理通过。运行态数据库和进程已按 fixture state 清理，证据目录保留脱敏摘要且不随源代码提交。
+本轮复审证据由本地 `data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json` 和 `output/playwright/dmh-p6-dev_mvp_20260903025159_81720-1788404036/browser-e2e-summary.txt` 提供：报告显示 `status=passed`、`schemaVersion=V060`、`pendingMigrations=0`、六服务和前端 HTTP 200，以及 3/2/2 业务事实；浏览器摘要显示四角色真实登录、参数化调用、CallRecord/Billing 增量、UI 登出、console error/warning 为 0，敏感扫描和受保护清理通过。报告中的 `gitDirty=true` 仅来自按约定保留的未跟踪 `.playwright-cli/` 与 `output/` 证据目录。运行态数据库和进程已按 fixture state 清理，证据目录保留脱敏摘要且不随源代码提交。
 
 ## 1. 总体判断与整改边界
 
