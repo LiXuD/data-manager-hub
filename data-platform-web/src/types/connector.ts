@@ -408,6 +408,14 @@ export interface JsonSchemaNode {
   required?: string[]
   items?: JsonSchemaNode
   additionalProperties?: boolean | JsonSchemaNode
+  allOf?: JsonSchemaNode[]
+  anyOf?: JsonSchemaNode[]
+  oneOf?: JsonSchemaNode[]
+  not?: JsonSchemaNode
+  if?: JsonSchemaNode
+  then?: JsonSchemaNode
+  else?: JsonSchemaNode
+  const?: unknown
   minItems?: number
   maxItems?: number
   uniqueItems?: boolean

@@ -2,13 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import { getConfigByVendor } from '@/api/config'
 import {
   convertLegacyConnectorSpec,
   getConnectorSpecCatalog,
   getConnectorSpecCatalogVersions,
   getConnectorSpecDraft,
   getConnectorSpecHistory,
+  getConnectorSecretReferenceOptions,
   previewConnectorSpecConversion,
   previewConnectorSpecUpgrade,
   publishConnectorSpecDraft,
@@ -37,7 +37,7 @@ import type {
   JsonSchemaNode,
   VendorConfigSummary
 } from '@/types'
-import { mergeSchemaDefaults } from '@/utils/connector'
+import { mergeSchemaDefaults, pruneSchemaValue, schemaContainsSecretField } from '@/utils/connector'
 import { dataTypeDisplayName, vendorDisplayName } from '../../interface-flow'
 
 const props = defineProps<{ modelValue: boolean; config: VendorConfigSummary | null }>()
@@ -61,7 +61,9 @@ const pendingPluginVersion = ref('')
 const selectedPluginId = ref('')
 const selectedPluginVersion = ref('')
 const formConfig = ref<Record<string, unknown>>({})
-const secretRefs = ref<string[]>(['vendor.secretKey'])
+const secretRefs = ref<string[]>([])
+const secretRefsLoaded = ref(false)
+const secretRefsError = ref(false)
 const testVisible = ref(false)
 const testParams = ref('{}')
 const historyVisible = ref(false)
@@ -75,7 +77,22 @@ const selectedCatalog = computed(() => catalog.value.find(item => item.pluginId 
 const selectedVersion = computed(() => catalogVersions.value.find(item => item.pluginVersion === selectedPluginVersion.value))
 const configSchema = computed<JsonSchemaNode>(() => selectedVersion.value?.configSchema || selectedCatalog.value?.configSchema || { type: 'object', properties: {} })
 const canEdit = computed(() => allowed('connector-plugin:bind') && !isLegacy.value && !rawReadOnlyFallback.value)
-const canSave = computed(() => canEdit.value && Boolean(selectedPluginId.value && selectedPluginVersion.value))
+const schemaRequiresSecret = computed(() => schemaContainsSecretField(configSchema.value))
+const secretRefsReady = computed(() => !schemaRequiresSecret.value
+  || (secretRefsLoaded.value && secretRefs.value.length > 0))
+const canSave = computed(() => canEdit.value
+  && Boolean(selectedPluginId.value && selectedPluginVersion.value)
+  && secretRefsReady.value)
+
+const isDialogCancelled = (error: unknown) => error === 'cancel' || error === 'close'
+const actionErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error === 'object' && error !== null) {
+    const response = (error as { response?: { data?: { msg?: string; message?: string } } }).response
+    const message = response?.data?.msg || response?.data?.message
+    if (message) return message
+  }
+  return error instanceof Error && error.message ? error.message : fallback
+}
 
 function cloneJson<T>(value: T): T {
   return value == null ? value : JSON.parse(JSON.stringify(value)) as T
@@ -97,6 +114,9 @@ function resetState() {
   selectedPluginId.value = ''
   selectedPluginVersion.value = ''
   formConfig.value = {}
+  secretRefs.value = []
+  secretRefsLoaded.value = false
+  secretRefsError.value = false
 }
 
 async function load() {
@@ -127,7 +147,7 @@ async function load() {
       accessDenied.value = true
       return
     }
-    console.warn('连接器产品 API 不可用，切换到高级流水线只读视图', error)
+    console.warn('连接器产品 API 不可用，切换到高级流水线只读视图')
     rawReadOnlyFallback.value = true
     await loadRawReadOnlyFallback()
   } finally {
@@ -150,14 +170,18 @@ async function loadRawReadOnlyFallback() {
 }
 
 async function loadSecretRefs() {
-  if (!props.config?.vendorId) return
+  secretRefs.value = []
+  secretRefsLoaded.value = false
+  secretRefsError.value = false
+  if (!props.config) return
   try {
-    const response: any = await getConfigByVendor(props.config.vendorId)
-    secretRefs.value = ['vendor.secretKey', ...((response.data || [])
-      .filter((item: any) => item.isEncrypted)
-      .map((item: any) => item.configKey))]
+    const response = await getConnectorSecretReferenceOptions(props.config.id)
+    secretRefs.value = (response.data || [])
+      .filter(item => item.available && item.secretRef)
+      .map(item => item.secretRef)
+    secretRefsLoaded.value = true
   } catch {
-    secretRefs.value = ['vendor.secretKey']
+    secretRefsError.value = true
   }
 }
 
@@ -241,7 +265,7 @@ function currentSpec(): ConnectorSpec {
   return {
     specVersion: '1',
     plugin: { pluginId: selectedPluginId.value, pluginVersion: selectedPluginVersion.value },
-    config: cloneJson(formConfig.value),
+    config: (pruneSchemaValue(configSchema.value, formConfig.value, true) || {}) as Record<string, unknown>,
     responseMapping: null
   }
 }
@@ -257,6 +281,8 @@ async function saveDraft() {
     )).data
     validation.value = null
     ElMessage.success('产品配置草稿已保存')
+  } catch (error) {
+    ElMessage.error(actionErrorMessage(error, '产品配置草稿保存失败，请稍后重试'))
   } finally {
     saving.value = false
   }
@@ -264,9 +290,13 @@ async function saveDraft() {
 
 async function runValidation() {
   if (!props.config || !isSimple.value) return
-  validation.value = (await validateConnectorSpecDraft(props.config.id)).data
-  if (validation.value.valid) ElMessage.success('连接器产品配置校验通过')
-  else ElMessage.error(validation.value.errorCode || '连接器产品配置已漂移，请重新保存')
+  try {
+    validation.value = (await validateConnectorSpecDraft(props.config.id)).data
+    if (validation.value.valid) ElMessage.success('连接器产品配置校验通过')
+    else ElMessage.error(validation.value.errorCode || '连接器产品配置已漂移，请重新保存')
+  } catch (error) {
+    ElMessage.error(actionErrorMessage(error, '连接器产品配置校验失败，请稍后重试'))
+  }
 }
 
 async function runTest() {
@@ -280,27 +310,51 @@ async function runTest() {
     ElMessage.error('测试参数必须是 JSON 对象')
     return
   }
-  testResult.value = (await testConnectorSpecDraft(props.config.id, params)).data
-  if (testResult.value.success) ElMessage.success('受控测试成功')
-  else ElMessage.error(testResult.value.safeMessage || '受控测试失败')
+  try {
+    testResult.value = (await testConnectorSpecDraft(props.config.id, params)).data
+    if (testResult.value.success) ElMessage.success('受控测试成功')
+    else ElMessage.error(testResult.value.safeMessage || '受控测试失败')
+  } catch (error) {
+    ElMessage.error(actionErrorMessage(error, '受控测试失败，请稍后重试'))
+  }
 }
 
 async function publishDraft() {
   if (!props.config || !isSimple.value || !draft.value?.draftVersion) return
-  await ElMessageBox.confirm('发布后会固化产品配置和执行计划，并切换当前活动版本。是否继续？', '发布连接器', { type: 'warning' })
-  await publishConnectorSpecDraft(props.config.id, draft.value.draftVersion)
-  ElMessage.success('连接器产品版本已发布')
-  emit('changed')
-  await load()
+  try {
+    await ElMessageBox.confirm('发布后会固化产品配置和执行计划，并切换当前活动版本。是否继续？', '发布连接器', { type: 'warning' })
+    await publishConnectorSpecDraft(props.config.id, draft.value.draftVersion)
+    ElMessage.success('连接器产品版本已发布')
+    emit('changed')
+    await load()
+  } catch (error: any) {
+    if (isDialogCancelled(error)) return
+    if (error?.response?.status === 409) {
+      ElMessage.warning(error.response.data?.msg || error.response.data?.message || '当前连接器状态已变化，请刷新后重试')
+      await load()
+      return
+    }
+    ElMessage.error(actionErrorMessage(error, '连接器发布失败，请稍后重试'))
+  }
 }
 
 async function rollback(version: ConnectorSpecHistoryVersion) {
   if (!props.config) return
-  await ElMessageBox.confirm(`回滚到 V${version.version} 会复制为新的不可变发布版本。是否继续？`, '回滚确认', { type: 'warning' })
-  await rollbackConnectorSpecVersion(props.config.id, version.version, props.config.connectorVersion || 0)
-  ElMessage.success('已创建回滚发布版本')
-  emit('changed')
-  await load()
+  try {
+    await ElMessageBox.confirm(`回滚到 V${version.version} 会复制为新的不可变发布版本。是否继续？`, '回滚确认', { type: 'warning' })
+    await rollbackConnectorSpecVersion(props.config.id, version.version, props.config.connectorVersion || 0)
+    ElMessage.success('已创建回滚发布版本')
+    emit('changed')
+    await load()
+  } catch (error: any) {
+    if (isDialogCancelled(error)) return
+    if (error?.response?.status === 409) {
+      ElMessage.warning(error.response.data?.msg || error.response.data?.message || '当前连接器状态已变化，请刷新后重试')
+      await load()
+      return
+    }
+    ElMessage.error(actionErrorMessage(error, '连接器回滚失败，请稍后重试'))
+  }
 }
 
 async function previewConversion() {
@@ -317,10 +371,20 @@ async function previewConversion() {
 
 async function convertLegacy() {
   if (!props.config || !isLegacy.value || !draft.value?.draftVersion || !conversionPreview.value?.convertible) return
-  await ElMessageBox.confirm('转换只会更新当前草稿，活动版本和历史版本保持不变；转换后必须重新测试并发布。是否继续？', '转换 Legacy 草稿', { type: 'warning' })
-  await convertLegacyConnectorSpec(props.config.id, draft.value.draftVersion)
-  ElMessage.success('Legacy 草稿已转换为产品配置，请重新测试并发布')
-  await load()
+  try {
+    await ElMessageBox.confirm('转换只会更新当前草稿，活动版本和历史版本保持不变；转换后必须重新测试并发布。是否继续？', '转换 Legacy 草稿', { type: 'warning' })
+    await convertLegacyConnectorSpec(props.config.id, draft.value.draftVersion)
+    ElMessage.success('Legacy 草稿已转换为产品配置，请重新测试并发布')
+    await load()
+  } catch (error: any) {
+    if (isDialogCancelled(error)) return
+    if (error?.response?.status === 409) {
+      ElMessage.warning(error.response.data?.msg || error.response.data?.message || '当前草稿状态已变化，请刷新后重试')
+      await load()
+      return
+    }
+    ElMessage.error(actionErrorMessage(error, 'Legacy 草稿转换失败，请稍后重试'))
+  }
 }
 
 function shortHash(value?: string) {
@@ -378,6 +442,16 @@ watch(() => props.modelValue, visible => { if (visible) void load() })
             <span v-if="!validation.valid">{{ validation.errorCode || '产品配置已变化，请重新保存' }}</span>
             <span v-else class="hash">编译 {{ validation.compileHash }} · 快照 {{ validation.compiledSnapshotHash }}</span>
           </template>
+        </el-alert>
+
+        <el-alert
+          v-if="isSimple && schemaRequiresSecret && !secretRefsReady"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="暂无可用密钥引用，已禁止保存"
+        >
+          {{ secretRefsError ? '密钥引用列表加载失败，请刷新后重试。' : '当前厂商没有可供该连接器引用的密钥。' }}
         </el-alert>
 
         <section v-if="isLegacy" class="legacy-panel">

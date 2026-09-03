@@ -58,8 +58,8 @@ async function loadPlugins(preferred?: string) {
     plugins.value = response.data || []
     selectedPluginId.value = preferred || selectedPluginId.value || plugins.value[0]?.pluginId || ''
     await loadVersions()
-  } catch (error) {
-    console.warn('加载连接器插件失败', error)
+  } catch {
+    console.warn('加载连接器插件失败')
   } finally {
     loading.value = false
   }
@@ -94,7 +94,7 @@ async function runAction(version: ConnectorPluginVersion, action: 'verify' | 'st
     ElMessage.success('操作成功')
     await loadPlugins(version.pluginId)
   } catch (error) {
-    if (error !== 'cancel') console.error(error)
+    if (error !== 'cancel') console.error('连接器插件操作失败')
   } finally {
     actionLoading.value = ''
   }

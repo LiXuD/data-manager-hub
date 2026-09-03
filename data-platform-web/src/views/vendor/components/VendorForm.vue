@@ -43,7 +43,7 @@
     </el-form>
     <template #footer>
       <el-button @click="handleClose">取消</el-button>
-      <el-button type="primary" @click="handleSubmit" :loading="loading">提交</el-button>
+      <el-button v-if="canSubmit" type="primary" @click="handleSubmit" :loading="loading">提交</el-button>
     </template>
   </el-dialog>
 </template>
@@ -58,6 +58,7 @@ interface Props {
   modelValue: boolean
   formData?: Vendor | null
   mode: 'add' | 'edit'
+  canSubmit?: boolean
 }
 
 const props = defineProps<Props>()
@@ -134,8 +135,8 @@ const handleSubmit = async () => {
     }
     emit('success')
     handleClose()
-  } catch (error) {
-    console.error('操作失败:', error)
+  } catch {
+    console.error('操作失败')
   } finally {
     loading.value = false
   }

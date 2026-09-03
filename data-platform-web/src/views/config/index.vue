@@ -6,7 +6,7 @@
         <h2>配置中心</h2>
         <p class="header-desc">管理第三方厂商API配置参数</p>
       </div>
-      <el-button type="primary" @click="handleAdd">
+      <el-button v-if="canAddConfig" type="primary" @click="handleAdd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
@@ -63,7 +63,7 @@
         </el-table-column>
         <el-table-column prop="isActive" label="状态" width="80">
           <template #default="{ row }">
-            <el-switch v-model="row.isActive" @change="handleToggleStatus(row)" />
+            <el-switch :model-value="row.isActive" :disabled="!canEditConfig" @change="handleToggleStatus(row, $event)" />
           </template>
         </el-table-column>
         <el-table-column prop="updatedAt" label="更新时间" width="180">
@@ -73,8 +73,8 @@
         </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canEditConfig" type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-if="canDeleteConfig" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -124,7 +124,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <el-button v-if="formData.id ? canEditConfig : canAddConfig" type="primary" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -136,6 +136,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getConfigList, createConfig, updateConfig, deleteConfig, updateConfigStatus } from '@/api/config'
 import { useCacheStore } from '@/stores/cache'
 import { extractPageData } from '@/utils/pagination'
+import { useUserStore } from '@/stores/user'
 
 // 本地类型 - 直接使用通用 Config 类型
 import type { Config } from '@/types'
@@ -151,6 +152,10 @@ const searchForm = reactive({
 })
 
 const cacheStore = useCacheStore()
+const userStore = useUserStore()
+const canAddConfig = computed(() => userStore.hasPermission('config:add'))
+const canEditConfig = computed(() => userStore.hasPermission('config:edit'))
+const canDeleteConfig = computed(() => userStore.hasPermission('config:delete'))
 const vendorList = computed(() => cacheStore.vendorOptions)
 
 const dialogVisible = ref(false)
@@ -217,9 +222,11 @@ const handleDelete = async (row: Config) => {
     await ElMessageBox.confirm(`确定要删除配置"${row.configKey}"吗？`, '提示', { type: 'warning' })
     await deleteConfig(row.id)
     ElMessage.success('删除成功')
-    fetchList()
-  } catch {
-    ElMessage.error('删除失败')
+    await fetchList()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error('删除失败')
+    }
   }
 }
 
@@ -237,19 +244,24 @@ const handleSubmit = async () => {
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
-    fetchList()
+    await fetchList()
   } catch {
     ElMessage.error('保存失败')
   }
 }
 
-const handleToggleStatus = async (row: Config) => {
-  const newStatus = !row.isActive
+const handleToggleStatus = async (row: Config, newStatus: string | number | boolean) => {
+  const previousStatus = row.isActive
+  const targetStatus = newStatus === true || newStatus === 1
+    || newStatus === '1' || newStatus === 'true'
   try {
-    await updateConfigStatus(row.id, newStatus ? 'active' : 'inactive')
-    row.isActive = newStatus
-    ElMessage.success(newStatus ? '已启用' : '已禁用')
+    await updateConfigStatus(row.id, targetStatus ? 'active' : 'inactive')
+    row.isActive = targetStatus
+    await fetchList()
+    ElMessage.success(targetStatus ? '已启用' : '已禁用')
   } catch {
+    row.isActive = previousStatus
+    await fetchList()
     ElMessage.error('状态更新失败')
   }
 }

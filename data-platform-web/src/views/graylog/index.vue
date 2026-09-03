@@ -6,7 +6,7 @@
         <h2>灰度发布</h2>
         <p class="header-desc">管理灰度发布规则与流量分配</p>
       </div>
-      <el-button type="primary" @click="handleAdd">
+      <el-button v-if="canAdd" type="primary" @click="handleAdd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
@@ -79,6 +79,7 @@
               :model-value="row.status === 'active'"
               active-text="启用"
               inactive-text="禁用"
+              :disabled="!canEdit"
               @change="(val: string | number | boolean) => handleStatusChange(row, val === true)"
             />
           </template>
@@ -90,8 +91,8 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canEdit" type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-if="canDelete" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -114,6 +115,7 @@
       v-model="formVisible"
       :form-data="currentRow"
       :mode="formMode"
+      :can-submit="formMode === 'add' ? canAdd : canEdit"
       @success="fetchList"
     />
   </div>
@@ -128,6 +130,7 @@ import { GRAY_RULE_STATUS_OPTIONS, GRAY_RULE_STATUS } from '@/constants'
 import { getStatusText } from '@/utils/status'
 import GrayRuleForm from './components/GrayRuleForm.vue'
 import { extractPageData } from '@/utils/pagination'
+import { useUserStore } from '@/stores/user'
 
 const loading = ref(false)
 const tableData = ref<GrayRule[]>([])
@@ -142,6 +145,11 @@ const searchForm = reactive({
 const formVisible = ref(false)
 const formMode = ref<'add' | 'edit'>('add')
 const currentRow = ref<GrayRule | null>(null)
+
+const userStore = useUserStore()
+const canAdd = computed(() => userStore.hasPermission('graylog:add'))
+const canEdit = computed(() => userStore.hasPermission('graylog:edit'))
+const canDelete = computed(() => userStore.hasPermission('graylog:delete'))
 
 
 const fetchList = async () => {

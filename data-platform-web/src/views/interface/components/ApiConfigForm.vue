@@ -81,8 +81,8 @@ watch(() => props.modelValue, async (val) => {
         requestSchema: res.requestSchema || '',
         responseSchema: res.responseSchema || ''
       }
-    } catch (error) {
-      console.error('加载接口详情失败:', error)
+    } catch {
+      console.error('加载接口详情失败')
     }
   } else if (!val) {
     form.value = {
@@ -127,8 +127,8 @@ const handleSubmit = async () => {
     })
     emit('success')
     handleClose()
-  } catch (error) {
-    console.error('保存配置失败:', error)
+    } catch {
+      console.error('保存配置失败')
   } finally {
     loading.value = false
   }

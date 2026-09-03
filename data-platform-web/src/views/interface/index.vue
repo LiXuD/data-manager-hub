@@ -5,7 +5,7 @@
         <h2>接口管理</h2>
         <p class="header-desc">管理API接口定义与配置</p>
       </div>
-      <el-button type="primary" @click="handleAdd">
+      <el-button v-if="canAdd" type="primary" @click="handleAdd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
@@ -91,6 +91,7 @@
               v-model="row.status"
               active-value="active"
               inactive-value="inactive"
+              :disabled="!canEdit"
               @change="handleStatusChange(row)"
             />
           </template>
@@ -98,12 +99,12 @@
         <el-table-column label="操作" width="330" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
-              <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+              <el-button v-if="canEdit" type="primary" link @click="handleEdit(row)">编辑</el-button>
               <el-button type="warning" link @click="handleStats(row)">统计</el-button>
-              <el-button type="primary" link @click="handleContract(row)">契约</el-button>
-              <el-button type="success" link @click="handleConfig(row)">厂商连接器</el-button>
+              <el-button v-if="canEdit" type="primary" link @click="handleContract(row)">契约</el-button>
+              <el-button v-if="canViewVendorConfig" type="success" link @click="handleConfig(row)">厂商连接器</el-button>
               <el-button type="info" link @click="handleDocs(row)">文档</el-button>
-              <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+              <el-button v-if="canDelete" type="danger" link @click="handleDelete(row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -129,6 +130,7 @@
       :form-data="currentRow"
       :mode="formMode"
       :datatype-options="dataTypeOptions"
+      :can-submit="formMode === 'add' ? canAdd : canEdit"
       @success="handleFormSuccess"
     />
 
@@ -136,12 +138,18 @@
     <VendorInterfaceConfig
       v-model="configVisible"
       :interface-data="currentRow"
+      :can-edit="canEdit"
+      :can-view-vendor-config="canViewVendorConfig"
+      :can-add-vendor-config="canAddVendorConfig"
+      :can-edit-vendor-config="canEditVendorConfig"
+      :can-delete-vendor-config="canDeleteVendorConfig"
       @success="handleConfigSuccess"
     />
 
     <InterfaceContractConfig
       v-model="contractVisible"
       :interface-data="currentRow"
+      :can-edit="canEdit"
       @success="handleConfigSuccess"
     />
 
@@ -163,6 +171,7 @@ import {
   updateInterfaceStatus
 } from '@/api/interface'
 import { useCacheStore } from '@/stores'
+import { useUserStore } from '@/stores/user'
 import type { ApiInterface } from '@/types'
 import InterfaceForm from './components/InterfaceForm.vue'
 import VendorInterfaceConfig from './components/VendorInterfaceConfig.vue'
@@ -173,7 +182,16 @@ import { extractPageData } from '@/utils/pagination'
 import { interfaceRoutingSummary, OPENAPI_QUERY_ENTRY } from './interface-flow'
 
 const cacheStore = useCacheStore()
+const userStore = useUserStore()
 const router = useRouter()
+
+const canAdd = computed(() => userStore.hasPermission('interface:add'))
+const canEdit = computed(() => userStore.hasPermission('interface:edit'))
+const canDelete = computed(() => userStore.hasPermission('interface:delete'))
+const canViewVendorConfig = computed(() => userStore.hasPermission('vendor:view'))
+const canAddVendorConfig = computed(() => userStore.hasPermission('vendor:add'))
+const canEditVendorConfig = computed(() => userStore.hasPermission('vendor:edit'))
+const canDeleteVendorConfig = computed(() => userStore.hasPermission('vendor:delete'))
 
 // 搜索表单
 const searchForm = reactive({
@@ -223,8 +241,8 @@ const loadData = async () => {
     const page = extractPageData<ApiInterface>(res)
     tableData.value = page.list
     pagination.total = page.total
-  } catch (error) {
-    console.error('加载失败:', error)
+  } catch {
+    console.error('加载失败')
   } finally {
     loading.value = false
   }
@@ -292,7 +310,7 @@ const handleDelete = async (row: ApiInterface) => {
     loadData()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('删除失败:', error)
+      console.error('删除失败')
     }
   }
 }
@@ -302,9 +320,9 @@ const handleStatusChange = async (row: ApiInterface) => {
   try {
     await updateInterfaceStatus(row.id, row.status as typeof COMMON_STATUS.ACTIVE | typeof COMMON_STATUS.INACTIVE)
     ElMessage.success(row.status === COMMON_STATUS.ACTIVE ? '已启用' : '已禁用')
-  } catch (error) {
+  } catch {
     row.status = row.status === COMMON_STATUS.ACTIVE ? COMMON_STATUS.INACTIVE : COMMON_STATUS.ACTIVE
-    console.error('状态更新失败:', error)
+    console.error('状态更新失败')
   }
 }
 
