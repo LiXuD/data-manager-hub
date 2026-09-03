@@ -197,9 +197,6 @@ function standardConditionFieldVisible(
     const branch = matched ? then : otherwise
     if (!branch) continue
     if (forbiddenFields(branch).has(fieldName)) return false
-    const selectedRequired = new Set(branch.required || [])
-    const oppositeRequired = new Set((matched ? otherwise : then)?.required || [])
-    if (oppositeRequired.has(fieldName) && !selectedRequired.has(fieldName)) return false
   }
   return true
 }
