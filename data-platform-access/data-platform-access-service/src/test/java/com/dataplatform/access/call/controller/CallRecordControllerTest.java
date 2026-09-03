@@ -51,6 +51,22 @@ class CallRecordControllerTest {
     }
 
     @Test
+    void rejectsFractionalAndOutOfRangeNumericQueryValuesWithoutTruncation() {
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(UserContext::getCurrentTenantId).thenReturn(20L);
+            userContext.when(() -> UserContext.hasPermission("system:admin")).thenReturn(false);
+
+            assertEquals(400, controller.query(Map.of("callerId", 1.9))
+                    .getStatusCode().value());
+            assertEquals(400, controller.query(Map.of("vendorId", Double.valueOf("9.223372036854776E18")))
+                    .getStatusCode().value());
+            assertEquals(400, controller.query(Map.of("page", 1.5))
+                    .getStatusCode().value());
+        }
+        verifyNoInteractions(callRecordService);
+    }
+
+    @Test
     void parsesValidQueryAndAlwaysPassesTenantScopeToService() {
         PageResult<com.dataplatform.common.entity.CallRecord> page = new PageResult<>();
         when(callRecordService.list(eq(20L), eq(1L), eq(2L), eq("company"), eq(Boolean.TRUE),

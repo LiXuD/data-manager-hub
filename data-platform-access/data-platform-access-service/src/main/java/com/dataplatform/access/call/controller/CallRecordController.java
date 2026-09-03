@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -172,9 +173,7 @@ public class CallRecordController {
             return defaultValue;
         }
         try {
-            int parsed = value instanceof Number number
-                    ? number.intValue()
-                    : Integer.parseInt(String.valueOf(value).trim());
+            int parsed = Math.toIntExact(parseIntegralNumber(value));
             if (parsed < min || parsed > max) {
                 throw new IllegalArgumentException(field + "参数不合法");
             }
@@ -189,9 +188,7 @@ public class CallRecordController {
             return null;
         }
         try {
-            long parsed = value instanceof Number number
-                    ? number.longValue()
-                    : Long.parseLong(String.valueOf(value).trim());
+            long parsed = parseIntegralNumber(value);
             if (parsed <= 0) {
                 throw new IllegalArgumentException(field + "参数不合法");
             }
@@ -199,6 +196,13 @@ public class CallRecordController {
         } catch (NumberFormatException | ArithmeticException exception) {
             throw new IllegalArgumentException(field + "参数不合法");
         }
+    }
+
+    private long parseIntegralNumber(Object value) {
+        if (value instanceof Number number) {
+            return new BigDecimal(number.toString()).longValueExact();
+        }
+        return Long.parseLong(String.valueOf(value).trim());
     }
 
     private String parseString(Object value, String field) {
