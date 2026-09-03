@@ -140,6 +140,29 @@ describe('connector helpers', () => {
     })).toEqual({ mode: 'token-business', tokenEndpoint: 'https://token.test' })
   })
 
+  it('preserves optional fields when only the opposite conditional branch requires them', () => {
+    const schema: JsonSchemaNode = {
+      type: 'object',
+      properties: {
+        mode: { type: 'string' },
+        endpoint: { type: 'string' },
+        tokenEndpoint: { type: 'string' }
+      },
+      if: { properties: { mode: { const: 'single-http' } } },
+      then: { required: ['endpoint'] },
+      else: { required: ['tokenEndpoint'] }
+    }
+
+    expect(schemaFieldVisible(schema.properties!.endpoint!, {
+      mode: 'token-business', endpoint: 'https://optional.test'
+    }, 'endpoint', schema)).toBe(true)
+    expect(pruneSchemaValue(schema, {
+      mode: 'token-business', endpoint: 'https://optional.test', tokenEndpoint: 'https://token.test'
+    })).toEqual({
+      mode: 'token-business', endpoint: 'https://optional.test', tokenEndpoint: 'https://token.test'
+    })
+  })
+
   it('preserves declared additional properties instead of silently dropping them', () => {
     const schema: JsonSchemaNode = {
       type: 'object', properties: { known: { type: 'string' } }, additionalProperties: true
