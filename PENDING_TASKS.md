@@ -1,7 +1,7 @@
 # 数据管理平台 - 当前任务清单
 
-**最后更新**: 2026-08-30
-**当前状态**: `dev` 的 fresh V052、六服务、前端和 3/2/2 真实业务夹具已经形成可重复闭环；本地 full build、持久 demo、真实浏览器和受保护清理均有直接证据。默认分支已镜像并激活 Dev MVP 工作日调度，最新 Ubuntu 手工 run `33290240743` 已用 `dev` SHA `db998205061beeb8a148d99949bc98d34525ce2d` full-build 通过并上传报告。当前主线转为保持 Dev MVP 可重复、定时发现回归和清理非阻断前端债务；生产厂商 inventory/迁移/观察/容量/滚动升级和阶段 6 旧入口最终退役继续保留为后续生产门禁，不作为当前开发主线。
+**最后更新**: 2026-09-02
+**当前状态**: 本轮整改已完成代码、前端、V058 前向迁移、测试和本地 Dev 运行态复审。fresh V058 六服务/前端/3/2/2 业务事实、四角色真实浏览器 P6、权限矩阵、敏感扫描和受保护清理均已通过；最终精确 SHA 的远端 `CI / required-ci` 尚未执行，调用场景产品决策和 staging/production 门禁仍保留为明确边界。详细设计与证据继续以 [真实浏览器验收问题整改方案](docs/2026-09-01-real-browser-acceptance-remediation-plan.md) 为准。
 
 ---
 
@@ -11,7 +11,7 @@
 - 每张领域表只有所属域可直接读写；跨域统计通过 Access 内部统计契约查询，Billing 不再直接读取 `call_record`。
 - `call-record` Kafka 仅用于 Access 域内异步落库；计费计算与日聚合由 Access 同步调用 Billing 完成，不存在跨域 Kafka 消费。
 - Gateway、五域服务和前端均可按现有部署文档启动；SDK 是普通 Jar，不作为独立服务部署。
-- 数据测试页面通过 `/interface/{id}/contract` 读取请求字段树，自动生成输入项、应用默认值并校验必填项、类型与约束。
+- 数据测试页面通过 Access `/data-test/contract` 读取请求字段树；Access 先校验当前用户、租户、API Key 和有效授权，再通过 Masterdata API Feign 返回最小权限契约。管理端 `/interface/{id}/contract` 仍只服务接口管理权限。
 - 接口契约只保留 `/contract` 读写；旧 Schema/params/import 端点、访问域旧 `/data/**` 链路和重复 API Key 路由已删除。
 - 厂商安全只执行版本化安全流水线；简单 `signType`/`encryptType`、签名构建器和失败回退已删除。
 - 厂商外部请求只走发布后的连接器插件流水线；`VendorAdapterFactory`、`HttpVendorAdapter`、旧请求列和 LEGACY 写路径已删除，`legacy-http` 仅作为宿主内置阶段桥接现有 HTTP/映射/安全能力。
@@ -22,7 +22,8 @@
 ## 当前开发里程碑：dev 环境跑通
 
 - [x] V049/V050 前向-only 迁移隔离修复；V049、V050、fresh V052、重复 update、Liquibase validate 已在隔离库通过。
-- [x] 本机 dev 数据库已升级至 V052，`migrate-db.sh status` 和数据库事实均为 0 pending。
+- [x] 本轮新增 V058 API Key 权限目录父级前向修复；fresh V058、重复 update、Liquibase validate、V058 父级断言均通过。
+- [x] 本机 fresh Dev MVP 已升级至 V058，`migrate-db.sh status` 和数据库事实均为 0 pending。
 - [x] `data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh` 提供 fresh 基础设施、迁移、六服务、前端和业务验收入口；报告 v2 记录源码 SHA、dirty 状态、时间、耗时和构建模式。
 - [x] dev MVP 夹具与正式迁移分离，验证 3 家厂商、2 个调用系统、2 类数据类型、单 HTTP/Token+业务/主备三类连接器流程，以及审批、OpenAPI、CallRecord、Billing、审计和监控落库事实。
 - [x] 普通配置页收敛为插件、固定版本和一次 Schema 表单；阶段、能力、顺序、TRANSPORT 和摘要迁移到 `system:admin` 保护的“连接器运行诊断”页。
@@ -30,7 +31,35 @@
 - [x] `dev` 分支保护要求 `CI / required-ci`，启用管理员约束、stale approval 失效、线性历史并禁止 force-push/删除。
 - [x] 从 `master` 选择性同步当前 Maven/npm/Action 安全版本，并用 `ci/contracts/dev-security-sync.v1.json` 明确禁止把生产 CI 作业误并入 dev required CI；远端新发现的 Spring Kafka 1 high/2 moderate 告警使用 Boot 3.5.16 BOM 兼容的 3.3.16 独立修复。
 - [x] `.github/workflows/dev-mvp-e2e.yml` 已通过 PR #27 镜像到默认分支 `master` 并处于 active，提供工作日定时和手工 full-build 验收，明确 checkout `dev`，不在 push/PR 上运行，不作为 required check；最新 Ubuntu 手工 run `33290240743` 已成功，artifact 保留 14 天。
-- [ ] 清理 `data-platform-web/src/views/layout/index.vue` 运行时图标模板造成的 Vue runtime compiler warning，并增加登录后 console warning 烟雾断言。
+- [x] 完成四角色真实浏览器代表性验收：真实用户名密码登录、申请、分离审批、授权、调用、CallRecord/BillingEvent、撤销后 403、计费冲正、P6 回放、敏感证据处置和隔离环境清理均有脱敏证据。
+- [x] 按 [2026-09-01 真实浏览器验收问题整改方案](docs/2026-09-01-real-browser-acceptance-remediation-plan.md) 完成 P0/P1 技术整改，并以当前安全版浏览器脚本重新执行 fresh 全链路回放；仍待最终 SHA 远端 required CI。
+- [x] 清理 `data-platform-web/src/views/layout/index.vue` 运行时图标模板造成的 Vue runtime compiler warning，并增加登录后 console warning 烟雾断言。
+
+## 真实浏览器验收整改（2026-09-02 复审状态）
+
+详细根因、目标设计、迁移策略、测试矩阵、提交边界和完成定义只维护在 [整改方案](docs/2026-09-01-real-browser-acceptance-remediation-plan.md)，本节只维护全局优先级和完成状态。
+
+### P0：安全闭环
+
+- [x] 对全部已盘点管理路由建立“方法/路径/页面权限/动作权限/租户范围”矩阵，并在五域后端补齐精确权限与对象归属校验；机器校验为 286 个 Controller mapping、255 个 policy entry、30 个 public/internal 排除项。
+- [x] 在 Access 增加数据测试专用契约入口：只有当前用户可用 API Key 且目标接口存在 ACTIVE grant 时，才通过 Masterdata API Feign 返回契约；普通申请人不再依赖 `interface:view`。
+- [x] 前端退出调用 Identity 既有 `/auth/logout`；fresh Dev MVP 报告中的旧会话重放为 401，真实浏览器网络中记录登出请求。
+
+### P1：功能正确性
+
+- [x] 以共享导航 manifest 统一菜单、路由、按钮和默认落点，用 `system:admin` 能力替代 `admin` 角色名特判；`api_process_admin` 已落地只读流程诊断，流程写管理仍需产品决定。
+- [x] 用 forward-only 迁移统一配置中心 `config:*` 权限并补 config-only/vendor-only 正负向测试。
+- [x] 统一租户 `active/inactive/suspended` 状态并修复租户、配置开关的二次反转和失败回滚。
+- [x] 修复简单连接器可选空字段、条件必填、SecretRef 误判/硬编码选项和结构化字段错误，覆盖三种 flow 与 Secret 所有权负向用例。
+- [x] 把连接器迁移资格校验前移到 prepare；不可迁移对象不新增任务，已有无效 PREPARED 事实只允许 dry-run 后 CAS 转为可解释阻断状态。
+- [x] 统一计费发布预检、400/404/409 领域错误和同业务键并发串行化；冲突路径无通用 500 且无部分状态。
+
+### P2 与收口门禁
+
+- [x] 移除 Vue 运行时模板 warning；调用场景技术侧采用编码不可变、名称/描述/状态可维护、停用代替物理删除，产品仍需确认最终生命周期语义。
+- [x] 保留重复发布、活动插件禁用、重复导入的后端 409 保护，前端表达禁用原因并覆盖无状态变化断言。
+- [x] 保留 CallRecord 有界轮询并补 Kafka lag/DLT/落库延迟观测；生产阈值仍由目标环境 SLO 决定。
+- [x] fresh V058、四角色真实浏览器、当前安全版 P6、敏感扫描和受保护清理已通过；最终精确 SHA 的远端 `CI / required-ci` 仍待执行。
 
 ## 开发阶段 CI/CD（当前生效）
 
@@ -44,13 +73,13 @@
 覆盖率、Checkstyle 和 SpotBugs 已移入根 POM 的 `quality` Profile，需要时手工执行，不属于基础 CI 门禁。
 
 当前阶段性成果：通过 `docker-compose.local-infra.yml`，Mac Docker 已提供 PostgreSQL 16、Redis 7、Kafka 3.7、Nacos 2.3.2；Mac
-本地可启动六个后端服务和 Vite 前端，六个后端健康检查均为 `UP`，数据库 V001—V052 已迁移并
+本地可启动六个后端服务和 Vite 前端，六个后端健康检查均为 `UP`，数据库 V001—V058 已迁移并
 通过校验。该成果满足开发阶段执行目标，但不改变 staging/production 尚未真实发布的结论。
 
 | 阶段 | 状态 | 当前边界 |
 |---|---|---|
 | 开发阶段基础 CI | 已实现；每个 PR 仍须等待最终 SHA 远端 CI | 安全同步与仓库合同、后端 `verify`（排除 `data-platform-test` 的 API、测试服务和 E2E fixture）、前端 `npm ci/lint/test/build`、`CI / required-ci` |
-| Dev MVP 定时 E2E | 已实现，非 required check | 工作日和手工 full-build、fresh V052、六服务、前端、3/2/2 业务事实及安全报告 artifact |
+| Dev MVP 定时 E2E | 已实现，非 required check | 工作日和手工 full-build、fresh V058、六服务、前端、3/2/2 业务事实及安全报告 artifact |
 | 生产前置能力 | 保留设计和代码蓝图，当前不自动执行 | 部署、GHCR/OCI、签名、Helm/Kubernetes、Nacos、快照、生产发布和回滚 |
 
 ### 生产部署前置方案（当前延期，不作为开发门禁）
@@ -237,7 +266,11 @@ inventory、生产观察窗口、生产容量/滚动升级和生产回滚演练�
 | `docs/runbooks/database-recovery.md` | PostgreSQL 快照/PITR 恢复、角色、验证、演练和禁止自动 rollback 的事故流程 |
 | `docs/runbooks/release-deployment.md` | Manifest 晋级、Nacos/Helm/Access 发布顺序、门禁、回滚和发布证据 |
 | `docs/2026-07-23-deep-cleanup-review.md` | 本轮清理范围、架构决策和回归证据 |
-| `sql/MIGRATIONS.md` | V001—V052 的迁移、V049/U049、V050/U050、V051/U051 和 V052/U052 前向恢复要求 |
+| `sql/MIGRATIONS.md` | V001—V058 的迁移、V049/U049、V050/U050、V051/U051、V052/U052 和 V058/U058 前向恢复要求 |
 | `docs/2026-08-03-external-request-connector-plugin-upgrade-design.md` | Bumblebee 参考、实施前基线、现已落地架构和隔离验收边界 |
 | `docs/2026-08-12-connector-product-model-simplification-design.md` | 粗粒度插件产品模型、阶段 0—5 控制面与隔离链路证据、阶段 5 生产迁移与阶段 6 退役门禁 |
-历史实施计划、已验收报告和过期性能样本不保留在当前知识库，需要追溯时请查阅 Git 历史。
+| `docs/2026-08-30-real-browser-end-to-end-acceptance-inventory-plan.md` | 真实浏览器验收前的历史盘点、角色/菜单/旅程与执行边界；不再作为当前实施依据 |
+| `docs/2026-08-31-real-browser-end-to-end-acceptance-results.md` | 三轮真实浏览器运行结果、缺口、脱敏证据和清理边界 |
+| `docs/2026-09-01-real-browser-acceptance-remediation-plan.md` | 本轮验收问题的唯一详细整改设计、优先级、验证与交付门禁 |
+
+除上述仍在当前整改链路中的专题材料外，其他历史实施计划、过期验收快照和性能样本不保留在当前知识库，需要追溯时请查阅 Git 历史。

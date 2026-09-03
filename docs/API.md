@@ -268,7 +268,7 @@ missing secretRef 和跨 vendor secretRef；测试和运行只解析当前阶段
 
 V049/U049 增加 Manifest v2、SIMPLE Spec/编译投影和发布冻结约束；V050/U050 种入不可覆盖的
 `generic-http:2.0.0` 静态目录事实；V051 将 `call_record.error_code` 扩展到 `VARCHAR(64)`，
-覆盖完整平台连接器错误类别；V052 为 `call_record` 增加可空 `interface_id`，让观察聚合按规范接口身份过滤。隔离回归入口分别为
+覆盖完整平台连接器错误类别；V052 为 `call_record` 增加可空 `interface_id`，让观察聚合按规范接口身份过滤；V053—V057 固化管理权限、计费发布锁、操作日志租户范围、配置版本加密元数据和告警类型宽度；V058 修复 API Key 权限目录父级引用。隔离回归入口分别为
 `verify-v049-connector-product-spec.sh` 和 `verify-v050-generic-http.sh`；脚本通过只允许匹配
 `dataplatform_v049_*_regression`/`dataplatform_v050_*_regression` 的临时数据库验证 fresh、升级、重复、
 漂移/HALT 原子性、条件回滚和重新应用。该证据不表示迁移已在生产数据库执行。
