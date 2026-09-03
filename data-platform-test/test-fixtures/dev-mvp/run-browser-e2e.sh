@@ -314,10 +314,17 @@ scan_evidence() {
       return 1
     fi
   done
-  if rg -E -i -- 'apiSecret|access_token|accessToken|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' \
+  local pattern_scan_status
+  if rg -i -- 'apiSecret|access_token|accessToken|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}' \
     "$EVIDENCE_DIR" >/dev/null 2>&1; then
     echo "浏览器证据包含 token 或 secret 字段" >&2
     return 1
+  else
+    pattern_scan_status=$?
+    if (( pattern_scan_status > 1 )); then
+      echo "浏览器证据敏感字段扫描失败，拒绝将扫描错误视为无匹配" >&2
+      return 1
+    fi
   fi
   if find "$EVIDENCE_DIR" -type f \( -name '*trace*' -o -name '*.zip' -o -name '*.webm' \) \
     | rg -q .; then
