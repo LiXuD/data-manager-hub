@@ -98,13 +98,13 @@ changeset。精确策略见 `sql/MIGRATIONS.md`。
 
 ### 5. 一键验收 dev MVP
 
-开发阶段的权威本地闭环入口是下面的夹具脚本。它从 fresh PostgreSQL 开始，启动本地基础设施，应用 V001—V059，构建并启动六个服务和 Web，创建隔离的 3 家厂商、2 个调用系统、2 类数据类型和三类连接器流程，并通过 Gateway 验证登录、权限审批、OpenAPI、CallRecord、Billing、审计和监控事实：
+开发阶段的权威本地闭环入口是下面的夹具脚本。它从 fresh PostgreSQL 开始，启动本地基础设施，应用 V001—V060，构建并启动六个服务和 Web，创建隔离的 3 家厂商、2 个调用系统、2 类数据类型和三类连接器流程，并通过 Gateway 验证登录、权限审批、OpenAPI、CallRecord、Billing、审计和监控事实：
 
 ```bash
 DEV_MVP_SKIP_BUILD=false rtk bash data-platform-test/test-fixtures/dev-mvp/verify-dev-closure.sh
 ```
 
-脚本成功时生成 `data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json`。报告不包含 Token、API Key、密钥或请求报文，必须满足 `status=passed`、`schemaVersion=V059`、`pendingMigrations=0`，并记录 `vendors=3`、`callers=2`、`dataTypes=2`、`connectorFlows` 和持久化观察事实。失败运行会保留精确的隔离数据库和日志；夹具数据不进入正式迁移或共享 dev 数据库。
+脚本成功时生成 `data-platform-test/test-fixtures/.runtime/dev-mvp-latest-report.json`。报告不包含 Token、API Key、密钥或请求报文，必须满足 `status=passed`、`schemaVersion=V060`、`pendingMigrations=0`，并记录 `vendors=3`、`callers=2`、`dataTypes=2`、`connectorFlows` 和持久化观察事实。V060 将精确的成功响应与脱敏审计响应分列，普通 CallRecord 查询不会读取精确缓存载荷，旧行也不会从脱敏 `response_data` 回填。失败运行会保留精确的隔离数据库和日志；夹具数据不进入正式迁移或共享 dev 数据库。
 
 `DEV_MVP_SKIP_BUILD=true` 仅用于已有制品的快速排障，不可替代完整构建证据。前端工具链严格要求 Node.js `v22.19.0` 和 npm `10.9.3`。
 
