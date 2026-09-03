@@ -54,7 +54,7 @@ platform:
           secret: ${INTERNAL_AUTH_BILLING_SECRET}
           grants:
             data-platform-masterdata: [masterdata:read]
-            data-platform-access: [access:stats:read]
+            data-platform-access: [access:stats:read, access:caller:read]
             data-platform-governance: [governance:alert, governance:log]
         data-platform-masterdata:
           secret: ${INTERNAL_AUTH_MASTERDATA_SECRET}
