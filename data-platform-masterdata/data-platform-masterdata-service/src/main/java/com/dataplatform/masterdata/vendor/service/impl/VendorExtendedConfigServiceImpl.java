@@ -9,6 +9,7 @@ import com.dataplatform.masterdata.vendor.entity.VendorExtendedConfig;
 import com.dataplatform.masterdata.vendor.mapper.ConfigVersionMapper;
 import com.dataplatform.masterdata.vendor.mapper.VendorExtendedConfigMapper;
 import com.dataplatform.masterdata.vendor.service.VendorExtendedConfigService;
+import com.dataplatform.masterdata.vendor.service.SecurityConfigConflictException;
 import com.dataplatform.api.Result;
 import com.dataplatform.identity.api.dto.EncryptionReqDTO;
 import com.dataplatform.identity.api.feign.EncryptionInternalFeignClient;
@@ -98,8 +99,12 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
         if (existing == null) {
             return null;
         }
-        saveVersion(existing);
         VendorExtendedConfig updated = merge(existing, config);
+        if (Boolean.TRUE.equals(existing.getIsEncrypted())
+                && Boolean.FALSE.equals(updated.getIsEncrypted())) {
+            throw new SecurityConfigConflictException("不允许将已加密配置降级为明文");
+        }
+        saveVersion(existing);
         boolean targetEncrypted = Boolean.TRUE.equals(updated.getIsEncrypted());
         String supplied = config == null ? null : config.getConfigValue();
         if (supplied == null || supplied.isBlank() || "••••••••".equals(supplied)) {

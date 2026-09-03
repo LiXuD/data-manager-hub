@@ -7,6 +7,7 @@ import com.dataplatform.common.result.Result;
 import com.dataplatform.common.util.UserContext;
 import com.dataplatform.masterdata.vendor.entity.ConfigVersion;
 import com.dataplatform.masterdata.vendor.entity.VendorExtendedConfig;
+import com.dataplatform.masterdata.vendor.service.SecurityConfigConflictException;
 import com.dataplatform.masterdata.vendor.service.VendorExtendedConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -208,5 +209,10 @@ public class ConfigController {
         result.setPage(page);
         result.setPageSize(pageSize);
         return result;
+    }
+
+    @ExceptionHandler(SecurityConfigConflictException.class)
+    public ResponseEntity<Result<Void>> handleSecurityConflict(SecurityConfigConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Result.error(409, exception.getMessage()));
     }
 }

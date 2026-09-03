@@ -95,6 +95,22 @@ class VendorExtendedConfigServiceImplSecurityTest {
     }
 
     @Test
+    void shouldRejectDowngradingEncryptedConfigToPlaintext() {
+        VendorExtendedConfig stored = config(true, "v1:1:ciphertext");
+        stored.setId(5L);
+        when(mapper.selectById(5L)).thenReturn(stored);
+        VendorExtendedConfig update = config(false, "new-plain-secret");
+
+        assertThrows(com.dataplatform.masterdata.vendor.service.SecurityConfigConflictException.class,
+                () -> service.updateSecure(5L, update));
+
+        verify(configVersionMapper, never()).insert(any(ConfigVersion.class));
+        verify(service, never()).updateById(any(VendorExtendedConfig.class));
+        verify(encryptionClient, never()).decrypt(any(EncryptionReqDTO.class));
+        verify(encryptionClient, never()).encrypt(any(EncryptionReqDTO.class));
+    }
+
+    @Test
     void shouldRejectPublishingEncryptedConfigToSharedChannel() {
         VendorExtendedConfig stored = config(true, "v1:1:ciphertext");
         doReturn(stored).when(service).getOne(any());

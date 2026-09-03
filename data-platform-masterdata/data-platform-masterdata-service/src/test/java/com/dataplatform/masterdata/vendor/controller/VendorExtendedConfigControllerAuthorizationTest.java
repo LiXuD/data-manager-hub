@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.dataplatform.common.util.UserContext;
 import com.dataplatform.masterdata.vendor.entity.VendorExtendedConfig;
+import com.dataplatform.masterdata.vendor.service.SecurityConfigConflictException;
 import com.dataplatform.masterdata.vendor.service.VendorExtendedConfigService;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import com.dataplatform.masterdata.vendor.service.VendorHealthService;
@@ -68,5 +69,21 @@ class VendorExtendedConfigControllerAuthorizationTest {
             assertThat(controller.getById(1L).getCode()).isEqualTo(403);
             verifyNoInteractions(vendorConfigService, healthService);
         }
+    }
+
+    @Test
+    void mapsEncryptedConfigDowngradeToConflictForBothConfigRoutes() {
+        SecurityConfigConflictException exception =
+                new SecurityConfigConflictException("不允许将已加密配置降级为明文");
+        ConfigController configController = new ConfigController();
+        VendorExtendedConfigController vendorController = new VendorExtendedConfigController();
+
+        var configResponse = configController.handleSecurityConflict(exception);
+        var vendorResponse = vendorController.handleSecurityConflict(exception);
+
+        assertThat(configResponse.getStatusCode().value()).isEqualTo(409);
+        assertThat(configResponse.getBody().getCode()).isEqualTo(409);
+        assertThat(vendorResponse.getStatusCode().value()).isEqualTo(409);
+        assertThat(vendorResponse.getBody().getCode()).isEqualTo(409);
     }
 }
