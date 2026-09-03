@@ -305,13 +305,21 @@ wait_for_side_effects() {
 
 scan_evidence() {
   local secret
+  local secret_scan_status
   for secret in \
     "$DEV_MVP_ADMIN_PASSWORD" "$DEV_MVP_APPLICANT_PASSWORD" \
     "$DEV_MVP_APPROVER_PASSWORD" "$DEV_MVP_SECURITY_PASSWORD" \
     "$DEV_MVP_DB_PASSWORD"; do
-    if [[ -n "$secret" ]] && rg -F -- "$secret" "$EVIDENCE_DIR" >/dev/null 2>&1; then
+    [[ -n "$secret" ]] || continue
+    if rg -F -- "$secret" "$EVIDENCE_DIR" >/dev/null 2>&1; then
       echo "浏览器证据包含未脱敏凭据" >&2
       return 1
+    else
+      secret_scan_status=$?
+      if (( secret_scan_status > 1 )); then
+        echo "浏览器证据凭据扫描失败，拒绝将扫描错误视为无匹配" >&2
+        return 1
+      fi
     fi
   done
   local pattern_scan_status
@@ -326,8 +334,12 @@ scan_evidence() {
       return 1
     fi
   fi
-  if find "$EVIDENCE_DIR" -type f \( -name '*trace*' -o -name '*.zip' -o -name '*.webm' \) \
-    | rg -q .; then
+  local forbidden_files
+  if ! forbidden_files="$(find "$EVIDENCE_DIR" -type f \( -name '*trace*' -o -name '*.zip' -o -name '*.webm' \) -print)"; then
+    echo "浏览器证据文件类型扫描失败，拒绝将扫描错误视为无匹配" >&2
+    return 1
+  fi
+  if [[ -n "$forbidden_files" ]]; then
     echo "浏览器证据不允许包含 trace/profile 或录屏文件" >&2
     return 1
   fi
