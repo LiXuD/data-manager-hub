@@ -155,6 +155,55 @@
       </el-tab-pane>
 
       <el-tab-pane
+        v-if="userStore.hasPermission('api-permission:process-view')"
+        label="流程诊断"
+        name="process-diagnostics"
+      >
+        <div class="toolbar">
+          <span class="toolbar-note">只读展示流程定义、节点角色和实例统计；不会修改运行中实例。</span>
+          <el-button @click="loadProcessDiagnostics">刷新</el-button>
+        </div>
+        <el-alert
+          v-if="processDiagnosticError"
+          :title="processDiagnosticError"
+          type="error"
+          :closable="false"
+          show-icon
+          class="diagnostic-alert"
+        />
+        <el-card v-for="definition in processDiagnostics" :key="definition.id" class="diagnostic-card">
+          <div class="diagnostic-header">
+            <div>
+              <div class="primary-cell">{{ definition.name || definition.key }}</div>
+              <div class="secondary-cell">{{ definition.key }} · v{{ definition.version }} · {{ definition.id }}</div>
+            </div>
+            <div class="diagnostic-stats">
+              <el-tag :type="definition.suspended ? 'warning' : 'success'">
+                {{ definition.suspended ? '已暂停' : '已启用' }}
+              </el-tag>
+              <span>活动实例 {{ definition.activeInstances }}</span>
+              <span>累计实例 {{ definition.totalInstances }}</span>
+            </div>
+          </div>
+          <div class="diagnostic-roles">
+            <span class="diagnostic-label">绑定角色</span>
+            <el-tag v-for="role in definition.boundRoles" :key="role" size="small" effect="plain">{{ role }}</el-tag>
+            <span v-if="!definition.boundRoles.length" class="secondary-cell">未声明候选角色</span>
+          </div>
+          <el-table :data="definition.nodes" stripe size="small">
+            <el-table-column prop="id" label="节点 ID" min-width="180" />
+            <el-table-column prop="name" label="节点名称" min-width="160" />
+            <el-table-column prop="type" label="类型" width="150" />
+            <el-table-column label="候选角色" min-width="220">
+              <template #default="{ row }">{{ row.candidateGroups.join('、') || '—' }}</template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+        <el-empty v-if="!processDiagnosticLoading && !processDiagnostics.length && !processDiagnosticError" description="暂无流程定义" />
+        <div v-loading="processDiagnosticLoading" class="diagnostic-loading" />
+      </el-tab-pane>
+
+      <el-tab-pane
         v-if="userStore.hasPermission('api-permission:grant-view')"
         label="授权台账"
         name="grants"
@@ -696,6 +745,7 @@ import {
   getEmergencyCallers,
   getEmergencyInterfaceOptions,
   getGrants,
+  getProcessDiagnostics,
   getInterfaceOptions,
   getTask,
   getTasks,
@@ -711,7 +761,8 @@ import {
   type ApprovalTaskDetail,
   type CallerOption,
   type Grant,
-  type InterfaceOption
+  type InterfaceOption,
+  type ProcessDiagnostic
 } from '@/api/api-permission'
 import { getDraftValidationError } from './validation'
 
@@ -720,7 +771,9 @@ const router = useRouter()
 const userStore = useUserStore()
 const defaultTab = userStore.hasPermission('api-permission:view')
   ? 'applications'
-  : userStore.hasPermission('api-permission:approve') ? 'tasks' : 'grants'
+  : userStore.hasPermission('api-permission:approve')
+    ? 'tasks'
+    : userStore.hasPermission('api-permission:process-view') ? 'process-diagnostics' : 'grants'
 const activeTab = ref(defaultTab)
 const applications = ref<ApiPermissionApplication[]>([])
 const applicationLoading = ref(false)
@@ -748,6 +801,9 @@ const emergencySaving = ref(false)
 const emergencyCallers = ref<CallerOption[]>([])
 const emergencyApiKeys = ref<ApiKeyOption[]>([])
 const emergencyInterfaces = ref<InterfaceOption[]>([])
+const processDiagnostics = ref<ProcessDiagnostic[]>([])
+const processDiagnosticLoading = ref(false)
+const processDiagnosticError = ref('')
 
 const draft = reactive<ApplicationDraft>({
   requestType: 'OPEN',
@@ -835,9 +891,24 @@ const loadGrants = async () => {
   }
 }
 
+const loadProcessDiagnostics = async () => {
+  processDiagnosticLoading.value = true
+  processDiagnosticError.value = ''
+  try {
+    const response = await getProcessDiagnostics()
+    processDiagnostics.value = response.data || []
+  } catch {
+    processDiagnostics.value = []
+    processDiagnosticError.value = '流程诊断加载失败，请检查审批引擎状态或稍后重试'
+  } finally {
+    processDiagnosticLoading.value = false
+  }
+}
+
 const handleTabChange = (name: TabsPaneContext['paneName']) => {
   if (name === 'applications') loadApplications()
   if (name === 'tasks') loadTasks()
+  if (name === 'process-diagnostics') loadProcessDiagnostics()
   if (name === 'grants') loadGrants()
 }
 
@@ -1234,6 +1305,13 @@ onMounted(async () => {
 .toolbar-note { margin-right: auto; color: var(--color-text-tertiary); font-size: 13px; }
 .status-filter { width: 160px; }
 .table-card { border-radius: 10px; }
+.diagnostic-card { margin-bottom: 14px; border-radius: 10px; }
+.diagnostic-alert { margin-bottom: 14px; }
+.diagnostic-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
+.diagnostic-stats { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: var(--color-text-secondary); font-size: 13px; }
+.diagnostic-roles { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.diagnostic-label { margin-right: 4px; color: var(--color-text-tertiary); font-size: 12px; }
+.diagnostic-loading { min-height: 4px; }
 .pagination-container { display: flex; justify-content: flex-end; margin-top: 20px; }
 .link-button { padding: 0; border: 0; color: var(--el-color-primary); background: transparent; cursor: pointer; }
 .code { font-family: var(--font-mono); font-size: 13px; }

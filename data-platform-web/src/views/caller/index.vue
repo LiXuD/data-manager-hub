@@ -6,7 +6,7 @@
         <h2>内部系统管理</h2>
         <p class="header-desc">管理内部系统及其 API Key</p>
       </div>
-      <el-button type="primary" @click="handleAdd">
+      <el-button v-if="canAddCaller" type="primary" @click="handleAdd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
@@ -45,15 +45,15 @@
         <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-switch v-model="row.status" active-value="active" inactive-value="inactive" @change="handleStatusChange(row)" />
+            <el-switch v-model="row.status" active-value="active" inactive-value="inactive" :disabled="!canEditCaller" @change="handleStatusChange(row)" />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-if="canEditCaller" type="primary" link @click="handleEdit(row)">编辑</el-button>
             <el-button type="primary" link @click="handleProducts(row)">产品</el-button>
-            <el-button type="primary" link @click="handleApiKey(row)">API Key</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canViewApiKeys" type="primary" link @click="handleApiKey(row)">API Key</el-button>
+            <el-button v-if="canDeleteCaller" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -99,14 +99,14 @@
       </el-form>
       <template #footer>
         <el-button @click="callerDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSaveCaller">保存</el-button>
+        <el-button v-if="callerForm.id ? canEditCaller : canAddCaller" type="primary" :loading="submitting" @click="handleSaveCaller">保存</el-button>
       </template>
     </el-dialog>
 
     <!-- API Key弹窗 -->
     <el-dialog v-model="apiKeyVisible" title="API Key管理" width="820px" class="form-dialog">
       <div class="api-key-header">
-        <el-button type="primary" @click="handleOpenCreateApiKey">创建API Key</el-button>
+        <el-button v-if="canAddApiKey" type="primary" @click="handleOpenCreateApiKey">创建API Key</el-button>
       </div>
       <el-table :data="apiKeyList" stripe class="api-key-table">
         <el-table-column prop="keyName" label="名称" min-width="120" />
@@ -131,10 +131,10 @@
         </el-table-column>
         <el-table-column label="操作" width="340">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleInterfaceAuth(row.id!)">申请接口权限</el-button>
-            <el-button type="primary" link @click="handleProductAuth(row.id!)">产品授权</el-button>
-            <el-button type="primary" link @click="handleRateLimitConfig(row)">限流配置</el-button>
-            <el-button type="danger" link @click="handleDeleteApiKey(row.id!)">删除</el-button>
+            <el-button v-if="canApplyInterfacePermission" type="primary" link @click="handleInterfaceAuth(row.id!)">申请接口权限</el-button>
+            <el-button v-if="canEditApiKey" type="primary" link @click="handleProductAuth(row.id!)">产品授权</el-button>
+            <el-button v-if="canEditApiKey" type="primary" link @click="handleRateLimitConfig(row)">限流配置</el-button>
+            <el-button v-if="canDeleteApiKey" type="danger" link @click="handleDeleteApiKey(row.id!)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -165,14 +165,14 @@
             </el-select>
             <div class="product-select-hint">
               API Key 创建后，只能调用这里授权的产品。
-              <el-button link type="primary" @click="handleOpenProductFromApiKey">添加产品</el-button>
+              <el-button v-if="canAddCaller" link type="primary" @click="handleOpenProductFromApiKey">添加产品</el-button>
             </div>
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="apiKeyCreateVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleCreateApiKey">创建</el-button>
+        <el-button v-if="canAddApiKey" type="primary" :loading="submitting" @click="handleCreateApiKey">创建</el-button>
       </template>
     </el-dialog>
 
@@ -198,7 +198,7 @@
       </el-form>
       <template #footer>
         <el-button @click="rateLimitDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSaveRateLimit">保存</el-button>
+        <el-button v-if="canEditApiKey" type="primary" :loading="submitting" @click="handleSaveRateLimit">保存</el-button>
       </template>
     </el-dialog>
 
@@ -218,7 +218,7 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button size="large" @click="productAuthVisible = false">取消</el-button>
-          <el-button type="primary" size="large" :loading="submitting" @click="handleSaveProductAuth">确定</el-button>
+          <el-button v-if="canEditApiKey" type="primary" size="large" :loading="submitting" @click="handleSaveProductAuth">确定</el-button>
         </div>
       </template>
     </el-dialog>
@@ -245,8 +245,18 @@ import {
 } from '@/api/caller'
 import type { Caller, ApiKey, CallerProduct } from '@/api/caller'
 import { COMMON_STATUS } from '@/constants'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
+const canAddCaller = computed(() => userStore.hasPermission('caller:add'))
+const canEditCaller = computed(() => userStore.hasPermission('caller:edit'))
+const canDeleteCaller = computed(() => userStore.hasPermission('caller:delete'))
+const canViewApiKeys = computed(() => userStore.hasPermission('apikey:view'))
+const canAddApiKey = computed(() => userStore.hasPermission('apikey:add'))
+const canEditApiKey = computed(() => userStore.hasPermission('apikey:edit'))
+const canDeleteApiKey = computed(() => userStore.hasPermission('apikey:delete'))
+const canApplyInterfacePermission = computed(() => userStore.hasPermission('api-permission:apply'))
 
 const searchForm = reactive({ keyword: '', status: '' })
 const tableData = ref<Caller[]>([])
