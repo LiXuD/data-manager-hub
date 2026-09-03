@@ -2,7 +2,7 @@
 
 > 日期：2026-09-01  
 > 适用基线：`dev` / `d4d56bf6954a2827c8d86223ecc211039debf7a9` 及其后续修复分支  
-> 状态：截至 2026-09-03，代码、前端、V059 前向迁移、测试和本地 Dev 运行态整改已实施并复审；最终精确 SHA 的远端 `CI / required-ci`、调用场景产品决策及 staging/production 门禁仍未宣称完成  
+> 状态：截至 2026-09-03，代码、前端、V059 前向迁移、测试和本地 Dev 运行态整改已实施并复审；最终精确 SHA 的远端 `CI / required-ci`、调用场景产品决策及 staging/production 门禁仍未宣称完成
 > 证据入口：[验收结果](2026-08-31-real-browser-end-to-end-acceptance-results.md) / [历史执行计划](2026-08-30-real-browser-end-to-end-acceptance-inventory-plan.md)  
 > 全局待办：以 [`PENDING_TASKS.md`](../PENDING_TASKS.md) 为准；本文是本轮问题的唯一详细整改设计
 
