@@ -5,6 +5,7 @@ import com.dataplatform.access.call.mapper.CallRecordMapper;
 import com.dataplatform.access.connector.api.dto.ConnectorMigrationObservationDTO;
 import com.dataplatform.access.connector.api.dto.ConnectorMigrationObservationReqDTO;
 import com.dataplatform.common.entity.CallRecord;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
@@ -40,10 +41,13 @@ public class ConnectorMigrationObservationService {
         long total = value(row, "total_calls");
         long success = value(row, "successful_calls");
         long failed = value(row, "failed_calls");
+        long p95Duration = value(row, "p95_duration_ms");
+        long cacheHits = value(row, "cache_hit_calls");
+        long realtimeCalls = value(row, "realtime_calls");
+        validateAggregates(total, success, failed, p95Duration, cacheHits, realtimeCalls);
         return new ConnectorMigrationObservationDTO(total, success, failed,
                 total == 0 ? 0D : (double) failed / total,
-                value(row, "p95_duration_ms"), value(row, "cache_hit_calls"),
-                value(row, "realtime_calls"));
+                p95Duration, cacheHits, realtimeCalls);
     }
 
     private void validate(ConnectorMigrationObservationReqDTO request) {
@@ -53,7 +57,7 @@ public class ConnectorMigrationObservationService {
             throw new IllegalArgumentException(
                     "vendorId, interfaceId, pipelineVersion, snapshotHash and startedAt are required");
         }
-        if (request.snapshotHash().length() != 64) {
+        if (!request.snapshotHash().matches("(?i)[0-9a-f]{64}")) {
             throw new IllegalArgumentException("snapshotHash must be a SHA-256 value");
         }
         if (request.endedAt() != null && request.endedAt().isBefore(request.startedAt())) {
@@ -64,6 +68,26 @@ public class ConnectorMigrationObservationService {
     private long value(Map<String, Object> row, String key) {
         Object value = row.get(key);
         if (value == null) return 0L;
-        return value instanceof Number number ? number.longValue() : Long.parseLong(value.toString());
+        try {
+            return new BigDecimal(value.toString().trim()).longValueExact();
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw new IllegalStateException("Invalid observation aggregate: " + key, exception);
+        }
+    }
+
+    private void validateAggregates(long total, long success, long failed, long p95Duration,
+                                    long cacheHits, long realtimeCalls) {
+        if (total < 0 || success < 0 || failed < 0 || p95Duration < 0 || cacheHits < 0
+                || realtimeCalls < 0) {
+            throw new IllegalStateException("Observation aggregates cannot be negative");
+        }
+        try {
+            if (Math.addExact(success, failed) != total
+                    || Math.addExact(cacheHits, realtimeCalls) != total) {
+                throw new IllegalStateException("Observation aggregate counts are inconsistent");
+            }
+        } catch (ArithmeticException exception) {
+            throw new IllegalStateException("Observation aggregate counts overflow", exception);
+        }
     }
 }

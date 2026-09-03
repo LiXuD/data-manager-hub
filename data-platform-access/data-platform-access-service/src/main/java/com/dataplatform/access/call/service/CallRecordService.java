@@ -24,7 +24,14 @@ public interface CallRecordService extends IService<CallRecord> {
                                 LocalDateTime startTime, LocalDateTime endTime,
                                 int page, int pageSize);
 
+    PageResult<CallRecord> list(Long tenantId, Long callerId, Long vendorId, String dataType, Boolean success,
+                                String apiCode, String productCode, String sceneCode, Boolean cacheHit,
+                                LocalDateTime startTime, LocalDateTime endTime,
+                                int page, int pageSize);
+
     Map<String, Object> getStats(LocalDateTime startTime, LocalDateTime endTime);
+
+    Map<String, Object> getStats(Long tenantId, LocalDateTime startTime, LocalDateTime endTime);
 
     CallRecord findLatestReusableCache(String apiCode, String requestHash, Long tenantId, Long callerId,
                                        LocalDateTime since, String cacheScope);
@@ -34,11 +41,22 @@ public interface CallRecordService extends IService<CallRecord> {
                                           Boolean cacheHit, LocalDateTime startTime,
                                           LocalDateTime endTime);
 
+    Map<String, Object> getDimensionStats(Long tenantId, Long callerId, String productCode, String sceneCode,
+                                          String apiCode, String vendorCode, String dataType,
+                                          Boolean cacheHit, LocalDateTime startTime,
+                                          LocalDateTime endTime);
+
     List<InterfaceQualityVO> getInterfaceQualityReport(String vendorCode, String dataType,
+                                                        String apiCode, LocalDateTime startTime,
+                                                        LocalDateTime endTime);
+
+    List<InterfaceQualityVO> getInterfaceQualityReport(Long tenantId, String vendorCode, String dataType,
                                                         String apiCode, LocalDateTime startTime,
                                                         LocalDateTime endTime);
 
     String export(Long callerId, LocalDateTime startTime, LocalDateTime endTime);
 
     byte[] exportData(Long callerId, LocalDateTime startTime, LocalDateTime endTime);
+
+    byte[] exportData(Long tenantId, Long callerId, LocalDateTime startTime, LocalDateTime endTime);
 }

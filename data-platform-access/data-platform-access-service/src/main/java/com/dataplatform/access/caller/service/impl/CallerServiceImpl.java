@@ -22,16 +22,25 @@ public class CallerServiceImpl extends ServiceImpl<CallerInfoMapper, CallerInfo>
 
     @Override
     public PageResult<CallerInfo> list(Integer page, Integer pageSize, String keyword, String status) {
+        return list(page, pageSize, keyword, status, null);
+    }
+
+    @Override
+    public PageResult<CallerInfo> list(Integer page, Integer pageSize, String keyword, String status, Long tenantId) {
         LambdaQueryWrapper<CallerInfo> wrapper = new LambdaQueryWrapper<>();
         
         if (StringUtils.hasText(keyword)) {
-            wrapper.like(CallerInfo::getCallerName, keyword)
-                   .or()
-                   .like(CallerInfo::getCallerCode, keyword);
+            wrapper.and(query -> query.like(CallerInfo::getCallerName, keyword)
+                    .or()
+                    .like(CallerInfo::getCallerCode, keyword));
         }
         
         if (StringUtils.hasText(status)) {
             wrapper.eq(CallerInfo::getStatus, status);
+        }
+
+        if (tenantId != null) {
+            wrapper.eq(CallerInfo::getTenantId, tenantId);
         }
         
         wrapper.eq(CallerInfo::getDeleted, false);
@@ -49,6 +58,14 @@ public class CallerServiceImpl extends ServiceImpl<CallerInfoMapper, CallerInfo>
         pageResult.setPageSize(pageSize);
         
         return pageResult;
+    }
+
+    @Override
+    public List<CallerInfo> listAllByTenant(Long tenantId) {
+        return list(new LambdaQueryWrapper<CallerInfo>()
+                .eq(CallerInfo::getTenantId, tenantId)
+                .eq(CallerInfo::getDeleted, false)
+                .orderByDesc(CallerInfo::getId));
     }
     
     @Override

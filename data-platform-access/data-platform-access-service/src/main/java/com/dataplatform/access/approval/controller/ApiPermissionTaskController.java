@@ -63,6 +63,10 @@ public class ApiPermissionTaskController {
             @PathVariable String taskId,
             @RequestBody CompleteTaskRequest request) {
         requirePermission("api-permission:approve");
+        if (request == null) {
+            throw new ApiPermissionException(
+                    HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "审批请求不能为空");
+        }
         return Result.success(taskService.complete(
                 taskId, request, userId(), username(), tenantId()));
     }
@@ -71,7 +75,8 @@ public class ApiPermissionTaskController {
     public Result<List<ApprovalEnginePort.HistorySnapshot>> processHistory(
             @PathVariable Long id) {
         boolean tenantScope = UserContext.hasPermission("api-permission:process-view")
-                || UserContext.hasPermission("api-permission:approve");
+                || UserContext.hasPermission("api-permission:approve")
+                || UserContext.hasPermission("system:admin");
         if (!tenantScope) {
             requirePermission("api-permission:view");
         }
@@ -79,8 +84,15 @@ public class ApiPermissionTaskController {
                 id, userId(), tenantId(), tenantScope));
     }
 
+    @GetMapping("/process-diagnostics")
+    public Result<List<ApprovalEnginePort.ProcessDefinitionSnapshot>> processDiagnostics() {
+        requirePermission("api-permission:process-view");
+        return Result.success(taskService.processDiagnostics());
+    }
+
     private void requirePermission(String permission) {
-        if (!UserContext.hasPermission(permission)) {
+        if (!UserContext.hasPermission(permission)
+                && !UserContext.hasPermission("system:admin")) {
             throw new ApiPermissionException(
                     HttpStatus.FORBIDDEN,
                     "PERMISSION_DENIED",

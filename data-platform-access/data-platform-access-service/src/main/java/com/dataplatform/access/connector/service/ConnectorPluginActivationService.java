@@ -432,9 +432,13 @@ public class ConnectorPluginActivationService {
         activation.setUpdatedAt(now);
         if (activation.getId() == null) {
             activation.setCreatedAt(now);
-            mapper.insert(activation);
+            if (mapper.insert(activation) != 1) {
+                throw new IllegalStateException("CONNECTOR_ACTIVATION_WRITE_FAILED");
+            }
         } else {
-            mapper.updateById(activation);
+            if (mapper.updateById(activation) != 1) {
+                throw new IllegalStateException("CONNECTOR_ACTIVATION_UPDATE_CONFLICT");
+            }
         }
     }
 

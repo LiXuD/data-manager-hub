@@ -6,6 +6,7 @@ import com.dataplatform.common.entity.CallRecord;
 import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.result.Result;
+import com.dataplatform.common.util.UserContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -45,32 +46,43 @@ public class CallRecordController {
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
-        return callRecordService.list(callerId, vendorId, dataType, success, apiCode, productCode, sceneCode,
-                cacheHit, startTime, endTime, page, pageSize);
+        if (!hasTenantScope()) {
+            return deniedPage(page, pageSize);
+        }
+        return callRecordService.list(scopeTenant(), callerId, vendorId, dataType, success, apiCode, productCode,
+                sceneCode, cacheHit, startTime, endTime, page, pageSize);
     }
 
     @PostMapping("/query")
     public ResponseEntity<Result<PageResult<CallRecord>>> query(@RequestBody Map<String, Object> queryParams) {
-        int page = queryParams.get("page") != null ? ((Number) queryParams.get("page")).intValue() : 1;
-        int pageSize = queryParams.get("pageSize") != null ? ((Number) queryParams.get("pageSize")).intValue() : 10;
-
-        if (page < 1 || pageSize < 1 || pageSize > 100) {
+        if (queryParams == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Result.error(400, "分页参数不合法"));
+                    .body(Result.error(400, "查询参数不能为空"));
         }
+        if (!hasTenantScope()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Result.error(403, "当前用户没有调用记录租户作用域"));
+        }
+        try {
+            int page = parseInteger(queryParams.get("page"), 1, "page", 1, Integer.MAX_VALUE);
+            int pageSize = parseInteger(queryParams.get("pageSize"), 10, "pageSize", 1, 100);
+            Long callerId = parseLong(queryParams.get("callerId"), "callerId");
+            Long vendorId = parseLong(queryParams.get("vendorId"), "vendorId");
+            String dataType = parseString(queryParams.get("dataType"), "dataType");
+            Boolean success = parseBoolean(queryParams.get("success"), "success");
 
-        Long callerId = queryParams.get("callerId") != null ? ((Number) queryParams.get("callerId")).longValue() : null;
-        Long vendorId = queryParams.get("vendorId") != null ? ((Number) queryParams.get("vendorId")).longValue() : null;
-        String dataType = (String) queryParams.get("dataType");
-        Boolean success = (Boolean) queryParams.get("success");
-
-        return ResponseEntity.ok(Result.success(callRecordService.list(callerId, vendorId, dataType, success, null, null, page, pageSize)));
+            return ResponseEntity.ok(Result.success(callRecordService.list(scopeTenant(), callerId, vendorId, dataType,
+                    success, null, null, null, null, null, null, page, pageSize)));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, exception.getMessage()));
+        }
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Result<CallRecord>> getById(@PathVariable Long id) {
         CallRecord record = callRecordService.getById(id);
-        if (record == null) {
+        if (record == null || !tenantAllowed(record)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "调用记录不存在"));
         }
@@ -81,7 +93,9 @@ public class CallRecordController {
     public Result<Map<String, Object>> getStats(
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
-        return Result.success(callRecordService.getStats(startTime, endTime));
+        return hasTenantScope()
+                ? Result.success(callRecordService.getStats(scopeTenant(), startTime, endTime))
+                : Result.error(403, "当前用户没有调用记录租户作用域");
     }
 
     @GetMapping("/dimension-stats")
@@ -95,8 +109,10 @@ public class CallRecordController {
             @RequestParam(required = false) Boolean cacheHit,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
-        return Result.success(callRecordService.getDimensionStats(callerId, productCode, sceneCode, apiCode,
-                vendorCode, dataType, cacheHit, startTime, endTime));
+        return hasTenantScope()
+                ? Result.success(callRecordService.getDimensionStats(scopeTenant(), callerId, productCode, sceneCode,
+                apiCode, vendorCode, dataType, cacheHit, startTime, endTime))
+                : Result.error(403, "当前用户没有调用记录租户作用域");
     }
 
     @GetMapping("/quality-report")
@@ -106,8 +122,10 @@ public class CallRecordController {
             @RequestParam(required = false) String apiCode,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
-        return Result.success(callRecordService.getInterfaceQualityReport(vendorCode, dataType, apiCode,
-                startTime, endTime));
+        return hasTenantScope()
+                ? Result.success(callRecordService.getInterfaceQualityReport(scopeTenant(), vendorCode, dataType,
+                apiCode, startTime, endTime))
+                : Result.error(403, "当前用户没有调用记录租户作用域");
     }
 
     @GetMapping("/export")
@@ -115,7 +133,10 @@ public class CallRecordController {
             @RequestParam(required = false) Long callerId,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
-        byte[] data = callRecordService.exportData(callerId, startTime, endTime);
+        if (!hasTenantScope()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        byte[] data = callRecordService.exportData(scopeTenant(), callerId, startTime, endTime);
         String filename = "call-record-" + LocalDate.now().format(DateTimeFormatter.ISO_DATE) + ".csv";
 
         HttpHeaders headers = new HttpHeaders();
@@ -126,5 +147,97 @@ public class CallRecordController {
         return ResponseEntity.ok()
                 .headers(headers)
                 .body(data);
+    }
+
+    private boolean isPlatformAdmin() {
+        return UserContext.hasPermission("system:admin");
+    }
+
+    private Long scopeTenant() {
+        return isPlatformAdmin() ? null : UserContext.getCurrentTenantId();
+    }
+
+    private boolean hasTenantScope() {
+        return isPlatformAdmin() || UserContext.getCurrentTenantId() != null;
+    }
+
+    private boolean tenantAllowed(CallRecord record) {
+        return isPlatformAdmin()
+                || (UserContext.getCurrentTenantId() != null
+                && UserContext.getCurrentTenantId().equals(record.getTenantId()));
+    }
+
+    private int parseInteger(Object value, int defaultValue, String field, int min, int max) {
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            int parsed = value instanceof Number number
+                    ? number.intValue()
+                    : Integer.parseInt(String.valueOf(value).trim());
+            if (parsed < min || parsed > max) {
+                throw new IllegalArgumentException(field + "参数不合法");
+            }
+            return parsed;
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw new IllegalArgumentException(field + "参数不合法");
+        }
+    }
+
+    private Long parseLong(Object value, String field) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            long parsed = value instanceof Number number
+                    ? number.longValue()
+                    : Long.parseLong(String.valueOf(value).trim());
+            if (parsed <= 0) {
+                throw new IllegalArgumentException(field + "参数不合法");
+            }
+            return parsed;
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw new IllegalArgumentException(field + "参数不合法");
+        }
+    }
+
+    private String parseString(Object value, String field) {
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String)) {
+            throw new IllegalArgumentException(field + "参数不合法");
+        }
+        String parsed = ((String) value).trim();
+        return parsed.isEmpty() ? null : parsed;
+    }
+
+    private Boolean parseBoolean(Object value, String field) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
+        }
+        if (value instanceof String stringValue) {
+            if ("true".equalsIgnoreCase(stringValue.trim())) {
+                return Boolean.TRUE;
+            }
+            if ("false".equalsIgnoreCase(stringValue.trim())) {
+                return Boolean.FALSE;
+            }
+        }
+        throw new IllegalArgumentException(field + "参数不合法");
+    }
+
+    private PageResult<CallRecord> deniedPage(int page, int pageSize) {
+        PageResult<CallRecord> denied = new PageResult<>();
+        denied.setCode(HttpStatus.FORBIDDEN.value());
+        denied.setMessage("当前用户没有调用记录租户作用域");
+        denied.setData(List.of());
+        denied.setTotal(0L);
+        denied.setPage(page);
+        denied.setPageSize(pageSize);
+        return denied;
     }
 }

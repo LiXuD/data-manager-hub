@@ -12,6 +12,7 @@ import com.dataplatform.access.call.mapper.CallRecordMapper;
 import com.dataplatform.access.connector.api.dto.ConnectorMigrationObservationReqDTO;
 import com.dataplatform.common.entity.CallRecord;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -57,5 +58,21 @@ class ConnectorMigrationObservationServiceTest {
                 new ConnectorMigrationObservationReqDTO(7L, 8L, 3, "short", LocalDateTime.now(), null)));
         assertThrows(IllegalArgumentException.class, () -> service.observe(
                 new ConnectorMigrationObservationReqDTO(7L, 8L, null, "a".repeat(64), LocalDateTime.now(), null)));
+        assertThrows(IllegalArgumentException.class, () -> service.observe(
+                new ConnectorMigrationObservationReqDTO(7L, 8L, 3, "g".repeat(64), LocalDateTime.now(), null)));
+    }
+
+    @Test
+    void rejectsOverflowingAggregateFactsInsteadOfTruncatingThem() {
+        when(mapper.selectMaps(any())).thenReturn(List.of(Map.of(
+                "total_calls", new BigDecimal("9223372036854775808"),
+                "successful_calls", 0L,
+                "failed_calls", 0L,
+                "p95_duration_ms", 0L,
+                "cache_hit_calls", 0L,
+                "realtime_calls", 0L)));
+
+        assertThrows(IllegalStateException.class, () -> service.observe(new ConnectorMigrationObservationReqDTO(
+                7L, 8L, 3, "a".repeat(64), LocalDateTime.now(), null)));
     }
 }

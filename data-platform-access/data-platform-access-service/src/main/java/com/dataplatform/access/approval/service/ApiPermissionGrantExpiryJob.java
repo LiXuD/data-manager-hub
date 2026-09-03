@@ -100,6 +100,8 @@ public class ApiPermissionGrantExpiryJob {
         action.setComment("授权已到期 grantId=" + grant.getId()
                 + "，source=" + grant.getGrantSource());
         action.setCreatedAt(now);
-        actionMapper.insert(action);
+        if (actionMapper.insert(action) != 1) {
+            throw new IllegalStateException("授权到期审计记录写入失败");
+        }
     }
 }

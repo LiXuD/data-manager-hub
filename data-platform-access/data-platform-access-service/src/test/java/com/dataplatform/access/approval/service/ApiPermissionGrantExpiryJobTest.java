@@ -39,6 +39,7 @@ class ApiPermissionGrantExpiryJobTest {
         grant.setExpireAt(LocalDateTime.now().minusMinutes(1));
         when(grantService.list(any(LambdaQueryWrapper.class))).thenReturn(List.of(grant));
         when(grantService.updateById(grant)).thenReturn(true);
+        when(actionMapper.insert(any(ApiPermissionAction.class))).thenReturn(1);
 
         new ApiPermissionGrantExpiryJob(
                 grantService, itemMapper, actionMapper, applicationService).expireDueGrants();

@@ -10,6 +10,7 @@ import com.dataplatform.identity.api.feign.IdentityAccessInternalFeignClient;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,6 +55,7 @@ class CurrentUserApiKeyOptionServiceTest {
                 LocalDateTime.now().minusMinutes(1));
         ApiKey revoked = key(13L, 1L, "revoked", "dp_revoked_123456", ApiKeyStatus.REVOKED, null);
         when(apiKeyService.listByCaller(1L)).thenReturn(List.of(active, expired, revoked));
+        when(callerService.getById(1L)).thenReturn(availableCaller);
 
         CurrentUserApiKeyOptionsVO result = service.listOptions(10L, 20L);
 
@@ -73,6 +75,43 @@ class CurrentUserApiKeyOptionServiceTest {
 
         assertThrows(IllegalStateException.class, () -> service.listOptions(10L, 20L));
         verifyNoInteractions(callerService, apiKeyService);
+    }
+
+    @Test
+    void ignoresDeletedCallersAndKeysEvenWhenTheirStatusIsActive() {
+        CallerInfo deletedCaller = caller(1L, 20L, "已删除系统", CommonStatus.ACTIVE);
+        deletedCaller.setDeleted(true);
+        when(identityAccessClient.getCallerIds(10L)).thenReturn(Result.success(List.of(1L)));
+        when(callerService.listByIds(List.of(1L))).thenReturn(List.of(deletedCaller));
+
+        CurrentUserApiKeyOptionsVO result = service.listOptions(10L, 20L);
+
+        assertTrue(result.isHasAssociatedCaller());
+        assertTrue(result.getOptions().isEmpty());
+        verifyNoInteractions(apiKeyService);
+    }
+
+    @Test
+    void failsClosedWhenIdentityReturnsNullCallerId() {
+        when(identityAccessClient.getCallerIds(10L)).thenReturn(Result.success(Collections.singletonList(null)));
+
+        assertThrows(IllegalStateException.class, () -> service.listOptions(10L, 20L));
+        verifyNoInteractions(callerService, apiKeyService);
+    }
+
+    @Test
+    void ignoresActiveKeysWithoutUsableRawCredential() {
+        CallerInfo availableCaller = caller(1L, 20L, "核心系统", CommonStatus.ACTIVE);
+        when(identityAccessClient.getCallerIds(10L)).thenReturn(Result.success(List.of(1L)));
+        when(callerService.listByIds(List.of(1L))).thenReturn(List.of(availableCaller));
+
+        ApiKey blankKey = key(11L, 1L, "blank", " ", ApiKeyStatus.ACTIVE, null);
+        when(apiKeyService.listByCaller(1L)).thenReturn(List.of(blankKey));
+
+        CurrentUserApiKeyOptionsVO result = service.listOptions(10L, 20L);
+
+        assertTrue(result.isHasAssociatedCaller());
+        assertTrue(result.getOptions().isEmpty());
     }
 
     private CallerInfo caller(Long id, Long tenantId, String name, CommonStatus status) {

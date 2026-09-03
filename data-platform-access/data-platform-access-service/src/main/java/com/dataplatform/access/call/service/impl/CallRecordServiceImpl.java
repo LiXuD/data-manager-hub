@@ -33,7 +33,7 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
             Long callerId, Long vendorId, String dataType, Boolean success,
             LocalDateTime startTime, LocalDateTime endTime,
             int page, int pageSize) {
-        return list(callerId, vendorId, dataType, success, null, null, null, null,
+        return list(null, callerId, vendorId, dataType, success, null, null, null, null,
                 startTime, endTime, page, pageSize);
     }
 
@@ -43,9 +43,22 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
             String apiCode, String productCode, String sceneCode, Boolean cacheHit,
             LocalDateTime startTime, LocalDateTime endTime,
             int page, int pageSize) {
+        return list(null, callerId, vendorId, dataType, success, apiCode, productCode, sceneCode, cacheHit,
+                startTime, endTime, page, pageSize);
+    }
+
+    @Override
+    public PageResult<CallRecord> list(
+            Long tenantId, Long callerId, Long vendorId, String dataType, Boolean success,
+            String apiCode, String productCode, String sceneCode, Boolean cacheHit,
+            LocalDateTime startTime, LocalDateTime endTime,
+            int page, int pageSize) {
 
         LambdaQueryWrapper<CallRecord> wrapper = new LambdaQueryWrapper<>();
 
+        if (tenantId != null) {
+            wrapper.eq(CallRecord::getTenantId, tenantId);
+        }
         if (callerId != null) {
             wrapper.eq(CallRecord::getCallerId, callerId);
         }
@@ -92,7 +105,15 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
 
     @Override
     public Map<String, Object> getStats(LocalDateTime startTime, LocalDateTime endTime) {
+        return getStats(null, startTime, endTime);
+    }
+
+    @Override
+    public Map<String, Object> getStats(Long tenantId, LocalDateTime startTime, LocalDateTime endTime) {
         LambdaQueryWrapper<CallRecord> wrapper = new LambdaQueryWrapper<>();
+        if (tenantId != null) {
+            wrapper.eq(CallRecord::getTenantId, tenantId);
+        }
         if (startTime != null) {
             wrapper.ge(CallRecord::getCallTime, startTime);
         }
@@ -110,6 +131,9 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
             successWrapper.le(CallRecord::getCallTime, endTime);
         }
         successWrapper.eq(CallRecord::getSuccess, true);
+        if (tenantId != null) {
+            successWrapper.eq(CallRecord::getTenantId, tenantId);
+        }
         Long successCount = count(successWrapper);
 
         Map<String, Object> stats = new HashMap<>();
@@ -144,31 +168,40 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
     @Override
     public Map<String, Object> getDimensionStats(Long callerId, String productCode, String sceneCode,
                                                  String apiCode, String vendorCode, String dataType,
+                                                  Boolean cacheHit, LocalDateTime startTime,
+                                                  LocalDateTime endTime) {
+        return getDimensionStats(null, callerId, productCode, sceneCode, apiCode, vendorCode, dataType,
+                cacheHit, startTime, endTime);
+    }
+
+    @Override
+    public Map<String, Object> getDimensionStats(Long tenantId, Long callerId, String productCode, String sceneCode,
+                                                 String apiCode, String vendorCode, String dataType,
                                                  Boolean cacheHit, LocalDateTime startTime,
                                                  LocalDateTime endTime) {
         Map<String, Object> stats = new HashMap<>();
-        stats.putAll(firstStatsRow(queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+        stats.putAll(firstStatsRow(queryDimensionStats(tenantId, callerId, productCode, sceneCode, apiCode, vendorCode,
                 dataType, cacheHit, startTime, endTime, Collections.emptyList())));
-        stats.put("byCaller", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+        stats.put("byCaller", queryDimensionStats(tenantId, callerId, productCode, sceneCode, apiCode, vendorCode,
                 dataType, cacheHit, startTime, endTime, List.of("caller_id")));
-        stats.put("byCallerProduct", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+        stats.put("byCallerProduct", queryDimensionStats(tenantId, callerId, productCode, sceneCode, apiCode, vendorCode,
                 dataType, cacheHit, startTime, endTime, List.of("caller_id", "product_code")));
-        stats.put("byScene", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+        stats.put("byScene", queryDimensionStats(tenantId, callerId, productCode, sceneCode, apiCode, vendorCode,
                 dataType, cacheHit, startTime, endTime, List.of("scene_code")));
-        stats.put("byCallerProductScene", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+        stats.put("byCallerProductScene", queryDimensionStats(tenantId, callerId, productCode, sceneCode, apiCode, vendorCode,
                 dataType, cacheHit, startTime, endTime, List.of("caller_id", "product_code", "scene_code")));
-        stats.put("byVendor", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+        stats.put("byVendor", queryDimensionStats(tenantId, callerId, productCode, sceneCode, apiCode, vendorCode,
                 dataType, cacheHit, startTime, endTime, List.of("vendor_code")));
-        stats.put("byDataType", queryDimensionStats(callerId, productCode, sceneCode, apiCode, vendorCode,
+        stats.put("byDataType", queryDimensionStats(tenantId, callerId, productCode, sceneCode, apiCode, vendorCode,
                 dataType, cacheHit, startTime, endTime, List.of("data_type")));
         return stats;
     }
 
-    private List<Map<String, Object>> queryDimensionStats(Long callerId, String productCode, String sceneCode,
+    private List<Map<String, Object>> queryDimensionStats(Long tenantId, Long callerId, String productCode, String sceneCode,
                                                           String apiCode, String vendorCode, String dataType,
                                                           Boolean cacheHit, LocalDateTime startTime,
                                                           LocalDateTime endTime, List<String> dimensions) {
-        QueryWrapper<CallRecord> wrapper = buildDimensionStatsWrapper(callerId, productCode, sceneCode, apiCode,
+        QueryWrapper<CallRecord> wrapper = buildDimensionStatsWrapper(tenantId, callerId, productCode, sceneCode, apiCode,
                 vendorCode, dataType, cacheHit, startTime, endTime);
         List<String> selects = new ArrayList<>(dimensions);
         selects.add("COUNT(*) AS \"totalCount\"");
@@ -187,11 +220,12 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
         return baseMapper.selectMaps(wrapper);
     }
 
-    private QueryWrapper<CallRecord> buildDimensionStatsWrapper(Long callerId, String productCode, String sceneCode,
+    private QueryWrapper<CallRecord> buildDimensionStatsWrapper(Long tenantId, Long callerId, String productCode, String sceneCode,
                                                                 String apiCode, String vendorCode, String dataType,
                                                                 Boolean cacheHit, LocalDateTime startTime,
                                                                 LocalDateTime endTime) {
         QueryWrapper<CallRecord> wrapper = new QueryWrapper<>();
+        wrapper.eq(tenantId != null, "tenant_id", tenantId);
         wrapper.eq(callerId != null, "caller_id", callerId);
         wrapper.eq(StringUtils.hasText(productCode), "product_code", productCode);
         wrapper.eq(StringUtils.hasText(sceneCode), "scene_code", sceneCode);
@@ -224,13 +258,20 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
     public List<InterfaceQualityVO> getInterfaceQualityReport(String vendorCode, String dataType,
                                                                String apiCode, LocalDateTime startTime,
                                                                LocalDateTime endTime) {
+        return getInterfaceQualityReport(null, vendorCode, dataType, apiCode, startTime, endTime);
+    }
+
+    @Override
+    public List<InterfaceQualityVO> getInterfaceQualityReport(Long tenantId, String vendorCode, String dataType,
+                                                               String apiCode, LocalDateTime startTime,
+                                                               LocalDateTime endTime) {
         if (startTime == null && endTime == null) {
             endTime = LocalDateTime.now();
             startTime = endTime.minusDays(90);
         }
 
         QueryWrapper<CallRecord> wrapper = buildDimensionStatsWrapper(
-                null, null, null, apiCode, vendorCode, dataType, null, startTime, endTime);
+                tenantId, null, null, null, apiCode, vendorCode, dataType, null, startTime, endTime);
         wrapper.select(
                 "vendor_code",
                 "data_type",
@@ -304,7 +345,15 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
 
     @Override
     public byte[] exportData(Long callerId, LocalDateTime startTime, LocalDateTime endTime) {
+        return exportData(null, callerId, startTime, endTime);
+    }
+
+    @Override
+    public byte[] exportData(Long tenantId, Long callerId, LocalDateTime startTime, LocalDateTime endTime) {
         LambdaQueryWrapper<CallRecord> wrapper = new LambdaQueryWrapper<>();
+        if (tenantId != null) {
+            wrapper.eq(CallRecord::getTenantId, tenantId);
+        }
         if (callerId != null) {
             wrapper.eq(CallRecord::getCallerId, callerId);
         }

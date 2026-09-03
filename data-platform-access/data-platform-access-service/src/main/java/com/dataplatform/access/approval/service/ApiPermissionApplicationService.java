@@ -29,6 +29,7 @@ import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.result.PageResult;
 import com.dataplatform.common.security.RoleCodeNormalizer;
+import com.dataplatform.common.util.UserContext;
 import com.dataplatform.identity.api.dto.CallerAccessDTO;
 import com.dataplatform.identity.api.feign.IdentityAccessInternalFeignClient;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
@@ -117,7 +118,9 @@ public class ApiPermissionApplicationService {
             application.setVersion(0);
             application.setCreatedAt(now);
             application.setUpdatedAt(now);
-            applicationMapper.insert(application);
+            if (applicationMapper.insert(application) != 1) {
+                throw conflict("APPLICATION_CREATE_FAILED", "申请创建失败，请重试");
+            }
             replaceItems(application, resources.interfaces(), ApplicationStatus.DRAFT, request);
             appendAction(application, "CREATE", "USER", userId, username,
                     null, ApplicationStatus.DRAFT.name(), null, null);
@@ -135,7 +138,7 @@ public class ApiPermissionApplicationService {
         ValidatedResources resources = validateResources(
                 request, userId, tenantId, false, tenantWideCallerAccess);
         return transactionTemplate.execute(status -> {
-            ApiPermissionApplication application = requireOwnedApplication(id, userId);
+            ApiPermissionApplication application = requireOwnedApplication(id, userId, tenantId);
             requireStatus(application, ApplicationStatus.DRAFT);
             applyRequest(application, request, resources, userId, username, tenantId);
             updateApplication(application);
@@ -154,22 +157,27 @@ public class ApiPermissionApplicationService {
         if (idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 64) {
             throw badRequest("IDEMPOTENCY_KEY_REQUIRED", "提交申请必须携带有效 Idempotency-Key");
         }
+        requireTenantScope(tenantId);
         String normalizedIdempotencyKey = idempotencyKey.trim();
-        ApiPermissionApplication replay = findIdempotentReplay(userId, normalizedIdempotencyKey);
+        ApiPermissionApplication replay = findIdempotentReplay(
+                userId, tenantId, normalizedIdempotencyKey);
         if (replay != null) {
             return requireSameIdempotentRequest(id, replay);
         }
 
         try {
             return transactionTemplate.execute(status -> {
-                ApiPermissionApplication locked = requireOwnedApplicationForUpdate(id, userId);
+                ApiPermissionApplication locked = requireOwnedApplicationForUpdate(id, userId, tenantId);
                 ApiPermissionApplication concurrentReplay = findIdempotentReplay(
-                        userId, normalizedIdempotencyKey);
+                        userId, tenantId, normalizedIdempotencyKey);
                 if (concurrentReplay != null) {
                     return requireSameIdempotentRequest(id, concurrentReplay);
                 }
                 requireStatus(locked, ApplicationStatus.DRAFT);
                 List<ApiPermissionApplicationItem> items = listItems(id);
+                if (items.isEmpty()) {
+                    throw conflict("APPLICATION_ITEMS_MISSING", "申请至少需要一个接口项");
+                }
                 ApplicationUpsertRequest request = toRequest(locked, items);
                 ValidatedResources resources = validateResources(
                         request, userId, tenantId, true, tenantWideCallerAccess);
@@ -215,6 +223,10 @@ public class ApiPermissionApplicationService {
                         locked.getApplicationNo(),
                         locked.getTenantId(),
                         variables);
+                if (start == null || start.processInstanceId() == null
+                        || start.processInstanceId().isBlank()) {
+                    throw serviceUnavailable("APPROVAL_ENGINE_UNAVAILABLE", "审批引擎未返回有效流程实例");
+                }
                 locked.setProcessInstanceId(start.processInstanceId());
                 locked.setProcessDefinitionVersion(start.processDefinitionVersion());
                 projectCurrentTaskInternal(locked, start.currentTask());
@@ -226,7 +238,7 @@ public class ApiPermissionApplicationService {
             });
         } catch (DuplicateKeyException exception) {
             ApiPermissionApplication concurrentReplay = findIdempotentReplay(
-                    userId, normalizedIdempotencyKey);
+                    userId, tenantId, normalizedIdempotencyKey);
             if (concurrentReplay != null) {
                 return requireSameIdempotentRequest(id, concurrentReplay);
             }
@@ -235,22 +247,48 @@ public class ApiPermissionApplicationService {
     }
 
     @Transactional
-    public ApiPermissionApplication cancel(Long id, Long userId, String username) {
-        ApiPermissionApplication application = requireOwnedApplication(id, userId);
-        ApplicationStatus current = ApplicationStatus.valueOf(application.getStatus());
+    public ApiPermissionApplication cancel(Long id, Long userId, String username, Long tenantId) {
+        ApiPermissionApplication application = requireOwnedApplication(id, userId, tenantId);
+        ApplicationStatus current = parseStatus(application.getStatus());
         if (current != ApplicationStatus.DRAFT && current != ApplicationStatus.IN_REVIEW) {
             throw conflict("APPLICATION_STATE_CONFLICT", "当前状态不允许取消");
         }
         if (current == ApplicationStatus.IN_REVIEW) {
-            List<ApprovalEnginePort.TaskSnapshot> activeTasks = approvalEngine
-                    .getCurrentTasks(application.getProcessInstanceId());
-            if (activeTasks.isEmpty()
-                    || activeTasks.stream()
-                    .map(task -> approvalEngine.getTaskPolicy(task.id()))
-                    .anyMatch(policy -> !policy.allowWithdraw())) {
+            if (application.getProcessInstanceId() == null
+                    || application.getProcessInstanceId().isBlank()) {
+                throw serviceUnavailable("APPROVAL_ENGINE_UNAVAILABLE", "审批申请缺少有效流程实例");
+            }
+            List<ApprovalEnginePort.TaskSnapshot> activeTasks;
+            try {
+                activeTasks = approvalEngine.getCurrentTasks(application.getProcessInstanceId());
+            } catch (RuntimeException exception) {
+                throw serviceUnavailable("APPROVAL_ENGINE_UNAVAILABLE", "审批引擎查询当前任务失败");
+            }
+            if (activeTasks == null) {
+                throw serviceUnavailable("APPROVAL_ENGINE_UNAVAILABLE", "审批引擎未返回当前任务");
+            }
+            if (activeTasks.isEmpty()) {
                 throw conflict("WITHDRAWAL_NOT_ALLOWED", "当前审批节点不允许申请人撤回");
             }
-            approvalEngine.terminate(application.getProcessInstanceId(), "申请人撤回");
+            for (ApprovalEnginePort.TaskSnapshot task : activeTasks) {
+                if (task == null || task.id() == null || task.id().isBlank()) {
+                    throw conflict("WITHDRAWAL_NOT_ALLOWED", "当前审批节点不允许申请人撤回");
+                }
+                ApprovalEnginePort.TaskPolicy policy;
+                try {
+                    policy = approvalEngine.getTaskPolicy(task.id());
+                } catch (RuntimeException exception) {
+                    throw serviceUnavailable("APPROVAL_ENGINE_UNAVAILABLE", "审批引擎读取节点策略失败");
+                }
+                if (policy == null || !policy.allowWithdraw()) {
+                    throw conflict("WITHDRAWAL_NOT_ALLOWED", "当前审批节点不允许申请人撤回");
+                }
+            }
+            try {
+                approvalEngine.terminate(application.getProcessInstanceId(), "申请人撤回");
+            } catch (RuntimeException exception) {
+                throw serviceUnavailable("APPROVAL_ENGINE_UNAVAILABLE", "审批引擎终止流程失败");
+            }
             application.setEngineStatus(EngineStatus.TERMINATED.name());
         }
         application.setStatus(ApplicationStatus.CANCELED.name());
@@ -271,7 +309,7 @@ public class ApiPermissionApplicationService {
             String username,
             Long tenantId,
             boolean tenantWideCallerAccess) {
-        requireOwnedApplication(id, userId);
+        requireOwnedApplication(id, userId, tenantId);
         ApplicationDetailResponse source = detail(id);
         ApplicationUpsertRequest request = toRequest(source.application(), source.items());
         return createDraft(request, userId, username, tenantId, tenantWideCallerAccess);
@@ -286,8 +324,16 @@ public class ApiPermissionApplicationService {
             int pageSize) {
         LambdaQueryWrapper<ApiPermissionApplication> query = new LambdaQueryWrapper<>();
         if (tenantScope) {
-            query.eq(ApiPermissionApplication::getTenantId, tenantId);
+            if (tenantId == null && !isPlatformAdmin()) {
+                throw forbidden("TENANT_SCOPE_REQUIRED", "当前用户没有租户作用域");
+            }
+            if (tenantId != null) {
+                query.eq(ApiPermissionApplication::getTenantId, tenantId);
+            }
         } else {
+            if (userId == null) {
+                throw forbidden("USER_SCOPE_REQUIRED", "当前用户身份不可用");
+            }
             query.eq(ApiPermissionApplication::getApplicantUserId, userId);
         }
         if (applicationStatus != null && !applicationStatus.isBlank()) {
@@ -296,7 +342,12 @@ public class ApiPermissionApplicationService {
         query.orderByDesc(ApiPermissionApplication::getCreatedAt);
         Page<ApiPermissionApplication> result = applicationMapper.selectPage(
                 new Page<>(Math.max(page, 1), Math.min(Math.max(pageSize, 1), 100)), query);
-        return PageResult.of(result.getRecords(), result.getTotal(), page, pageSize);
+        if (result == null) {
+            throw serviceUnavailable("APPLICATION_LOOKUP_UNAVAILABLE", "申请列表查询失败");
+        }
+        return PageResult.of(result.getRecords() == null ? List.of() : result.getRecords(),
+                result.getTotal(),
+                Math.max(page, 1), Math.min(Math.max(pageSize, 1), 100));
     }
 
     public ApplicationDetailResponse detail(Long id) {
@@ -304,10 +355,11 @@ public class ApiPermissionApplicationService {
         if (application == null) {
             throw notFound("APPLICATION_NOT_FOUND", "申请不存在");
         }
-        List<ApiPermissionAction> actions = actionMapper.selectList(
+        List<ApiPermissionAction> actions = requireList(actionMapper.selectList(
                 new LambdaQueryWrapper<ApiPermissionAction>()
                         .eq(ApiPermissionAction::getApplicationId, id)
-                        .orderByAsc(ApiPermissionAction::getCreatedAt));
+                        .orderByAsc(ApiPermissionAction::getCreatedAt)),
+                "申请审计记录查询失败");
         return new ApplicationDetailResponse(application, listItems(id), actions);
     }
 
@@ -316,19 +368,21 @@ public class ApiPermissionApplicationService {
             Long tenantId,
             boolean tenantWideCallerAccess) {
         if (tenantWideCallerAccess) {
-            return callerService.listByTenant(tenantId)
-                    .stream()
-                    .map(caller -> new CallerOptionResponse(
-                            caller.getId(), caller.getCallerCode(), caller.getCallerName()))
-                    .toList();
+            List<CallerInfo> callers = tenantId == null
+                    ? callerService.list()
+                    : callerService.listByTenant(tenantId);
+            return callerOptions(callers);
         }
         List<Long> callerIds = requireData(identityClient.getCallerIds(userId), "身份服务返回异常");
+        if (callerIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw serviceUnavailable("IDENTITY_DATA_INVALID", "身份服务返回了无效 Caller 数据");
+        }
         if (callerIds.isEmpty()) {
             return List.of();
         }
-        return callerService.listByIds(callerIds).stream()
-                .filter(caller -> tenantId.equals(caller.getTenantId()))
-                .filter(caller -> CommonStatus.ACTIVE.equals(caller.getStatus()))
+        requireTenantScope(tenantId);
+        return activeCallers(callerService.listByIds(callerIds)).stream()
+                .filter(caller -> tenantId != null && tenantId.equals(caller.getTenantId()))
                 .map(caller -> new CallerOptionResponse(
                         caller.getId(), caller.getCallerCode(), caller.getCallerName()))
                 .toList();
@@ -341,7 +395,12 @@ public class ApiPermissionApplicationService {
             boolean tenantWideCallerAccess) {
         validateCallerAccess(callerId, userId, tenantId, tenantWideCallerAccess);
         LocalDateTime now = LocalDateTime.now();
-        return apiKeyService.listByCaller(callerId).stream()
+        List<ApiKey> keys = apiKeyService.listByCaller(callerId);
+        if (keys == null) {
+            throw serviceUnavailable("API_KEY_LOOKUP_UNAVAILABLE", "API Key查询失败");
+        }
+        return keys.stream()
+                .filter(java.util.Objects::nonNull)
                 .filter(key -> ApiKeyStatus.ACTIVE.equals(key.getStatus()))
                 .filter(key -> key.getExpireTime() == null || key.getExpireTime().isAfter(now))
                 .map(key -> new ApiKeyOptionResponse(
@@ -362,18 +421,26 @@ public class ApiPermissionApplicationService {
         ApiKey apiKey = requireApiKey(apiKeyId);
         validateCallerAccess(
                 apiKey.getCallerId(), userId, tenantId, tenantWideCallerAccess);
-        List<ApiInterfaceDTO> options = requireData(interfaceClient.getOptions(keyword), "主数据服务返回异常");
-        Set<Long> granted = new HashSet<>(grantService.getInterfaceIdsByApiKeyId(apiKeyId));
-        Set<Long> pending = itemMapper.selectList(
-                        new LambdaQueryWrapper<ApiPermissionApplicationItem>()
-                                .eq(ApiPermissionApplicationItem::getApiKeyId, apiKeyId)
-                                .in(ApiPermissionApplicationItem::getItemStatus,
-                                        ApplicationStatus.IN_REVIEW.name(),
-                                        ApplicationStatus.PROVISIONING.name()))
-                .stream()
+        List<ApiInterfaceDTO> options = requireInterfaces(
+                interfaceClient.getOptions(keyword), "主数据服务返回异常");
+        Set<Long> granted = new HashSet<>(requirePositiveIds(
+                grantService.getInterfaceIdsByApiKeyId(apiKeyId), "接口授权查询失败"));
+        List<ApiPermissionApplicationItem> pendingItems = requireList(itemMapper.selectList(
+                new LambdaQueryWrapper<ApiPermissionApplicationItem>()
+                        .eq(ApiPermissionApplicationItem::getApiKeyId, apiKeyId)
+                        .in(ApiPermissionApplicationItem::getItemStatus,
+                                ApplicationStatus.IN_REVIEW.name(),
+                                ApplicationStatus.PROVISIONING.name())),
+                "申请项查询失败");
+        if (pendingItems.stream().anyMatch(item -> item == null
+                || item.getInterfaceId() == null || item.getInterfaceId() <= 0)) {
+            throw serviceUnavailable("APPLICATION_ITEM_DATA_INVALID", "申请项数据损坏");
+        }
+        Set<Long> pending = pendingItems.stream()
                 .map(ApiPermissionApplicationItem::getInterfaceId)
                 .collect(Collectors.toSet());
         return options.stream()
+                .filter(java.util.Objects::nonNull)
                 .map(option -> new InterfaceOptionResponse(
                         option.getId(),
                         option.getInterfaceCode(),
@@ -390,12 +457,26 @@ public class ApiPermissionApplicationService {
     }
 
     public List<ApiPermissionApplicationItem> listItems(Long applicationId) {
-        return itemMapper.selectList(new LambdaQueryWrapper<ApiPermissionApplicationItem>()
+        if (applicationId == null || applicationId <= 0) {
+            throw notFound("APPLICATION_NOT_FOUND", "申请不存在");
+        }
+        List<ApiPermissionApplicationItem> items = itemMapper.selectList(
+                new LambdaQueryWrapper<ApiPermissionApplicationItem>()
                 .eq(ApiPermissionApplicationItem::getApplicationId, applicationId)
                 .orderByAsc(ApiPermissionApplicationItem::getId));
+        if (items == null) {
+            throw serviceUnavailable("APPLICATION_ITEM_LOOKUP_UNAVAILABLE", "申请接口项查询失败");
+        }
+        if (items.stream().anyMatch(item -> item == null || item.getId() == null)) {
+            throw serviceUnavailable("APPLICATION_ITEM_DATA_INVALID", "申请接口项数据损坏");
+        }
+        return items;
     }
 
     public ApiPermissionApplication requireApplication(Long id) {
+        if (id == null || id <= 0) {
+            throw notFound("APPLICATION_NOT_FOUND", "申请不存在");
+        }
         ApiPermissionApplication application = applicationMapper.selectById(id);
         if (application == null) {
             throw notFound("APPLICATION_NOT_FOUND", "申请不存在");
@@ -409,9 +490,11 @@ public class ApiPermissionApplicationService {
             Long tenantId,
             boolean tenantScope) {
         ApiPermissionApplication application = requireApplication(id);
-        boolean visible = tenantScope
-                ? tenantId.equals(application.getTenantId())
-                : userId.equals(application.getApplicantUserId());
+        boolean visible = isPlatformAdmin()
+                || (tenantId != null
+                && tenantId.equals(application.getTenantId())
+                && (tenantScope
+                || (userId != null && userId.equals(application.getApplicantUserId()))));
         if (!visible) {
             throw forbidden("APPLICATION_ACCESS_DENIED", "无权查看该申请");
         }
@@ -420,8 +503,13 @@ public class ApiPermissionApplicationService {
 
     public List<ApiInterfaceDTO> validateProvisioningResources(
             ApiPermissionApplication application) {
+        if (application == null || application.getId() == null
+                || application.getCallerId() == null || application.getApiKeyId() == null) {
+            throw conflict("APPLICATION_DATA_INVALID", "申请资源数据不完整");
+        }
         CallerInfo caller = callerService.getById(application.getCallerId());
         if (caller == null
+                || application.getTenantId() == null
                 || !application.getTenantId().equals(caller.getTenantId())
                 || !CommonStatus.ACTIVE.equals(caller.getStatus())) {
             throw conflict("CALLER_NOT_ACTIVE", "Caller 已停用或租户信息不一致");
@@ -436,7 +524,10 @@ public class ApiPermissionApplicationService {
         List<Long> interfaceIds = listItems(application.getId()).stream()
                 .map(ApiPermissionApplicationItem::getInterfaceId)
                 .toList();
-        List<ApiInterfaceDTO> interfaces = requireData(
+        if (interfaceIds.isEmpty() || interfaceIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw conflict("APPLICATION_DATA_INVALID", "申请接口项数据不完整");
+        }
+        List<ApiInterfaceDTO> interfaces = requireInterfaces(
                 interfaceClient.batchGet(interfaceIds), "主数据服务返回异常");
         Set<Long> returnedIds = interfaces.stream()
                 .map(ApiInterfaceDTO::getId)
@@ -455,6 +546,9 @@ public class ApiPermissionApplicationService {
     }
 
     public void updateApplication(ApiPermissionApplication application) {
+        if (application == null || application.getId() == null) {
+            throw badRequest("APPLICATION_INVALID", "申请不能为空且必须包含标识");
+        }
         application.setUpdatedAt(LocalDateTime.now());
         if (applicationMapper.updateById(application) != 1) {
             throw conflict("APPLICATION_VERSION_CONFLICT", "申请已被并发更新，请刷新后重试");
@@ -462,16 +556,23 @@ public class ApiPermissionApplicationService {
     }
 
     public void updateItem(ApiPermissionApplicationItem item) {
+        if (item == null || item.getId() == null) {
+            throw badRequest("APPLICATION_ITEM_INVALID", "申请项不能为空且必须包含标识");
+        }
         item.setUpdatedAt(LocalDateTime.now());
-        itemMapper.updateById(item);
+        if (itemMapper.updateById(item) != 1) {
+            throw conflict("APPLICATION_ITEM_VERSION_CONFLICT", "申请项已被并发更新，请刷新后重试");
+        }
     }
 
     public void updateItemStatus(Long applicationId, ApplicationStatus status) {
+        if (applicationId == null || status == null) {
+            throw badRequest("APPLICATION_ITEM_INVALID", "申请和申请项状态不能为空");
+        }
         List<ApiPermissionApplicationItem> items = listItems(applicationId);
         for (ApiPermissionApplicationItem item : items) {
             item.setItemStatus(status.name());
-            item.setUpdatedAt(LocalDateTime.now());
-            itemMapper.updateById(item);
+            updateItem(item);
         }
     }
 
@@ -479,6 +580,13 @@ public class ApiPermissionApplicationService {
             Long applicationId,
             boolean cacheEnabled,
             Integer approvedCacheDays) {
+        if (applicationId == null) {
+            throw badRequest("APPLICATION_ITEM_INVALID", "申请标识不能为空");
+        }
+        if (cacheEnabled && (approvedCacheDays == null || approvedCacheDays < 1
+                || approvedCacheDays > MAX_CACHE_DAYS)) {
+            throw badRequest("INVALID_CACHE_POLICY", "审批缓存时效必须在 1 到 365 天之间");
+        }
         for (ApiPermissionApplicationItem item : listItems(applicationId)) {
             item.setApprovedCacheEnabled(cacheEnabled);
             item.setApprovedCacheDays(cacheEnabled ? approvedCacheDays : null);
@@ -496,6 +604,11 @@ public class ApiPermissionApplicationService {
             String toStatus,
             String comment,
             ApprovalEnginePort.TaskSnapshot task) {
+        if (application == null || application.getId() == null
+                || action == null || action.isBlank()
+                || actorType == null || actorType.isBlank()) {
+            throw badRequest("APPLICATION_AUDIT_INVALID", "申请审计数据不完整");
+        }
         ApiPermissionAction record = new ApiPermissionAction();
         record.setApplicationId(application.getId());
         record.setAction(action);
@@ -516,7 +629,12 @@ public class ApiPermissionApplicationService {
         record.setProcessDefinitionVersion(application.getProcessDefinitionVersion());
         record.setTraceId(MDC.get("traceId"));
         record.setCreatedAt(LocalDateTime.now());
-        actionMapper.insert(record);
+        if (actionMapper.insert(record) != 1) {
+            throw new ApiPermissionException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "APPLICATION_AUDIT_WRITE_FAILED",
+                    "申请审计记录写入失败，请重试");
+        }
     }
 
     private ValidatedResources validateResources(
@@ -524,8 +642,12 @@ public class ApiPermissionApplicationService {
             Long userId,
             Long tenantId,
             boolean submitting,
-            boolean tenantWideCallerAccess) {
+        boolean tenantWideCallerAccess) {
         validateRequest(request, submitting);
+        requireTenantScope(tenantId);
+        if (userId == null || userId <= 0) {
+            throw forbidden("USER_SCOPE_REQUIRED", "当前用户身份不可用");
+        }
         CallerInfo caller = validateCallerAccess(
                 request.callerId(), userId, tenantId, tenantWideCallerAccess);
         ApiKey apiKey = requireApiKey(request.apiKeyId());
@@ -538,10 +660,10 @@ public class ApiPermissionApplicationService {
         }
 
         List<Long> interfaceIds = request.interfaceIds().stream().distinct().toList();
-        List<ApiInterfaceDTO> interfaces = requireData(
+        List<ApiInterfaceDTO> interfaces = requireInterfaces(
                 interfaceClient.batchGet(interfaceIds), "主数据服务返回异常");
         Map<Long, ApiInterfaceDTO> byId = interfaces.stream()
-                .collect(Collectors.toMap(ApiInterfaceDTO::getId, Function.identity()));
+                .collect(Collectors.toMap(ApiInterfaceDTO::getId, Function.identity(), (first, second) -> first));
         if (byId.size() != interfaceIds.size()) {
             throw notFound("INTERFACE_NOT_FOUND", "部分接口不存在");
         }
@@ -563,21 +685,28 @@ public class ApiPermissionApplicationService {
         if (caller == null) {
             throw notFound("CALLER_NOT_FOUND", "Caller 不存在");
         }
-        if (!tenantId.equals(caller.getTenantId()) || !CommonStatus.ACTIVE.equals(caller.getStatus())) {
+        if (tenantId == null || !tenantId.equals(caller.getTenantId())
+                || !CommonStatus.ACTIVE.equals(caller.getStatus())) {
             throw forbidden("CALLER_ACCESS_DENIED", "Caller 不属于当前租户或已停用");
+        }
+        if (!tenantWideCallerAccess && (userId == null || userId <= 0)) {
+            throw forbidden("USER_SCOPE_REQUIRED", "当前用户身份不可用");
         }
         if (tenantWideCallerAccess) {
             return caller;
         }
         CallerAccessDTO access = requireData(
                 identityClient.getCallerAccess(userId, callerId), "身份服务返回异常");
-        if (!access.isAllowed() || !tenantId.equals(access.getTenantId())) {
+        if (!access.isAllowed() || tenantId == null || !tenantId.equals(access.getTenantId())) {
             throw forbidden("CALLER_ACCESS_DENIED", "当前用户无权管理该 Caller");
         }
         return caller;
     }
 
     private ApiKey requireApiKey(Long apiKeyId) {
+        if (apiKeyId == null || apiKeyId <= 0) {
+            throw badRequest("INVALID_RESOURCE", "API Key 标识无效");
+        }
         ApiKey apiKey = apiKeyService.getById(apiKeyId);
         if (apiKey == null) {
             throw notFound("API_KEY_NOT_FOUND", "API Key 不存在");
@@ -592,7 +721,8 @@ public class ApiPermissionApplicationService {
         if (!Set.of("OPEN", "RENEW").contains(request.requestType())) {
             throw badRequest("INVALID_REQUEST_TYPE", "requestType 只能是 OPEN 或 RENEW");
         }
-        if (request.callerId() == null || request.apiKeyId() == null) {
+        if (request.callerId() == null || request.callerId() <= 0
+                || request.apiKeyId() == null || request.apiKeyId() <= 0) {
             throw badRequest("INVALID_RESOURCE", "Caller 和 API Key 不能为空");
         }
         if (request.interfaceIds() == null
@@ -638,14 +768,22 @@ public class ApiPermissionApplicationService {
     private void validateNoPendingOrEffectiveGrant(
             ApiPermissionApplication application,
             List<ApiInterfaceDTO> interfaces) {
+        if (application == null || interfaces == null || interfaces.isEmpty()
+                || interfaces.stream().anyMatch(apiInterface -> apiInterface == null
+                || apiInterface.getId() == null)) {
+            throw conflict("APPLICATION_DATA_INVALID", "申请接口数据不完整");
+        }
         for (ApiInterfaceDTO apiInterface : interfaces) {
-            long pending = itemMapper.selectCount(new LambdaQueryWrapper<ApiPermissionApplicationItem>()
+            Long pending = itemMapper.selectCount(new LambdaQueryWrapper<ApiPermissionApplicationItem>()
                     .eq(ApiPermissionApplicationItem::getApiKeyId, application.getApiKeyId())
                     .eq(ApiPermissionApplicationItem::getInterfaceId, apiInterface.getId())
                     .ne(ApiPermissionApplicationItem::getApplicationId, application.getId())
                     .in(ApiPermissionApplicationItem::getItemStatus,
                             ApplicationStatus.IN_REVIEW.name(),
                             ApplicationStatus.PROVISIONING.name()));
+            if (pending == null) {
+                throw serviceUnavailable("APPLICATION_ITEM_LOOKUP_UNAVAILABLE", "待审批申请查询失败");
+            }
             if (pending > 0) {
                 throw conflict("DUPLICATE_PENDING_APPLICATION", "相同 API Key 和接口已有待审批申请");
             }
@@ -663,19 +801,29 @@ public class ApiPermissionApplicationService {
             Long tenantId,
             String businessType,
             String riskLevel) {
-        List<ApprovalProcessConfig> configs = processConfigMapper.selectList(
-                new LambdaQueryWrapper<ApprovalProcessConfig>()
-                        .in(ApprovalProcessConfig::getTenantId, tenantId, 0L)
-                        .eq(ApprovalProcessConfig::getBusinessType, businessType)
+        LambdaQueryWrapper<ApprovalProcessConfig> query = new LambdaQueryWrapper<>();
+        if (tenantId == null) {
+            query.eq(ApprovalProcessConfig::getTenantId, 0L);
+        } else {
+            query.in(ApprovalProcessConfig::getTenantId, tenantId, 0L);
+        }
+        query.eq(ApprovalProcessConfig::getBusinessType, businessType)
                         .eq(ApprovalProcessConfig::getEngineType, "FLOWABLE")
                         .in(ApprovalProcessConfig::getRiskLevel, riskLevel, "*")
-                        .eq(ApprovalProcessConfig::getEnabled, true));
+                        .eq(ApprovalProcessConfig::getEnabled, true);
+        List<ApprovalProcessConfig> configs = processConfigMapper.selectList(query);
+        if (configs == null) {
+            throw serviceUnavailable("APPROVAL_CONFIG_UNAVAILABLE", "审批流程配置查询失败");
+        }
         return configs.stream()
+                .filter(this::isUsableProcessConfig)
                 .sorted(Comparator
-                        .comparing((ApprovalProcessConfig config) -> config.getTenantId().equals(tenantId))
+                        .comparing((ApprovalProcessConfig config) -> tenantId != null
+                                && tenantId.equals(config.getTenantId()))
                         .reversed()
-                        .thenComparing(config -> config.getRiskLevel().equals(riskLevel), Comparator.reverseOrder())
-                        .thenComparing(ApprovalProcessConfig::getPriority, Comparator.reverseOrder()))
+                        .thenComparing(config -> riskLevel.equals(config.getRiskLevel()), Comparator.reverseOrder())
+                        .thenComparing(ApprovalProcessConfig::getPriority,
+                                Comparator.nullsLast(Comparator.reverseOrder())))
                 .findFirst()
                 .orElseThrow(() -> conflict(
                         "APPROVAL_PROCESS_NOT_CONFIGURED", "未配置可用的审批流程"));
@@ -686,8 +834,15 @@ public class ApiPermissionApplicationService {
             List<ApiInterfaceDTO> interfaces,
             ApplicationStatus status,
             ApplicationUpsertRequest request) {
-        itemMapper.delete(new LambdaQueryWrapper<ApiPermissionApplicationItem>()
+        if (application == null || application.getId() == null || interfaces == null || status == null
+                || request == null) {
+            throw badRequest("APPLICATION_ITEM_INVALID", "申请接口项数据不完整");
+        }
+        int deleted = itemMapper.delete(new LambdaQueryWrapper<ApiPermissionApplicationItem>()
                 .eq(ApiPermissionApplicationItem::getApplicationId, application.getId()));
+        if (deleted < 0) {
+            throw serviceUnavailable("APPLICATION_ITEM_DELETE_FAILED", "申请接口项旧数据清理失败");
+        }
         LocalDateTime now = LocalDateTime.now();
         for (ApiInterfaceDTO apiInterface : interfaces) {
             ApiPermissionApplicationItem item = new ApiPermissionApplicationItem();
@@ -704,7 +859,9 @@ public class ApiPermissionApplicationService {
             item.setApprovedCacheDays(null);
             item.setCreatedAt(now);
             item.setUpdatedAt(now);
-            itemMapper.insert(item);
+            if (itemMapper.insert(item) != 1) {
+                throw conflict("APPLICATION_ITEM_CREATE_FAILED", "申请接口项写入失败，请重试");
+            }
         }
     }
 
@@ -752,30 +909,55 @@ public class ApiPermissionApplicationService {
                         .orElse(null));
     }
 
-    private ApiPermissionApplication requireOwnedApplication(Long id, Long userId) {
+    private ApiPermissionApplication requireOwnedApplication(Long id, Long userId, Long tenantId) {
         ApiPermissionApplication application = requireApplication(id);
-        if (!userId.equals(application.getApplicantUserId())) {
+        if (userId == null || !userId.equals(application.getApplicantUserId())
+                || (!isPlatformAdmin()
+                && (tenantId == null || !tenantId.equals(application.getTenantId())))) {
             throw forbidden("APPLICATION_ACCESS_DENIED", "只能操作本人申请");
         }
         return application;
     }
 
-    private ApiPermissionApplication requireOwnedApplicationForUpdate(Long id, Long userId) {
+    private ApiPermissionApplication requireOwnedApplicationForUpdate(
+            Long id, Long userId, Long tenantId) {
         ApiPermissionApplication application = applicationMapper.selectByIdForUpdate(id);
         if (application == null) {
             throw notFound("APPLICATION_NOT_FOUND", "申请不存在");
         }
-        if (!userId.equals(application.getApplicantUserId())) {
+        if (userId == null || !userId.equals(application.getApplicantUserId())
+                || (!isPlatformAdmin()
+                && (tenantId == null || !tenantId.equals(application.getTenantId())))) {
             throw forbidden("APPLICATION_ACCESS_DENIED", "只能操作本人申请");
         }
         return application;
     }
 
-    private ApiPermissionApplication findIdempotentReplay(Long userId, String idempotencyKey) {
-        return applicationMapper.selectOne(
-                new LambdaQueryWrapper<ApiPermissionApplication>()
-                        .eq(ApiPermissionApplication::getApplicantUserId, userId)
-                        .eq(ApiPermissionApplication::getIdempotencyKey, idempotencyKey));
+    private ApiPermissionApplication findIdempotentReplay(
+            Long userId, Long tenantId, String idempotencyKey) {
+        LambdaQueryWrapper<ApiPermissionApplication> query = new LambdaQueryWrapper<>();
+        query.eq(ApiPermissionApplication::getApplicantUserId, userId)
+                .eq(ApiPermissionApplication::getIdempotencyKey, idempotencyKey);
+        if (tenantId == null) {
+            query.isNull(ApiPermissionApplication::getTenantId);
+        } else {
+            query.eq(ApiPermissionApplication::getTenantId, tenantId);
+        }
+        return applicationMapper.selectOne(query);
+    }
+
+    private boolean isPlatformAdmin() {
+        try {
+            return UserContext.hasPermission("system:admin");
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private void requireTenantScope(Long tenantId) {
+        if (tenantId == null) {
+            throw forbidden("TENANT_SCOPE_REQUIRED", "当前用户没有租户作用域");
+        }
     }
 
     private ApiPermissionApplication requireSameIdempotentRequest(
@@ -788,7 +970,7 @@ public class ApiPermissionApplicationService {
     }
 
     private void requireStatus(ApiPermissionApplication application, ApplicationStatus expected) {
-        if (!expected.name().equals(application.getStatus())) {
+        if (application == null || expected == null || !expected.name().equals(application.getStatus())) {
             throw conflict("APPLICATION_STATE_CONFLICT", "申请状态已变化，请刷新后重试");
         }
     }
@@ -803,6 +985,9 @@ public class ApiPermissionApplicationService {
     }
 
     private String riskLevel(ApiPermissionApplication application) {
+        if (application == null || application.getExpectedDailyCalls() == null) {
+            throw conflict("APPLICATION_DATA_INVALID", "申请预计调用量数据不完整");
+        }
         if (application.getExpectedDailyCalls() >= 100_000) {
             return "HIGH";
         }
@@ -824,6 +1009,66 @@ public class ApiPermissionApplicationService {
         return result.getData();
     }
 
+    private <T> List<T> requireList(List<T> values, String message) {
+        if (values == null) {
+            throw serviceUnavailable("DEPENDENCY_UNAVAILABLE", message);
+        }
+        return values;
+    }
+
+    private List<ApiInterfaceDTO> requireInterfaces(
+            Result<List<ApiInterfaceDTO>> result, String message) {
+        List<ApiInterfaceDTO> interfaces = requireData(result, message);
+        if (interfaces.stream().anyMatch(apiInterface -> apiInterface == null
+                || apiInterface.getId() == null || apiInterface.getId() <= 0)) {
+            throw serviceUnavailable("DEPENDENCY_DATA_INVALID", "主数据服务返回了无效接口数据");
+        }
+        return interfaces;
+    }
+
+    private List<Long> requirePositiveIds(List<Long> ids, String message) {
+        if (ids == null || ids.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw serviceUnavailable("DEPENDENCY_DATA_INVALID", message);
+        }
+        return ids;
+    }
+
+    private List<CallerOptionResponse> callerOptions(List<CallerInfo> callers) {
+        return requireList(callers, "Caller查询失败").stream()
+                .filter(caller -> caller != null && caller.getId() != null)
+                .filter(caller -> CommonStatus.ACTIVE.equals(caller.getStatus()))
+                .map(caller -> new CallerOptionResponse(
+                        caller.getId(), caller.getCallerCode(), caller.getCallerName()))
+                .toList();
+    }
+
+    private List<CallerInfo> activeCallers(List<CallerInfo> callers) {
+        return requireList(callers, "Caller查询失败").stream()
+                .filter(caller -> caller != null && caller.getId() != null)
+                .filter(caller -> CommonStatus.ACTIVE.equals(caller.getStatus()))
+                .toList();
+    }
+
+    private ApplicationStatus parseStatus(String status) {
+        try {
+            return ApplicationStatus.valueOf(status);
+        } catch (RuntimeException exception) {
+            throw conflict("APPLICATION_DATA_INVALID", "申请状态数据损坏");
+        }
+    }
+
+    private boolean isUsableProcessConfig(ApprovalProcessConfig config) {
+        return config != null
+                && config.getTenantId() != null
+                && config.getRiskLevel() != null
+                && !config.getRiskLevel().isBlank()
+                && config.getPriority() != null
+                && config.getProcessDefinitionKey() != null
+                && !config.getProcessDefinitionKey().isBlank()
+                && config.getApproverGroup() != null
+                && !config.getApproverGroup().isBlank();
+    }
+
     private ApiPermissionException badRequest(String code, String message) {
         return new ApiPermissionException(HttpStatus.BAD_REQUEST, code, message);
     }
@@ -838,6 +1083,10 @@ public class ApiPermissionApplicationService {
 
     private ApiPermissionException conflict(String code, String message) {
         return new ApiPermissionException(HttpStatus.CONFLICT, code, message);
+    }
+
+    private ApiPermissionException serviceUnavailable(String code, String message) {
+        return new ApiPermissionException(HttpStatus.SERVICE_UNAVAILABLE, code, message);
     }
 
     private record ValidatedResources(

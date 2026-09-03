@@ -1,16 +1,19 @@
 package com.dataplatform.access.caller.controller;
 
 import com.dataplatform.access.caller.entity.ApiKey;
+import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.entity.CallerProduct;
 import com.dataplatform.access.caller.service.ApiKeyInterfaceService;
 import com.dataplatform.access.caller.service.ApiKeyProductService;
 import com.dataplatform.access.caller.service.ApiKeyProvisioningService;
+import com.dataplatform.access.caller.service.ApiKeyProvisioningException;
 import com.dataplatform.access.caller.service.ApiKeyService;
 import com.dataplatform.access.caller.service.CallerProductService;
 import com.dataplatform.access.caller.service.CallerService;
 import com.dataplatform.access.caller.service.CurrentUserApiKeyOptionService;
 import com.dataplatform.access.caller.vo.ApiKeyCreateReqVO;
 import com.dataplatform.access.caller.vo.ApiKeyRateLimitUpdateVO;
+import com.dataplatform.access.caller.vo.ApiKeyResponse;
 import com.dataplatform.access.caller.vo.CurrentUserApiKeyOptionsVO;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.enums.ApiKeyStatus;
@@ -18,8 +21,10 @@ import com.dataplatform.common.log.OperationLog;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.common.util.UserContext;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -51,8 +56,23 @@ public class ApiKeyController {
     private CurrentUserApiKeyOptionService currentUserApiKeyOptionService;
 
     @GetMapping("/list")
-    public Result<List<ApiKey>> list(@RequestParam(value = "callerId", required = false) Long callerId) {
-        return Result.success(callerId != null ? apiKeyService.listByCaller(callerId) : apiKeyService.list());
+    public Result<List<ApiKeyResponse>> list(@RequestParam(value = "callerId", required = false) Long callerId) {
+        if (callerId != null) {
+            if (!callerAllowed(callerId)) {
+                return Result.error(404, "调用方不存在");
+            }
+            return Result.success(toViews(apiKeyService.listByCaller(callerId)));
+        }
+        if (isPlatformAdmin()) {
+            return Result.success(toViews(apiKeyService.list()));
+        }
+        Long tenantId = UserContext.getCurrentTenantId();
+        if (tenantId == null) {
+            return Result.error(403, "当前用户没有租户作用域");
+        }
+        List<ApiKey> keys = new ArrayList<>();
+        callerService.listAllByTenant(tenantId).forEach(caller -> keys.addAll(apiKeyService.listByCaller(caller.getId())));
+        return Result.success(toViews(keys));
     }
 
     @GetMapping("/current-user-options")
@@ -62,13 +82,14 @@ public class ApiKeyController {
     }
 
     @GetMapping("/{id}")
-    public Result<ApiKey> getById(@PathVariable Long id) {
-        return Result.success(apiKeyService.getById(id));
+    public Result<ApiKeyResponse> getById(@PathVariable Long id) {
+        ApiKey apiKey = ownedApiKey(id);
+        return apiKey == null ? Result.error(404, "API Key不存在") : Result.success(ApiKeyResponse.view(apiKey));
     }
 
     @OperationLog(module = "API Key管理", operation = "新增API Key")
     @PostMapping
-    public ResponseEntity<Result<ApiKey>> create(@RequestBody ApiKeyCreateReqVO request) {
+    public ResponseEntity<Result<ApiKeyResponse>> create(@RequestBody ApiKeyCreateReqVO request) {
         if (request == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Result.error(400, "请求体不能为空"));
@@ -83,7 +104,7 @@ public class ApiKeyController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Result.error(400, "name不能为空"));
         }
-        if (callerService.getById(callerId) == null) {
+        if (!callerAllowed(callerId)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "调用方不存在"));
         }
@@ -93,30 +114,46 @@ public class ApiKeyController {
                     .body(Result.error(400, productError));
         }
 
-        ApiKey apiKey = apiKeyProvisioningService.create(callerId, name.trim(), request.getProductIds());
-        return ResponseEntity.ok(Result.success(apiKey));
+        try {
+            ApiKey apiKey = apiKeyProvisioningService.create(callerId, name.trim(), request.getProductIds());
+            return ResponseEntity.ok(Result.success(ApiKeyResponse.created(apiKey)));
+        } catch (ApiKeyProvisioningException exception) {
+            return error(exception);
+        }
     }
 
     @OperationLog(module = "API Key管理", operation = "更新API Key状态")
     @PutMapping("/{id}/status")
-    public Result<ApiKey> updateStatus(@PathVariable Long id, @RequestBody Map<String, Object> params) {
-        String status = (String) params.get("status");
+    public Result<ApiKeyResponse> updateStatus(@PathVariable Long id, @RequestBody Map<String, Object> params) {
+        if (params == null) {
+            return Result.error(400, "请求体不能为空");
+        }
+        Object rawStatus = params.get("status");
+        if (!(rawStatus instanceof String)) {
+            return Result.error(400, "status必须是字符串，且取值为active、expired或revoked");
+        }
+        String status = ((String) rawStatus).trim();
         ApiKeyStatus statusEnum = ApiKeyStatus.fromCode(status);
         if (statusEnum == null) {
             return Result.error(400, "status必须是active、expired或revoked");
         }
-        ApiKey apiKey = apiKeyService.getById(id);
+        ApiKey apiKey = ownedApiKey(id);
         if (apiKey == null) {
             return Result.error(404, "API Key不存在");
         }
-        apiKey.setStatus(statusEnum);
-        apiKeyService.updateById(apiKey);
-        return Result.success(apiKey);
+        ApiKey patch = new ApiKey();
+        patch.setId(id);
+        patch.setStatus(statusEnum);
+        if (!apiKeyService.updateById(patch)) {
+            return Result.error(409, "API Key状态已被其他请求修改，请刷新后重试");
+        }
+        ApiKey latest = apiKeyService.getById(id);
+        return Result.success(ApiKeyResponse.view(latest != null ? latest : patch));
     }
 
     @OperationLog(module = "API Key管理", operation = "更新限流策略")
     @PutMapping("/{id}/rate-limit")
-    public ResponseEntity<Result<ApiKey>> updateRateLimit(
+    public ResponseEntity<Result<ApiKeyResponse>> updateRateLimit(
             @PathVariable Long id,
             @RequestBody ApiKeyRateLimitUpdateVO request) {
         if (request == null || request.getRateLimitEnabled() == null || request.getRateLimit() == null) {
@@ -128,18 +165,23 @@ public class ApiKeyController {
                     .body(Result.error(400, "每分钟最大请求数必须在1到1000000之间"));
         }
 
+        if (ownedApiKey(id) == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Result.error(404, "API Key不存在"));
+        }
+
         ApiKey apiKey = apiKeyService.updateRateLimitPolicy(
                 id, request.getRateLimitEnabled(), request.getRateLimit());
         if (apiKey == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "API Key不存在"));
         }
-        return ResponseEntity.ok(Result.success(apiKey));
+        return ResponseEntity.ok(Result.success(ApiKeyResponse.view(apiKey)));
     }
 
     @GetMapping("/{id}/interfaces")
     public ResponseEntity<Result<List<Long>>> getInterfaceIds(@PathVariable Long id) {
-        ApiKey apiKey = apiKeyService.getById(id);
+        ApiKey apiKey = ownedApiKey(id);
         if (apiKey == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "API Key不存在"));
@@ -151,7 +193,7 @@ public class ApiKeyController {
     @OperationLog(module = "API Key管理", operation = "分配接口权限")
     @PostMapping("/{id}/interfaces")
     public ResponseEntity<Result<Void>> assignInterfaces(@PathVariable Long id, @RequestBody List<Long> interfaceIds) {
-        ApiKey apiKey = apiKeyService.getById(id);
+        ApiKey apiKey = ownedApiKey(id);
         if (apiKey == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "API Key不存在"));
@@ -164,7 +206,7 @@ public class ApiKeyController {
 
     @GetMapping("/{id}/products")
     public ResponseEntity<Result<List<Long>>> getProductIds(@PathVariable Long id) {
-        ApiKey apiKey = apiKeyService.getById(id);
+        ApiKey apiKey = ownedApiKey(id);
         if (apiKey == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "API Key不存在"));
@@ -175,7 +217,7 @@ public class ApiKeyController {
     @OperationLog(module = "API Key管理", operation = "分配产品权限")
     @PostMapping("/{id}/products")
     public ResponseEntity<Result<Void>> assignProducts(@PathVariable Long id, @RequestBody List<Long> productIds) {
-        ApiKey apiKey = apiKeyService.getById(id);
+        ApiKey apiKey = ownedApiKey(id);
         if (apiKey == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "API Key不存在"));
@@ -185,8 +227,12 @@ public class ApiKeyController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Result.error(400, productError));
         }
-        apiKeyProductService.assignProducts(id, productIds);
-        return ResponseEntity.ok(Result.success(null));
+        try {
+            apiKeyProductService.assignProducts(id, productIds);
+            return ResponseEntity.ok(Result.success(null));
+        } catch (ApiKeyProvisioningException exception) {
+            return error(exception);
+        }
     }
 
     private String validateProductIds(Long callerId, List<Long> productIds, boolean required) {
@@ -198,8 +244,9 @@ public class ApiKeyController {
             return "产品列表包含无效或重复数据";
         }
         List<CallerProduct> products = callerProductService.listByIds(productIds);
-        if (products.size() != productIds.size()
-                || products.stream().anyMatch(product -> !callerId.equals(product.getCallerId()))) {
+        if (products == null || products.size() != productIds.size()
+                || products.stream().anyMatch(product -> product == null
+                || !java.util.Objects.equals(callerId, product.getCallerId()))) {
             return "产品必须属于该API Key对应调用方";
         }
         if (products.stream().anyMatch(product -> !StatusConstants.ACTIVE.equals(product.getStatus()))) {
@@ -211,12 +258,50 @@ public class ApiKeyController {
     @OperationLog(module = "API Key管理", operation = "删除API Key")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
-        ApiKey apiKey = apiKeyService.getById(id);
+        ApiKey apiKey = ownedApiKey(id);
         if (apiKey == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "API Key不存在"));
         }
-        apiKeyService.removeById(id);
+        if (!apiKeyService.removeById(id)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Result.error(409, "API Key删除失败，请重试"));
+        }
         return ResponseEntity.ok(Result.success(null));
+    }
+
+    private boolean isPlatformAdmin() {
+        return UserContext.hasPermission("system:admin");
+    }
+
+    private boolean callerAllowed(Long callerId) {
+        CallerInfo caller = callerId == null ? null : callerService.getById(callerId);
+        return caller != null && (isPlatformAdmin()
+                || (UserContext.getCurrentTenantId() != null
+                && UserContext.getCurrentTenantId().equals(caller.getTenantId())));
+    }
+
+    private ApiKey ownedApiKey(Long id) {
+        ApiKey apiKey = id == null ? null : apiKeyService.getById(id);
+        if (apiKey == null || !callerAllowed(apiKey.getCallerId())) {
+            return null;
+        }
+        return apiKey;
+    }
+
+    private List<ApiKeyResponse> toViews(List<ApiKey> keys) {
+        if (keys == null) {
+            return List.of();
+        }
+        return keys.stream()
+                .filter(Objects::nonNull)
+                .map(ApiKeyResponse::view)
+                .toList();
+    }
+
+    private <T> ResponseEntity<Result<T>> error(ApiKeyProvisioningException exception) {
+        return ResponseEntity.status(exception.getStatus())
+                .body(Result.error(exception.getStatus().value(),
+                        exception.getErrorCode() + ": " + exception.getMessage()));
     }
 }

@@ -13,6 +13,10 @@ import java.util.List;
 public interface CallerService extends IService<CallerInfo> {
     
     PageResult<CallerInfo> list(Integer page, Integer pageSize, String keyword, String status);
+
+    PageResult<CallerInfo> list(Integer page, Integer pageSize, String keyword, String status, Long tenantId);
+
+    List<CallerInfo> listAllByTenant(Long tenantId);
     
     List<CallerInfo> listByTenant(Long tenantId);
     

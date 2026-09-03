@@ -39,6 +39,8 @@ public interface ApprovalEnginePort {
 
     List<HistorySnapshot> history(String processInstanceId);
 
+    List<ProcessDefinitionSnapshot> processDiagnostics();
+
     record StartResult(
             String processInstanceId,
             String processDefinitionKey,
@@ -83,5 +85,24 @@ public interface ApprovalEnginePort {
             String assignee,
             LocalDateTime startedAt,
             LocalDateTime endedAt) {
+    }
+
+    record ProcessDefinitionSnapshot(
+            String id,
+            String key,
+            String name,
+            Integer version,
+            boolean suspended,
+            List<ProcessNodeSnapshot> nodes,
+            List<String> boundRoles,
+            long activeInstances,
+            long totalInstances) {
+    }
+
+    record ProcessNodeSnapshot(
+            String id,
+            String name,
+            String type,
+            List<String> candidateGroups) {
     }
 }

@@ -23,6 +23,10 @@ public class ApiKeyProvisioningService {
     @Transactional
     public ApiKey create(Long callerId, String keyName, List<Long> productIds) {
         ApiKey apiKey = apiKeyService.createApiKey(callerId, keyName);
+        if (apiKey == null || apiKey.getId() == null) {
+            throw ApiKeyProvisioningException.serviceUnavailable(
+                    "API_KEY_PROVISIONING_UNAVAILABLE", "API Key创建结果不可用");
+        }
         apiKeyProductService.assignProducts(apiKey.getId(), productIds);
         return apiKey;
     }

@@ -1,10 +1,13 @@
 package com.dataplatform.access.caller.controller;
 
 import com.dataplatform.access.caller.entity.ApiKey;
+import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.entity.CallerProduct;
 import com.dataplatform.access.caller.service.ApiKeyProductService;
 import com.dataplatform.access.caller.service.ApiKeyService;
 import com.dataplatform.access.caller.service.CallerProductService;
+import com.dataplatform.access.caller.service.CallerService;
+import com.dataplatform.common.util.UserContext;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +15,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -21,6 +25,7 @@ class ApiKeyControllerProductTest {
     private ApiKeyService apiKeyService;
     private ApiKeyProductService apiKeyProductService;
     private CallerProductService callerProductService;
+    private CallerService callerService;
     private ApiKeyController controller;
 
     @BeforeEach
@@ -28,10 +33,15 @@ class ApiKeyControllerProductTest {
         apiKeyService = mock(ApiKeyService.class);
         apiKeyProductService = mock(ApiKeyProductService.class);
         callerProductService = mock(CallerProductService.class);
+        callerService = mock(CallerService.class);
         controller = new ApiKeyController();
         ReflectionTestUtils.setField(controller, "apiKeyService", apiKeyService);
         ReflectionTestUtils.setField(controller, "apiKeyProductService", apiKeyProductService);
         ReflectionTestUtils.setField(controller, "callerProductService", callerProductService);
+        ReflectionTestUtils.setField(controller, "callerService", callerService);
+        CallerInfo caller = new CallerInfo();
+        caller.setId(1L);
+        when(callerService.getById(1L)).thenReturn(caller);
     }
 
     @Test
@@ -43,7 +53,10 @@ class ApiKeyControllerProductTest {
         when(apiKeyService.getById(9L)).thenReturn(apiKey);
         when(callerProductService.listByIds(List.of(10L))).thenReturn(List.of(activeProduct));
 
-        assertEquals(200, controller.assignProducts(9L, List.of(10L)).getStatusCode().value());
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("system:admin")).thenReturn(true);
+            assertEquals(200, controller.assignProducts(9L, List.of(10L)).getStatusCode().value());
+        }
 
         verify(apiKeyProductService).assignProducts(9L, List.of(10L));
     }
@@ -57,7 +70,10 @@ class ApiKeyControllerProductTest {
         when(apiKeyService.getById(9L)).thenReturn(apiKey);
         when(callerProductService.listByIds(List.of(10L))).thenReturn(List.of(inactiveProduct));
 
-        assertEquals(400, controller.assignProducts(9L, List.of(10L)).getStatusCode().value());
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("system:admin")).thenReturn(true);
+            assertEquals(400, controller.assignProducts(9L, List.of(10L)).getStatusCode().value());
+        }
 
         verifyNoInteractions(apiKeyProductService);
     }

@@ -63,63 +63,91 @@ public class OpenApiQueryService {
     }
 
     public OpenApiQueryRespVO query(OpenApiCallContext context) {
+        if (context == null) {
+            throw OpenApiQueryException.badRequest(
+                    "OPENAPI_CONTEXT_INVALID", "调用请求上下文不能为空");
+        }
         LocalDateTime requestTime = LocalDateTime.now();
         long startTime = System.currentTimeMillis();
         String platformRequestId = generateRequestId();
         String requestHash = buildRequestHash(context);
         boolean useCache = Boolean.TRUE.equals(context.getUseCache());
+        if (useCache && (context.getCacheDays() == null || context.getCacheDays() <= 0)) {
+            throw OpenApiQueryException.badRequest(
+                    "OPENAPI_CACHE_POLICY_INVALID", "useCache=true时cacheDays必须大于0");
+        }
         if (useCache) {
-            CallRecord cachedRecord = callRecordService.findLatestReusableCache(
-                    context.getApiCode(),
-                    requestHash,
-                    context.getTenantId(),
-                    context.getCallerId(),
-                    requestTime.minusDays(context.getCacheDays()),
-                    context.getCacheScope());
+            CallRecord cachedRecord;
+            try {
+                cachedRecord = callRecordService.findLatestReusableCache(
+                        context.getApiCode(),
+                        requestHash,
+                        context.getTenantId(),
+                        context.getCallerId(),
+                        requestTime.minusDays(context.getCacheDays()),
+                        context.getCacheScope());
+            } catch (RuntimeException exception) {
+                throw OpenApiQueryException.serviceUnavailable(
+                        "OPENAPI_CACHE_UNAVAILABLE", "调用缓存服务暂不可用");
+            }
             if (cachedRecord != null && !Boolean.FALSE.equals(cachedRecord.getResponseContractValid())) {
                 LocalDateTime responseTime = LocalDateTime.now();
                 long duration = System.currentTimeMillis() - startTime;
-                Map<String, Object> cachedResult = new LinkedHashMap<>(readResponseData(cachedRecord.getResponseData()));
-                cachedResult.putIfAbsent("actualVendorId", cachedRecord.getVendorId());
-                cachedResult.putIfAbsent("actualVendorCode", cachedRecord.getVendorCode());
-                ResponseContractEvaluation contractEvaluation = evaluateResponseContract(context, cachedResult);
-                if (contractEvaluation.valid()) {
-                    cachedResult.put("responseContractValid", true);
-                    BillingMeteringPolicyDTO meteringPolicy = resolveMeteringPolicy(
-                            actualVendorCode(context, cachedResult), context.getApiCode(), requestTime);
-                    BigDecimal cost = charge(context, meteringPolicy, platformRequestId, duration,
-                            requestTime, true, true, cachedResult,
-                            cachedRecord.getPluginId(), cachedRecord.getPluginVersion(),
-                            cachedRecord.getPipelineVersion(), cachedRecord.getSnapshotHash(),
-                            cachedRecord.getHashAlgorithm(), cachedRecord.getIntegrityHash());
-                    CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
-                            true, duration, cost, true, cachedRecord.getId(), requestTime, responseTime);
-                    copyConnectorTrace(cachedRecord, record);
-                    callRecordEventPublisher.publish(record);
-                    return buildResponse(context, platformRequestId, cachedResult, true,
-                            cachedRecord.getId(), requestTime, responseTime, duration, cost);
+                Map<String, Object> cachedResult = readResponseData(cachedRecord.getResponseData());
+                if (cachedResult != null && cachedResult.get("success") instanceof Boolean) {
+                    cachedResult.putIfAbsent("actualVendorId", cachedRecord.getVendorId());
+                    cachedResult.putIfAbsent("actualVendorCode", cachedRecord.getVendorCode());
+                    ResponseContractEvaluation contractEvaluation = evaluateResponseContract(context, cachedResult);
+                    if (contractEvaluation.valid()) {
+                        cachedResult.put("responseContractValid", true);
+                        BillingMeteringPolicyDTO meteringPolicy = resolveMeteringPolicy(
+                                actualVendorCode(context, cachedResult), context.getApiCode(), requestTime);
+                        BigDecimal cost = charge(context, meteringPolicy, platformRequestId, duration,
+                                requestTime, true, true, cachedResult,
+                                cachedRecord.getPluginId(), cachedRecord.getPluginVersion(),
+                                cachedRecord.getPipelineVersion(), cachedRecord.getSnapshotHash(),
+                                cachedRecord.getHashAlgorithm(), cachedRecord.getIntegrityHash());
+                        CallRecord record = buildRecord(context, platformRequestId, requestHash, cachedResult,
+                                true, duration, cost, true, cachedRecord.getId(), requestTime, responseTime);
+                        copyConnectorTrace(cachedRecord, record);
+                        callRecordEventPublisher.publish(record);
+                        return buildResponse(context, platformRequestId, cachedResult, true,
+                                cachedRecord.getId(), requestTime, responseTime, duration, cost);
+                    }
                 }
             }
         }
 
         Map<String, Object> vendorResult;
-        if (context.getPrimaryVendorConfig() != null) {
-            vendorResult = vendorProxyService.callVendor(
-                    context.getVendorCode(),
-                    context.getFallbackVendorCode(),
-                    context.getDataTypeCode(),
-                    context.getParams(),
-                    context.getPrimaryVendorConfig(),
-                    context.getFallbackVendorConfig(),
-                    platformRequestId);
-        } else {
-            vendorResult = vendorProxyService.callVendor(
-                    context.getVendorCode(),
-                    context.getDataTypeCode(),
-                    context.getParams(),
-                    context.getVendorConfig(),
-                    platformRequestId);
+        try {
+            if (context.getPrimaryVendorConfig() != null) {
+                vendorResult = vendorProxyService.callVendor(
+                        context.getVendorCode(),
+                        context.getFallbackVendorCode(),
+                        context.getDataTypeCode(),
+                        context.getParams(),
+                        context.getPrimaryVendorConfig(),
+                        context.getFallbackVendorConfig(),
+                        platformRequestId);
+            } else {
+                vendorResult = vendorProxyService.callVendor(
+                        context.getVendorCode(),
+                        context.getDataTypeCode(),
+                        context.getParams(),
+                        context.getVendorConfig(),
+                        platformRequestId);
+            }
+        } catch (OpenApiQueryException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_VENDOR_UNAVAILABLE", "厂商调用服务暂不可用");
         }
+        if (vendorResult == null) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_VENDOR_UNAVAILABLE", "厂商调用服务未返回有效结果");
+        }
+        vendorResult = new LinkedHashMap<>(vendorResult);
 
         LocalDateTime responseTime = LocalDateTime.now();
         long duration = System.currentTimeMillis() - startTime;
@@ -156,11 +184,18 @@ public class OpenApiQueryService {
 
     private BillingMeteringPolicyDTO resolveMeteringPolicy(String vendorCode, String apiCode,
                                                            LocalDateTime callTime) {
-        Result<BillingMeteringPolicyDTO> result = billingFeignClient.getMeteringPolicy(
-                vendorCode, apiCode, callTime);
+        Result<BillingMeteringPolicyDTO> result;
+        try {
+            result = billingFeignClient.getMeteringPolicy(vendorCode, apiCode, callTime);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_BILLING_UNAVAILABLE", "计费服务暂不可用");
+        }
         BillingMeteringPolicyDTO policy = result != null ? result.getData() : null;
-        if (policy == null || policy.getPlanId() == null) {
-            throw new IllegalStateException("Billing service returned an empty metering policy");
+        if (result == null || !Integer.valueOf(200).equals(result.getCode())
+                || policy == null || policy.getPlanId() == null) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_BILLING_POLICY_UNAVAILABLE", "计费策略暂不可用");
         }
         return policy;
     }
@@ -194,13 +229,26 @@ public class OpenApiQueryService {
         request.setSnapshotHash(snapshotHash);
         request.setHashAlgorithm(hashAlgorithm);
         request.setIntegrityHash(integrityHash);
-        request.setMeteringFacts(billingFactExtractor.extract(
-                policy, result, context.getParams()));
-        request.setAdditionalPlans(buildAdditionalPlans(policy, result, context.getParams()));
-        Result<BillingChargeRespDTO> chargeResult = billingFeignClient.charge(request);
+        try {
+            request.setMeteringFacts(billingFactExtractor.extract(
+                    policy, result, context.getParams()));
+            request.setAdditionalPlans(buildAdditionalPlans(policy, result, context.getParams()));
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_BILLING_POLICY_INVALID", "计费策略暂不可用");
+        }
+        Result<BillingChargeRespDTO> chargeResult;
+        try {
+            chargeResult = billingFeignClient.charge(request);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_BILLING_UNAVAILABLE", "计费服务暂不可用");
+        }
         BillingChargeRespDTO response = chargeResult != null ? chargeResult.getData() : null;
-        if (response == null || response.getFinalAmount() == null) {
-            throw new IllegalStateException("Billing service returned an empty charge result");
+        if (chargeResult == null || !Integer.valueOf(200).equals(chargeResult.getCode())
+                || response == null || response.getFinalAmount() == null) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_BILLING_CHARGE_UNAVAILABLE", "计费结果暂不可用");
         }
         return response.getFinalAmount();
     }
@@ -210,6 +258,10 @@ public class OpenApiQueryService {
             Map<String, Object> params) {
         if (policy.getAdditionalPlans() == null) return java.util.List.of();
         return policy.getAdditionalPlans().stream().map(source -> {
+            if (source == null || source.getPlanId() == null) {
+                throw OpenApiQueryException.serviceUnavailable(
+                        "OPENAPI_BILLING_POLICY_INVALID", "计费策略暂不可用");
+            }
             BillingAdditionalPlanDTO target = new BillingAdditionalPlanDTO();
             target.setPlanId(source.getPlanId());
             target.setPlanCode(source.getPlanCode());
@@ -256,12 +308,13 @@ public class OpenApiQueryService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> readResponseData(String responseData) {
         if (responseData == null || responseData.isEmpty()) {
-            return Collections.emptyMap();
+            return null;
         }
         try {
-            return objectMapper.readValue(responseData, Map.class);
+            Map<String, Object> parsed = objectMapper.readValue(responseData, Map.class);
+            return parsed == null ? null : new LinkedHashMap<>(parsed);
         } catch (Exception e) {
-            return Collections.emptyMap();
+            return null;
         }
     }
 
@@ -341,8 +394,7 @@ public class OpenApiQueryService {
         applyResponseContractResult(record, context, result);
         try {
             record.setRequestParams(objectMapper.writeValueAsString(sanitizeForRecord(context.getParams())));
-            Map<String, Object> responseForRecord = Boolean.TRUE.equals(context.getUseCache())
-                    ? result : sanitizeForRecord(result);
+            Map<String, Object> responseForRecord = sanitizeForRecord(result);
             record.setResponseData(objectMapper.writeValueAsString(responseForRecord));
         } catch (Exception e) {
             log.warn("Failed to serialize call record payload: requestId={}, type={}",

@@ -1,10 +1,12 @@
 package com.dataplatform.access.approval.service;
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.dataplatform.access.approval.api.ApiPermissionException;
 import com.dataplatform.access.approval.api.EmergencyGrantRequest;
 import com.dataplatform.access.approval.mapper.ApiPermissionActionMapper;
 import com.dataplatform.access.approval.mapper.ApiPermissionApplicationItemMapper;
 import com.dataplatform.access.caller.entity.ApiKey;
+import com.dataplatform.access.caller.entity.ApiKeyInterface;
 import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.service.ApiKeyInterfaceService;
 import com.dataplatform.access.caller.service.ApiKeyService;
@@ -129,6 +131,53 @@ class ApiPermissionGrantServiceTest {
                 .isInstanceOfSatisfying(ApiPermissionException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo("CALLER_TENANT_DENIED"));
+    }
+
+    @Test
+    void shouldFailClosedWhenGrantLookupReturnsNull() {
+        when(grantService.list(org.mockito.ArgumentMatchers.<Wrapper<ApiKeyInterface>>any())).thenReturn(null);
+
+        assertThatThrownBy(() -> service.list(7L, null))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("GRANT_LOOKUP_UNAVAILABLE"));
+    }
+
+    @Test
+    void shouldFailClosedWhenEmergencyCallerLookupReturnsNull() {
+        when(callerService.listByTenant(7L)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.emergencyCallers(7L))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("CALLER_LOOKUP_UNAVAILABLE"));
+    }
+
+    @Test
+    void shouldFailClosedWhenEmergencyApiKeyLookupReturnsNull() {
+        when(callerService.getById(1L)).thenReturn(caller(1L, 7L));
+        when(apiKeyService.listByCaller(1L)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.emergencyApiKeys(1L, 7L))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("API_KEY_LOOKUP_UNAVAILABLE"));
+    }
+
+    @Test
+    void shouldRejectInvalidEmergencyInterfaceIdsBeforeDependencyCall() {
+        EmergencyGrantRequest request = new EmergencyGrantRequest(
+                1L,
+                2L,
+                List.of(0L),
+                LocalDateTime.now().plusHours(1),
+                "生产故障应急恢复需要临时调用接口",
+                "INC-2026-001");
+
+        assertThatThrownBy(() -> service.emergencyGrant(request, 9L, "security-admin", 7L))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("INVALID_EMERGENCY_REQUEST"));
     }
 
     private CallerInfo caller(Long id, Long tenantId) {

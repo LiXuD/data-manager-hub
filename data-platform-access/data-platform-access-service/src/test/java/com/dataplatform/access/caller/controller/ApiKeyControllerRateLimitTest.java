@@ -1,8 +1,12 @@
 package com.dataplatform.access.caller.controller;
 
 import com.dataplatform.access.caller.entity.ApiKey;
+import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.service.ApiKeyService;
+import com.dataplatform.access.caller.service.CallerService;
+import com.dataplatform.common.util.UserContext;
 import com.dataplatform.access.caller.vo.ApiKeyRateLimitUpdateVO;
+import com.dataplatform.access.caller.vo.ApiKeyResponse;
 import com.dataplatform.common.result.Result;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -20,13 +26,16 @@ import static org.mockito.Mockito.when;
 class ApiKeyControllerRateLimitTest {
 
     private ApiKeyService apiKeyService;
+    private CallerService callerService;
     private ApiKeyController controller;
 
     @BeforeEach
     void setUp() {
         apiKeyService = mock(ApiKeyService.class);
+        callerService = mock(CallerService.class);
         controller = new ApiKeyController();
         ReflectionTestUtils.setField(controller, "apiKeyService", apiKeyService);
+        ReflectionTestUtils.setField(controller, "callerService", callerService);
     }
 
     @Test
@@ -36,20 +45,31 @@ class ApiKeyControllerRateLimitTest {
         updated.setId(7L);
         updated.setRateLimitEnabled(false);
         updated.setRateLimit(600);
+        ApiKey existing = new ApiKey();
+        existing.setId(7L);
+        existing.setCallerId(1L);
+        CallerInfo caller = new CallerInfo();
+        caller.setId(1L);
+        when(apiKeyService.getById(7L)).thenReturn(existing);
+        when(callerService.getById(1L)).thenReturn(caller);
         when(apiKeyService.updateRateLimitPolicy(7L, false, 600)).thenReturn(updated);
 
-        ResponseEntity<Result<ApiKey>> response = controller.updateRateLimit(7L, request);
+        ResponseEntity<Result<ApiKeyResponse>> response;
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("system:admin")).thenReturn(true);
+            response = controller.updateRateLimit(7L, request);
+        }
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertFalse(response.getBody().getData().getRateLimitEnabled());
-        assertEquals(600, response.getBody().getData().getRateLimit());
+        assertFalse(response.getBody().getData().rateLimitEnabled());
+        assertEquals(600, response.getBody().getData().rateLimit());
         verify(apiKeyService).updateRateLimitPolicy(7L, false, 600);
     }
 
     @Test
     void shouldRejectInvalidRateLimitPolicy() {
-        ResponseEntity<Result<ApiKey>> response = controller.updateRateLimit(7L, request(true, 0));
+        ResponseEntity<Result<ApiKeyResponse>> response = controller.updateRateLimit(7L, request(true, 0));
 
         assertEquals(400, response.getStatusCode().value());
         verifyNoInteractions(apiKeyService);
@@ -58,11 +78,12 @@ class ApiKeyControllerRateLimitTest {
     @Test
     void shouldReturnNotFoundForMissingApiKey() {
         ApiKeyRateLimitUpdateVO request = request(true, 100);
-        when(apiKeyService.updateRateLimitPolicy(99L, true, 100)).thenReturn(null);
+        when(apiKeyService.getById(99L)).thenReturn(null);
 
-        ResponseEntity<Result<ApiKey>> response = controller.updateRateLimit(99L, request);
+        ResponseEntity<Result<ApiKeyResponse>> response = controller.updateRateLimit(99L, request);
 
         assertEquals(404, response.getStatusCode().value());
+        verify(apiKeyService, never()).updateRateLimitPolicy(99L, true, 100);
     }
 
     private ApiKeyRateLimitUpdateVO request(boolean enabled, int rateLimit) {

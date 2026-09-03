@@ -5,11 +5,15 @@ import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.common.enums.CommonStatus;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -44,12 +48,16 @@ public class ApiKeyCacheService {
                 return;
             }
             boolean callerActive = caller.getStatus() == CommonStatus.ACTIVE;
-            redisTemplate.opsForValue().set(OPENAPI_KEY_PREFIX + apiKey.getApiKey(), Map.of(
-                    "keyId", apiKey.getId(),
-                    "callerId", apiKey.getCallerId(),
-                    "callerName", caller.getCallerName() != null ? caller.getCallerName() : "",
-                    "status", callerActive ? 1 : 0
-            ));
+            Map<String, Object> keyInfo = new HashMap<>();
+            keyInfo.put("keyId", apiKey.getId());
+            keyInfo.put("callerId", apiKey.getCallerId());
+            keyInfo.put("callerName", caller.getCallerName() != null ? caller.getCallerName() : "");
+            keyInfo.put("status", callerActive ? 1 : 0);
+            if (apiKey.getExpireTime() != null) {
+                keyInfo.put("expireAtEpochMs", apiKey.getExpireTime()
+                        .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+            }
+            redisTemplate.opsForValue().set(OPENAPI_KEY_PREFIX + apiKey.getApiKey(), keyInfo);
             redisTemplate.opsForValue().set(RATE_LIMIT_PREFIX + apiKey.getId(), Map.of(
                     "enabled", !Boolean.FALSE.equals(apiKey.getRateLimitEnabled()),
                     "windowSec", DEFAULT_WINDOW_SEC,
@@ -57,6 +65,23 @@ public class ApiKeyCacheService {
             ));
         } catch (Exception e) {
             log.warn("同步API Key网关缓存失败: keyId={}, error={}", apiKey.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Publish a cache change only after the database transaction has committed.
+     * A direct, non-transactional caller still gets an immediate best-effort sync.
+     */
+    public void syncAfterCommit(ApiKey apiKey) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    sync(apiKey);
+                }
+            });
+        } else {
+            sync(apiKey);
         }
     }
 
@@ -76,10 +101,23 @@ public class ApiKeyCacheService {
         }
     }
 
+    public void evictAfterCommit(ApiKey apiKey) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    evict(apiKey);
+                }
+            });
+        } else {
+            evict(apiKey);
+        }
+    }
+
     private boolean isUsableKey(ApiKey apiKey) {
         if (apiKey.getStatus() != ApiKeyStatus.ACTIVE) {
             return false;
         }
-        return apiKey.getExpireTime() == null || !apiKey.getExpireTime().isBefore(LocalDateTime.now());
+        return apiKey.getExpireTime() == null || apiKey.getExpireTime().isAfter(LocalDateTime.now());
     }
 }

@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -220,6 +221,53 @@ public class FlowableApprovalEngineAdapter implements ApprovalEnginePort {
                 .stream()
                 .map(this::toHistory)
                 .toList();
+    }
+
+    @Override
+    public List<ProcessDefinitionSnapshot> processDiagnostics() {
+        return repositoryService.createProcessDefinitionQuery().list().stream()
+                .sorted(Comparator.comparing(ProcessDefinition::getKey)
+                        .thenComparing(ProcessDefinition::getVersion).reversed())
+                .map(this::toProcessDefinitionSnapshot)
+                .toList();
+    }
+
+    private ProcessDefinitionSnapshot toProcessDefinitionSnapshot(ProcessDefinition definition) {
+        BpmnModel model = repositoryService.getBpmnModel(definition.getId());
+        List<ProcessNodeSnapshot> nodes = model.getProcesses().stream()
+                .flatMap(process -> process.getFlowElements().stream())
+                .map(this::toProcessNodeSnapshot)
+                .toList();
+        List<String> boundRoles = nodes.stream()
+                .flatMap(node -> node.candidateGroups().stream())
+                .filter(this::hasText)
+                .distinct()
+                .sorted()
+                .toList();
+        long activeInstances = runtimeService.createProcessInstanceQuery()
+                .processDefinitionId(definition.getId())
+                .count();
+        long totalInstances = historyService.createHistoricProcessInstanceQuery()
+                .processDefinitionId(definition.getId())
+                .count();
+        return new ProcessDefinitionSnapshot(
+                definition.getId(),
+                definition.getKey(),
+                definition.getName(),
+                definition.getVersion(),
+                definition.isSuspended(),
+                nodes,
+                boundRoles,
+                activeInstances,
+                totalInstances);
+    }
+
+    private ProcessNodeSnapshot toProcessNodeSnapshot(FlowElement element) {
+        List<String> candidateGroups = element instanceof UserTask userTask
+                ? userTask.getCandidateGroups().stream().filter(this::hasText).distinct().sorted().toList()
+                : List.of();
+        return new ProcessNodeSnapshot(
+                element.getId(), element.getName(), element.getClass().getSimpleName(), candidateGroups);
     }
 
     private Task requiredTask(String taskId) {

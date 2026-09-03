@@ -3,6 +3,7 @@ package com.dataplatform.access.call.controller;
 import com.dataplatform.access.call.entity.CallScene;
 import com.dataplatform.access.call.service.CallSceneService;
 import com.dataplatform.access.call.service.OpenApiQueryService;
+import com.dataplatform.access.call.service.OpenApiQueryException;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
 import com.dataplatform.access.call.vo.OpenApiQueryReqVO;
@@ -20,6 +21,7 @@ import com.dataplatform.access.caller.service.CallerService;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.enums.ApiKeyStatus;
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
 import com.dataplatform.masterdata.interface_.api.dto.RoutingReadiness;
@@ -104,6 +106,7 @@ class OpenApiQueryControllerTest {
         CallerInfo caller = new CallerInfo();
         caller.setId(20L);
         caller.setTenantId(1L);
+        caller.setStatus(CommonStatus.ACTIVE);
         when(callerService.getById(20L)).thenReturn(caller);
 
         CallerProduct product = new CallerProduct();
@@ -218,6 +221,89 @@ class OpenApiQueryControllerTest {
     }
 
     @Test
+    void shouldRejectNullSingleRequestWithoutServerError() {
+        ResponseEntity<Result<OpenApiQueryRespVO>> response =
+                controller.query(null, null, null, null, null);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertEquals(400, response.getBody().getCode());
+        verifyNoInteractions(apiKeyService, callerService, openApiQueryService);
+    }
+
+    @Test
+    void shouldRejectNullBatchRequestWithoutServerError() {
+        ResponseEntity<Result<com.dataplatform.access.call.vo.OpenApiBatchQueryRespVO>> response =
+                controller.batchQuery(null, null, null, null, null);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertEquals(400, response.getBody().getCode());
+        verifyNoInteractions(apiKeyService, callerService, openApiQueryService);
+    }
+
+    @Test
+    void mapsDependencyFailureToStructuredResponseAtControllerBoundary() {
+        ResponseEntity<Result<Object>> response = controller.handleOpenApiQueryException(
+                OpenApiQueryException.serviceUnavailable("OPENAPI_API_KEY_UNAVAILABLE", "API Key服务暂不可用"));
+
+        assertEquals(503, response.getStatusCode().value());
+        assertEquals(503, response.getBody().getCode());
+        assertTrue(response.getBody().getMsg().contains("OPENAPI_API_KEY_UNAVAILABLE"));
+    }
+
+    @Test
+    void shouldMapContractDependencyFailureToStructuredBadGateway() {
+        ApiKey apiKey = activeApiKey();
+        when(apiKeyService.getByKey("test-key")).thenReturn(apiKey);
+        when(callerService.getById(20L)).thenReturn(activeCaller());
+
+        CallerProduct product = new CallerProduct();
+        product.setId(60L);
+        product.setCallerId(20L);
+        product.setProductCode("loan-risk");
+        when(callerProductService.getActiveProduct(20L, "loan-risk")).thenReturn(product);
+        when(apiKeyProductService.hasProductPermission(10L, 60L)).thenReturn(true);
+
+        CallScene scene = new CallScene();
+        scene.setSceneCode("pre-loan-review");
+        when(callSceneService.getActiveScene("pre-loan-review")).thenReturn(scene);
+
+        when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY"))
+                .thenReturn(Result.success(routeInterface(RoutingReadiness.READY, null)));
+        when(vendorConfigFeignClient.getById(100L))
+                .thenReturn(Result.success(routeConfig(100L, 40L, "personal")));
+        when(vendorFeignClient.getById(40L))
+                .thenReturn(Result.success(routeVendor(40L, "vendor-a")));
+        when(apiInterfaceFeignClient.getContract(30L))
+                .thenReturn(Result.error(503, "contract service unavailable"));
+
+        ResponseEntity<Result<OpenApiQueryRespVO>> response =
+                controller.query("test-key", null, null, validRequest(), null);
+
+        assertEquals(502, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals(502, response.getBody().getCode());
+        assertTrue(response.getBody().getMsg().contains("OPENAPI_CONTRACT_UNAVAILABLE"));
+        verifyNoInteractions(openApiQueryService);
+    }
+
+    @Test
+    void shouldRejectInactiveCallerBeforeCallingProducts() {
+        ApiKey apiKey = activeApiKey();
+        CallerInfo caller = new CallerInfo();
+        caller.setId(20L);
+        caller.setStatus(CommonStatus.INACTIVE);
+        when(apiKeyService.getByKey("test-key")).thenReturn(apiKey);
+        when(callerService.getById(20L)).thenReturn(caller);
+
+        ResponseEntity<Result<OpenApiQueryRespVO>> response =
+                controller.query("test-key", null, null, validRequest(), null);
+
+        assertEquals(403, response.getStatusCode().value());
+        assertEquals("调用方已停用", response.getBody().getMsg());
+        verifyNoInteractions(callerProductService, apiKeyProductService, openApiQueryService);
+    }
+
+    @Test
     void shouldFailClosedWhenInterfaceHasNoExplicitPrimaryRoute() {
         ApiInterfaceDTO apiInterface = new ApiInterfaceDTO();
         apiInterface.setId(30L);
@@ -291,7 +377,7 @@ class OpenApiQueryControllerTest {
     void shouldRejectProductThatIsNotConfiguredForCaller() {
         ApiKey apiKey = activeApiKey();
         when(apiKeyService.getByKey("test-key")).thenReturn(apiKey);
-        when(callerService.getById(20L)).thenReturn(new CallerInfo());
+        when(callerService.getById(20L)).thenReturn(activeCaller());
         when(callerProductService.getActiveProduct(20L, "loan-risk")).thenReturn(null);
 
         ResponseEntity<Result<OpenApiQueryRespVO>> response =
@@ -310,7 +396,7 @@ class OpenApiQueryControllerTest {
         product.setCallerId(20L);
         product.setProductCode("loan-risk");
         when(apiKeyService.getByKey("test-key")).thenReturn(apiKey);
-        when(callerService.getById(20L)).thenReturn(new CallerInfo());
+        when(callerService.getById(20L)).thenReturn(activeCaller());
         when(callerProductService.getActiveProduct(20L, "loan-risk")).thenReturn(product);
         when(apiKeyProductService.hasProductPermission(10L, 60L)).thenReturn(false);
 
@@ -381,6 +467,14 @@ class OpenApiQueryControllerTest {
         apiKey.setApiKey("test-key");
         apiKey.setStatus(ApiKeyStatus.ACTIVE);
         return apiKey;
+    }
+
+    private CallerInfo activeCaller() {
+        CallerInfo caller = new CallerInfo();
+        caller.setId(20L);
+        caller.setTenantId(1L);
+        caller.setStatus(CommonStatus.ACTIVE);
+        return caller;
     }
 
     private OpenApiQueryReqVO validRequest() {
