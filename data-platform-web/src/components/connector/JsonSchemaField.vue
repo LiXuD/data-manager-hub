@@ -5,6 +5,7 @@ import {
   orderedSchemaProperties,
   readSecretReference,
   schemaFieldVisible,
+  schemaFieldRequired,
   schemaDefault,
   secretFieldRepresentation,
   writeSecretReference
@@ -33,7 +34,7 @@ const properties = computed(() => orderedSchemaProperties(props.schema))
 const showAdvanced = ref(false)
 const managedFields = computed(() => new Set(props.schema['x-platform-managed'] || []))
 const visibleProperties = computed(() => properties.value.filter(([key, child]) =>
-  !managedFields.value.has(key) && schemaFieldVisible(child, props.modelValue)
+  !managedFields.value.has(key) && schemaFieldVisible(child, props.modelValue, key, props.schema)
 ))
 const advancedProperties = computed(() => visibleProperties.value.filter(([, child]) => child['x-ui-advanced']))
 const displayedGroups = computed(() => {
@@ -100,7 +101,22 @@ function groupLabel(value: string) {
 </script>
 
 <template>
-  <div v-if="schema.type === 'object' || schema.properties" class="schema-object">
+  <el-form-item v-if="secretSelector" :label="label" :required="required" class="schema-field">
+    <el-select
+      :model-value="selectedSecretRef"
+      filterable
+      clearable
+      :disabled="disabled"
+      placeholder="选择密钥引用（不保存明文）"
+      style="width: 100%"
+      @update:model-value="updateSecretRef"
+    >
+      <el-option v-for="item in secretOptions" :key="item" :label="item" :value="item" />
+    </el-select>
+    <div v-if="schema['x-help-text'] || schema.description" class="field-help">{{ schema['x-help-text'] || schema.description }}</div>
+  </el-form-item>
+
+  <div v-else-if="schema.type === 'object' || schema.properties" class="schema-object">
     <div v-if="label" class="schema-group-title">{{ label }}</div>
     <section v-for="group in displayedGroups" :key="group.name || 'default'" class="schema-ui-group">
       <div v-if="group.name" class="schema-ui-group-label">{{ groupLabel(group.name) }}</div>
@@ -111,7 +127,7 @@ function groupLabel(value: string) {
         :schema="child"
         :field-name="key"
         :label="child.title || key"
-        :required="requiredKeys.has(key)"
+        :required="requiredKeys.has(key) || schemaFieldRequired(key, schema, modelValue)"
         :secret-options="secretOptions"
         :disabled="disabled"
         @update:model-value="value => updateObject(key, value)"
@@ -143,19 +159,7 @@ function groupLabel(value: string) {
 
   <el-form-item v-else :label="label" :required="required" class="schema-field">
     <el-select
-      v-if="secretSelector"
-      :model-value="selectedSecretRef"
-      filterable
-      clearable
-      :disabled="disabled"
-      placeholder="选择密钥引用（不保存明文）"
-      style="width: 100%"
-      @update:model-value="updateSecretRef"
-    >
-      <el-option v-for="item in secretOptions" :key="item" :label="item" :value="item" />
-    </el-select>
-    <el-select
-      v-else-if="schema.enum"
+      v-if="schema.enum"
       :model-value="primitiveValue(modelValue)"
       clearable
       :disabled="disabled"

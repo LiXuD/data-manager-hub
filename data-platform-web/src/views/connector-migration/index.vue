@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import {
   completeConnectorMigration,
   getConnectorLegacyInventory,
   getConnectorMigrations,
+  getInvalidPreparedMigrations,
   observeConnectorMigration,
   prepareConnectorMigration,
+  repairInvalidPreparedMigrations,
   rollbackConnectorMigration,
   startConnectorMigrationObservation,
-  type ConnectorLegacyInventory
+  type ConnectorLegacyInventory,
+  type ConnectorLegacyInventoryEntry
 } from '@/api/connector-migration'
 import { useUserStore } from '@/stores/user'
 import type { VendorConnectorMigration } from '@/types'
@@ -16,6 +20,7 @@ import type { VendorConnectorMigration } from '@/types'
 const loading = ref(false)
 const rows = ref<VendorConnectorMigration[]>([])
 const inventory = ref<ConnectorLegacyInventory | null>(null)
+const invalidPrepared = ref<Awaited<ReturnType<typeof getInvalidPreparedMigrations>>['data']>([])
 const state = ref('')
 const busyAction = ref<string | null>(null)
 const userStore = useUserStore()
@@ -32,25 +37,52 @@ function stateType(value: string) {
 async function load() {
   loading.value = true
   try {
-    const [migrationResponse, inventoryResponse] = await Promise.all([
+    const [migrationResponse, inventoryResponse, auditResponse] = await Promise.all([
       getConnectorMigrations(state.value || undefined),
-      getConnectorLegacyInventory()
+      getConnectorLegacyInventory(),
+      getInvalidPreparedMigrations()
     ])
     rows.value = migrationResponse.data || []
     inventory.value = inventoryResponse.data || null
-  } catch (error) {
-    console.warn('加载厂商连接器迁移历史失败', error)
+    invalidPrepared.value = auditResponse.data || []
+  } catch {
+    console.warn('加载厂商连接器迁移历史失败')
   } finally {
     loading.value = false
   }
+}
+
+async function repairInvalidPrepared() {
+  if (!canMigrate.value || invalidPrepared.value.length === 0) return
+  await ElMessageBox.confirm(
+    `将把 ${invalidPrepared.value.length} 条不可安全推进的 PREPARED 记录以 CAS 方式标记为 BLOCKED，保留历史与错误摘要。是否继续？`,
+    '修复无效迁移准备记录',
+    { type: 'warning' }
+  )
+  await repairInvalidPreparedMigrations()
+  await load()
 }
 
 function isBusy(action: string, vendorConfigId: number) {
   return busyAction.value === `${action}:${vendorConfigId}`
 }
 
-async function runAction(action: 'prepare' | 'start' | 'observe' | 'complete' | 'rollback', row: VendorConnectorMigration | { vendorConfigId: number }) {
+function canPrepare(entry: ConnectorLegacyInventoryEntry) {
+  return entry.active?.classification === 'LOSSLESS_CONVERTIBLE'
+}
+
+function prepareReason(entry: ConnectorLegacyInventoryEntry) {
+  return entry.active?.reasons.map(reason => reason.safeMessage).filter(Boolean).join('；')
+    || '当前 Legacy 配置不满足安全迁移资格'
+}
+
+async function runAction(
+  action: 'prepare' | 'start' | 'observe' | 'complete' | 'rollback',
+  row: VendorConnectorMigration | ConnectorLegacyInventoryEntry
+) {
   if (!canMigrate.value) return
+  if (action === 'prepare' && 'active' in row
+      && row.active?.classification !== 'LOSSLESS_CONVERTIBLE') return
   const vendorConfigId = row.vendorConfigId
   busyAction.value = `${action}:${vendorConfigId}`
   try {
@@ -68,8 +100,8 @@ async function runAction(action: 'prepare' | 'start' | 'observe' | 'complete' | 
       await rollbackConnectorMigration(vendorConfigId, { expectedRecordVersion: row.recordVersion })
     }
     await load()
-  } catch (error) {
-    console.warn('执行厂商连接器迁移动作失败', error)
+  } catch {
+    console.warn('执行厂商连接器迁移动作失败')
   } finally {
     busyAction.value = null
   }
@@ -102,6 +134,24 @@ onMounted(load)
       description="准备和观察动作只保存版本哈希与聚合事实；开始观察前必须确认两个 Access 实例均已 READY，异常时通过不可变版本回滚。"
     />
 
+    <section v-if="invalidPrepared.length" class="section-card repair-card">
+      <div class="section-heading">
+        <div>
+          <div class="section-kicker">DRY-RUN REPAIR REPORT</div>
+          <h2>发现不可推进的 PREPARED 记录</h2>
+        </div>
+        <el-button v-if="canMigrate" type="warning" @click="repairInvalidPrepared">安全标记 BLOCKED</el-button>
+      </div>
+      <el-table :data="invalidPrepared" size="small">
+        <el-table-column prop="migrationId" label="迁移记录" width="100" />
+        <el-table-column prop="vendorConfigId" label="配置" width="90" />
+        <el-table-column prop="classification" label="分类" width="240" />
+        <el-table-column label="安全原因">
+          <template #default="{ row }">{{ row.reasonCodes.join('、') }}</template>
+        </el-table-column>
+      </el-table>
+    </section>
+
     <section class="section-card">
       <div class="section-heading">
         <div>
@@ -125,12 +175,15 @@ onMounted(load)
         <el-table-column label="操作" width="150">
           <template #default="{ row }">
             <el-button
-              v-if="canMigrate && row.active"
+              v-if="canMigrate && row.active && canPrepare(row)"
               type="primary"
               link
               :loading="isBusy('prepare', row.vendorConfigId)"
               @click="runAction('prepare', row)"
             >准备迁移</el-button>
+            <span v-else-if="canMigrate && row.active" class="muted">
+              不可准备：{{ prepareReason(row) }}
+            </span>
           </template>
         </el-table-column>
       </el-table>

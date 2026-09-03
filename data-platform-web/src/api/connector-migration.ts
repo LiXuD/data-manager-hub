@@ -62,10 +62,24 @@ export interface ConnectorMigrationActionRequest {
   expectedRecordVersion: number
 }
 
+export interface ConnectorMigrationRepairCandidate {
+  migrationId: number
+  vendorConfigId: number
+  recordVersion: number
+  classification: string
+  reasonCodes: string[]
+}
+
 const path = '/vendor/connector-migration'
 
 export const getConnectorMigrations = (state?: string) =>
   request.get<ConnectorApiResponse<VendorConnectorMigration[]>>(path, { params: state ? { state } : undefined })
+
+export const getInvalidPreparedMigrations = () =>
+  request.get<ConnectorApiResponse<ConnectorMigrationRepairCandidate[]>>(`${path}/prepared-audit`)
+
+export const repairInvalidPreparedMigrations = () =>
+  request.post<ConnectorApiResponse<number>>(`${path}/repair-invalid-prepared`)
 
 export const getConnectorLegacyInventory = (page = 1, pageSize = 50) =>
   request.get<ConnectorApiResponse<ConnectorLegacyInventory>>('/vendor/config/connector-spec/inventory', {

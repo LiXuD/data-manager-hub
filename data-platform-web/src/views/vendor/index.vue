@@ -6,7 +6,7 @@
         <h2>厂商管理</h2>
         <p class="header-desc">管理外部数据供应商信息与接口配置</p>
       </div>
-      <el-button type="primary" @click="handleAdd">
+      <el-button v-if="canAdd" type="primary" @click="handleAdd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
@@ -101,6 +101,7 @@
               v-model="row.status"
               active-value="active"
               inactive-value="inactive"
+              :disabled="!canEdit"
               @change="handleStatusChange(row)"
             />
           </template>
@@ -108,9 +109,9 @@
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
-              <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
+              <el-button v-if="canEdit" type="primary" link @click="handleEdit(row)">编辑</el-button>
               <el-button type="primary" link @click="handleView(row)">详情</el-button>
-              <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+              <el-button v-if="canDelete" type="danger" link @click="handleDelete(row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -135,6 +136,7 @@
       v-model="formVisible"
       :form-data="currentRow"
       :mode="formMode"
+      :can-submit="formMode === 'add' ? canAdd : canEdit"
       @success="handleFormSuccess"
     />
 
@@ -193,12 +195,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getVendorList, updateVendorStatus, deleteVendor } from '@/api/vendor'
 import type { Vendor } from '@/types'
 import VendorForm from './components/VendorForm.vue'
 import { COMMON_STATUS } from '@/constants/status'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
+const canAdd = computed(() => userStore.hasPermission('vendor:add'))
+const canEdit = computed(() => userStore.hasPermission('vendor:edit'))
+const canDelete = computed(() => userStore.hasPermission('vendor:delete'))
 
 // 搜索表单
 const searchForm = reactive({
@@ -261,8 +269,8 @@ const loadData = async () => {
     const res = await getVendorList(params)
     tableData.value = res.data || []
     pagination.total = res.total || 0
-  } catch (error) {
-    console.error('加载失败:', error)
+  } catch {
+    console.error('加载失败')
     ElMessage.error('加载数据失败，请稍后重试')
   } finally {
     loading.value = false
@@ -317,7 +325,7 @@ const handleDelete = async (row: Vendor) => {
     loadData()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('删除失败:', error)
+      console.error('删除失败')
       ElMessage.error('删除失败，请稍后重试')
     }
   }

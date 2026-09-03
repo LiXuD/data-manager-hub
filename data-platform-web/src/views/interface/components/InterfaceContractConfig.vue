@@ -10,6 +10,7 @@ import type { ApiInterface, InterfaceContract, InterfaceParam } from '@/types'
 interface Props {
   modelValue: boolean
   interfaceData?: ApiInterface | null
+  canEdit?: boolean
 }
 
 interface LocalField extends InterfaceParam {
@@ -55,8 +56,8 @@ const loadContract = async () => {
     contract.value = data
     requestFields.value = toLocal(data.requestFields)
     responseFields.value = toLocal(data.responseFields)
-  } catch (error) {
-    console.error('加载接口契约失败:', error)
+  } catch {
+    console.error('加载接口契约失败')
   } finally {
     loading.value = false
   }
@@ -340,8 +341,8 @@ const save = async () => {
     responseFields.value = toLocal(data.responseFields)
     ElMessage.success('接口契约已保存，文档已同步更新')
     emit('success')
-  } catch (error) {
-    console.error('保存接口契约失败:', error)
+  } catch {
+    console.error('保存接口契约失败')
   } finally {
     saving.value = false
   }
@@ -401,7 +402,7 @@ const close = () => emit('update:modelValue', false)
           <el-radio-button value="response">响应参数</el-radio-button>
         </el-radio-group>
         <div>
-          <el-button type="primary" @click="addRoot">新增根字段</el-button>
+          <el-button v-if="canEdit" type="primary" @click="addRoot">新增根字段</el-button>
         </div>
       </div>
 
@@ -428,47 +429,47 @@ const close = () => emit('update:modelValue', false)
         </el-table-column>
         <el-table-column label="字段名" min-width="170">
           <template #default="{ row }">
-            <el-input v-model="row.paramName" placeholder="fieldName" />
+            <el-input v-model="row.paramName" placeholder="fieldName" :disabled="!canEdit" />
           </template>
         </el-table-column>
         <el-table-column label="类型" width="150">
           <template #default="{ row }">
-            <el-select v-model="row.paramType">
+            <el-select v-model="row.paramType" :disabled="!canEdit">
               <el-option v-for="type in ['string','integer','number','boolean','object','array']" :key="type" :label="type" :value="type" />
             </el-select>
-            <el-select v-if="row.paramType === 'array'" v-model="row.arrayItemType" size="small" class="item-type-select" clearable placeholder="元素: 任意">
+            <el-select v-if="row.paramType === 'array'" v-model="row.arrayItemType" size="small" class="item-type-select" clearable placeholder="元素: 任意" :disabled="!canEdit">
               <el-option v-for="type in ['string','integer','number','boolean','object']" :key="type" :label="`元素: ${type}`" :value="type" />
             </el-select>
           </template>
         </el-table-column>
         <el-table-column label="必填" width="70" align="center">
-          <template #default="{ row }"><el-switch v-model="row.required" /></template>
+          <template #default="{ row }"><el-switch v-model="row.required" :disabled="!canEdit" /></template>
         </el-table-column>
         <el-table-column label="说明" min-width="180">
-          <template #default="{ row }"><el-input v-model="row.description" placeholder="字段含义" /></template>
+          <template #default="{ row }"><el-input v-model="row.description" placeholder="字段含义" :disabled="!canEdit" /></template>
         </el-table-column>
         <el-table-column label="默认值" width="130">
-          <template #default="{ row }"><el-input v-model="row.defaultValue" placeholder="JSON或文本" /></template>
+          <template #default="{ row }"><el-input v-model="row.defaultValue" placeholder="JSON或文本" :disabled="!canEdit" /></template>
         </el-table-column>
         <el-table-column label="示例值" width="130">
-          <template #default="{ row }"><el-input v-model="row.exampleValue" placeholder="JSON或文本" /></template>
+          <template #default="{ row }"><el-input v-model="row.exampleValue" placeholder="JSON或文本" :disabled="!canEdit" /></template>
         </el-table-column>
         <el-table-column label="约束" width="100">
           <template #default="{ row }">
             <el-popover placement="left" :width="360" trigger="click">
-              <template #reference><el-button link type="primary">编辑约束</el-button></template>
+              <template #reference><el-button link type="primary" :disabled="!canEdit">编辑约束</el-button></template>
               <p class="constraint-tip">支持 enum、pattern、minimum、maximum、minLength、maxLength、minItems、maxItems、format。</p>
-              <el-input v-model="row.constraintConfig" type="textarea" :rows="6" placeholder='{"minLength": 1, "maxLength": 64}' />
+              <el-input v-model="row.constraintConfig" type="textarea" :rows="6" placeholder='{"minLength": 1, "maxLength": 64}' :disabled="!canEdit" />
             </el-popover>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="230" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="addChild(row)">子字段</el-button>
-            <el-button link @click="copyField(row)">复制</el-button>
-            <el-button link @click="moveField(row, -1)">上移</el-button>
-            <el-button link @click="moveField(row, 1)">下移</el-button>
-            <el-button link type="danger" @click="deleteField(row)">删除</el-button>
+            <el-button v-if="canEdit" link type="primary" @click="addChild(row)">子字段</el-button>
+            <el-button v-if="canEdit" link @click="copyField(row)">复制</el-button>
+            <el-button v-if="canEdit" link @click="moveField(row, -1)">上移</el-button>
+            <el-button v-if="canEdit" link @click="moveField(row, 1)">下移</el-button>
+            <el-button v-if="canEdit" link type="danger" @click="deleteField(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -487,7 +488,7 @@ const close = () => emit('update:modelValue', false)
 
     <template #footer>
       <el-button @click="close">关闭</el-button>
-      <el-button type="primary" :loading="saving" @click="save">保存契约</el-button>
+      <el-button v-if="canEdit" type="primary" :loading="saving" @click="save">保存契约</el-button>
     </template>
   </el-drawer>
 </template>

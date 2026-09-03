@@ -20,8 +20,8 @@ const load = async () => {
   loading.value = true
   try {
     document.value = await getManagedOpenApiDocument(interfaceId)
-  } catch (error) {
-    console.error('加载接口文档失败:', error)
+  } catch {
+    console.error('加载接口文档失败')
   } finally {
     loading.value = false
   }

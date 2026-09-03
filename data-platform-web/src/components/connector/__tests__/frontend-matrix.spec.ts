@@ -14,16 +14,19 @@ describe('connector frontend acceptance matrix', () => {
     expect(schemaField).toContain("schema.type === 'boolean'")
     expect(schemaField).toContain("schema.type === 'integer' || schema.type === 'number'")
     expect(schemaField).toContain("schema['x-ui-widget'] === 'textarea'")
-    expect(schemaField).toContain('schemaFieldVisible(child, props.modelValue)')
+    expect(schemaField).toContain('schemaFieldVisible(child, props.modelValue, key, props.schema)')
     expect(schemaField).toContain("child['x-ui-advanced']")
     expect(schemaField).toContain("props.schema['x-platform-managed']")
     expect(schemaField).toContain("groupLabel(group.name)")
   })
 
   it('only permits selecting an existing secret reference', () => {
+    expect(schemaField.indexOf('v-if="secretSelector"')).toBeLessThan(
+      schemaField.indexOf("v-else-if=\"schema.type === 'object' || schema.properties\"")
+    )
     const secretBranch = schemaField.slice(
       schemaField.indexOf('v-if="secretSelector"'),
-      schemaField.indexOf('v-else-if="schema.enum"')
+      schemaField.indexOf("v-else-if=\"schema.type === 'object' || schema.properties\"")
     )
     expect(secretBranch).toContain('placeholder="选择密钥引用（不保存明文）"')
     expect(secretBranch).toContain('v-for="item in secretOptions"')
@@ -56,8 +59,8 @@ describe('connector frontend acceptance matrix', () => {
   it('does not bypass backend permissions by role name and handles expected load failures', () => {
     expect(pluginCenter).toContain('const allowed = (permission: string) => userStore.hasPermission(permission)')
     expect(pluginCenter).not.toContain("role.trim().toLowerCase() === 'admin'")
-    expect(pluginCenter).toContain("console.warn('加载连接器插件失败', error)")
-    expect(migrationHistory).toContain("console.warn('加载厂商连接器迁移历史失败', error)")
+expect(pluginCenter).toContain("console.warn('加载连接器插件失败')")
+expect(migrationHistory).toContain("console.warn('加载厂商连接器迁移历史失败')")
     expect(router).toContain("import { getProfile } from '@/api/auth'")
     expect(router).toContain('const syncCurrentUser = async')
   })

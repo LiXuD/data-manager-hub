@@ -131,4 +131,11 @@ describe('utils/request 冒烟', () => {
     const res = await request.get<{ status: string }>('/actuator/health')
     expect(res).toEqual({ status: 'UP' })
   })
+
+  it('空业务响应不会在错误提示阶段再次抛出空引用异常', async () => {
+    stubAdapter(null)
+
+    await expect(request.get('/ping')).rejects.toThrow('请求失败')
+    expect(elMessageError).toHaveBeenCalledWith('请求失败')
+  })
 })

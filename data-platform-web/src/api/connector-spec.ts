@@ -16,6 +16,12 @@ import type {
 
 const path = (configId: number) => `/vendor/config/${configId}/connector-spec`
 
+export interface ConnectorSecretReferenceOption {
+  secretRef: string
+  scope: string
+  available: boolean
+}
+
 export const getConnectorSpecCatalog = (configId: number) =>
   request.get<ConnectorApiResponse<ConnectorSpecCatalog>>(`${path(configId)}/catalog`)
 
@@ -26,6 +32,9 @@ export const getConnectorSpecCatalogVersions = (configId: number, pluginId: stri
 
 export const getConnectorSpecDraft = (configId: number) =>
   request.get<ConnectorApiResponse<ConnectorSpecDraftView>>(`${path(configId)}/draft`)
+
+export const getConnectorSecretReferenceOptions = (configId: number) =>
+  request.get<ConnectorApiResponse<ConnectorSecretReferenceOption[]>>(`${path(configId)}/secret-options`)
 
 export const saveConnectorSpecDraft = (
   configId: number,

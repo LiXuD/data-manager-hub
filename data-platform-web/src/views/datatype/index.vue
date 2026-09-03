@@ -6,7 +6,7 @@
         <h2>数据类型管理</h2>
         <p class="header-desc">管理系统支持的数据类型</p>
       </div>
-      <el-button type="primary" @click="handleAdd">
+      <el-button v-if="canAdd" type="primary" @click="handleAdd">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14"/>
         </svg>
@@ -52,7 +52,7 @@
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-switch v-model="row.status" active-value="active" inactive-value="inactive" @change="handleStatusChange(row)" />
+            <el-switch v-model="row.status" active-value="active" inactive-value="inactive" :disabled="!canEdit" @change="handleStatusChange(row)" />
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170">
@@ -62,8 +62,8 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canEdit" type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-if="canDelete" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -106,14 +106,14 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button v-if="form.id ? canEdit : canAdd" type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getDataTypeList,
@@ -124,8 +124,14 @@ import {
 } from '@/api/datatype'
 import { COMMON_STATUS } from '@/constants'
 import { extractPageData } from '@/utils/pagination'
+import { useUserStore } from '@/stores/user'
 
 interface DataType { id: number; dataTypeCode: string; dataTypeName: string; dataCategory: string; description: string; status: string; createdAt: string }
+
+const userStore = useUserStore()
+const canAdd = computed(() => userStore.hasPermission('datatype:add'))
+const canEdit = computed(() => userStore.hasPermission('datatype:edit'))
+const canDelete = computed(() => userStore.hasPermission('datatype:delete'))
 
 const loading = ref(false)
 const submitting = ref(false)

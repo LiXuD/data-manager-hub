@@ -272,8 +272,8 @@ const loadStats = async () => {
 
     stats.value = statsRes
     dailyStats.value = dailyRes || []
-  } catch (error) {
-    console.error('加载统计数据失败:', error)
+  } catch {
+    console.error('加载统计数据失败')
   } finally {
     loading.value = false
   }

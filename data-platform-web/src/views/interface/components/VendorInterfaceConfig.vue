@@ -26,6 +26,11 @@ import {
 interface Props {
   modelValue: boolean
   interfaceData?: ApiInterface | null
+  canEdit?: boolean
+  canViewVendorConfig?: boolean
+  canAddVendorConfig?: boolean
+  canEditVendorConfig?: boolean
+  canDeleteVendorConfig?: boolean
 }
 
 const props = defineProps<Props>()
@@ -43,13 +48,7 @@ const editingConfig = ref<VendorConfigSummary | null>(null)
 const connectorVisible = ref(false)
 const connectorConfig = ref<VendorConfigSummary | null>(null)
 
-const canManageConnector = computed(() => [
-  'connector-plugin:view',
-  'connector-plugin:bind',
-  'connector-plugin:test',
-  'connector-plugin:publish',
-  'connector-plugin:rollback'
-].some(permission => userStore.hasPermission(permission)))
+const canManageConnector = computed(() => userStore.hasPermission('connector-plugin:view'))
 
 const form = ref({
   vendorId: undefined as number | undefined,
@@ -83,8 +82,8 @@ async function loadConfigList() {
   try {
     configList.value = (await getVendorConfigByInterface(props.interfaceData.id)).data || []
     syncRouting()
-  } catch (error) {
-    console.error('加载厂商配置失败:', error)
+  } catch {
+    console.error('加载厂商配置失败')
   } finally {
     loading.value = false
   }
@@ -132,8 +131,8 @@ async function handleSubmit() {
     formVisible.value = false
     await loadConfigList()
     emit('success')
-  } catch (error) {
-    console.error('保存厂商配置失败:', error)
+  } catch {
+    console.error('保存厂商配置失败')
   } finally {
     submitting.value = false
   }
@@ -144,8 +143,8 @@ async function handleTest(config: VendorConfigSummary) {
     const result = (await testVendorConfig(config.id)).data
     if (result.success) ElMessage.success(`连接器 V${result.pipelineVersion || config.connectorVersion || '—'} 测试成功`)
     else ElMessage.error(result.errorMsg || '连接器测试失败')
-  } catch (error) {
-    console.error('连接器测试失败:', error)
+  } catch {
+    console.error('连接器测试失败')
   }
 }
 
@@ -158,7 +157,7 @@ async function handleDelete(config: VendorConfigSummary) {
     emit('success')
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('删除厂商配置失败:', error)
+      console.error('删除厂商配置失败')
     }
   }
 }
@@ -167,9 +166,9 @@ async function handleStatusChange(config: VendorConfigSummary) {
   try {
     await updateVendorConfigStatus(config.id, config.status)
     ElMessage.success(config.status === 'active' ? '已启用' : '已停用')
-  } catch (error) {
+  } catch {
     config.status = config.status === 'active' ? 'inactive' : 'active'
-    console.error('更新厂商配置状态失败:', error)
+    console.error('更新厂商配置状态失败')
   }
 }
 
@@ -190,8 +189,8 @@ async function saveRouting() {
     ElMessage.success('主备路由已保存')
     await loadConfigList()
     emit('success')
-  } catch (error) {
-    console.error('保存主备路由失败:', error)
+  } catch {
+    console.error('保存主备路由失败')
   } finally {
     submitting.value = false
   }
@@ -219,7 +218,7 @@ async function handleConnectorChanged() {
           <h3>厂商连接器</h3>
           <p>{{ interfaceData?.interfaceName }} <code>{{ interfaceData?.interfaceCode }}</code></p>
         </div>
-        <el-button type="primary" @click="resetForm()">绑定厂商</el-button>
+        <el-button v-if="canAddVendorConfig" type="primary" @click="resetForm()">绑定厂商</el-button>
       </div>
     </template>
 
@@ -237,7 +236,7 @@ async function handleConnectorChanged() {
       <template #header><strong>主备路由</strong></template>
       <el-form label-width="100px">
         <el-form-item label="主厂商" required>
-          <el-select v-model="routing.primaryVendorConfigId" placeholder="请选择主厂商连接器" style="width: 100%">
+          <el-select v-model="routing.primaryVendorConfigId" placeholder="请选择主厂商连接器" style="width: 100%" :disabled="!canEdit">
             <el-option
               v-for="config in configList"
               :key="config.id"
@@ -247,7 +246,7 @@ async function handleConnectorChanged() {
           </el-select>
         </el-form-item>
         <el-form-item label="备用厂商">
-          <el-select v-model="routing.fallbackVendorConfigId" placeholder="可选" clearable style="width: 100%">
+          <el-select v-model="routing.fallbackVendorConfigId" placeholder="可选" clearable style="width: 100%" :disabled="!canEdit">
             <el-option
               v-for="config in configList"
               :key="config.id"
@@ -257,7 +256,7 @@ async function handleConnectorChanged() {
             />
           </el-select>
         </el-form-item>
-        <el-button type="primary" :loading="submitting" @click="saveRouting">保存主备路由</el-button>
+        <el-button v-if="canEdit" type="primary" :loading="submitting" @click="saveRouting">保存主备路由</el-button>
       </el-form>
     </el-card>
 
@@ -278,6 +277,7 @@ async function handleConnectorChanged() {
               v-model="config.status"
               active-value="active"
               inactive-value="inactive"
+              :disabled="!canEditVendorConfig"
               @change="handleStatusChange(config)"
             />
           </div>
@@ -292,10 +292,10 @@ async function handleConnectorChanged() {
         </el-descriptions>
 
         <div class="card-actions">
-          <el-button @click="resetForm(config)">执行策略</el-button>
+          <el-button v-if="canEditVendorConfig" @click="resetForm(config)">执行策略</el-button>
           <el-button v-if="canManageConnector" type="primary" @click="openConnector(config)">连接器配置</el-button>
-          <el-button :disabled="!config.activeConnectorVersionId" @click="handleTest(config)">受控测试</el-button>
-          <el-button type="danger" plain @click="handleDelete(config)">删除</el-button>
+          <el-button v-if="canEditVendorConfig" :disabled="!config.activeConnectorVersionId" @click="handleTest(config)">受控测试</el-button>
+          <el-button v-if="canDeleteVendorConfig" type="danger" plain @click="handleDelete(config)">删除</el-button>
         </div>
       </el-card>
     </div>
@@ -303,7 +303,7 @@ async function handleConnectorChanged() {
     <el-dialog v-model="formVisible" :title="editingConfig ? '编辑执行策略' : '绑定厂商'" width="560px" append-to-body>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="厂商" prop="vendorId">
-          <el-select v-model="form.vendorId" :disabled="Boolean(editingConfig)" style="width: 100%">
+          <el-select v-model="form.vendorId" :disabled="Boolean(editingConfig) || !canAddVendorConfig" style="width: 100%">
             <el-option v-for="vendor in availableVendorOptions" :key="vendor.id" :label="vendorDisplayName(vendor.vendorName)" :value="Number(vendor.id)" />
           </el-select>
         </el-form-item>
@@ -311,15 +311,15 @@ async function handleConnectorChanged() {
           <el-input :model-value="dataTypeDisplayName(interfaceData?.dataTypeName)" disabled />
         </el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="超时" prop="timeout"><el-input-number v-model="form.timeout" :min="100" :max="60000" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="重试" prop="retryCount"><el-input-number v-model="form.retryCount" :min="0" :max="10" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="熔断阈值" prop="circuitThreshold"><el-input-number v-model="form.circuitThreshold" :min="1" :max="100" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="熔断秒数" prop="circuitTimeout"><el-input-number v-model="form.circuitTimeout" :min="1" :max="3600" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="超时" prop="timeout"><el-input-number v-model="form.timeout" :min="100" :max="60000" :disabled="!canEditVendorConfig" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="重试" prop="retryCount"><el-input-number v-model="form.retryCount" :min="0" :max="10" :disabled="!canEditVendorConfig" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="熔断阈值" prop="circuitThreshold"><el-input-number v-model="form.circuitThreshold" :min="1" :max="100" :disabled="!canEditVendorConfig" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="熔断秒数" prop="circuitTimeout"><el-input-number v-model="form.circuitTimeout" :min="1" :max="3600" :disabled="!canEditVendorConfig" /></el-form-item></el-col>
         </el-row>
       </el-form>
       <template #footer>
         <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
+        <el-button v-if="editingConfig ? canEditVendorConfig : canAddVendorConfig" type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
 
