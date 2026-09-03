@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -29,10 +30,11 @@ import com.dataplatform.masterdata.vendor.api.feign.VendorInternalFeignClient;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.junit.jupiter.api.Test;
 
 class BillingPlanServiceTest {
 
@@ -181,7 +183,7 @@ class BillingPlanServiceTest {
 
     @Test
     void missingPlanIsReportedAsNotFoundBeforePublishLocking() {
-        when(planMapper.selectByIdForUpdate(404L)).thenReturn(null);
+        when(planMapper.selectById(404L)).thenReturn(null);
 
         BillingPlanException exception = assertThrows(BillingPlanException.class,
                 () -> service.publish(404L));
@@ -189,6 +191,7 @@ class BillingPlanServiceTest {
         assertEquals(404, exception.getStatus());
         assertEquals("BILLING_PLAN_NOT_FOUND", exception.getErrorCode());
         verify(planMapper, never()).ensurePublishLock(any(), any(), any());
+        verify(planMapper, never()).selectByIdForUpdate(any());
     }
 
     @Test
@@ -196,6 +199,7 @@ class BillingPlanServiceTest {
         BillingPlan candidate = storedPlan(2L, "PLAN-B", "DRAFT", "2026-09-10T00:00:00");
         BillingPlan existing = storedPlan(1L, "PLAN-A", "ACTIVE", "2026-09-01T00:00:00");
         existing.setEffectiveTo(LocalDateTime.parse("2026-10-01T00:00:00"));
+        when(planMapper.selectById(2L)).thenReturn(candidate);
         when(planMapper.selectByIdForUpdate(2L)).thenReturn(candidate);
         when(planMapper.selectPublishableForUpdate(7L, 11L, "VENDOR_PAYABLE"))
                 .thenReturn(List.of(existing));
@@ -212,6 +216,7 @@ class BillingPlanServiceTest {
     @Test
     void publishSucceedsOnlyAfterSerializedPreflight() {
         BillingPlan candidate = storedPlan(2L, "PLAN-B", "DRAFT", "2026-09-10T00:00:00");
+        when(planMapper.selectById(2L)).thenReturn(candidate);
         when(planMapper.selectByIdForUpdate(2L)).thenReturn(candidate);
         when(planMapper.selectPublishableForUpdate(7L, 11L, "VENDOR_PAYABLE"))
                 .thenReturn(List.of());
@@ -225,6 +230,34 @@ class BillingPlanServiceTest {
         verify(planMapper).ensurePublishLock(7L, 11L, "VENDOR_PAYABLE");
         verify(planMapper).lockPublishKey(7L, 11L, "VENDOR_PAYABLE");
         verify(planMapper).updateById(candidate);
+
+        InOrder inOrder = inOrder(planMapper);
+        inOrder.verify(planMapper).selectById(2L);
+        inOrder.verify(planMapper).ensurePublishLock(7L, 11L, "VENDOR_PAYABLE");
+        inOrder.verify(planMapper).lockPublishKey(7L, 11L, "VENDOR_PAYABLE");
+        inOrder.verify(planMapper).selectByIdForUpdate(2L);
+        inOrder.verify(planMapper).selectPublishableForUpdate(7L, 11L, "VENDOR_PAYABLE");
+    }
+
+    @Test
+    void abortsWhenCandidateBusinessKeyChangesBetweenSnapshotAndLockedRow() {
+        BillingPlan snapshot = storedPlan(2L, "PLAN-B", "DRAFT", "2026-09-10T00:00:00");
+        BillingPlan locked = storedPlan(2L, "PLAN-B", "DRAFT", "2026-09-10T00:00:00");
+        locked.setVendorId(8L);
+        when(planMapper.selectById(2L)).thenReturn(snapshot);
+        when(planMapper.selectByIdForUpdate(2L)).thenReturn(locked);
+        when(planMapper.lockPublishKey(7L, 11L, "VENDOR_PAYABLE")).thenReturn(7L);
+
+        BillingPlanException exception = assertThrows(BillingPlanException.class,
+                () -> service.publish(2L));
+
+        assertEquals(409, exception.getStatus());
+        assertEquals("BILLING_PLAN_CONCURRENT_MODIFICATION", exception.getErrorCode());
+        verify(planMapper).ensurePublishLock(7L, 11L, "VENDOR_PAYABLE");
+        verify(planMapper).lockPublishKey(7L, 11L, "VENDOR_PAYABLE");
+        verify(planMapper, never()).selectPublishableForUpdate(any(), any(), any());
+        verify(planMapper, never()).updateById(any(BillingPlan.class));
+        verifyNoInteractions(interfaceClient);
     }
 
     @Test
