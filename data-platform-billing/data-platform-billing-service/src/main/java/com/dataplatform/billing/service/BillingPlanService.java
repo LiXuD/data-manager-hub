@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
@@ -183,23 +184,37 @@ public class BillingPlanService {
 
     @Transactional
     public BillingPlanModel publish(Long id) {
-        BillingPlan existing = requirePlanForUpdate(id);
-        if (!"DRAFT".equals(existing.getStatus()) && !"NEEDS_REVIEW".equals(existing.getStatus())) {
+        // Read the candidate without a row lock first. Every concurrent publish
+        // for the same business key must acquire the durable key row before it
+        // can lock any plan row, otherwise two candidates can deadlock while
+        // each waits for the other's plan lock.
+        BillingPlan snapshot = requirePlan(id);
+        if (!isPublishableState(snapshot)) {
             throw BillingPlanException.conflict("BILLING_PLAN_STATE_CONFLICT",
                     "只有草稿或待复核方案可以发布");
         }
-        requirePublishKey(existing);
-        planMapper.ensurePublishLock(existing.getVendorId(), existing.getInterfaceId(),
-                defaultValue(existing.getAccountingPurpose(), "VENDOR_PAYABLE"));
-        Long publishLock = planMapper.lockPublishKey(existing.getVendorId(), existing.getInterfaceId(),
-                defaultValue(existing.getAccountingPurpose(), "VENDOR_PAYABLE"));
+        requirePublishKey(snapshot);
+        String accountingPurpose = publishAccountingPurpose(snapshot);
+        planMapper.ensurePublishLock(snapshot.getVendorId(), snapshot.getInterfaceId(), accountingPurpose);
+        Long publishLock = planMapper.lockPublishKey(snapshot.getVendorId(), snapshot.getInterfaceId(),
+                accountingPurpose);
         if (publishLock == null) {
             throw BillingPlanException.conflict("BILLING_PLAN_LOCK_UNAVAILABLE", "计费方案发布锁不可用");
         }
 
-        // The candidate row is already locked. Re-read the business-key rows only
-        // after acquiring the durable lock, then validate and inspect conflicts in
-        // one serialized transaction.
+        // Re-read and lock the candidate only after the durable business-key lock.
+        // The key check prevents publishing under a lock that no longer matches
+        // the candidate after a concurrent draft update.
+        BillingPlan existing = requirePlanForUpdate(id);
+        if (!samePublishKey(snapshot, existing)) {
+            throw BillingPlanException.conflict("BILLING_PLAN_CONCURRENT_MODIFICATION",
+                    "计费方案发布前业务键已变化，请重新校验");
+        }
+        if (!isPublishableState(existing)) {
+            throw BillingPlanException.conflict("BILLING_PLAN_STATE_CONFLICT",
+                    "只有草稿或待复核方案可以发布");
+        }
+        requirePublishKey(existing);
         BillingPlanModel plan = toModel(existing);
         InterfaceContractDTO contract = requireData(safeCall(
                 () -> interfaceClient.getContract(plan.getInterfaceId()), "接口服务暂不可用"),
@@ -208,7 +223,7 @@ public class BillingPlanService {
         if (!errors.isEmpty()) throw BillingPlanException.validation(errors);
         List<BillingPlan> publishablePlans = planMapper.selectPublishableForUpdate(
                 plan.getVendorId(), plan.getInterfaceId(),
-                defaultValue(plan.getAccountingPurpose(), "VENDOR_PAYABLE"));
+                publishAccountingPurpose(existing));
         rejectPublishConflicts(plan, publishablePlans);
         closeSupersededVersion(plan, publishablePlans);
         LocalDateTime publishedAt = LocalDateTime.now();
@@ -404,6 +419,20 @@ public class BillingPlanService {
         BillingPlan plan = planMapper.selectByIdForUpdate(id);
         if (plan == null) throw BillingPlanException.notFound("计费方案不存在: " + id);
         return plan;
+    }
+
+    private boolean isPublishableState(BillingPlan plan) {
+        return plan != null && ("DRAFT".equals(plan.getStatus()) || "NEEDS_REVIEW".equals(plan.getStatus()));
+    }
+
+    private String publishAccountingPurpose(BillingPlan plan) {
+        return defaultValue(plan.getAccountingPurpose(), "VENDOR_PAYABLE");
+    }
+
+    private boolean samePublishKey(BillingPlan first, BillingPlan second) {
+        return Objects.equals(first.getVendorId(), second.getVendorId())
+                && Objects.equals(first.getInterfaceId(), second.getInterfaceId())
+                && Objects.equals(publishAccountingPurpose(first), publishAccountingPurpose(second));
     }
 
     private int safeMaxVersion(String planCode) {
