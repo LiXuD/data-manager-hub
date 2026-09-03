@@ -45,7 +45,10 @@ public class QualityService extends ServiceImpl<QualityRuleMapper, QualityRule> 
         rule.setIsActive(true);
         rule.setCreatedAt(LocalDateTime.now());
         rule.setUpdatedAt(LocalDateTime.now());
-        return this.save(rule);
+        if (!this.save(rule)) {
+            throw new IllegalStateException("质量规则保存失败，请重试");
+        }
+        return true;
     }
 
     public QualityScore checkQuality(String dataType, Long dataId, Map<String, Object> data) {
@@ -80,7 +83,9 @@ public class QualityService extends ServiceImpl<QualityRuleMapper, QualityRule> 
         qualityScore.setIssueSummary(issues.toString());
         qualityScore.setCheckedAt(LocalDateTime.now());
 
-        qualityScoreMapper.insert(qualityScore);
+        if (qualityScoreMapper.insert(qualityScore) != 1) {
+            throw new IllegalStateException("质量检查结果落库失败，请重试");
+        }
         return qualityScore;
     }
 

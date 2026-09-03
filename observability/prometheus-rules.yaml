@@ -90,3 +90,28 @@ groups:
         annotations:
           summary: data-manager-hub connector runtime readiness is down
           runbook: docs/runbooks/release-deployment.md
+      - alert: DmhCallRecordConsumerDltPublished
+        expr: >-
+          sum(increase(call_record_consumer_dlt_published_total{
+            namespace=~"dmh-(staging|prod)",service=~"data-manager-access.*"
+          }[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: data-manager-hub
+        annotations:
+          summary: call-record consumer published an event to the dead-letter topic
+          runbook: docs/runbooks/release-deployment.md
+      - alert: DmhCallRecordConsumerFailures
+        expr: >-
+          sum(rate(call_record_consumer_events_total{
+            namespace=~"dmh-(staging|prod)",service=~"data-manager-access.*",
+            outcome=~"failed|malformed"
+          }[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: data-manager-hub
+        annotations:
+          summary: call-record consumer is failing or receiving malformed events
+          runbook: docs/runbooks/release-deployment.md

@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.common.log.OperationLogRecord;
 import com.dataplatform.common.log.OperationLogService;
 import com.dataplatform.common.result.PageResult;
+import com.dataplatform.common.util.UserContext;
 import com.dataplatform.governance.log.entity.OperationLog;
 import com.dataplatform.governance.log.mapper.OperationLogMapper;
 import org.springframework.context.annotation.Primary;
@@ -40,6 +41,7 @@ public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> im
         if (StringUtils.hasText(operation)) {
             wrapper.like(OperationLog::getOperation, operation);
         }
+        applyTenantScope(wrapper);
         applyTimeRange(wrapper, startTime, endTime);
         wrapper.orderByDesc(OperationLog::getCreatedAt);
 
@@ -57,6 +59,7 @@ public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> im
 
     public Map<String, Object> stats(String startTime, String endTime) {
         LambdaQueryWrapper<OperationLog> wrapper = new LambdaQueryWrapper<>();
+        applyTenantScope(wrapper);
         applyTimeRange(wrapper, startTime, endTime);
         List<OperationLog> logs = list(wrapper);
 
@@ -84,22 +87,29 @@ public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> im
         if (StringUtils.hasText(operation)) {
             wrapper.like(OperationLog::getOperation, operation);
         }
+        applyTenantScope(wrapper);
         applyTimeRange(wrapper, startTime, endTime);
         wrapper.orderByDesc(OperationLog::getCreatedAt);
         return list(wrapper);
     }
 
     public void saveLog(OperationLog log) {
+        if (log.getTenantId() == null) {
+            log.setTenantId(currentTenantId());
+        }
         log.setOperationModule(defaultValue(log.getOperationModule(), log.getModule(), "unknown"));
         log.setOperationType(limit(defaultValue(log.getOperationType(), log.getOperation(), log.getMethod(), "UNKNOWN"), 20));
         log.setCreatedAt(LocalDateTime.now());
-        save(log);
+        if (!save(log)) {
+            throw new IllegalStateException("操作日志落库失败");
+        }
     }
 
     @Override
     public void save(OperationLogRecord record) {
         OperationLog log = new OperationLog();
         log.setUserId(record.getUserId());
+        log.setTenantId(record.getTenantId());
         log.setUsername(record.getUsername());
         log.setModule(record.getModule());
         log.setOperation(record.getOperation());
@@ -112,6 +122,22 @@ public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> im
         log.setStatus(record.getStatus());
         log.setCreatedAt(record.getCreatedAt());
         saveLog(log);
+    }
+
+    public OperationLog getVisibleById(Long id) {
+        if (id == null) {
+            return null;
+        }
+        if (isPlatformAdmin()) {
+            return getById(id);
+        }
+        Long tenantId = currentTenantId();
+        if (tenantId == null) {
+            return null;
+        }
+        LambdaQueryWrapper<OperationLog> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(OperationLog::getId, id).eq(OperationLog::getTenantId, tenantId);
+        return getOne(wrapper);
     }
 
     private String defaultValue(String... values) {
@@ -134,6 +160,33 @@ public class LogService extends ServiceImpl<OperationLogMapper, OperationLog> im
         }
         if (StringUtils.hasText(endTime)) {
             wrapper.le(OperationLog::getCreatedAt, LocalDateTime.parse(endTime, formatter));
+        }
+    }
+
+    private void applyTenantScope(LambdaQueryWrapper<OperationLog> wrapper) {
+        if (!isPlatformAdmin()) {
+            Long tenantId = currentTenantId();
+            if (tenantId == null) {
+                wrapper.eq(OperationLog::getTenantId, -1L);
+            } else {
+                wrapper.eq(OperationLog::getTenantId, tenantId);
+            }
+        }
+    }
+
+    private boolean isPlatformAdmin() {
+        try {
+            return UserContext.hasPermission("system:admin");
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private Long currentTenantId() {
+        try {
+            return UserContext.getCurrentTenantId();
+        } catch (RuntimeException exception) {
+            return null;
         }
     }
 }

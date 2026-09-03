@@ -28,6 +28,9 @@ public class RemoteOperationLogService implements OperationLogService {
         if (record.getUserId() != null) {
             logData.put("userId", record.getUserId());
         }
+        if (record.getTenantId() != null) {
+            logData.put("tenantId", record.getTenantId());
+        }
         logData.put("username", record.getUsername());
         logData.put("module", record.getModule());
         logData.put("operation", record.getOperation());

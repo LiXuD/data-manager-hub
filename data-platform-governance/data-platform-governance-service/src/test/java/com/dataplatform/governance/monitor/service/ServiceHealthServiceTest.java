@@ -13,6 +13,7 @@ import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -31,6 +32,7 @@ class ServiceHealthServiceTest {
         ServiceInstance instance = mock(ServiceInstance.class);
         when(discoveryClient.getInstances("data-platform-access")).thenReturn(List.of(instance));
         when(checkMapper.selectList(any())).thenReturn(List.of());
+        when(checkMapper.insert(any(ServiceHealthCheck.class))).thenReturn(1);
         ServiceHealthService service = new ServiceHealthService(discoveryClient, checkMapper);
 
         ServiceHealthVO health = service.inspect("data-platform-access");
@@ -40,5 +42,14 @@ class ServiceHealthServiceTest {
         ArgumentCaptor<ServiceHealthCheck> check = ArgumentCaptor.forClass(ServiceHealthCheck.class);
         verify(checkMapper).insert(check.capture());
         assertEquals(Boolean.TRUE, check.getValue().getHealthy());
+    }
+
+    @Test
+    void failsWhenHealthAuditCannotBePersisted() {
+        when(discoveryClient.getInstances("data-platform-access")).thenReturn(List.of());
+        when(checkMapper.insert(any(ServiceHealthCheck.class))).thenReturn(0);
+        ServiceHealthService service = new ServiceHealthService(discoveryClient, checkMapper);
+
+        assertThrows(IllegalStateException.class, () -> service.inspect("data-platform-access"));
     }
 }

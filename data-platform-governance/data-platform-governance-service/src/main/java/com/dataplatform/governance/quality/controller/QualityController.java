@@ -27,6 +27,10 @@ public class QualityController {
     @OperationLog(module = "数据质量管理", operation = "新增质量规则")
     @PostMapping("/rules")
     public ResponseEntity<Result<QualityRule>> addRule(@RequestBody QualityRule rule) {
+        if (rule == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "请求体不能为空"));
+        }
         // 参数验证
         if (rule.getRuleName() == null || rule.getRuleName().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -46,6 +50,9 @@ public class QualityController {
             return ResponseEntity.ok(Result.success(rule));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Result.error(400, e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Result.error(409, e.getMessage()));
         }
     }
 

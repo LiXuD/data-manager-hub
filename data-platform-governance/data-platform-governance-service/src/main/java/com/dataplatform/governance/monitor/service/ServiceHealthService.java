@@ -44,7 +44,9 @@ public class ServiceHealthService {
         check.setResponseTime(responseTime);
         check.setInstanceCount(instanceCount);
         check.setCheckedAt(checkedAt);
-        checkMapper.insert(check);
+        if (checkMapper.insert(check) != 1) {
+            throw new IllegalStateException("服务健康检查记录落库失败，请重试");
+        }
     }
 
     private double calculateUptime(String serviceName) {

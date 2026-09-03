@@ -37,11 +37,17 @@ public class AlertController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
+        if (!hasTenantScope()) {
+            return forbiddenPage();
+        }
         return alertService.listRules(keyword, status, page, pageSize);
     }
 
     @GetMapping("/rule/{id}")
     public ResponseEntity<Result<AlertRule>> getRuleById(@PathVariable Long id) {
+        if (!hasTenantScope()) {
+            return forbiddenResponse();
+        }
         AlertRule rule = alertService.getRuleById(id);
         if (rule == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -53,6 +59,10 @@ public class AlertController {
     @OperationLog(module = "告警规则管理", operation = "新增告警规则")
     @PostMapping("/rule")
     public ResponseEntity<Result<AlertRule>> createRule(@RequestBody AlertRule rule) {
+        if (rule == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "请求体不能为空"));
+        }
         if (rule.getRuleName() == null || rule.getRuleName().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(400, "规则名称不能为空"));
@@ -67,6 +77,9 @@ public class AlertController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Result.error(400, "规则类型、条件和阈值不能为空"));
         }
+        if (!hasTenantScope()) {
+            return forbiddenResponse();
+        }
 
         rule.setId(null);
         rule.setStatus(AlertStatus.ACTIVE);
@@ -77,6 +90,13 @@ public class AlertController {
     @OperationLog(module = "告警规则管理", operation = "更新告警规则")
     @PutMapping("/rule/{id}")
     public ResponseEntity<Result<AlertRule>> updateRule(@PathVariable Long id, @RequestBody AlertRule rule) {
+        if (rule == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "请求体不能为空"));
+        }
+        if (!hasTenantScope()) {
+            return forbiddenResponse();
+        }
         // 检查是否存在
         AlertRule existing = alertService.getRuleById(id);
         if (existing == null) {
@@ -91,6 +111,13 @@ public class AlertController {
     @OperationLog(module = "告警规则管理", operation = "更新告警规则状态")
     @PatchMapping("/rule/{id}/status")
     public ResponseEntity<Result<Void>> updateRuleStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        if (body == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "请求体不能为空"));
+        }
+        if (!hasTenantScope()) {
+            return forbiddenResponse();
+        }
         AlertRule rule = alertService.getRuleById(id);
         if (rule == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -109,6 +136,9 @@ public class AlertController {
     @OperationLog(module = "告警规则管理", operation = "删除告警规则")
     @DeleteMapping("/rule/{id}")
     public ResponseEntity<Result<Void>> deleteRule(@PathVariable Long id) {
+        if (!hasTenantScope()) {
+            return forbiddenResponse();
+        }
         // 检查是否存在
         AlertRule existing = alertService.getRuleById(id);
         if (existing == null) {
@@ -127,11 +157,17 @@ public class AlertController {
             @RequestParam(required = false) String level,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
+        if (!hasTenantScope()) {
+            return forbiddenPage();
+        }
         return alertService.listRecords(status, level, page, pageSize);
     }
 
     @GetMapping("/record/{id}")
     public ResponseEntity<Result<AlertRecord>> getRecordById(@PathVariable Long id) {
+        if (!hasTenantScope()) {
+            return forbiddenResponse();
+        }
         AlertRecord record = alertService.getRecordById(id);
         if (record == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -143,6 +179,13 @@ public class AlertController {
     @OperationLog(module = "告警记录管理", operation = "处理告警")
     @PostMapping("/record/{id}/resolve")
     public ResponseEntity<Result<Void>> resolveRecord(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        if (body == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "请求体不能为空"));
+        }
+        if (!hasTenantScope()) {
+            return forbiddenResponse();
+        }
         // 检查是否存在
         AlertRecord record = alertService.getRecordById(id);
         if (record == null) {
@@ -157,5 +200,24 @@ public class AlertController {
         }
         alertService.resolveRecord(id, resolution);
         return ResponseEntity.ok(Result.success(null));
+    }
+
+    private boolean hasTenantScope() {
+        return com.dataplatform.common.util.UserContext.hasPermission("system:admin")
+                || com.dataplatform.common.util.UserContext.getCurrentTenantId() != null;
+    }
+
+    private <T> ResponseEntity<Result<T>> forbiddenResponse() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Result.error(HttpStatus.FORBIDDEN.value(), "当前用户没有租户作用域"));
+    }
+
+    private <T> PageResult<T> forbiddenPage() {
+        PageResult<T> response = new PageResult<>();
+        response.setCode(HttpStatus.FORBIDDEN.value());
+        response.setMessage("当前用户没有租户作用域");
+        response.setData(List.of());
+        response.setTotal(0L);
+        return response;
     }
 }

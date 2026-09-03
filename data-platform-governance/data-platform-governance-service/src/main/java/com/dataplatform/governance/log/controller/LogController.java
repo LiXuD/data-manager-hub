@@ -39,7 +39,7 @@ public class LogController {
 
     @GetMapping("/{id}")
     public ResponseEntity<Result<OperationLog>> get(@PathVariable Long id) {
-        OperationLog log = logService.getById(id);
+        OperationLog log = logService.getVisibleById(id);
         if (log == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "日志不存在"));
