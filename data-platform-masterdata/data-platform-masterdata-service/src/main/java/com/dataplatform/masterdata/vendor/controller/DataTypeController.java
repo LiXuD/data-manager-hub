@@ -71,6 +71,12 @@ public class DataTypeController {
     @OperationLog(module = "数据类型管理", operation = "新增数据类型")
     @PostMapping
     public Result<DataTypeDTO> create(@RequestBody DataTypeCreateReqDTO dto) {
+        if (dto == null) {
+            return Result.error(400, "数据类型请求不能为空");
+        }
+        if (hasInvalidStatus(dto.getStatus())) {
+            return Result.error(400, "无效的状态值，有效值: active, inactive");
+        }
         DataType dataType = toEntity(dto);
         if (!StringUtils.hasText(dataType.getDataTypeCode())) {
             return Result.error(400, "dataTypeCode不能为空");
@@ -90,13 +96,24 @@ public class DataTypeController {
         dataType.setDeleted(false);
         dataType.setCreatedAt(LocalDateTime.now());
         dataType.setUpdatedAt(LocalDateTime.now());
-        dataTypeMapper.insert(dataType);
+        if (dataTypeMapper.insert(dataType) <= 0) {
+            return Result.error(409, "数据类型保存失败");
+        }
         return Result.success(toDTO(dataType));
     }
 
     @OperationLog(module = "数据类型管理", operation = "更新数据类型")
     @PutMapping("/{id}")
     public Result<DataTypeDTO> update(@PathVariable("id") Long id, @RequestBody DataTypeUpdateReqDTO dto) {
+        if (dto == null) {
+            return Result.error(400, "数据类型请求不能为空");
+        }
+        if (hasInvalidStatus(dto.getStatus())) {
+            return Result.error(400, "无效的状态值，有效值: active, inactive");
+        }
+        if (dto.getDataTypeName() != null && !StringUtils.hasText(dto.getDataTypeName())) {
+            return Result.error(400, "dataTypeName不能为空");
+        }
         DataType existing = dataTypeMapper.selectById(id);
         if (existing == null || Boolean.TRUE.equals(existing.getDeleted())) {
             return Result.error(404, "数据类型不存在");
@@ -104,8 +121,14 @@ public class DataTypeController {
         DataType dataType = toEntity(dto);
         dataType.setId(id);
         dataType.setUpdatedAt(LocalDateTime.now());
-        dataTypeMapper.updateById(dataType);
-        return Result.success(toDTO(dataTypeMapper.selectById(id)));
+        if (dataTypeMapper.updateById(dataType) <= 0) {
+            return Result.error(409, "数据类型更新失败");
+        }
+        DataType updated = dataTypeMapper.selectById(id);
+        if (updated == null || Boolean.TRUE.equals(updated.getDeleted())) {
+            return Result.error(409, "数据类型更新后无法读取");
+        }
+        return Result.success(toDTO(updated));
     }
 
     @OperationLog(module = "数据类型管理", operation = "删除数据类型")
@@ -118,13 +141,18 @@ public class DataTypeController {
         DataType dataType = new DataType();
         dataType.setId(id);
         dataType.setDeleted(true);
-        dataTypeMapper.updateById(dataType);
+        if (dataTypeMapper.updateById(dataType) <= 0) {
+            return Result.error(409, "数据类型删除失败");
+        }
         return Result.success(null);
     }
 
     @OperationLog(module = "数据类型管理", operation = "更新数据类型状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
+        if (body == null) {
+            return Result.error(400, "状态请求不能为空");
+        }
         CommonStatus status = CommonStatus.fromCode(body.get("status"));
         if (status == null) {
             return Result.error(400, "无效的状态值，有效值: active, inactive");
@@ -139,7 +167,9 @@ public class DataTypeController {
         dataType.setId(id);
         dataType.setStatus(status);
         dataType.setUpdatedAt(LocalDateTime.now());
-        dataTypeMapper.updateById(dataType);
+        if (dataTypeMapper.updateById(dataType) <= 0) {
+            return Result.error(409, "数据类型状态更新失败");
+        }
         return Result.success(null);
     }
 
@@ -173,6 +203,7 @@ public class DataTypeController {
     private DataType getActiveByCode(String code) {
         LambdaQueryWrapper<DataType> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(DataType::getDataTypeCode, code);
+        wrapper.eq(DataType::getStatus, CommonStatus.ACTIVE);
         wrapper.eq(DataType::getDeleted, false);
         return dataTypeMapper.selectOne(wrapper);
     }
@@ -192,8 +223,14 @@ public class DataTypeController {
     private DataType toEntity(DataTypeCreateReqDTO dto) {
         DataType entity = new DataType();
         BeanUtils.copyProperties(dto, entity);
+        if (dto.getDataTypeCode() != null) {
+            entity.setDataTypeCode(dto.getDataTypeCode().trim());
+        }
+        if (dto.getDataTypeName() != null) {
+            entity.setDataTypeName(dto.getDataTypeName().trim());
+        }
         if (dto.getStatus() != null) {
-            entity.setStatus(CommonStatus.fromCode(dto.getStatus()));
+            entity.setStatus(CommonStatus.fromCode(dto.getStatus().trim()));
         }
         return entity;
     }
@@ -201,9 +238,16 @@ public class DataTypeController {
     private DataType toEntity(DataTypeUpdateReqDTO dto) {
         DataType entity = new DataType();
         BeanUtils.copyProperties(dto, entity);
+        if (dto.getDataTypeName() != null) {
+            entity.setDataTypeName(dto.getDataTypeName().trim());
+        }
         if (dto.getStatus() != null) {
-            entity.setStatus(CommonStatus.fromCode(dto.getStatus()));
+            entity.setStatus(CommonStatus.fromCode(dto.getStatus().trim()));
         }
         return entity;
+    }
+
+    private boolean hasInvalidStatus(String status) {
+        return status != null && CommonStatus.fromCode(status.trim()) == null;
     }
 }

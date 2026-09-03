@@ -1,14 +1,10 @@
 package com.dataplatform.masterdata.connector.spec.inventory;
 
 import com.dataplatform.masterdata.connector.api.dto.ConnectorLegacyInventoryDTO;
-import com.dataplatform.masterdata.connector.api.dto.ConnectorPipelineStepDTO;
 import com.dataplatform.masterdata.connector.service.LegacyHttpConversionClassification;
-import com.dataplatform.masterdata.connector.service.LegacyHttpConversionPolicy;
 import com.dataplatform.masterdata.connector.service.LegacyHttpConversionPreflightResult;
 import com.dataplatform.masterdata.connector.service.LegacyHttpConversionReason;
 import com.dataplatform.masterdata.connector.service.LegacyHttpSpecConverter;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -26,22 +22,16 @@ public class ConnectorLegacyInventoryService {
     private static final int MAX_SAFE_MESSAGE = 256;
     private static final int MAX_STAGE_KEY = 128;
     private static final String LEGACY = "ADVANCED_LEGACY";
-    private static final TypeReference<List<ConnectorPipelineStepDTO>> PIPELINE_TYPE =
-            new TypeReference<>() { };
-
     private final ConnectorLegacyInventoryMapper mapper;
     private final LegacyHttpSpecConverter converter;
-    private final ObjectMapper objectMapper;
     private final ConnectorLegacyInventoryMetrics metrics;
 
     public ConnectorLegacyInventoryService(
             ConnectorLegacyInventoryMapper mapper,
             LegacyHttpSpecConverter converter,
-            ObjectMapper objectMapper,
             ConnectorLegacyInventoryMetrics metrics) {
         this.mapper = mapper;
         this.converter = converter;
-        this.objectMapper = objectMapper;
         this.metrics = metrics;
     }
 
@@ -119,21 +109,11 @@ public class ConnectorLegacyInventoryService {
         }
 
         LegacyHttpConversionPreflightResult result;
-        try {
-            List<ConnectorPipelineStepDTO> pipeline = objectMapper.readValue(pipelineJson, PIPELINE_TYPE);
-            LegacyHttpConversionPolicy policy = timeout == null || timeout <= 0
-                    ? null : new LegacyHttpConversionPolicy(timeout);
-            result = converter.preflight(pipeline, policy);
-        } catch (RuntimeException | java.io.IOException exception) {
+        result = converter.assessMigrationEligibility(pipelineJson, timeout);
+        if (result.classification() == LegacyHttpConversionClassification.MUST_REMAIN_LEGACY
+                && result.reasons().stream().anyMatch(reason ->
+                "PIPELINE_SNAPSHOT_INVALID".equals(reason.code().name()))) {
             metrics.failed("PIPELINE_INVALID");
-            LegacyHttpConversionClassification classification =
-                    LegacyHttpConversionClassification.MUST_REMAIN_LEGACY;
-            metrics.classified(classification);
-            increment(classification, summary);
-            return new ConnectorLegacyInventoryDTO.Candidate(
-                    id, role, versionNo, draftVersion, LEGACY, classification.name(),
-                    List.of(new ConnectorLegacyInventoryDTO.Reason(
-                            "PIPELINE_SNAPSHOT_INVALID", null, null, "流水线快照无法安全解析")));
         }
         metrics.classified(result.classification());
         increment(result.classification(), summary);

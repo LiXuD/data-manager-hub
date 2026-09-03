@@ -203,6 +203,39 @@ class LegacyHttpSpecConverterTest {
     }
 
     @Test
+    void rejectsFractionalTimeoutThatWouldBeTruncatedByNumericConversion() {
+        LegacyHttpConversionPreflightResult result = converter.preflight(
+                replaceConfig(0, Map.of("connectTimeoutMs", 10_000.5D)), platformPolicy);
+
+        assertEquals(LegacyHttpConversionClassification.MUST_REMAIN_LEGACY, result.classification());
+        assertTrue(hasReason(result, LegacyHttpConversionReasonCode.PLATFORM_TIMEOUT_MISMATCH));
+    }
+
+    @Test
+    void rejectsFractionalResponseLimitThatWouldBeTruncatedByNumericConversion() {
+        LegacyHttpConversionPreflightResult result = converter.preflight(
+                replaceConfig(0, Map.of("maxResponseBytes", 10 * 1024 * 1024 + 0.5D)), platformPolicy);
+
+        assertEquals(LegacyHttpConversionClassification.MUST_REMAIN_LEGACY, result.classification());
+        assertTrue(hasReason(result, LegacyHttpConversionReasonCode.RESPONSE_LIMIT_UNSUPPORTED));
+    }
+
+    @Test
+    void classifiesPersistedPipelineParsingFailuresAsLegacyOnly() {
+        LegacyHttpConversionPreflightResult empty =
+                converter.assessMigrationEligibility("", 10_000);
+        LegacyHttpConversionPreflightResult malformed =
+                converter.assessMigrationEligibility("{not-json", 10_000);
+
+        assertEquals(LegacyHttpConversionClassification.MUST_REMAIN_LEGACY, empty.classification());
+        assertEquals(LegacyHttpConversionReasonCode.PIPELINE_SNAPSHOT_INVALID,
+                empty.reasons().getFirst().code());
+        assertEquals(LegacyHttpConversionClassification.MUST_REMAIN_LEGACY, malformed.classification());
+        assertEquals(LegacyHttpConversionReasonCode.PIPELINE_SNAPSHOT_INVALID,
+                malformed.reasons().getFirst().code());
+    }
+
+    @Test
     void rejectsPlaintextAuthenticationWithoutEchoingTheSecret() {
         List<ConnectorPipelineStepDTO> candidate = new ArrayList<>(singleHttpLegacyPipeline());
         ConnectorPipelineStepDTO processor = candidate.get(1);

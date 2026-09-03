@@ -19,13 +19,15 @@ class VendorExtendedConfigControllerAuthorizationTest {
     private final VendorExtendedConfigService service = mock(VendorExtendedConfigService.class);
 
     @Test
-    void configControllerRejectsReadAndWriteWithoutVendorPermissions() {
+    void configControllerRejectsReadAndWriteWithoutConfigPermissions() {
         ConfigController controller = new ConfigController();
         ReflectionTestUtils.setField(controller, "configService", service);
 
         try (var userContext = mockStatic(UserContext.class)) {
-            userContext.when(() -> UserContext.hasPermission("vendor:view")).thenReturn(false);
-            userContext.when(() -> UserContext.hasPermission("vendor:edit")).thenReturn(false);
+            userContext.when(() -> UserContext.hasPermission("config:view")).thenReturn(false);
+            userContext.when(() -> UserContext.hasPermission("config:edit")).thenReturn(false);
+            userContext.when(() -> UserContext.hasPermission("config:add")).thenReturn(false);
+            userContext.when(() -> UserContext.hasPermission("config:delete")).thenReturn(false);
 
             assertThat(controller.list(null, null, 1, 10).getCode()).isEqualTo(403);
             assertThat(controller.get(1L).getStatusCode().value()).isEqualTo(403);

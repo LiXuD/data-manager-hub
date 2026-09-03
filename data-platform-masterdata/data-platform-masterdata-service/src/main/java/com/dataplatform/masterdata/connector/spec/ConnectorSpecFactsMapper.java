@@ -91,6 +91,7 @@ public interface ConnectorSpecFactsMapper {
                 FROM vendor_config_extended
                 WHERE vendor_id = #{vendorId}
                   AND is_active = TRUE
+                  AND is_encrypted = TRUE
                   AND config_value IS NOT NULL AND btrim(config_value) <> ''
             ) owned
             ORDER BY ref

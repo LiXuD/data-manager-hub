@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -162,7 +163,11 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
         update.eq(ApiInterface::getId, interfaceId)
                 .isNull(ApiInterface::getPrimaryVendorConfigId)
                 .set(ApiInterface::getPrimaryVendorConfigId, vendorConfigId);
-        return baseMapper.update(null, update) == 1;
+        boolean updated = baseMapper.update(null, update) == 1;
+        if (updated) {
+            evictInterfaceCache(getById(interfaceId));
+        }
+        return updated;
     }
 
     @Override
@@ -228,7 +233,44 @@ public class ApiInterfaceServiceImpl extends ServiceImpl<ApiInterfaceMapper, Api
             return false;
         }
 
-        return baseMapper.updateSchemaById(id, requestSchema, responseSchema) > 0;
+        boolean updated = baseMapper.updateSchemaById(id, requestSchema, responseSchema) > 0;
+        if (updated) {
+            evictInterfaceCache(apiInterface);
+        }
+        return updated;
+    }
+
+    @Override
+    public boolean updateById(ApiInterface entity) {
+        if (entity == null || entity.getId() == null) {
+            return false;
+        }
+        ApiInterface existing = super.getById(entity.getId());
+        boolean updated = super.updateById(entity);
+        if (updated) {
+            evictInterfaceCache(existing);
+            evictInterfaceCache(entity);
+        }
+        return updated;
+    }
+
+    @Override
+    public boolean removeById(Serializable id) {
+        if (id == null) {
+            return false;
+        }
+        ApiInterface existing = super.getById(id);
+        boolean removed = super.removeById(id);
+        if (removed) {
+            evictInterfaceCache(existing);
+        }
+        return removed;
+    }
+
+    private void evictInterfaceCache(ApiInterface apiInterface) {
+        if (apiInterface != null && StringUtils.hasText(apiInterface.getInterfaceCode())) {
+            redisTemplate.delete(INTERFACE_CACHE_PREFIX + apiInterface.getInterfaceCode());
+        }
     }
 
     @Override

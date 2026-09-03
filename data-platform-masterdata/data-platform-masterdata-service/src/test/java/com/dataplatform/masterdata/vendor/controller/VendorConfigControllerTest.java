@@ -66,7 +66,7 @@ class VendorConfigControllerTest {
         });
 
         try (var userContext = mockStatic(UserContext.class)) {
-            userContext.when(() -> UserContext.hasPermission("vendor:edit")).thenReturn(true);
+            userContext.when(() -> UserContext.hasPermission("vendor:add")).thenReturn(true);
 
             var result = controller.create(request);
 
@@ -89,7 +89,7 @@ class VendorConfigControllerTest {
         when(service.getDataTypeIdByCode("WORLD_TIME")).thenReturn(null);
 
         try (var userContext = mockStatic(UserContext.class)) {
-            userContext.when(() -> UserContext.hasPermission("vendor:edit")).thenReturn(true);
+            userContext.when(() -> UserContext.hasPermission("vendor:add")).thenReturn(true);
 
             var result = controller.create(request);
 
@@ -110,7 +110,7 @@ class VendorConfigControllerTest {
                 .thenThrow(new VendorConfigConflictException("当前接口已绑定该厂商"));
 
         try (var userContext = mockStatic(UserContext.class)) {
-            userContext.when(() -> UserContext.hasPermission("vendor:edit")).thenReturn(true);
+            userContext.when(() -> UserContext.hasPermission("vendor:add")).thenReturn(true);
             assertThatThrownBy(() -> controller.create(request()))
                     .isInstanceOf(VendorConfigConflictException.class);
             var response = controller.conflict(new VendorConfigConflictException("当前接口已绑定该厂商"));
@@ -135,6 +135,35 @@ class VendorConfigControllerTest {
             var result = controller.updateStatus(9L, Map.of("status", "active"));
 
             assertThat(result.getCode()).isEqualTo(200);
+        }
+    }
+
+    @Test
+    void returnsNotFoundForMissingConfiguration() {
+        when(service.getById(404L)).thenReturn(null);
+
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("vendor:view")).thenReturn(true);
+
+            var result = controller.getById(404L);
+
+            assertThat(result.getCode()).isEqualTo(404);
+            verify(dtoAssembler, never()).toDTO(any(VendorConfig.class));
+        }
+    }
+
+    @Test
+    void rejectsInvalidCreatePolicyBeforePersistence() {
+        VendorConfigCreateReqDTO request = request();
+        request.setTimeout(0);
+
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("vendor:add")).thenReturn(true);
+
+            var result = controller.create(request);
+
+            assertThat(result.getCode()).isEqualTo(400);
+            verify(service, never()).createBinding(any(VendorConfig.class));
         }
     }
 

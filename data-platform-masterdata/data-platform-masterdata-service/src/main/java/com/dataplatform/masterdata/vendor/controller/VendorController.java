@@ -12,6 +12,7 @@ import com.dataplatform.masterdata.vendor.service.VendorService;
 import com.dataplatform.masterdata.vendor.service.VendorHealthService;
 import com.dataplatform.masterdata.vendor.service.VendorConfigService;
 import org.springframework.beans.BeanUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -72,11 +73,14 @@ public class VendorController {
     @OperationLog(module = "厂商管理", operation = "新增厂商")
     @PostMapping
     public Result<VendorInfoDTO> create(@RequestBody VendorCreateReqDTO dto) {
+        if (dto == null) {
+            return Result.error(400, "厂商请求不能为空");
+        }
         VendorInfo vendor = toEntity(dto);
-        if (vendor.getVendorCode() == null || vendor.getVendorCode().trim().isEmpty()) {
+        if (!StringUtils.hasText(vendor.getVendorCode())) {
             return Result.error(400, "厂商代码不能为空");
         }
-        if (vendor.getVendorName() == null || vendor.getVendorName().trim().isEmpty()) {
+        if (!StringUtils.hasText(vendor.getVendorName())) {
             return Result.error(400, "厂商名称不能为空");
         }
         if (vendor.getVendorType() == null || vendor.getVendorType().trim().isEmpty()) {
@@ -90,21 +94,35 @@ public class VendorController {
 
         vendor.setId(null);
         vendor.setStatus(CommonStatus.ACTIVE);
-        vendorService.save(vendor);
+        if (!vendorService.save(vendor)) {
+            return Result.error(409, "厂商保存失败");
+        }
         return Result.success(toDTO(vendor));
     }
 
     @OperationLog(module = "厂商管理", operation = "更新厂商")
     @PutMapping("/{id}")
     public Result<VendorInfoDTO> update(@PathVariable("id") Long id, @RequestBody VendorUpdateReqDTO dto) {
+        if (dto == null) {
+            return Result.error(400, "厂商请求不能为空");
+        }
+        if (dto.getVendorName() != null && !StringUtils.hasText(dto.getVendorName())) {
+            return Result.error(400, "厂商名称不能为空");
+        }
         VendorInfo existing = vendorService.getById(id);
         if (existing == null) {
             return Result.error(404, "厂商不存在");
         }
         VendorInfo vendor = toEntity(dto);
         vendor.setId(id);
-        vendorService.updateById(vendor);
-        return Result.success(toDTO(vendorService.getById(id)));
+        if (!vendorService.updateById(vendor)) {
+            return Result.error(409, "厂商更新失败");
+        }
+        VendorInfo updated = vendorService.getById(id);
+        if (updated == null) {
+            return Result.error(409, "厂商更新后无法读取");
+        }
+        return Result.success(toDTO(updated));
     }
 
     @OperationLog(module = "厂商管理", operation = "删除厂商")
@@ -114,15 +132,20 @@ public class VendorController {
         if (existing == null) {
             return Result.error(404, "厂商不存在");
         }
-        vendorService.removeById(id);
+        if (!vendorService.removeById(id)) {
+            return Result.error(409, "厂商删除失败");
+        }
         return Result.success(null);
     }
 
     @OperationLog(module = "厂商管理", operation = "更新厂商状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
+        if (body == null) {
+            return Result.error(400, "状态请求不能为空");
+        }
         String status = body.get("status");
-        CommonStatus statusEnum = CommonStatus.fromCode(status);
+        CommonStatus statusEnum = CommonStatus.fromCode(status == null ? null : status.trim());
         if (statusEnum == null) {
             return Result.error(400, "无效的状态值，有效值: active, inactive");
         }
@@ -135,7 +158,9 @@ public class VendorController {
         VendorInfo vendor = new VendorInfo();
         vendor.setId(id);
         vendor.setStatus(statusEnum);
-        vendorService.updateById(vendor);
+        if (!vendorService.updateById(vendor)) {
+            return Result.error(409, "厂商状态更新失败");
+        }
         return Result.success(null);
     }
 
@@ -176,12 +201,21 @@ public class VendorController {
     private VendorInfo toEntity(VendorCreateReqDTO dto) {
         VendorInfo entity = new VendorInfo();
         BeanUtils.copyProperties(dto, entity);
+        if (dto.getVendorCode() != null) {
+            entity.setVendorCode(dto.getVendorCode().trim());
+        }
+        if (dto.getVendorName() != null) {
+            entity.setVendorName(dto.getVendorName().trim());
+        }
         return entity;
     }
 
     private VendorInfo toEntity(VendorUpdateReqDTO dto) {
         VendorInfo entity = new VendorInfo();
         BeanUtils.copyProperties(dto, entity);
+        if (dto.getVendorName() != null) {
+            entity.setVendorName(dto.getVendorName().trim());
+        }
         return entity;
     }
 }

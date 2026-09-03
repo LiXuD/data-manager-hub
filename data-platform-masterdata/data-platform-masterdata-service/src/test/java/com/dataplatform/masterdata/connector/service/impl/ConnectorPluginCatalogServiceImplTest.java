@@ -54,6 +54,7 @@ class ConnectorPluginCatalogServiceImplTest {
     @Test
     void successfulVerificationExplicitlyClearsPreviousSafeFailure() {
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        stubVersionWrites(versionMapper);
         ConnectorPluginVersion version = failedVersion("STAGING_FAILED");
         when(versionMapper.selectOne(any())).thenReturn(version);
         PluginArtifactVerifier artifactVerifier = mock(PluginArtifactVerifier.class);
@@ -73,6 +74,7 @@ class ConnectorPluginCatalogServiceImplTest {
     @Test
     void successfulRestageClearsFailedAttemptBeforeAccessReportsReady() {
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        stubVersionWrites(versionMapper);
         ConnectorPluginVersion version = failedVersion("STAGING_FAILED");
         when(versionMapper.selectOne(any())).thenReturn(version);
         ConnectorPluginActivationInternalFeignClient activationClient =
@@ -96,6 +98,7 @@ class ConnectorPluginCatalogServiceImplTest {
     @Test
     void activeVersionCanBeRestagedWithoutDowngradingCatalogStatus() {
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        stubVersionWrites(versionMapper);
         ConnectorPluginVersion version = failedVersion("ACTIVE");
         when(versionMapper.selectOne(any())).thenReturn(version);
         ConnectorPluginActivationInternalFeignClient activationClient =
@@ -119,6 +122,7 @@ class ConnectorPluginCatalogServiceImplTest {
     @Test
     void successfulActivationExplicitlyClearsStaleStagingFailure() {
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        stubVersionWrites(versionMapper);
         ConnectorPluginVersion version = failedVersion("STAGING");
         when(versionMapper.selectOne(any())).thenReturn(version);
         ConnectorPluginActivationInternalFeignClient activationClient =
@@ -145,6 +149,7 @@ class ConnectorPluginCatalogServiceImplTest {
     @Test
     void stageFailureIsRecordedAsSafeFailedState() {
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        stubVersionWrites(versionMapper);
         ConnectorPluginVersion version = new ConnectorPluginVersion();
         version.setPluginId("demo");
         version.setVersion("1.0.0");
@@ -172,6 +177,7 @@ class ConnectorPluginCatalogServiceImplTest {
     @Test
     void refusesToDisableVersionBoundByActiveConnector() {
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        stubVersionWrites(versionMapper);
         ConnectorPluginVersion version = new ConnectorPluginVersion();
         version.setPluginId("demo");
         version.setVersion("1.0.0");
@@ -229,6 +235,7 @@ class ConnectorPluginCatalogServiceImplTest {
         plugin.setStatus("ACTIVE");
         when(pluginMapper.selectOne(any())).thenReturn(plugin);
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        stubVersionWrites(versionMapper);
         ConnectorPluginVersion activeVersion = new ConnectorPluginVersion();
         activeVersion.setVersion("1.0.0");
         when(versionMapper.selectOne(any())).thenReturn(activeVersion);
@@ -304,6 +311,7 @@ class ConnectorPluginCatalogServiceImplTest {
         VendorConfigMapper configMapper = mock(VendorConfigMapper.class);
         VendorConnectorVersionMapper connectorMapper = mock(VendorConnectorVersionMapper.class);
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
+        stubVersionWrites(versionMapper);
         when(configMapper.selectList(any())).thenReturn(List.of(activeConfig(77L, 88L)));
         when(connectorMapper.selectById(88L)).thenReturn(activePipeline(77L, """
                 [{"stageKey":"connector.response-parser","capability":"RESPONSE_PARSER",
@@ -399,6 +407,7 @@ class ConnectorPluginCatalogServiceImplTest {
             ConnectorPluginVersionMapper versionMapper,
             VendorConnectorVersionMapper connectorMapper,
             VendorConfigMapper configMapper) {
+        stubVersionWrites(versionMapper);
         return new ConnectorPluginCatalogServiceImpl(
                 mock(ConnectorPluginMapper.class), versionMapper, connectorMapper, configMapper,
                 mock(VendorConnectorTestFactMapper.class), mock(PluginArtifactVerifier.class),
@@ -411,6 +420,7 @@ class ConnectorPluginCatalogServiceImplTest {
             VendorConnectorTestFactMapper factMapper,
             PluginArtifactVerifier artifactVerifier,
             ConnectorPluginActivationInternalFeignClient activationClient) {
+        stubVersionWrites(versionMapper);
         return new ConnectorPluginCatalogServiceImpl(
                 mock(ConnectorPluginMapper.class), versionMapper,
                 mock(VendorConnectorVersionMapper.class),
@@ -420,6 +430,12 @@ class ConnectorPluginCatalogServiceImplTest {
 
     private com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator releaseCoordinator() {
         return mock(com.dataplatform.masterdata.connector.service.ConnectorPluginReleaseCoordinator.class);
+    }
+
+    private void stubVersionWrites(ConnectorPluginVersionMapper versionMapper) {
+        when(versionMapper.insert(any(ConnectorPluginVersion.class))).thenReturn(1);
+        when(versionMapper.updateById(any(ConnectorPluginVersion.class))).thenReturn(1);
+        when(versionMapper.update(any(), any())).thenReturn(1);
     }
 
     private ConnectorPluginVersion failedVersion(String status) {

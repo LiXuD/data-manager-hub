@@ -29,7 +29,7 @@ class ConnectorLegacyInventoryServiceTest {
     @BeforeEach
     void setUp() {
         service = new ConnectorLegacyInventoryService(
-                mapper, new LegacyHttpSpecConverter(), objectMapper, metrics);
+                mapper, new LegacyHttpSpecConverter(), metrics);
     }
 
     @Test

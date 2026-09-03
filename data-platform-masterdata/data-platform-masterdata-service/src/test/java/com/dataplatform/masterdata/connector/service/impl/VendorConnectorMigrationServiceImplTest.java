@@ -1,6 +1,8 @@
 package com.dataplatform.masterdata.connector.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.dataplatform.masterdata.connector.fixture.ConnectorProductModelFixtures.singleHttpLegacyPipeline;
+import static com.dataplatform.masterdata.connector.fixture.ConnectorProductModelFixtures.tokenThenBusinessPipeline;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -22,7 +24,9 @@ import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationSta
 import com.dataplatform.masterdata.connector.api.dto.ConnectorSpecDraftViewDTO;
 import com.dataplatform.masterdata.connector.entity.VendorConnectorMigration;
 import com.dataplatform.masterdata.connector.mapper.VendorConnectorMigrationMapper;
+import com.dataplatform.masterdata.connector.service.LegacyHttpSpecConverter;
 import com.dataplatform.masterdata.connector.spec.ConnectorSpecService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,7 +51,8 @@ class VendorConnectorMigrationServiceImplTest {
             mock(ConnectorPluginActivationInternalFeignClient.class);
     private final ConnectorSpecService spec = mock(ConnectorSpecService.class);
     private final VendorConnectorMigrationServiceImpl service =
-            new VendorConnectorMigrationServiceImpl(mapper, access, billing, activation, spec);
+                new VendorConnectorMigrationServiceImpl(mapper, access, billing, activation, spec,
+                    new LegacyHttpSpecConverter());
 
     @Test
     void exposesMigrationFactsAsReadOnlyHistory() {
@@ -77,6 +82,83 @@ class VendorConnectorMigrationServiceImplTest {
     }
 
     @Test
+    void retriesPrepareIdempotentlyAfterStableMigrationWithoutRequiringLegacyRuntime() {
+        VendorConnectorMigrationMapper.MigrationRuntimeFacts facts = facts("SIMPLE_CONNECTOR", "PLUGIN", 12L);
+        VendorConnectorMigration row = prepared(42L, 4);
+        row.setState("STABLE");
+        row.setObservationGatePassed(true);
+        row.setCompletedAt(LocalDateTime.now().minusMinutes(1));
+        when(mapper.lockRuntimeFacts(42L)).thenReturn(facts);
+        when(mapper.selectOne(any())).thenReturn(row);
+
+        VendorConnectorMigrationDTO result = service.prepare(42L, 9L);
+
+        assertThat(result.state()).isEqualTo("STABLE");
+        verify(mapper).lockRuntimeFacts(42L);
+        verify(mapper).selectOne(any());
+        org.mockito.Mockito.verifyNoInteractions(access, billing, activation, spec);
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never()).insert(any(VendorConnectorMigration.class));
+    }
+
+    @Test
+    void refusesToCreatePreparedRowWhenLegacySourceIsNotLosslesslyConvertible() throws Exception {
+        VendorConnectorMigrationMapper.MigrationRuntimeFacts facts = facts("ADVANCED_LEGACY", "PLUGIN", 11L);
+        facts.setActivePipelineSnapshot(new ObjectMapper().writeValueAsString(tokenThenBusinessPipeline()));
+        when(mapper.lockRuntimeFacts(42L)).thenReturn(facts);
+
+        var exception = org.junit.jupiter.api.Assertions.assertThrows(
+                com.dataplatform.masterdata.connector.service.ConnectorConflictException.class,
+                () -> service.prepare(42L, 9L));
+
+        assertThat(exception).hasMessage("CONNECTOR_MIGRATION_REQUIRES_DEDICATED_PLUGIN");
+        verify(mapper).lockRuntimeFacts(42L);
+        verify(mapper).selectOne(any());
+        org.mockito.Mockito.verifyNoMoreInteractions(mapper);
+    }
+
+    @Test
+    void reportsAndCasBlocksExistingInvalidPreparedRows() throws Exception {
+        VendorConnectorMigration row = prepared(42L, 3);
+        VendorConnectorMigrationMapper.MigrationRuntimeFacts facts = facts("ADVANCED_LEGACY", "PLUGIN", 11L);
+        facts.setActivePipelineSnapshot("{not-json");
+        when(mapper.selectList(any())).thenReturn(List.of(row));
+        when(mapper.readRuntimeFacts(42L)).thenReturn(facts);
+
+        var report = service.auditInvalidPrepared();
+
+        assertThat(report).hasSize(1);
+        assertThat(report.getFirst().classification()).isEqualTo("MUST_REMAIN_LEGACY");
+        assertThat(report.getFirst().reasonCodes()).containsExactly("PIPELINE_SNAPSHOT_INVALID");
+
+        when(mapper.lockRuntimeFacts(42L)).thenReturn(facts);
+        when(mapper.selectOne(any())).thenReturn(row);
+        when(mapper.update(any(), any())).thenReturn(1);
+
+        assertThat(service.repairInvalidPrepared(9L)).isEqualTo(1);
+        verify(mapper).update(any(), any());
+    }
+
+    @Test
+    void reportsAndRepairsPreparedRowWithMissingVendorConfigWithoutDereferencingNull() {
+        VendorConnectorMigration row = prepared(42L, 3);
+        row.setVendorConfigId(null);
+        when(mapper.selectList(any())).thenReturn(List.of(row));
+        when(mapper.selectOne(any())).thenReturn(row);
+        when(mapper.update(any(), any())).thenReturn(1);
+
+        var report = service.auditInvalidPrepared();
+
+        assertThat(report).hasSize(1);
+        assertThat(report.getFirst().classification()).isEqualTo("UNKNOWN");
+        assertThat(report.getFirst().reasonCodes())
+                .containsExactly("CONNECTOR_MIGRATION_RUNTIME_FACTS_INVALID");
+
+        assertThat(service.repairInvalidPrepared(9L)).isEqualTo(1);
+        verify(mapper).selectOne(any());
+        verify(mapper).update(any(), any());
+    }
+
+    @Test
     void startsObservationOnlyAfterBothAccessInstancesAreReady() {
         VendorConnectorMigrationMapper.MigrationRuntimeFacts facts = facts("SIMPLE_CONNECTOR", "PLUGIN", 12L);
         VendorConnectorMigration row = prepared(42L, 0);
@@ -94,6 +176,53 @@ class VendorConnectorMigrationServiceImplTest {
         verify(spec).draft(42L);
         verify(activation).activation("generic-http", "2.0.0");
         verify(mapper).update(any(), any());
+    }
+
+    @Test
+    void rejectsActivationSummaryForDifferentPluginCoordinates() {
+        VendorConnectorMigrationMapper.MigrationRuntimeFacts facts = facts("SIMPLE_CONNECTOR", "PLUGIN", 12L);
+        VendorConnectorMigration row = prepared(42L, 0);
+        when(mapper.lockRuntimeFacts(42L)).thenReturn(facts);
+        when(mapper.selectOne(any())).thenReturn(row);
+        when(spec.draft(42L)).thenReturn(simpleDraft(88L, 4));
+        ConnectorPluginActivationSummaryDTO summary = activationSummary(true, "READY", "READY");
+        summary.setPluginVersion("9.9.9");
+        when(activation.activation("generic-http", "2.0.0")).thenReturn(Result.success(summary));
+
+        var exception = org.junit.jupiter.api.Assertions.assertThrows(
+                com.dataplatform.masterdata.connector.service.ConnectorConflictException.class,
+                () -> service.startObservation(42L,
+                        new VendorConnectorMigrationStartRequestDTO(0, 0, 1L, 0.1D, 1000L, 1D), 9L));
+
+        assertThat(exception).hasMessage("CONNECTOR_PLUGIN_ACTIVATION_MISMATCH");
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.never()).update(any(), any());
+    }
+
+    @Test
+    void rejectsInconsistentObservationAggregatesInsteadOfOpeningGate() {
+        LocalDateTime started = LocalDateTime.now().minusMinutes(1);
+        VendorConnectorMigrationMapper.MigrationRuntimeFacts facts = facts("SIMPLE_CONNECTOR", "PLUGIN", 12L);
+        VendorConnectorMigration row = observing(42L, 1, started);
+        when(mapper.lockRuntimeFacts(42L)).thenReturn(facts);
+        when(mapper.selectOne(any())).thenAnswer(invocation -> row);
+        when(activation.activation("generic-http", "2.0.0"))
+                .thenReturn(Result.success(activationSummary(true, "READY", "READY")));
+        when(access.observation(any())).thenReturn(Result.success(
+                new ConnectorMigrationObservationDTO(2, 2, 0, 1D, 80, 1, 1)));
+        when(billing.observation(any())).thenReturn(Result.success(
+                new ConnectorBillingObservationDTO(2, 2, 0, 0, 2, new BigDecimal("0.20"))));
+        when(mapper.update(any(), any())).thenAnswer(invocation -> {
+            row.setState("FAILED");
+            row.setRecordVersion(2);
+            row.setSafeErrorCode("OBSERVATION_FACTS_INVALID");
+            return 1;
+        });
+
+        VendorConnectorMigrationDTO result = service.observe(42L,
+                new VendorConnectorMigrationObserveRequestDTO(1, LocalDateTime.now()), 9L);
+
+        assertThat(result.state()).isEqualTo("FAILED");
+        assertThat(result.safeErrorCode()).isEqualTo("OBSERVATION_FACTS_INVALID");
     }
 
     @Test
@@ -161,6 +290,14 @@ class VendorConnectorMigrationServiceImplTest {
         facts.setActiveVersionNo(2);
         facts.setActiveAuthoringMode(authoringMode);
         facts.setActiveSnapshotHash("a".repeat(64));
+        if ("ADVANCED_LEGACY".equals(authoringMode)) {
+            try {
+                facts.setActivePipelineSnapshot(new ObjectMapper().writeValueAsString(singleHttpLegacyPipeline()));
+            } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+                throw new IllegalStateException(exception);
+            }
+        }
+        facts.setTimeout(10_000);
         facts.setPluginId("generic-http");
         facts.setPluginVersion("2.0.0");
         return facts;
@@ -214,12 +351,16 @@ class VendorConnectorMigrationServiceImplTest {
         summary.setPluginId("generic-http");
         summary.setPluginVersion("2.0.0");
         summary.setReady(ready);
-        summary.setInstances(List.of(activation(firstState), activation(secondState)));
+        summary.setInstances(List.of(activation(firstState, "access-1"),
+                activation(secondState, "access-2")));
         return summary;
     }
 
-    private ConnectorPluginActivationDTO activation(String state) {
+    private ConnectorPluginActivationDTO activation(String state, String instanceId) {
         ConnectorPluginActivationDTO activation = new ConnectorPluginActivationDTO();
+        activation.setServiceInstanceId(instanceId);
+        activation.setPluginId("generic-http");
+        activation.setPluginVersion("2.0.0");
         activation.setState(state);
         return activation;
     }

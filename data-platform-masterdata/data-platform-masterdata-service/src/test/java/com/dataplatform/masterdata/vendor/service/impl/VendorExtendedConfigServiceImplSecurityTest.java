@@ -16,6 +16,7 @@ import com.dataplatform.api.Result;
 import com.dataplatform.identity.api.dto.EncryptionReqDTO;
 import com.dataplatform.identity.api.feign.EncryptionInternalFeignClient;
 import com.dataplatform.masterdata.vendor.entity.VendorExtendedConfig;
+import com.dataplatform.masterdata.vendor.entity.ConfigVersion;
 import com.dataplatform.masterdata.vendor.mapper.ConfigVersionMapper;
 import com.dataplatform.masterdata.vendor.mapper.VendorExtendedConfigMapper;
 import java.util.concurrent.TimeUnit;
@@ -141,6 +142,40 @@ class VendorExtendedConfigServiceImplSecurityTest {
         doReturn(false).when(service).save(any(VendorExtendedConfig.class));
 
         assertThrows(IllegalStateException.class, () -> service.saveSecure(input));
+    }
+
+    @Test
+    void shouldRestoreEncryptionModeWhenRollingBackVersion() {
+        VendorExtendedConfig current = config(false, "plain-current");
+        current.setId(5L);
+        ConfigVersion version = new ConfigVersion();
+        version.setId(7L);
+        version.setConfigKey("vendor.aes.key");
+        version.setConfigValue("v1:1:old-ciphertext");
+        version.setIsEncrypted(true);
+        when(configVersionMapper.selectById(7L)).thenReturn(version);
+        when(configVersionMapper.selectOne(any())).thenReturn(null);
+        doReturn(current).when(service).getOne(any());
+        doReturn(true).when(service).updateById(any(VendorExtendedConfig.class));
+
+        assertEquals(true, service.rollback("vendor.aes.key", 7L));
+
+        verify(service).updateById(org.mockito.ArgumentMatchers.argThat(updated ->
+                "v1:1:old-ciphertext".equals(updated.getConfigValue())
+                        && Boolean.TRUE.equals(updated.getIsEncrypted())));
+    }
+
+    @Test
+    void shouldMaskEncryptedHistoricalVersionEvenWhenCurrentConfigIsPlaintext() {
+        VendorExtendedConfig current = config(false, "plain-current");
+        ConfigVersion version = new ConfigVersion();
+        version.setConfigKey("vendor.aes.key");
+        version.setConfigValue("v1:1:old-ciphertext");
+        version.setIsEncrypted(true);
+        when(configVersionMapper.selectList(any())).thenReturn(java.util.List.of(version));
+        doReturn(current).when(service).getOne(any());
+
+        assertEquals("••••••••", service.getVersionHistory("vendor.aes.key").get(0).getConfigValue());
     }
 
     private VendorExtendedConfig config(boolean encrypted, String value) {

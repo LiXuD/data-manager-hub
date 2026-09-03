@@ -41,7 +41,7 @@ public class VendorSecurityController {
 
     @GetMapping("/security-capabilities")
     public Result<List<VendorSecurityCapabilityDTO>> capabilities() {
-        if (!UserContext.hasPermission("vendor:view")) {
+        if (!allowed("vendor:view")) {
             return Result.error(403, "没有厂商安全配置查看权限");
         }
         return Result.success(securityService.capabilities());
@@ -49,7 +49,7 @@ public class VendorSecurityController {
 
     @GetMapping("/{configId}/security-steps")
     public Result<VendorSecurityStepListDTO> getSteps(@PathVariable Long configId) {
-        if (!UserContext.hasPermission("vendor:view")) {
+        if (!allowed("vendor:view")) {
             return Result.error(403, "没有厂商安全配置查看权限");
         }
         return Result.success(securityService.getSteps(configId));
@@ -59,8 +59,11 @@ public class VendorSecurityController {
     @PutMapping("/{configId}/security-steps")
     public Result<VendorSecurityStepListDTO> saveSteps(@PathVariable Long configId,
                                                        @RequestBody VendorSecuritySaveReqDTO request) {
-        if (!UserContext.hasPermission("vendor:edit")) {
+        if (!allowed("vendor:edit")) {
             return Result.error(403, "没有厂商安全配置编辑权限");
+        }
+        if (request == null) {
+            return Result.error(400, "安全配置请求不能为空");
         }
         return Result.success(securityService.replaceSteps(configId, request.getVersion(), request.getSteps()));
     }
@@ -69,8 +72,11 @@ public class VendorSecurityController {
     @PutMapping("/{configId}/security-steps/order")
     public Result<VendorSecurityStepListDTO> reorder(@PathVariable Long configId,
                                                      @RequestBody VendorSecurityOrderReqDTO request) {
-        if (!UserContext.hasPermission("vendor:edit")) {
+        if (!allowed("vendor:edit")) {
             return Result.error(403, "没有厂商安全配置编辑权限");
+        }
+        if (request == null) {
+            return Result.error(400, "安全配置请求不能为空");
         }
         return Result.success(securityService.reorder(configId, request));
     }
@@ -78,15 +84,18 @@ public class VendorSecurityController {
     @PostMapping("/{configId}/security-preview")
     public Result<VendorSecurityPreviewDTO> preview(@PathVariable Long configId,
                                                     @RequestBody VendorSecurityPreviewReqDTO request) {
-        if (!UserContext.hasPermission("vendor:edit")) {
+        if (!allowed("vendor:edit")) {
             return Result.error(403, "没有厂商安全配置编辑权限");
+        }
+        if (request == null) {
+            return Result.error(400, "安全配置请求不能为空");
         }
         return Result.success(securityService.preview(configId, request));
     }
 
     @PostMapping("/{configId}/security-test")
     public Result<Map<String, Object>> test(@PathVariable Long configId) {
-        if (!UserContext.hasPermission("vendor:edit")) {
+        if (!allowed("vendor:edit")) {
             return Result.error(403, "没有厂商安全配置编辑权限");
         }
         return Result.success(healthService.testConnection(configId));
@@ -94,7 +103,7 @@ public class VendorSecurityController {
 
     @GetMapping("/{configId}/security-versions")
     public Result<List<VendorSecurityVersionDTO>> history(@PathVariable Long configId) {
-        if (!UserContext.hasPermission("vendor:view")) {
+        if (!allowed("vendor:view")) {
             return Result.error(403, "没有厂商安全配置查看权限");
         }
         return Result.success(securityService.history(configId));
@@ -105,10 +114,15 @@ public class VendorSecurityController {
     public Result<VendorSecurityStepListDTO> rollback(@PathVariable Long configId,
                                                       @PathVariable Long versionId,
                                                       @RequestParam Integer version) {
-        if (!UserContext.hasPermission("vendor:edit")) {
+        if (!allowed("vendor:edit")) {
             return Result.error(403, "没有厂商安全配置编辑权限");
         }
         return Result.success(securityService.rollback(configId, versionId, version));
+    }
+
+    private boolean allowed(String permission) {
+        return UserContext.hasPermission(permission)
+                || UserContext.hasPermission("system:admin");
     }
 
     @ExceptionHandler(SecurityConfigConflictException.class)

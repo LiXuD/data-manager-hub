@@ -60,15 +60,20 @@ public class ConfigController {
     @OperationLog(module = "配置管理", operation = "新增配置")
     @PostMapping
     public ResponseEntity<Result<VendorExtendedConfig>> create(@RequestBody VendorExtendedConfig config) {
-        if (!canEdit()) {
+        if (!canAdd()) {
             return forbidden();
         }
-        if (config.getConfigKey() == null || config.getConfigKey().isEmpty()) {
+        if (config == null || config.getConfigKey() == null || config.getConfigKey().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Result.error(400, "configKey不能为空"));
         }
+        config.setConfigKey(config.getConfigKey().trim());
         config.setId(null);
         config.setStatus(StatusConstants.ACTIVE);
+        config.setIsActive(true);
+        config.setUpdatedBy(null);
+        config.setCreatedAt(null);
+        config.setUpdatedAt(null);
         return ResponseEntity.ok(Result.success(configService.saveSecure(config)));
     }
 
@@ -77,6 +82,10 @@ public class ConfigController {
     public ResponseEntity<Result<VendorExtendedConfig>> update(@PathVariable Long id, @RequestBody VendorExtendedConfig config) {
         if (!canEdit()) {
             return forbidden();
+        }
+        if (config == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "请求体不能为空"));
         }
         VendorExtendedConfig updated = configService.updateSecure(id, config);
         if (updated == null) {
@@ -89,7 +98,7 @@ public class ConfigController {
     @OperationLog(module = "配置管理", operation = "删除配置")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
-        if (!canEdit()) {
+        if (!canDelete()) {
             return forbidden();
         }
         if (!configService.removeSecure(id)) {
@@ -102,7 +111,7 @@ public class ConfigController {
     @GetMapping("/vendor/{vendorId}")
     public Result<List<VendorExtendedConfig>> getByVendor(@PathVariable Long vendorId) {
         if (!canView()) {
-            return Result.error(403, "没有厂商配置查看权限");
+            return Result.error(403, "没有配置中心查看权限");
         }
         return Result.success(configService.getByVendor(vendorId));
     }
@@ -112,6 +121,10 @@ public class ConfigController {
     public ResponseEntity<Result<Void>> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         if (!canEdit()) {
             return forbidden();
+        }
+        if (body == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "请求体不能为空"));
         }
         String status = body.get("status");
 
@@ -132,7 +145,7 @@ public class ConfigController {
     @GetMapping("/key/{configKey}")
     public Result<String> getConfigValue(@PathVariable String configKey) {
         if (!canView()) {
-            return Result.error(403, "没有厂商配置查看权限");
+            return Result.error(403, "没有配置中心查看权限");
         }
         return Result.success(configService.getDisplayValue(configKey));
     }
@@ -140,7 +153,7 @@ public class ConfigController {
     @PostMapping("/key/{configKey}/publish")
     public Result<Boolean> publishConfig(@PathVariable String configKey) {
         if (!canEdit()) {
-            return Result.error(403, "没有厂商配置编辑权限");
+            return Result.error(403, "没有配置中心编辑权限");
         }
         return Result.success(configService.publishConfig(configKey));
     }
@@ -148,7 +161,7 @@ public class ConfigController {
     @GetMapping("/key/{configKey}/versions")
     public Result<List<ConfigVersion>> getVersionHistory(@PathVariable String configKey) {
         if (!canView()) {
-            return Result.error(403, "没有厂商配置查看权限");
+            return Result.error(403, "没有配置中心查看权限");
         }
         return Result.success(configService.getVersionHistory(configKey));
     }
@@ -156,28 +169,40 @@ public class ConfigController {
     @PostMapping("/cache/clear")
     public Result<Void> clearCache() {
         if (!canEdit()) {
-            return Result.error(403, "没有厂商配置编辑权限");
+            return Result.error(403, "没有配置中心编辑权限");
         }
         configService.clearAllCache();
         return Result.success(null);
     }
 
     private boolean canView() {
-        return UserContext.hasPermission("vendor:view");
+        return UserContext.hasPermission("config:view")
+                || UserContext.hasPermission("system:admin");
     }
 
     private boolean canEdit() {
-        return UserContext.hasPermission("vendor:edit");
+        return UserContext.hasPermission("config:edit")
+                || UserContext.hasPermission("system:admin");
+    }
+
+    private boolean canAdd() {
+        return UserContext.hasPermission("config:add")
+                || UserContext.hasPermission("system:admin");
+    }
+
+    private boolean canDelete() {
+        return UserContext.hasPermission("config:delete")
+                || UserContext.hasPermission("system:admin");
     }
 
     private <T> ResponseEntity<Result<T>> forbidden() {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Result.error(403, "没有厂商配置操作权限"));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Result.error(403, "没有配置中心操作权限"));
     }
 
     private PageResult<VendorExtendedConfig> forbiddenPage(int page, int pageSize) {
         PageResult<VendorExtendedConfig> result = new PageResult<>();
         result.setCode(403);
-        result.setMessage("没有厂商配置查看权限");
+        result.setMessage("没有配置中心查看权限");
         result.setData(List.of());
         result.setTotal(0L);
         result.setPage(page);

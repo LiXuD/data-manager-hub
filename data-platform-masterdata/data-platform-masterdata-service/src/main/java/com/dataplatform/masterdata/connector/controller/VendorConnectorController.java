@@ -53,6 +53,7 @@ public class VendorConnectorController {
     public Result<VendorConnectorDraftDTO> saveDraft(@PathVariable Long configId,
             @Valid @RequestBody VendorConnectorSaveDraftRequestDTO request) {
         if (!allowed("connector-plugin:bind")) return forbidden();
+        if (request == null) return Result.error(400, "连接器草稿请求不能为空");
         return Result.success(service.saveDraft(configId, request, UserContext.getCurrentUserId()));
     }
 
@@ -76,6 +77,7 @@ public class VendorConnectorController {
     public Result<VendorConnectorVersionDTO> publish(@PathVariable Long configId,
             @Valid @RequestBody VendorConnectorPublishRequestDTO request) {
         if (!allowed("connector-plugin:publish")) return forbidden();
+        if (request == null) return Result.error(400, "连接器发布请求不能为空");
         return Result.success(service.publish(configId, request.expectedDraftVersion(),
                 UserContext.getCurrentUserId()));
     }
@@ -92,6 +94,7 @@ public class VendorConnectorController {
             @PathVariable Integer version,
             @Valid @RequestBody VendorConnectorRollbackRequestDTO request) {
         if (!allowed("connector-plugin:rollback")) return forbidden();
+        if (request == null) return Result.error(400, "连接器回滚请求不能为空");
         return Result.success(service.rollback(configId, version, request.expectedConnectorVersion(),
                 UserContext.getCurrentUserId()));
     }
@@ -111,6 +114,9 @@ public class VendorConnectorController {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Result.error(400, exception.getMessage()));
     }
 
-    private boolean allowed(String permission) { return UserContext.hasPermission(permission); }
+    private boolean allowed(String permission) {
+        return UserContext.hasPermission(permission)
+                || UserContext.hasPermission("system:admin");
+    }
     private <T> Result<T> forbidden() { return Result.error(403, "没有厂商连接器操作权限"); }
 }

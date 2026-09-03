@@ -30,6 +30,9 @@ public class InterfaceParamServiceImpl extends ServiceImpl<InterfaceParamMapper,
     @Override
     @Transactional
     public void batchSave(Long interfaceId, List<InterfaceParam> params) {
+        if (interfaceId == null) {
+            throw new IllegalArgumentException("接口ID不能为空");
+        }
         // 删除旧参数
         LambdaQueryWrapper<InterfaceParam> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(InterfaceParam::getInterfaceId, interfaceId)
@@ -40,11 +43,16 @@ public class InterfaceParamServiceImpl extends ServiceImpl<InterfaceParamMapper,
         // 保存新参数
         if (params != null && !params.isEmpty()) {
             for (InterfaceParam param : params) {
+                if (param == null) {
+                    throw new IllegalArgumentException("接口参数不能为空");
+                }
                 param.setInterfaceId(interfaceId);
                 param.setDirection("REQUEST");
                 param.setParentId(null);
             }
-            this.saveBatch(params);
+            if (!this.saveBatch(params)) {
+                throw new IllegalStateException("接口参数保存失败，请重试");
+            }
         }
     }
 

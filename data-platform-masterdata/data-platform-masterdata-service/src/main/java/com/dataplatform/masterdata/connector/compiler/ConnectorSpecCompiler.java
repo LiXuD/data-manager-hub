@@ -74,6 +74,17 @@ public final class ConnectorSpecCompiler {
 
         JsonNode config = mapper.valueToTree(spec.getConfig());
         rejectReservedFields(config, "$.config");
+        if (GenericHttpConnectorMetadata.PLUGIN_ID.equals(manifest.pluginId())) {
+            try {
+                // Run the connector-specific structural checks first so malformed generic-http
+                // configurations keep their domain error code. Secret ownership remains the
+                // shared schema validator's responsibility below.
+                GenericHttpConnectorConfigValidator.validate(config, ignored -> true);
+            } catch (RuntimeException exception) {
+                throw invalid("GENERIC_HTTP_CONFIG_INVALID",
+                        "Generic HTTP configuration is invalid");
+            }
+        }
         List<String> schemaErrors = schemaValidator.validate(
                 manifest.configSchema(), config, input.secretOwnedByVendor());
         if (!schemaErrors.isEmpty()) {

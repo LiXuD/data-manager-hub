@@ -84,6 +84,10 @@ class VendorConnectorServiceImplTest {
         pluginVersion.setManifestJson("{}");
         pluginVersion.setConfigSchemaJson("{\"type\":\"object\",\"properties\":{\"endpoint\":{\"type\":\"string\"}}}");
         when(pluginMapper.selectOne(any())).thenReturn(pluginVersion);
+        when(connectorMapper.insert(any(VendorConnectorVersion.class))).thenReturn(1);
+        when(connectorMapper.updateById(any(VendorConnectorVersion.class))).thenReturn(1);
+        when(connectorMapper.update(any(), any())).thenReturn(1);
+        when(testFactMapper.insert(any(VendorConnectorTestFact.class))).thenReturn(1);
     }
 
     @Test

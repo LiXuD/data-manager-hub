@@ -150,6 +150,10 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
         if (config == null || config.getInterfaceId() == null || config.getVendorId() == null) {
             throw new IllegalArgumentException("接口和厂商不能为空");
         }
+        VendorInfo vendor = vendorInfoMapper.selectById(config.getVendorId());
+        if (vendor == null || !CommonStatus.ACTIVE.equals(vendor.getStatus())) {
+            throw new IllegalArgumentException("厂商不存在或未启用");
+        }
         ApiInterface apiInterface = apiInterfaceMapper.selectById(config.getInterfaceId());
         if (apiInterface == null) {
             throw new IllegalArgumentException("接口不存在");
@@ -157,19 +161,28 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
         if (config.getDataTypeId() == null || !config.getDataTypeId().equals(apiInterface.getDataTypeId())) {
             throw new IllegalArgumentException("厂商配置数据类型必须与接口数据类型一致");
         }
+        DataType dataType = dataTypeMapper.selectById(config.getDataTypeId());
+        if (dataType == null || !CommonStatus.ACTIVE.equals(dataType.getStatus())) {
+            throw new IllegalArgumentException("数据类型不存在或未启用");
+        }
         if (getByInterfaceAndVendor(config.getInterfaceId(), config.getVendorId()) != null) {
             throw new VendorConfigConflictException("当前接口已绑定该厂商");
         }
-        save(config);
-        if (config.getId() == null) {
-            throw new IllegalStateException("厂商配置保存后未返回ID");
+        if (!save(config) || config.getId() == null) {
+            throw new IllegalStateException("厂商配置保存失败或未返回ID");
         }
         LambdaUpdateWrapper<ApiInterface> update = new LambdaUpdateWrapper<>();
         update.eq(ApiInterface::getId, config.getInterfaceId())
                 .isNull(ApiInterface::getPrimaryVendorConfigId)
                 .set(ApiInterface::getPrimaryVendorConfigId, config.getId());
-        apiInterfaceMapper.update(null, update);
-        return getById(config.getId());
+        if (apiInterfaceMapper.update(null, update) < 0) {
+            throw new IllegalStateException("接口主厂商路由更新失败");
+        }
+        VendorConfig persisted = getById(config.getId());
+        if (persisted == null) {
+            throw new IllegalStateException("厂商配置保存后无法读取");
+        }
+        return persisted;
     }
 
     @Override
@@ -346,6 +359,8 @@ public class VendorConfigServiceImpl extends ServiceImpl<VendorConfigMapper, Ven
             dataTypeMapper.selectOne(
                 new LambdaQueryWrapper<DataType>()
                     .eq(DataType::getDataTypeCode, dataTypeCode)
+                    .eq(DataType::getStatus, CommonStatus.ACTIVE)
+                    .eq(DataType::getDeleted, false)
             )
         );
     }

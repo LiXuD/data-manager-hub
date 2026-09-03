@@ -106,7 +106,8 @@ public class ConnectorPluginController {
     }
 
     private boolean allowed(String permission) {
-        return UserContext.hasPermission(permission);
+        return UserContext.hasPermission(permission)
+                || UserContext.hasPermission("system:admin");
     }
 
     private <T> Result<T> forbidden() {

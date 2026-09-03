@@ -20,6 +20,7 @@ import com.dataplatform.masterdata.connector.api.dto.ConnectorSpecSaveRequestDTO
 import com.dataplatform.masterdata.connector.api.dto.ConnectorSpecTestRequestDTO;
 import com.dataplatform.masterdata.connector.api.dto.ConnectorSpecUpgradePreviewRequestDTO;
 import com.dataplatform.masterdata.connector.api.dto.ConnectorSpecVersionDTO;
+import com.dataplatform.masterdata.connector.service.ConnectorSecretReferenceService;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.List;
@@ -72,6 +73,7 @@ class ConnectorSpecControllerContractTest {
         assertRoute("versions", new Class<?>[]{Long.class, String.class}, GetMapping.class,
                 "/catalog/{pluginId}/versions");
         assertRoute("draft", new Class<?>[]{Long.class}, GetMapping.class, "/draft");
+        assertRoute("secretOptions", new Class<?>[]{Long.class}, GetMapping.class, "/secret-options");
         assertRoute("saveDraft", new Class<?>[]{Long.class, ConnectorSpecSaveRequestDTO.class},
                 PutMapping.class, "/draft");
         assertRoute("validate", new Class<?>[]{Long.class}, PostMapping.class, "/validate");
@@ -102,11 +104,13 @@ class ConnectorSpecControllerContractTest {
         }
 
         ConnectorSpecService service = mock(ConnectorSpecService.class);
-        ConnectorSpecController controller = new ConnectorSpecController(service);
+        ConnectorSpecController controller = new ConnectorSpecController(
+                service, mock(ConnectorSecretReferenceService.class));
         try (var user = mockStatic(UserContext.class)) {
             user.when(() -> UserContext.hasPermission("connector-plugin:view")).thenReturn(false);
             assertEquals(403, controller.catalog(1L).getCode());
             assertEquals(403, controller.draft(1L).getCode());
+            assertEquals(403, controller.secretOptions(1L).getCode());
             assertEquals(403, controller.executionPlan(1L, null).getCode());
             user.when(() -> UserContext.hasPermission("connector-plugin:test")).thenReturn(false);
             assertEquals(403, controller.test(1L, new ConnectorSpecTestRequestDTO()).getCode());

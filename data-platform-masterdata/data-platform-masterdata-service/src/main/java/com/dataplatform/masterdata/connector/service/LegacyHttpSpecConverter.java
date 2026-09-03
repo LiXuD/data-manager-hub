@@ -4,6 +4,7 @@ import com.dataplatform.common.plugin.runtime.GenericHttpConnectorConfigValidato
 import com.dataplatform.masterdata.connector.api.dto.ConnectorPipelineStepDTO;
 import com.dataplatform.masterdata.connector.api.dto.ConnectorSpecDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -148,6 +149,28 @@ public final class LegacyHttpSpecConverter {
         }
         return new LegacyHttpConversionPreflightResult(
                 LegacyHttpConversionClassification.LOSSLESS_CONVERTIBLE, List.of());
+    }
+
+    /**
+     * Assesses a persisted Legacy pipeline without exposing its payload or allowing callers to
+     * accidentally classify parse failures as convertible.
+     */
+    public LegacyHttpConversionPreflightResult assessMigrationEligibility(
+            String pipelineSnapshot, Integer timeoutMs) {
+        if (pipelineSnapshot == null || pipelineSnapshot.isBlank()) {
+            return legacy(reason(LegacyHttpConversionReasonCode.PIPELINE_SNAPSHOT_INVALID,
+                    null, null, "活动流水线快照为空，无法安全评估迁移资格"));
+        }
+        try {
+            List<ConnectorPipelineStepDTO> pipeline = MAPPER.readValue(pipelineSnapshot,
+                    new com.fasterxml.jackson.core.type.TypeReference<>() { });
+            LegacyHttpConversionPolicy policy = timeoutMs == null || timeoutMs <= 0
+                    ? null : new LegacyHttpConversionPolicy(timeoutMs);
+            return preflight(pipeline, policy);
+        } catch (Exception exception) {
+            return legacy(reason(LegacyHttpConversionReasonCode.PIPELINE_SNAPSHOT_INVALID,
+                    null, null, "活动流水线快照无法安全解析"));
+        }
     }
 
     public LegacyHttpConversionResult convert(
@@ -360,17 +383,29 @@ public final class LegacyHttpSpecConverter {
                     index, stageKey, "步骤 timeout 与平台唯一 timeout 不一致"));
         }
         Object maxResponseBytes = config.get("maxResponseBytes");
-        long effectiveLimit = maxResponseBytes instanceof Number number
-                ? number.longValue() : PLATFORM_MAX_RESPONSE_BYTES;
-        if (effectiveLimit != PLATFORM_MAX_RESPONSE_BYTES) {
+        if (maxResponseBytes != null && !matchesExactNumber(maxResponseBytes, PLATFORM_MAX_RESPONSE_BYTES)) {
             reasons.add(reason(LegacyHttpConversionReasonCode.RESPONSE_LIMIT_UNSUPPORTED,
                     index, stageKey, "响应大小上限不是平台固定值，不能无损删除"));
         }
     }
 
     private boolean matchesTimeout(Object configured, long defaultValue, int platformTimeoutMs) {
-        long effective = configured instanceof Number number ? number.longValue() : defaultValue;
-        return effective == platformTimeoutMs;
+        if (configured == null) return defaultValue == platformTimeoutMs;
+        if (!(configured instanceof Number number)) return false;
+        try {
+            return new BigDecimal(number.toString()).compareTo(BigDecimal.valueOf(platformTimeoutMs)) == 0;
+        } catch (NumberFormatException exception) {
+            return false;
+        }
+    }
+
+    private boolean matchesExactNumber(Object configured, long expected) {
+        if (!(configured instanceof Number number)) return false;
+        try {
+            return new BigDecimal(number.toString()).compareTo(BigDecimal.valueOf(expected)) == 0;
+        } catch (NumberFormatException exception) {
+            return false;
+        }
     }
 
     private void validateIdempotencySemantics(int index, String stageKey,

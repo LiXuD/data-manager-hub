@@ -2,6 +2,7 @@ package com.dataplatform.masterdata.connector.service;
 
 /** Stable, value-free reason codes for migration inventory and later API projection. */
 public enum LegacyHttpConversionReasonCode {
+    PIPELINE_SNAPSHOT_INVALID,
     EMPTY_PIPELINE,
     TOO_MANY_STEPS,
     NULL_STEP,

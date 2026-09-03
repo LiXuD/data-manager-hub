@@ -1,9 +1,11 @@
 package com.dataplatform.common.plugin.schema;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.dataplatform.plugin.spi.StageCapability;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -50,5 +52,58 @@ class ConnectorJsonSchemaValidatorSecretReferenceTest {
                 schema, config, StageCapability.RESPONSE_PARSER));
         assertEquals(Set.of(), validator.secretReferences(
                 schema, config, StageCapability.TRANSPORT));
+    }
+
+    @Test
+    void appliesTypeAndStringConstraintsToExplicitSecretReferences() throws Exception {
+        var schema = mapper.readTree("""
+                {"type":"object","properties":{
+                  "secret":{"type":"string","minLength":3,"maxLength":12,
+                    "pattern":"^vendor\\\\.[a-z-]+$","x-secret-ref":true}
+                }}
+                """);
+
+        assertEquals(List.of(), validator.validate(schema,
+                mapper.readTree("{\"secret\":\"vendor.key\"}"), ignored -> true));
+        assertFalse(validator.validate(schema,
+                mapper.readTree("{\"secret\":\"other.key\"}"), ignored -> true).isEmpty());
+        assertFalse(validator.validate(schema,
+                mapper.readTree("{\"secret\":\"vendor.this-reference-is-too-long\"}"), ignored -> true)
+                .isEmpty());
+        assertFalse(validator.validate(schema,
+                mapper.readTree("{\"secret\":{\"secretRef\":\"vendor.key\"}}"), ignored -> true)
+                .isEmpty());
+    }
+
+    @Test
+    void validatesTheReferencePropertyInsideObjectSecretRepresentations() throws Exception {
+        var schema = mapper.readTree("""
+                {"type":"object","properties":{
+                  "certificate":{"type":"object","x-secret-ref":true,
+                    "properties":{"secretRef":{"type":"string","minLength":3,
+                      "pattern":"^vendor\\\\.[a-z-]+$"}},"additionalProperties":false}
+                }}
+                """);
+
+        assertEquals(List.of(), validator.validate(schema,
+                mapper.readTree("{\"certificate\":{\"secretRef\":\"vendor.cert\"}}"), ignored -> true));
+        assertFalse(validator.validate(schema,
+                mapper.readTree("{\"certificate\":{\"secretRef\":\"other.cert\"}}"), ignored -> true)
+                .isEmpty());
+    }
+
+    @Test
+    void protectsAdditionalLegacySensitiveFieldNames() throws Exception {
+        var schema = mapper.readTree("""
+                {"type":"object","properties":{
+                  "secretKey":{"type":"object"},"apiSecret":{"type":"object"}
+                }}
+                """);
+
+        assertFalse(validator.validate(schema,
+                mapper.readTree("{\"secretKey\":{\"value\":\"plaintext\"}}"), ignored -> true)
+                .isEmpty());
+        assertEquals(List.of(), validator.validate(schema,
+                mapper.readTree("{\"apiSecret\":{\"secretRef\":\"vendor.api-secret\"}}"), ignored -> true));
     }
 }

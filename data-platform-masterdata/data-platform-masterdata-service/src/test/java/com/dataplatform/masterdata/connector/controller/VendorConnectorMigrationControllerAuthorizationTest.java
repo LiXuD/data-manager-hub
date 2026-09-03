@@ -54,7 +54,7 @@ class VendorConnectorMigrationControllerAuthorizationTest {
         long postRoutes = java.util.Arrays.stream(VendorConnectorMigrationController.class.getDeclaredMethods())
                 .filter(method -> method.isAnnotationPresent(PostMapping.class))
                 .count();
-        assertEquals(1, getRoutes);
-        assertEquals(5, postRoutes);
+        assertEquals(2, getRoutes);
+        assertEquals(6, postRoutes);
     }
 }
