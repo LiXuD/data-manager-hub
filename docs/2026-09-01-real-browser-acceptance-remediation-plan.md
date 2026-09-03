@@ -2,7 +2,7 @@
 
 > 日期：2026-09-01  
 > 适用基线：`dev` / `d4d56bf6954a2827c8d86223ecc211039debf7a9` 及其后续修复分支  
-> 状态：截至 2026-09-03，代码、前端、V060 前向迁移、测试和本地 Dev 运行态整改已实施并复审；合并后对抗性审查发现的四类缺陷已按功能点修复，远端交付仍以最终 PR 精确 SHA 的 `CI / required-ci` 为门禁，调用场景产品决策及 staging/production 门禁仍未宣称完成
+> 状态：截至 2026-09-03，代码、前端、V060 前向迁移、测试和本地 Dev 运行态整改已实施并复审；合并后对抗性审查发现的四类缺陷及回放暴露的 Element Plus 弃用警告已按功能点修复，远端交付仍以最终 PR 精确 SHA 的 `CI / required-ci` 为门禁，调用场景产品决策及 staging/production 门禁仍未宣称完成
 > 证据入口：[验收结果](2026-08-31-real-browser-end-to-end-acceptance-results.md) / [历史执行计划](2026-08-30-real-browser-end-to-end-acceptance-inventory-plan.md)  
 > 全局待办：以 [`PENDING_TASKS.md`](../PENDING_TASKS.md) 为准；本文是本轮问题的唯一详细整改设计
 
@@ -84,6 +84,7 @@ PR #45 合并后重新审查其目标评论，发现此前“已通过”的判�
 - `3920046735`：浏览器敏感字段扫描使用了无效的 `rg -E -i` 参数，且错误可能被当作无匹配。`9bb4442` 修正参数并对 ripgrep 执行错误 fail-closed；`2723ea3` 又补齐凭据扫描和禁止文件扫描的错误路径，新增缺失证据目录负向 harness。
 - `3920046738`：条件 Schema 的另一分支 `required` 不能推断当前分支禁止字段，否则会误删合法可选值。`23f1b4f` 仅依据显式 `not`/禁止字段处理，新增 `pruneSchemaValue` 可选字段回归测试。
 - `3920046742`：`Number.longValue()` 会截断小数和超范围浮点数，可能查询错误 CallRecord。`edfeb82` 使用精确整数解析并拒绝小数、NaN、无穷和越界值，新增 Controller 400/无服务调用测试。
+- 回放还发现个人中心的 Element Plus `el-radio` 使用已弃用的 `label` 作为值，导致认证页面产生 3 条 warning。`4d89658` 改用 `value`，并在登录后的个人中心页面以 DOM、截图和零新增 console warning/error 复核。
 
 上述提交保持功能边界拆分；对应 targeted backend/frontend 测试、shell harness 和 fresh V060 运行态复验均在最终交付门禁前重新执行。
 
