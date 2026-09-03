@@ -26,8 +26,8 @@ source "$STATE_FILE"
   echo "拒绝使用非 Dev MVP 运行目录: ${DEV_MVP_OUTPUT_DIR:-}" >&2
   exit 1
 }
-[[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V058" ]] || {
-  echo "Dev MVP fixture 必须基于 V058: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
+[[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V059" ]] || {
+  echo "Dev MVP fixture 必须基于 V059: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
   exit 1
 }
 
@@ -180,7 +180,7 @@ run_migration_gate() {
   fi
   if ! grep -Eiq 'up to date|no changesets|没有.*待(执行|更新)' "$status_log"; then
     cat "$status_log" >&2
-    echo "Dev MVP 数据库仍有待执行迁移，要求 V058 pending=0" >&2
+    echo "Dev MVP 数据库仍有待执行迁移，要求 V059 pending=0" >&2
     exit 1
   fi
   [[ "$(sql "SELECT count(*) FROM databasechangelog WHERE id IN ('widen-call-record-error-code-2026-08-27', 'bind-call-record-interface-identity-2026-08-28', 'management-permission-matrix-2026-09-01', 'serialize-billing-plan-publish-2026-09-01', 'complete-operation-log-tenant-scope-2026-09-02', 'preserve-config-version-encryption-2026-09-02', 'widen-alert-record-type-2026-09-02', 'repair-api-key-permission-parent-links-2026-09-02') AND author = 'data-platform' AND exectype = 'EXECUTED'")" == "8" ]] || {
@@ -189,6 +189,10 @@ run_migration_gate() {
   }
   [[ "$(sql "SELECT count(*) FROM permission child JOIN permission parent ON parent.permission_code = 'caller:view' AND child.parent_id = parent.id WHERE child.permission_code IN ('apikey:view', 'apikey:add', 'apikey:edit', 'apikey:delete')")" == "4" ]] || {
     echo "V058 API Key 权限目录父级未按 permission_code 正确修复" >&2
+    exit 1
+  }
+  [[ "$(sql "SELECT count(*) FROM databasechangelog WHERE id = 'scope-call-scene-by-tenant-2026-09-03' AND author = 'data-platform' AND exectype = 'EXECUTED'")" == "1" ]] || {
+    echo "V059 调用场景租户范围迁移未记录为 EXECUTED" >&2
     exit 1
   }
 }

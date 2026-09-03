@@ -122,7 +122,7 @@ class OpenApiQueryControllerTest {
         scene.setId(70L);
         scene.setSceneCode("pre-loan-review");
         scene.setSceneName("贷前审批");
-        when(callSceneService.getActiveScene("pre-loan-review")).thenReturn(scene);
+        when(callSceneService.getActiveScene(1L, "pre-loan-review")).thenReturn(scene);
 
         ApiInterfaceDTO apiInterface = new ApiInterfaceDTO();
         apiInterface.setId(30L);
@@ -265,7 +265,7 @@ class OpenApiQueryControllerTest {
 
         CallScene scene = new CallScene();
         scene.setSceneCode("pre-loan-review");
-        when(callSceneService.getActiveScene("pre-loan-review")).thenReturn(scene);
+        when(callSceneService.getActiveScene(1L, "pre-loan-review")).thenReturn(scene);
 
         when(apiInterfaceFeignClient.getByInterfaceCode("PERSONAL_QUERY"))
                 .thenReturn(Result.success(routeInterface(RoutingReadiness.READY, null)));

@@ -16,14 +16,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CallSceneService extends ServiceImpl<CallSceneMapper, CallScene> {
 
-    public List<CallScene> listManagedScenes() {
+    public List<CallScene> listManagedScenes(Long tenantId) {
+        if (!isValidTenant(tenantId)) {
+            return List.of();
+        }
         LambdaQueryWrapper<CallScene> wrapper = new LambdaQueryWrapper<>();
-        wrapper.orderByAsc(CallScene::getSceneCode);
+        wrapper.eq(CallScene::getTenantId, tenantId)
+                .orderByAsc(CallScene::getSceneCode);
         return list(wrapper);
     }
 
     @Transactional
-    public CallScene createScene(CallScene scene) {
+    public CallScene createScene(Long tenantId, CallScene scene) {
+        requireTenant(tenantId);
         if (scene == null) {
             throw CallSceneException.badRequest("CALL_SCENE_REQUIRED", "场景不能为空");
         }
@@ -32,6 +37,7 @@ public class CallSceneService extends ServiceImpl<CallSceneMapper, CallScene> {
         scene.setStatus(normalizeStatus(scene.getStatus()));
         scene.setDescription(normalizeDescription(scene.getDescription()));
         scene.setId(null);
+        scene.setTenantId(tenantId);
         scene.setDeleted(false);
         if (!save(scene)) {
             throw CallSceneException.conflict("CALL_SCENE_CREATE_FAILED", "场景创建失败");
@@ -40,8 +46,8 @@ public class CallSceneService extends ServiceImpl<CallSceneMapper, CallScene> {
     }
 
     @Transactional
-    public CallScene updateMetadata(Long id, String sceneName, String description) {
-        CallScene existing = requireScene(id);
+    public CallScene updateMetadata(Long tenantId, Long id, String sceneName, String description) {
+        CallScene existing = requireScene(tenantId, id);
         CallScene update = new CallScene();
         update.setId(existing.getId());
         update.setSceneName(requiredText(sceneName, "CALL_SCENE_NAME_REQUIRED", "sceneName不能为空"));
@@ -49,12 +55,12 @@ public class CallSceneService extends ServiceImpl<CallSceneMapper, CallScene> {
         if (!updateById(update)) {
             throw CallSceneException.conflict("CALL_SCENE_UPDATE_CONFLICT", "场景已被其他请求修改，请刷新后重试");
         }
-        return requireScene(id);
+        return requireScene(tenantId, id);
     }
 
     @Transactional
-    public CallScene changeStatus(Long id, String status) {
-        CallScene existing = requireScene(id);
+    public CallScene changeStatus(Long tenantId, Long id, String status) {
+        CallScene existing = requireScene(tenantId, id);
         String normalizedStatus = normalizeStatus(status);
         if (normalizedStatus.equalsIgnoreCase(existing.getStatus())) {
             return existing;
@@ -65,29 +71,45 @@ public class CallSceneService extends ServiceImpl<CallSceneMapper, CallScene> {
         if (!updateById(update)) {
             throw CallSceneException.conflict("CALL_SCENE_STATUS_CONFLICT", "场景已被其他请求修改，请刷新后重试");
         }
-        return requireScene(id);
+        return requireScene(tenantId, id);
     }
 
-    public CallScene getActiveScene(String sceneCode) {
-        if (sceneCode == null || sceneCode.trim().isEmpty()) {
+    public CallScene getActiveScene(Long tenantId, String sceneCode) {
+        if (!isValidTenant(tenantId) || sceneCode == null || sceneCode.trim().isEmpty()) {
             return null;
         }
         LambdaQueryWrapper<CallScene> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(CallScene::getSceneCode, sceneCode.trim())
+        wrapper.eq(CallScene::getTenantId, tenantId)
+                .eq(CallScene::getSceneCode, sceneCode.trim())
                 .eq(CallScene::getStatus, StatusConstants.ACTIVE)
                 .last("LIMIT 1");
         return getOne(wrapper, false);
     }
 
-    private CallScene requireScene(Long id) {
+    private CallScene requireScene(Long tenantId, Long id) {
+        requireTenant(tenantId);
         if (id == null || id <= 0) {
             throw CallSceneException.badRequest("CALL_SCENE_ID_INVALID", "场景ID无效");
         }
-        CallScene scene = getById(id);
+        LambdaQueryWrapper<CallScene> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(CallScene::getId, id)
+                .eq(CallScene::getTenantId, tenantId)
+                .last("LIMIT 1");
+        CallScene scene = getOne(wrapper, false);
         if (scene == null) {
             throw CallSceneException.notFound("CALL_SCENE_NOT_FOUND", "场景不存在");
         }
         return scene;
+    }
+
+    private void requireTenant(Long tenantId) {
+        if (!isValidTenant(tenantId)) {
+            throw CallSceneException.badRequest("CALL_SCENE_TENANT_REQUIRED", "租户不能为空");
+        }
+    }
+
+    private boolean isValidTenant(Long tenantId) {
+        return tenantId != null && tenantId > 0;
     }
 
     private String requiredText(String value, String errorCode, String message) {

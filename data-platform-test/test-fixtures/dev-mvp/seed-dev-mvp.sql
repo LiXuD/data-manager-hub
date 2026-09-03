@@ -223,11 +223,11 @@ JOIN caller_info c ON c.caller_code IN (
 WHERE u.username = 'dev-mvp-applicant-' || :'run_token'
 ON CONFLICT (user_id, caller_id) DO NOTHING;
 
-INSERT INTO call_scene (scene_code, scene_name, description, status, deleted)
-VALUES (
-    'dev-mvp-scene-' || :'run_token', 'Dev MVP 业务验收场景',
-    '风控与信贷系统共用的开发验收调用场景', 'active', FALSE
-);
+INSERT INTO call_scene (tenant_id, scene_code, scene_name, description, status, deleted)
+SELECT t.id, 'dev-mvp-scene-' || :'run_token', 'Dev MVP 业务验收场景',
+       '风控与信贷系统共用的开发验收调用场景', 'active', FALSE
+FROM tenant_info t
+WHERE t.tenant_code = 'dev-mvp-tenant-' || :'run_token';
 
 INSERT INTO billing_plan (
     plan_code, version, plan_name, vendor_id, vendor_code, vendor_name,

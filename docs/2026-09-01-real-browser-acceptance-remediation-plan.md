@@ -2,7 +2,7 @@
 
 > 日期：2026-09-01  
 > 适用基线：`dev` / `d4d56bf6954a2827c8d86223ecc211039debf7a9` 及其后续修复分支  
-> 状态：截至 2026-09-02，代码、前端、V058 前向迁移、测试和本地 Dev 运行态整改已实施并复审；最终精确 SHA 的远端 `CI / required-ci`、调用场景产品决策及 staging/production 门禁仍未宣称完成  
+> 状态：截至 2026-09-03，代码、前端、V059 前向迁移、测试和本地 Dev 运行态整改已实施并复审；最终精确 SHA 的远端 `CI / required-ci`、调用场景产品决策及 staging/production 门禁仍未宣称完成  
 > 证据入口：[验收结果](2026-08-31-real-browser-end-to-end-acceptance-results.md) / [历史执行计划](2026-08-30-real-browser-end-to-end-acceptance-inventory-plan.md)  
 > 全局待办：以 [`PENDING_TASKS.md`](../PENDING_TASKS.md) 为准；本文是本轮问题的唯一详细整改设计
 
@@ -41,7 +41,7 @@
 | 结论类型 | 当前证据 | 使用边界 |
 |---|---|---|
 | 源码事实 | 当前工作树的 Controller、Service、Vue、TypeScript、fixture 与迁移代码 | 可用于定位候选根因；实现前仍须重新执行 GitNexus impact |
-| 运行态事实 | 2026-08-31 与 2026-09-02 隔离 Dev-MVP 的浏览器、HTTP、脱敏数据库和清理证据 | 2026-09-02 当前工作树的 fresh V058/P6 已重新运行并通过；不代表 staging/production 已验证 |
+| 运行态事实 | 2026-08-31 与 2026-09-03 隔离 Dev-MVP 的浏览器、HTTP、脱敏数据库和清理证据 | 2026-09-03 当前工作树的 fresh V059/P6 已重新运行并通过；不代表 staging/production 已验证 |
 | 高置信推断 | 计费发布 500 与区间冲突的异常映射，现由领域异常、预检、事务锁和回归测试覆盖 | 未保留服务端生产堆栈；仍需在目标环境观察真实错误率和并发行为 |
 | 未验证 | 最终精确 SHA 的远端 required CI、调用场景产品决策、生产环境与真实付费厂商 | 只能作为当前残余门禁，不能写成已通过 |
 
@@ -65,14 +65,15 @@
 | UX-01 | P2 | 正确的保护性 409 只能在提交后看到 | Web | 保留后端拒绝语义 |
 | OBS-01 | P2 | CallRecord 最终一致只由测试轮询兜底 | Access + Governance | 生产阈值需观测数据决定 |
 | ROLE-01 | 已闭合/回归 | 历史 fixture 把管理员和审批人耦合 | Test fixture | 保持四角色分离，不重新引入自审 |
-| TEST-01 | 验收门禁 | 当前安全收尾版 P6 已在 fresh V058 隔离环境完整回放 | Test fixture | 仍需在最终精确 SHA 上等待远端 `CI / required-ci` |
+| TEST-01 | 验收门禁 | 当前安全收尾版 P6 已在 fresh V059 隔离环境完整回放 | Test fixture | 仍需在最终精确 SHA 上等待远端 `CI / required-ci` |
 
-### 3.1 2026-09-02 实施与对抗性复审结论
+### 3.1 2026-09-03 实施与对抗性复审结论
 
 - SEC-01/SEC-02/AUTH-01、NAV-01/NAV-02、PERM-01、STATE-01/02、CONN-01、MIG-01 和 BILL-01 的技术整改已落地；路由机器校验为 286 个 Controller mapping、255 个 policy entry、30 个 public/internal 排除项。
 - UI-01、UX-01 和 OBS-01 已落地并通过前端/运行态断言；`api_process_admin` 采用只读流程诊断，流程写管理仍等待产品决策。
 - SCENE-01 已采用安全的编码不可变、元数据可维护、停用代替物理删除实现；是否将其作为最终产品生命周期仍等待产品确认，未把该停点伪装成完成。
-- V058 以前向迁移修复 API Key 权限目录的历史 ID 父级错误，不改写 V053 或任何已执行历史事实；fresh/upgrade/repeat/父级断言均纳入验证。
+- V058 以前向迁移修复 API Key 权限目录的历史 ID 父级错误，V059 为调用场景补齐租户所有权并在无法明确归属存量行时原子 HALT；两者都不改写已执行历史事实，fresh/upgrade/repeat/负向断言均纳入验证。
+- 对 V053 的对抗性复审发现 `ON CONFLICT DO UPDATE` 会重写既有权限事实，已改为只补齐缺失词汇；对计费发布复审发现候选行锁早于业务键锁，已调整为“业务键锁 → 候选行锁 → 业务键范围行锁”，并补充并发顺序和并发修改回归测试。
 - 对抗性复审重点检查了权限绕过、跨租户对象、Secret 明文/引用、Schema 条件字段、Redis 不可用、计费冲突部分写入、迁移脏状态、前端二次反转、控制台噪声和证据泄露；当前 Dev 证据未发现新增已知缺陷。
 
 ## 4. 详细修复设计
@@ -292,7 +293,7 @@ Kafka 异步落库导致成功响应后短暂查不到 CallRecord 是设计行�
 
 ### 4.16 TEST-01：安全收尾脚本的 fresh 完整回放
 
-最终 P6 通过后，脚本移除了 tracing start/stop 以避免保留凭据。整改前该安全收尾版本只执行过 `bash -n` 和 `--help`；2026-09-02 已在 fresh V058 隔离环境完成以下回放：
+最终 P6 通过后，脚本移除了 tracing start/stop 以避免保留凭据。整改前该安全收尾版本只执行过 `bash -n` 和 `--help`；2026-09-03 已在 fresh V059 隔离环境完成以下回放：
 
 1. 从 fresh 隔离数据库、最新迁移且 `pendingMigrations=0` 启动六服务、Gateway、Web 和 HTTPS fixture。
 2. 使用四个分离角色和真实用户名密码，不注入 Token/storage state/mock。

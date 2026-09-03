@@ -17,6 +17,7 @@ public class CallScene {
 
     @TableId(type = IdType.AUTO)
     private Long id;
+    private Long tenantId;
     private String sceneCode;
     private String sceneName;
     private String status;
@@ -33,6 +34,8 @@ public class CallScene {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
     public String getSceneCode() { return sceneCode; }
     public void setSceneCode(String sceneCode) { this.sceneCode = sceneCode; }
     public String getSceneName() { return sceneName; }

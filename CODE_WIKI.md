@@ -1027,7 +1027,7 @@ data-platform-web/src/
 | 12 | api_key | API Key、限流开关、每分钟上限和配额 | access |
 | 13 | api_key_interface | API Key 接口授权 | access |
 | 14 | api_key_product | API Key 产品授权 | access |
-| 15 | call_scene | 调用场景字典 | access |
+| 15 | call_scene | 租户范围内的调用场景字典（编码复合唯一） | access |
 | 16 | call_record | 调用记录、缓存来源和响应契约校验结果 (按月分区) | access |
 | 17 | billing_template | 计费算法模板 | billing |
 | 18 | billing_plan | 厂商接口版本化计费方案 | billing |

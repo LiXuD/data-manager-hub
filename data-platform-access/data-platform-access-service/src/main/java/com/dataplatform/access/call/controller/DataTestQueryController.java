@@ -83,8 +83,9 @@ public class DataTestQueryController {
                     .body(Result.error(HttpStatus.FORBIDDEN.value(), "没有数据测试权限"));
         }
         try {
+            Long tenantId = UserContext.getCurrentTenantId();
             Set<Long> authorizedInterfaceIds = resolveAuthorizedInterfaceIds(
-                    UserContext.getCurrentUserId(), UserContext.getCurrentTenantId(), apiKeyId);
+                    UserContext.getCurrentUserId(), tenantId, apiKeyId);
             if (authorizedInterfaceIds == null) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Result.error(HttpStatus.FORBIDDEN.value(), "无权使用该API Key"));
@@ -139,7 +140,7 @@ public class DataTestQueryController {
                 }
             }
 
-            List<DataTestOptionsVO.SceneOption> scenes = callSceneService.list().stream()
+            List<DataTestOptionsVO.SceneOption> scenes = callSceneService.listManagedScenes(tenantId).stream()
                     .filter(scene -> scene != null
                             && !Boolean.TRUE.equals(scene.getDeleted())
                             && "active".equalsIgnoreCase(scene.getStatus()))
@@ -147,7 +148,7 @@ public class DataTestQueryController {
                     .sorted(Comparator.comparing(DataTestOptionsVO.SceneOption::sceneCode))
                     .toList();
             List<DataTestOptionsVO.ProductOption> products = resolveAuthorizedProducts(
-                    UserContext.getCurrentUserId(), UserContext.getCurrentTenantId(), apiKeyId);
+                    UserContext.getCurrentUserId(), tenantId, apiKeyId);
 
             return ResponseEntity.ok(Result.success(new DataTestOptionsVO(
                     List.copyOf(vendors.values()),

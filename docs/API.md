@@ -268,7 +268,7 @@ missing secretRef 和跨 vendor secretRef；测试和运行只解析当前阶段
 
 V049/U049 增加 Manifest v2、SIMPLE Spec/编译投影和发布冻结约束；V050/U050 种入不可覆盖的
 `generic-http:2.0.0` 静态目录事实；V051 将 `call_record.error_code` 扩展到 `VARCHAR(64)`，
-覆盖完整平台连接器错误类别；V052 为 `call_record` 增加可空 `interface_id`，让观察聚合按规范接口身份过滤；V053—V057 固化管理权限、计费发布锁、操作日志租户范围、配置版本加密元数据和告警类型宽度；V058 修复 API Key 权限目录父级引用。隔离回归入口分别为
+覆盖完整平台连接器错误类别；V052 为 `call_record` 增加可空 `interface_id`，让观察聚合按规范接口身份过滤；V053—V057 固化管理权限、计费发布锁、操作日志租户范围、配置版本加密元数据和告警类型宽度；V058 修复 API Key 权限目录父级引用，V059 固化调用场景租户所有权。隔离回归入口分别为
 `verify-v049-connector-product-spec.sh` 和 `verify-v050-generic-http.sh`；脚本通过只允许匹配
 `dataplatform_v049_*_regression`/`dataplatform_v050_*_regression` 的临时数据库验证 fresh、升级、重复、
 漂移/HALT 原子性、条件回滚和重新应用。该证据不表示迁移已在生产数据库执行。
@@ -349,7 +349,7 @@ Content-Type: application/json
 | GET | `/caller/apikey/{id}/interfaces` | 查询当前有效接口权限 |
 | POST | `/caller/apikey/{id}/interfaces` | 已收口，固定返回 409；改用接口权限申请或紧急授权 |
 | GET/POST | `/caller/apikey/{id}/products` | 查询或分配产品权限 |
-| GET/POST | `/call-scene/list`、`/call-scene` | 公共调用场景 |
+| GET/POST | `/call-scene/list`、`/call-scene` | 当前租户的调用场景；编码创建后不可变，名称/描述/状态可维护，停用代替物理删除 |
 | POST | `/data-test/query` | 登录态测试调用；正文使用 `apiKeyId`，服务端校验用户关联后按该 Key 授权、限流、配额和计费 |
 
 创建 API Key 时会在同一事务中写入 `api_key` 与 `api_key_product`；产品必须启用且属于该 Caller。完整密钥只在创建响应中返回；后续列表不应作为密钥恢复通道。

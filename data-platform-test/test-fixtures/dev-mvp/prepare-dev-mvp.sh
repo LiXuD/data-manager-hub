@@ -125,7 +125,7 @@ fi
   printf 'DEV_MVP_SECURITY_USERNAME=%q\n' "dev-mvp-security-$RUN_TOKEN"
   printf 'DEV_MVP_SECURITY_PASSWORD=%q\n' "$ADMIN_PASSWORD"
   printf 'DEV_MVP_DB_READY=%q\n' 'true'
-  printf 'DEV_MVP_SCHEMA_VERSION=%q\n' 'V058'
+  printf 'DEV_MVP_SCHEMA_VERSION=%q\n' 'V059'
 } >> "$STATE_FILE"
 
 # shellcheck disable=SC1090

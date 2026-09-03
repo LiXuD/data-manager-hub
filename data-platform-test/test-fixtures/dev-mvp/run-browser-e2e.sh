@@ -40,8 +40,8 @@ source "$STATE_FILE"
   echo "fixture 状态文件不属于当前项目" >&2
   exit 1
 }
-[[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V058" ]] || {
-  echo "Dev MVP fixture 必须基于 V058: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
+[[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V059" ]] || {
+  echo "Dev MVP fixture 必须基于 V059: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
   exit 1
 }
 [[ "${DEV_MVP_DB_NAME:-}" =~ ^dataplatform_dev_mvp_[0-9]{14}_[0-9]+_regression$ ]] || {
