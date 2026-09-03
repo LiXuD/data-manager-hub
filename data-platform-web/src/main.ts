@@ -13,8 +13,8 @@ app.use(createPinia())
 app.use(router)
 
 // 全局错误处理器
-app.config.errorHandler = (err, _instance, info) => {
-  console.error('全局错误:', err, info)
+app.config.errorHandler = (_err, _instance, _info) => {
+  console.error('全局错误')
   ElMessage.error('系统异常，请稍后重试')
 }
 

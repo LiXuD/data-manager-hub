@@ -1,11 +1,11 @@
 import { request } from '@/utils/request'
-import type { Tenant, ListResponse } from '@/types'
+import type { Tenant, ListResponse, TenantStatus } from '@/types'
 
 export const getTenantList = (params: {
   page: number
   pageSize: number
   keyword?: string
-  status?: 'active' | 'disabled'
+  status?: TenantStatus
 }) => {
   return request.get<ListResponse<Tenant>>('/tenant/list', { params })
 }
@@ -26,6 +26,6 @@ export const deleteTenant = (id: string | number) => {
   return request.delete<void>(`/tenant/${id}`)
 }
 
-export const updateTenantStatus = (id: string, status: 'active' | 'disabled') => {
+export const updateTenantStatus = (id: string, status: TenantStatus) => {
   return request.patch<void>(`/tenant/${id}/status`, { status })
 }

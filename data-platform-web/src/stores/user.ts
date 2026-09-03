@@ -17,7 +17,13 @@ interface UserInfo {
 
 const loadUserInfo = (): UserInfo | null => {
   const stored = localStorage.getItem(STORAGE_KEYS.USER_INFO)
-  return stored ? JSON.parse(stored) : null
+  if (!stored) return null
+  try {
+    return JSON.parse(stored) as UserInfo
+  } catch {
+    localStorage.removeItem(STORAGE_KEYS.USER_INFO)
+    return null
+  }
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -34,21 +40,24 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed(() => !!token.value && !isTokenExpired.value)
   const isTokenExpired = computed(() => {
     if (!tokenExpiresAt.value) return false // 无过期时间则不校验
-    return Date.now() > tokenExpiresAt.value
+    return Date.now() >= tokenExpiresAt.value
   })
 
   const hasPermission = (permission: string): boolean => {
-    return permissions.value.includes(permission)
+    return permissions.value.includes('system:admin') || permissions.value.includes(permission)
   }
 
   const setToken = (newToken: string, expiresAt?: number) => {
-    if (newToken === token.value) return
+    if (newToken === token.value && expiresAt === undefined) return
     token.value = newToken
     if (newToken) {
       localStorage.setItem(STORAGE_KEYS.TOKEN, newToken)
-      if (expiresAt) {
+      if (expiresAt !== undefined) {
         tokenExpiresAt.value = expiresAt
         localStorage.setItem('token_expires_at', String(expiresAt))
+      } else {
+        tokenExpiresAt.value = null
+        localStorage.removeItem('token_expires_at')
       }
     } else {
       localStorage.removeItem(STORAGE_KEYS.TOKEN)

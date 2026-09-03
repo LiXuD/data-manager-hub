@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { computed, ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { LineChart, PieChart } from 'echarts/charts'
 import {
@@ -13,6 +13,7 @@ import { getVendorAll } from '@/api/vendor'
 import { getCallerList } from '@/api/caller'
 import { extractPageData } from '@/utils/pagination'
 import type { CallRecord, CallerDTO, Vendor } from '@/types'
+import { useUserStore } from '@/stores/user'
 
 use([
   LineChart,
@@ -23,6 +24,7 @@ use([
 ])
 
 const router = useRouter()
+const userStore = useUserStore()
 
 const statsData = ref([
   { label: '调用总量', value: '0', unit: '次', note: '成功率 0%' },
@@ -33,11 +35,14 @@ const statsData = ref([
 
 // 快捷入口
 const quickActions = [
-  { label: '新增厂商', icon: 'plus', route: '/vendor' },
-  { label: '调用查询', icon: 'search', route: '/call' },
-  { label: '账单查看', icon: 'wallet', route: '/billing' },
-  { label: '告警处理', icon: 'alarm', route: '/monitor' }
+  { label: '新增厂商', icon: 'plus', route: '/vendor', permission: 'vendor:view' },
+  { label: '调用查询', icon: 'search', route: '/call', permission: 'call:view' },
+  { label: '账单查看', icon: 'wallet', route: '/billing', permission: 'billing:view' },
+  { label: '告警处理', icon: 'alarm', route: '/monitor', permission: 'monitor:view' }
 ]
+
+const visibleQuickActions = computed(() => quickActions.filter(action =>
+  userStore.hasPermission(action.permission)))
 
 const recentCalls = ref<Array<{ id: number; vendor: string; type: string; caller: string; status: string; time: string; cost: number }>>([])
 const hourlyCounts = ref<number[]>(Array(24).fill(0))
@@ -255,7 +260,7 @@ onUnmounted(() => {
 
     <!-- 快捷入口 -->
     <div class="quick-actions">
-      <div v-for="action in quickActions" :key="action.label" class="action-item" @click="router.push(action.route)">
+        <div v-for="action in visibleQuickActions" :key="action.label" class="action-item" @click="router.push(action.route)">
         <div class="action-icon">
           <svg v-if="action.icon === 'plus'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M5 12h14"/>
@@ -302,7 +307,7 @@ onUnmounted(() => {
       <template #header>
         <div class="chart-header">
           <span class="chart-title">最近调用记录</span>
-          <el-button type="primary" link @click="router.push('/call')">查看全部</el-button>
+          <el-button v-if="userStore.hasPermission('call:view')" type="primary" link @click="router.push('/call')">查看全部</el-button>
         </div>
       </template>
       <el-table :data="recentCalls" stripe class="recent-table">

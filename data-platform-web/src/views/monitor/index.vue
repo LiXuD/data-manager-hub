@@ -116,8 +116,8 @@
             </el-table-column>
             <el-table-column label="操作" width="180" fixed="right">
               <template #default="{ row }">
-                <el-button type="primary" link @click="handleCheckNow(row)">立即检查</el-button>
-                <el-button type="primary" link @click="handleViewLogs(row)">查看日志</el-button>
+                <el-button v-if="canManage" type="primary" link @click="handleCheckNow(row)">立即检查</el-button>
+                <el-button v-if="canViewAudit" type="primary" link @click="handleViewLogs(row)">查看日志</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -126,7 +126,7 @@
         <!-- 告警规则 -->
         <el-tab-pane label="告警规则" name="alert">
           <div class="tool-bar">
-            <el-button type="primary" @click="handleAddRule">
+            <el-button v-if="canManage" type="primary" @click="handleAddRule">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 5v14M5 12h14"/>
               </svg>
@@ -153,13 +153,13 @@
             </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
-                <el-switch v-model="row.status" active-value="active" inactive-value="inactive" @change="handleRuleStatusChange(row)" />
+                <el-switch v-model="row.status" active-value="active" inactive-value="inactive" :disabled="!canManage" @change="handleRuleStatusChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="操作" width="150" fixed="right">
               <template #default="{ row }">
-                <el-button type="primary" link @click="handleEditRule(row)">编辑</el-button>
-                <el-button type="danger" link @click="handleDeleteRule(row)">删除</el-button>
+                <el-button v-if="canManage" type="primary" link @click="handleEditRule(row)">编辑</el-button>
+                <el-button v-if="canManage" type="danger" link @click="handleDeleteRule(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -180,7 +180,7 @@
             <el-table-column prop="alertTime" label="告警时间" width="180" />
             <el-table-column label="操作" width="100">
               <template #default="{ row }">
-                <el-button v-if="row.status !== 'resolved'" type="primary" link @click="openResolveDialog(row)">处理</el-button>
+                <el-button v-if="row.status !== 'resolved' && canManage" type="primary" link @click="openResolveDialog(row)">处理</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -237,7 +237,7 @@
       </el-form>
       <template #footer>
         <el-button @click="ruleDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="ruleSubmitting" @click="handleSaveRule">保存</el-button>
+        <el-button v-if="canManage" type="primary" :loading="ruleSubmitting" @click="handleSaveRule">保存</el-button>
       </template>
     </el-dialog>
 
@@ -245,14 +245,14 @@
       <el-input v-model="resolution" type="textarea" :rows="4" placeholder="请输入处理结果" />
       <template #footer>
         <el-button @click="resolveDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="resolving" @click="handleResolveAlert">确认处理</el-button>
+        <el-button v-if="canManage" type="primary" :loading="resolving" @click="handleResolveAlert">确认处理</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -270,6 +270,11 @@ import {
 import type { AlertRecord, AlertRule } from '@/types'
 import { getStatusType as getTagType, getStatusText } from '@/utils/status'
 import { extractPageData } from '@/utils/pagination'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
+const canManage = computed(() => userStore.hasPermission('monitor:manage'))
+const canViewAudit = computed(() => userStore.hasPermission('audit:view'))
 
 const loading = ref(false)
 const route = useRoute()

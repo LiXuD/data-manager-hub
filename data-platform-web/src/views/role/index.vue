@@ -3,7 +3,7 @@
     <!-- 页面标题 -->
     <PageHeader title="角色管理" description="管理系统角色与权限配置">
       <template #action>
-        <el-button type="primary" @click="handleAdd">
+        <el-button v-if="canAddRole" type="primary" @click="handleAdd">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M5 12h14"/>
           </svg>
@@ -34,7 +34,7 @@
         <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
-            <el-switch v-model="row.status" :active-value="COMMON_STATUS.ACTIVE" :inactive-value="COMMON_STATUS.INACTIVE" @change="handleStatusChange(row)" />
+            <el-switch v-model="row.status" :active-value="COMMON_STATUS.ACTIVE" :inactive-value="COMMON_STATUS.INACTIVE" :disabled="!canEditRole" @change="handleStatusChange(row)" />
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="170">
@@ -44,9 +44,9 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link @click="handlePermission(row)">配置权限</el-button>
-            <el-button type="primary" link @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button v-if="canConfigurePermissions" type="primary" link @click="handlePermission(row)">配置权限</el-button>
+            <el-button v-if="canEditRole" type="primary" link @click="handleEdit(row)">编辑</el-button>
+            <el-button v-if="canDeleteRole" type="danger" link @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -67,7 +67,7 @@
     <el-dialog v-model="dialogVisible" :title="form.id ? '编辑角色' : '新增角色'" width="500px" class="form-dialog">
       <el-form :model="form" label-width="100px">
         <el-form-item label="角色编码" required>
-          <el-input v-model="form.roleCode" placeholder="如: ADMIN, TENANT_ADMIN" />
+          <el-input v-model="form.roleCode" :disabled="Boolean(form.id)" placeholder="如: ADMIN, TENANT_ADMIN" />
         </el-form-item>
         <el-form-item label="角色名称" required>
           <el-input v-model="form.roleName" placeholder="请输入角色名称" />
@@ -75,7 +75,7 @@
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
         </el-form-item>
-        <el-form-item label="状态">
+        <el-form-item v-if="!form.id" label="状态">
           <el-select v-model="form.status" style="width: 100%">
             <el-option label="启用" value="active" />
             <el-option label="禁用" value="inactive" />
@@ -84,7 +84,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button v-if="form.id ? canEditRole : canAddRole" type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
 
@@ -102,7 +102,7 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="permissionVisible = false" size="large">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="handleSavePermissions" size="large">确定</el-button>
+          <el-button v-if="canEditRole" type="primary" :loading="submitting" @click="handleSavePermissions" size="large">确定</el-button>
         </div>
       </template>
     </el-dialog>
@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getRoleList, createRole, updateRole, deleteRole, updateRoleStatus, assignPermissions, getRolePermissionIds } from '@/api/role'
 import { getAllPermissions } from '@/api/permission'
@@ -118,9 +118,16 @@ import PageHeader from '@/components/PageHeader.vue'
 import SearchBar from '@/components/SearchBar.vue'
 import { COMMON_STATUS, STATUS_LABELS } from '@/constants'
 import { extractPageData } from '@/utils/pagination'
+import { useUserStore } from '@/stores/user'
 
 interface Role { id: number; roleCode: string; roleName: string; description: string; status: string; createdAt: string }
 interface Permission { id: number; permissionCode: string; permissionName: string }
+
+const userStore = useUserStore()
+const canAddRole = computed(() => userStore.hasPermission('role:add'))
+const canEditRole = computed(() => userStore.hasPermission('role:edit'))
+const canDeleteRole = computed(() => userStore.hasPermission('role:delete'))
+const canConfigurePermissions = computed(() => canEditRole.value && userStore.hasPermission('permission:view'))
 
 const loading = ref(false)
 const submitting = ref(false)

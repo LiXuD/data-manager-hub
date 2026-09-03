@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { login } from '@/api/auth'
+import { resolveFirstAuthorizedRoute } from '@/router/navigation'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const loginFormRef = ref<FormInstance>()
 const loading = ref(false)
@@ -44,9 +46,10 @@ const handleLogin = async () => {
         })
 
         ElMessage.success('登录成功')
-        router.push('/dashboard')
-      } catch (error) {
-        console.error('登录失败:', error)
+        const requestedPath = typeof route.query.redirect === 'string' ? route.query.redirect : undefined
+        router.push(resolveFirstAuthorizedRoute(userStore.permissions, requestedPath))
+      } catch {
+        console.error('登录失败')
       } finally {
         loading.value = false
       }

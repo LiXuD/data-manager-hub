@@ -78,9 +78,9 @@ async function loadInterfaces() {
     if (!interfaces.value.some(item => item.id === selectedInterfaceId.value)) {
       selectedInterfaceId.value = interfaces.value[0]?.id
     }
-  } catch (error) {
+  } catch {
     loadError.value = '业务接口列表加载失败，请确认接口查询权限和服务状态。'
-    console.warn('加载连接器诊断接口列表失败', error)
+    console.warn('加载连接器诊断接口列表失败')
   } finally {
     loading.value = false
   }
@@ -97,9 +97,9 @@ async function loadConfigs(interfaceId: number) {
     configs.value = (await getVendorConfigByInterface(interfaceId)).data || []
     if (requestId !== diagnosticRequest) return
     selectedConfigId.value = configs.value[0]?.id
-  } catch (error) {
+  } catch {
     if (requestId === diagnosticRequest) loadError.value = '厂商连接器列表加载失败，请确认连接器查看权限。'
-    console.warn('加载连接器诊断配置列表失败', error)
+    console.warn('加载连接器诊断配置列表失败')
   } finally {
     if (requestId === diagnosticRequest) loading.value = false
   }
@@ -150,11 +150,11 @@ async function loadPlan(version?: number) {
   try {
     plan.value = (await getConnectorExecutionPlan(selectedConfigId.value, version)).data
     planVersion.value = version
-  } catch (error) {
+  } catch {
     plan.value = null
     planVersion.value = version
     planError.value = '执行计划加载失败，请稍后重试。'
-    console.warn('加载连接器执行计划失败', error)
+    console.warn('加载连接器执行计划失败')
   } finally {
     planLoading.value = false
   }
