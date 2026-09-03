@@ -1918,10 +1918,14 @@ class CiContractTests(unittest.TestCase):
 
     def test_prometheus_release_rules_cover_continuous_slo_signals(self) -> None:
         result = run_script("verify-observability-rules.py")
-        self.assertIn("6 alerts", result.stdout)
+        self.assertIn("8 alerts", result.stdout)
         rules = (ROOT / "observability" / "prometheus-rules.yaml").read_text(encoding="utf-8")
         self.assertIn("DmhReleaseErrorBudgetBurnCritical", rules)
         self.assertIn("DmhConnectorRuntimeNotReady", rules)
+        self.assertIn("DmhCallRecordConsumerDltPublished", rules)
+        self.assertIn("DmhCallRecordConsumerFailures", rules)
+        self.assertIn("call_record_consumer_dlt_published_total", rules)
+        self.assertIn('outcome=~"failed|malformed"', rules)
         self.assertIn("min(dm_connector_runtime_readiness", rules)
         critical = rules.split("alert: DmhReleaseErrorBudgetBurnCritical", 1)[1].split("alert:", 1)[0]
         warning = rules.split("alert: DmhReleaseErrorBudgetBurnWarning", 1)[1].split("alert:", 1)[0]

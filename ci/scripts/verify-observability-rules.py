@@ -11,6 +11,8 @@ import yaml
 
 
 EXPECTED_ALERTS = {
+    "DmhCallRecordConsumerDltPublished",
+    "DmhCallRecordConsumerFailures",
     "DmhReleaseErrorBudgetBurnCritical",
     "DmhReleaseErrorBudgetBurnWarning",
     "DmhReleaseLatencyP95High",

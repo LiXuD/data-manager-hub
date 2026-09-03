@@ -133,8 +133,8 @@ validate_state() {
     echo "fixture 状态文件不属于当前项目" >&2
     exit 1
   }
-  [[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V052" ]] || {
-    echo "Dev MVP fixture 必须基于 V052: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
+  [[ "${DEV_MVP_SCHEMA_VERSION:-}" == "V058" ]] || {
+    echo "Dev MVP fixture 必须基于 V058: ${DEV_MVP_SCHEMA_VERSION:-}" >&2
     exit 1
   }
   [[ "${DEV_MVP_DB_NAME:-}" =~ ^dataplatform_dev_mvp_[0-9]{14}_[0-9]+_regression$ ]] || {
@@ -149,6 +149,8 @@ validate_state() {
     DEV_MVP_DB_HOST DEV_MVP_DB_PORT DEV_MVP_DB_USERNAME DEV_MVP_DB_PASSWORD \
     DEV_MVP_DB_NAME DEV_MVP_OUTPUT_DIR DEV_MVP_ADMIN_USERNAME \
     DEV_MVP_ADMIN_PASSWORD DEV_MVP_APPLICANT_USERNAME DEV_MVP_APPLICANT_PASSWORD \
+    DEV_MVP_APPROVER_USERNAME DEV_MVP_APPROVER_PASSWORD \
+    DEV_MVP_SECURITY_USERNAME DEV_MVP_SECURITY_PASSWORD \
     FIXTURE_ARTIFACT_URI FIXTURE_ARTIFACT_SHA256 FIXTURE_DETACHED_SIGNATURE \
     FIXTURE_SIGNING_KEY_ID FIXTURE_SIGNING_PUBLIC_KEY_BASE64 \
     FIXTURE_ACCESS_SIGNING_KEY_RESOURCE FIXTURE_JAVA_TLS_OPTIONS; do
@@ -494,7 +496,7 @@ mkdir -p "$RUNTIME_ROOT"
 install -m 600 "$BUSINESS_REPORT" "$LATEST_REPORT"
 
 echo "DEV_MVP_REPORT=$LATEST_REPORT"
-echo "Dev MVP dev 闭环通过：V052 无待迁移、六服务健康、前端可访问、3/2/2 业务事实和审批/调用/计费/审计/监控均已验收。"
+echo "Dev MVP dev 闭环通过：V058 无待迁移、六服务健康、前端可访问、3/2/2 业务事实和审批/调用/计费/审计/监控均已验收。"
 
 if [[ "$KEEP_RUNNING" == true ]]; then
   {

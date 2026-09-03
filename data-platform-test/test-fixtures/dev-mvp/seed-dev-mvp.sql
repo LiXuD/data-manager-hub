@@ -27,6 +27,22 @@ SELECT 'dev-mvp-applicant-' || :'run_token', 'Dev MVP Applicant', :'password_has
 FROM tenant_info
 WHERE tenant_code = 'dev-mvp-tenant-' || :'run_token';
 
+INSERT INTO user_info (
+    username, nickname, password, tenant_id, status, deleted
+)
+SELECT 'dev-mvp-approver-' || :'run_token', 'Dev MVP Approver', :'password_hash',
+       id, 'active', FALSE
+FROM tenant_info
+WHERE tenant_code = 'dev-mvp-tenant-' || :'run_token';
+
+INSERT INTO user_info (
+    username, nickname, password, tenant_id, status, deleted
+)
+SELECT 'dev-mvp-security-' || :'run_token', 'Dev MVP Security', :'password_hash',
+       id, 'active', FALSE
+FROM tenant_info
+WHERE tenant_code = 'dev-mvp-tenant-' || :'run_token';
+
 INSERT INTO user_role (user_id, role_id, created_by, deleted)
 SELECT u.id, r.id, u.id, FALSE
 FROM user_info u
@@ -47,7 +63,15 @@ INSERT INTO user_role (user_id, role_id, created_by, deleted)
 SELECT u.id, r.id, u.id, FALSE
 FROM user_info u
 JOIN role_info r ON r.role_code = 'api_interface_approver'
-WHERE u.username = 'dev-mvp-admin-' || :'run_token'
+WHERE u.username = 'dev-mvp-approver-' || :'run_token'
+  AND r.status = 'active' AND r.deleted = FALSE
+ON CONFLICT (user_id, role_id) DO UPDATE SET deleted = FALSE;
+
+INSERT INTO user_role (user_id, role_id, created_by, deleted)
+SELECT u.id, r.id, u.id, FALSE
+FROM user_info u
+JOIN role_info r ON r.role_code = 'platform_security_admin'
+WHERE u.username = 'dev-mvp-security-' || :'run_token'
   AND r.status = 'active' AND r.deleted = FALSE
 ON CONFLICT (user_id, role_id) DO UPDATE SET deleted = FALSE;
 
