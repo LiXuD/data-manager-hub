@@ -69,7 +69,7 @@ class OpenApiQueryServiceTest {
     void shouldReturnHistoricalRecordWhenCacheHit() {
         CallRecord cachedRecord = new CallRecord();
         cachedRecord.setId(100L);
-        cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":99}}");
+        setCacheResponseData(cachedRecord, "{\"success\":true,\"data\":{\"score\":99}}");
         cachedRecord.setPluginId("vendor-http");
         cachedRecord.setPluginVersion("1.2.0");
         cachedRecord.setPipelineVersion(7);
@@ -201,7 +201,7 @@ class OpenApiQueryServiceTest {
         CallRecord cachedRecord = new CallRecord();
         cachedRecord.setId(102L);
         cachedRecord.setResponseContractValid(true);
-        cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":\"stale\"}}");
+        setCacheResponseData(cachedRecord, "{\"success\":true,\"data\":{\"score\":\"stale\"}}");
         when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
                 any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
         when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
@@ -233,7 +233,7 @@ class OpenApiQueryServiceTest {
     void shouldUseIndependentCacheWindowsForDifferentCallers() {
         CallRecord cachedRecord = new CallRecord();
         cachedRecord.setId(103L);
-        cachedRecord.setResponseData("{\"success\":true,\"data\":{\"score\":99}}");
+        setCacheResponseData(cachedRecord, "{\"success\":true,\"data\":{\"score\":99}}");
         when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), any(),
                 any(LocalDateTime.class), eq("CALLER"))).thenReturn(cachedRecord);
 
@@ -378,7 +378,7 @@ class OpenApiQueryServiceTest {
     void shouldTreatMalformedCachePayloadAsCacheMiss() {
         CallRecord cachedRecord = new CallRecord();
         cachedRecord.setId(104L);
-        cachedRecord.setResponseData("not-json");
+        setCacheResponseData(cachedRecord, "not-json");
         when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
                 any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
         when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
@@ -411,6 +411,24 @@ class OpenApiQueryServiceTest {
         verify(callRecordEventPublisher).publish(recordCaptor.capture());
         assertTrue(recordCaptor.getValue().getResponseData().contains("***MASKED***"));
         assertFalse(recordCaptor.getValue().getResponseData().contains("must-not-persist"));
+        assertTrue(String.valueOf(ReflectionTestUtils.getField(recordCaptor.getValue(), "cacheResponseData"))
+                .contains("must-not-persist"));
+    }
+
+    @Test
+    void cacheHitMustReplayOriginalPayloadInsteadOfSanitizedAuditPayload() {
+        CallRecord cachedRecord = new CallRecord();
+        cachedRecord.setId(105L);
+        cachedRecord.setResponseData("{\"success\":true,\"data\":{\"name\":\"***MASKED***\"}}");
+        setCacheResponseData(cachedRecord, "{\"success\":true,\"data\":{\"name\":\"Alice\"}}");
+        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
+                any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
+
+        OpenApiQueryRespVO response = service.query(buildContext(true, 3));
+
+        assertTrue(response.getSuccess());
+        assertEquals("Alice", response.getData().get("name"));
+        verify(vendorProxyService, never()).callVendor(anyString(), anyString(), any(), any(), anyString());
     }
 
     @Test
@@ -457,6 +475,10 @@ class OpenApiQueryServiceTest {
 
     private void verifyNoCacheLookup() {
         org.mockito.Mockito.verifyNoInteractions(callRecordService);
+    }
+
+    private void setCacheResponseData(CallRecord record, String payload) {
+        ReflectionTestUtils.setField(record, "cacheResponseData", payload);
     }
 
     private OpenApiCallContext buildContext(boolean useCache, Integer cacheDays) {

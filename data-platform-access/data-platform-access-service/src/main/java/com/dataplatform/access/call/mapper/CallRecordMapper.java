@@ -3,6 +3,10 @@ package com.dataplatform.access.call.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.dataplatform.common.entity.CallRecord;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+import java.time.LocalDateTime;
 
 /**
  * 访问域数据调用的 Call Record Mapper。
@@ -10,4 +14,13 @@ import org.apache.ibatis.annotations.Mapper;
  */
 @Mapper
 public interface CallRecordMapper extends BaseMapper<CallRecord> {
+
+    @Select("""
+            SELECT cache_response_data::text
+            FROM call_record
+            WHERE id = #{id}
+              AND call_time = #{callTime}
+            LIMIT 1
+            """)
+    String selectCacheResponseData(@Param("id") Long id, @Param("callTime") LocalDateTime callTime);
 }

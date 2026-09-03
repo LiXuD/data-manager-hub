@@ -2,6 +2,7 @@ package com.dataplatform.access.call.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -13,6 +14,7 @@ import com.dataplatform.common.entity.CallRecord;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.concurrent.CompletableFuture;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -44,6 +46,23 @@ class CallRecordEventPublisherTest {
         new CallRecordEventPublisher(kafkaTemplate, callRecordService, objectMapper).publish(record);
 
         verify(callRecordService).save(record);
+    }
+
+    @Test
+    void includesExactCachePayloadInInternalEvent() {
+        KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
+        CallRecord record = record("req-cache-payload");
+        record.setCacheResponseData("{\"success\":true,\"data\":{\"name\":\"Alice\"}}");
+        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        new CallRecordEventPublisher(kafkaTemplate, mock(CallRecordService.class), new ObjectMapper())
+                .publish(record);
+
+        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate).send(anyString(), anyString(), payloadCaptor.capture());
+        assertTrue(payloadCaptor.getValue().contains("cacheResponseData"));
+        assertTrue(payloadCaptor.getValue().contains("Alice"));
     }
 
     @Test

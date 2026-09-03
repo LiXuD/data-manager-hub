@@ -248,6 +248,7 @@ CREATE TABLE IF NOT EXISTS call_record (
     request_params JSONB,
     request_hash VARCHAR(64),
     response_data JSONB,
+    cache_response_data JSONB,
     success BOOLEAN NOT NULL DEFAULT true,
     error_code VARCHAR(20),
     error_msg VARCHAR(500),
@@ -275,6 +276,7 @@ ALTER TABLE call_record ADD COLUMN IF NOT EXISTS scene_code VARCHAR(64);
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS scene_name VARCHAR(100);
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS data_type_code VARCHAR(50);
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS request_hash VARCHAR(64);
+ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_response_data JSONB;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS use_cache BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE call_record ADD COLUMN IF NOT EXISTS cache_days INTEGER;

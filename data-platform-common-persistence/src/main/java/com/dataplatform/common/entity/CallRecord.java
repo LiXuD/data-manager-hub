@@ -36,6 +36,13 @@ public class CallRecord {
     private String requestHash;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String responseData;
+    /**
+     * Unmodified successful response retained only for authorized cache replay.
+     * The field is excluded from normal database reads so call-record APIs expose
+     * the sanitized audit payload instead of the replay payload.
+     */
+    @TableField(select = false, typeHandler = JsonbTypeHandler.class)
+    private String cacheResponseData;
     private Boolean responseContractValid;
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String responseContractErrors;
@@ -101,6 +108,8 @@ public class CallRecord {
     public void setRequestHash(String requestHash) { this.requestHash = requestHash; }
     public String getResponseData() { return responseData; }
     public void setResponseData(String responseData) { this.responseData = responseData; }
+    public String getCacheResponseData() { return cacheResponseData; }
+    public void setCacheResponseData(String cacheResponseData) { this.cacheResponseData = cacheResponseData; }
     public Boolean getResponseContractValid() { return responseContractValid; }
     public void setResponseContractValid(Boolean responseContractValid) { this.responseContractValid = responseContractValid; }
     public String getResponseContractErrors() { return responseContractErrors; }

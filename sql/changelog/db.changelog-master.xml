@@ -755,4 +755,23 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="separate-call-record-cache-payload-2026-09-03"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="call_record"/>
+        </preConditions>
+        <sqlFile path="../migrations/V060__separate_call_record_cache_payload.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U060__refuse_call_record_cache_payload_removal.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>

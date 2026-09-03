@@ -155,6 +155,7 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
                 .eq(CallRecord::getSuccess, true)
                 .eq(CallRecord::getUseCache, true)
                 .eq(CallRecord::getCacheHit, false)
+                .isNotNull(CallRecord::getCacheResponseData)
                 .and(nested -> nested.isNull(CallRecord::getResponseContractValid)
                         .or().eq(CallRecord::getResponseContractValid, true))
                 .ge(CallRecord::getCallTime, since);
@@ -162,7 +163,11 @@ public class CallRecordServiceImpl extends ServiceImpl<CallRecordMapper, CallRec
             wrapper.eq(CallRecord::getCallerId, callerId);
         }
         wrapper.orderByDesc(CallRecord::getCallTime).last("LIMIT 1");
-        return getOne(wrapper, false);
+        CallRecord record = getOne(wrapper, false);
+        if (record != null) {
+            record.setCacheResponseData(baseMapper.selectCacheResponseData(record.getId(), record.getCallTime()));
+        }
+        return record;
     }
 
     @Override
