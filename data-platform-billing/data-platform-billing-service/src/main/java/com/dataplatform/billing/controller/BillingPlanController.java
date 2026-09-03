@@ -9,6 +9,7 @@ import com.dataplatform.billing.model.BillingSimulationResult;
 import com.dataplatform.billing.model.BillingReversalCommand;
 import com.dataplatform.billing.service.BillingContractReviewService;
 import com.dataplatform.billing.service.BillingEventQueryService;
+import com.dataplatform.billing.service.BillingPlanException;
 import com.dataplatform.billing.service.BillingPlanService;
 import com.dataplatform.billing.service.BillingRecurringChargeService;
 import com.dataplatform.billing.service.BillingReversalService;
@@ -21,8 +22,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -60,7 +65,7 @@ public class BillingPlanController {
 
     @GetMapping("/template/list")
     public Result<List<BillingTemplate>> templates() {
-        if (!UserContext.hasPermission("billing:view")) {
+        if (!allowed("billing:view")) {
             return Result.error(403, "没有计费管理查看权限");
         }
         return Result.success(planService.listTemplates());
@@ -68,7 +73,7 @@ public class BillingPlanController {
 
     @GetMapping("/plan/list")
     public Result<List<BillingPlanModel>> plans() {
-        if (!UserContext.hasPermission("billing:view")) {
+        if (!allowed("billing:view")) {
             return Result.error(403, "没有计费管理查看权限");
         }
         return Result.success(planService.listPlans());
@@ -76,7 +81,7 @@ public class BillingPlanController {
 
     @GetMapping("/plan/{id}")
     public Result<BillingPlanModel> plan(@PathVariable Long id) {
-        if (!UserContext.hasPermission("billing:view")) {
+        if (!allowed("billing:view")) {
             return Result.error(403, "没有计费管理查看权限");
         }
         return Result.success(planService.get(id));
@@ -85,7 +90,7 @@ public class BillingPlanController {
     @OperationLog(module = "计费方案管理", operation = "创建计费方案草稿")
     @PostMapping("/plan")
     public Result<BillingPlanModel> create(@RequestBody BillingPlanModel command) {
-        if (!UserContext.hasPermission("billing:manage")) {
+        if (!allowed("billing:manage")) {
             return Result.error(403, "没有计费方案管理权限");
         }
         return Result.success(planService.createDraft(command));
@@ -94,7 +99,7 @@ public class BillingPlanController {
     @OperationLog(module = "计费方案管理", operation = "更新计费方案草稿")
     @PutMapping("/plan/{id}")
     public Result<BillingPlanModel> update(@PathVariable Long id, @RequestBody BillingPlanModel command) {
-        if (!UserContext.hasPermission("billing:manage")) {
+        if (!allowed("billing:manage")) {
             return Result.error(403, "没有计费方案管理权限");
         }
         return Result.success(planService.updateDraft(id, command));
@@ -103,7 +108,7 @@ public class BillingPlanController {
     @OperationLog(module = "计费方案管理", operation = "创建计费方案新版本")
     @PostMapping("/plan/{id}/next-version")
     public Result<BillingPlanModel> nextVersion(@PathVariable Long id) {
-        if (!UserContext.hasPermission("billing:manage")) {
+        if (!allowed("billing:manage")) {
             return Result.error(403, "没有计费方案管理权限");
         }
         return Result.success(planService.createNextVersion(id));
@@ -111,7 +116,7 @@ public class BillingPlanController {
 
     @PostMapping("/plan/{id}/validate")
     public Result<Map<String, Object>> validate(@PathVariable Long id) {
-        if (!UserContext.hasPermission("billing:view")) {
+        if (!allowed("billing:view")) {
             return Result.error(403, "没有计费管理查看权限");
         }
         List<String> errors = planService.validate(id);
@@ -121,8 +126,11 @@ public class BillingPlanController {
     @PostMapping("/plan/{id}/simulate")
     public Result<BillingSimulationResult> simulate(@PathVariable Long id,
                                                     @RequestBody BillingSimulationCommand command) {
-        if (!UserContext.hasPermission("billing:view")) {
+        if (!allowed("billing:view")) {
             return Result.error(403, "没有计费管理查看权限");
+        }
+        if (command == null) {
+            return Result.error(400, "计费模拟请求不能为空");
         }
         return Result.success(simulationService.simulate(id, command));
     }
@@ -130,7 +138,7 @@ public class BillingPlanController {
     @OperationLog(module = "计费方案管理", operation = "发布计费方案")
     @PostMapping("/plan/{id}/publish")
     public Result<BillingPlanModel> publish(@PathVariable Long id) {
-        if (!UserContext.hasPermission("billing:manage")) {
+        if (!allowed("billing:manage")) {
             return Result.error(403, "没有计费方案管理权限");
         }
         return Result.success(planService.publish(id));
@@ -139,7 +147,7 @@ public class BillingPlanController {
     @OperationLog(module = "计费方案管理", operation = "删除计费方案草稿")
     @DeleteMapping("/plan/{id}")
     public Result<Void> delete(@PathVariable Long id) {
-        if (!UserContext.hasPermission("billing:manage")) {
+        if (!allowed("billing:manage")) {
             return Result.error(403, "没有计费方案管理权限");
         }
         planService.deleteDraft(id);
@@ -151,7 +159,7 @@ public class BillingPlanController {
     public Result<Map<String, Integer>> accrue(
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        if (!UserContext.hasPermission("billing:manage")) {
+        if (!allowed("billing:manage")) {
             return Result.error(403, "没有计费方案管理权限");
         }
         LocalDateTime at = date != null ? date.atStartOfDay() : LocalDateTime.now();
@@ -161,7 +169,7 @@ public class BillingPlanController {
     @OperationLog(module = "计费方案管理", operation = "检查响应契约变更")
     @PostMapping("/plan/review-contracts")
     public Result<Map<String, Object>> reviewContracts() {
-        if (!UserContext.hasPermission("billing:manage")) {
+        if (!allowed("billing:manage")) {
             return Result.error(403, "没有计费方案管理权限");
         }
         return Result.success(contractReviewService.review());
@@ -178,14 +186,14 @@ public class BillingPlanController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
-        if (!UserContext.hasPermission("billing:view")) {
+        if (!canViewBillingEvents() || !canAccessBillingTenant(tenantId)) {
             PageResult<BillingEvent> forbidden = new PageResult<>();
             forbidden.setCode(403);
-            forbidden.setMessage("没有计费管理查看权限");
+            forbidden.setMessage("没有该租户的计费事件查看权限");
             return forbidden;
         }
         Page<BillingEvent> result = eventQueryService.page(
-                tenantId, vendorId, interfaceId, accountingPurpose, status,
+                scopedBillingTenant(tenantId), vendorId, interfaceId, accountingPurpose, status,
                 startTime, endTime, page, pageSize);
         PageResult<BillingEvent> response = new PageResult<>();
         response.setCode(200);
@@ -205,20 +213,72 @@ public class BillingPlanController {
             @RequestParam(required = false) String accountingPurpose,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
-        if (!UserContext.hasPermission("billing:view")) {
+        if (!canViewBillingEvents() || !canAccessBillingTenant(tenantId)) {
             return Result.error(403, "没有计费管理查看权限");
         }
         return Result.success(eventQueryService.stats(
-                tenantId, vendorId, interfaceId, accountingPurpose, startTime, endTime));
+                scopedBillingTenant(tenantId), vendorId, interfaceId, accountingPurpose, startTime, endTime));
     }
 
     @OperationLog(module = "计费事件管理", operation = "冲正计费事件")
     @PostMapping("/event/{id}/reverse")
     public Result<BillingEvent> reverse(@PathVariable Long id,
                                         @RequestBody BillingReversalCommand command) {
-        if (!UserContext.hasPermission("billing:reverse")) {
+        if (!allowed("billing:reverse")) {
             return Result.error(403, "没有计费事件冲正权限");
         }
+        if (command == null) {
+            return Result.error(400, "计费冲正请求不能为空");
+        }
+        BillingEvent original = eventQueryService.getById(id);
+        if (original == null) {
+            return Result.error(404, "原始计费事件不存在");
+        }
+        if (!canAccessBillingTenant(original.getTenantId())) {
+            return Result.error(403, "不能冲正其他租户的计费事件");
+        }
         return Result.success(reversalService.reverse(id, command));
+    }
+
+    @ExceptionHandler(BillingPlanException.class)
+    public ResponseEntity<Result<Map<String, Object>>> handleBillingPlanException(
+            BillingPlanException exception) {
+        Map<String, Object> details = Map.of(
+                "errorCode", exception.getErrorCode(),
+                "errors", exception.getErrors());
+        Result<Map<String, Object>> result = Result.error(
+                exception.getStatus(), exception.getErrorCode() + ": " + exception.getMessage());
+        result.setData(details);
+        return ResponseEntity.status(exception.getStatus()).body(result);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Result<Void>> handleBillingPlanConstraint(DataIntegrityViolationException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Result.error(409, "BILLING_PLAN_CONFLICT: 计费方案与现有版本发生并发或唯一性冲突"));
+    }
+
+    private boolean allowed(String permission) {
+        return UserContext.hasPermission(permission)
+                || UserContext.hasPermission("system:admin");
+    }
+
+    private boolean canViewBillingEvents() {
+        return allowed("billing:view") || allowed("billing:view-all");
+    }
+
+    private boolean canAccessBillingTenant(Long requestedTenantId) {
+        if (allowed("billing:view-all")) {
+            return true;
+        }
+        Long currentTenantId = UserContext.getCurrentTenantId();
+        return currentTenantId != null
+                && (requestedTenantId == null || currentTenantId.equals(requestedTenantId));
+    }
+
+    private Long scopedBillingTenant(Long requestedTenantId) {
+        return allowed("billing:view-all")
+                ? requestedTenantId
+                : UserContext.getCurrentTenantId();
     }
 }

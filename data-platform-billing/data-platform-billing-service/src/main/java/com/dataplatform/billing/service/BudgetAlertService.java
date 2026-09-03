@@ -44,6 +44,9 @@ public class BudgetAlertService extends ServiceImpl<TenantBudgetMapper, TenantBu
         if (tenantId == null || newAmount == null || newAmount.signum() < 0) {
             throw new IllegalArgumentException("租户ID和非负费用金额不能为空");
         }
+        if (getByTenantId(tenantId) == null) {
+            return false;
+        }
         LambdaUpdateWrapper<TenantBudget> updateWrapper = new LambdaUpdateWrapper<>();
         updateWrapper.eq(TenantBudget::getTenantId, tenantId)
             .setSql("used_amount = COALESCE(used_amount, 0) + " + newAmount.toString())
@@ -51,7 +54,7 @@ public class BudgetAlertService extends ServiceImpl<TenantBudgetMapper, TenantBu
 
         boolean updated = this.update(updateWrapper);
         if (!updated) {
-            return false;
+            throw new IllegalStateException("租户预算更新失败，请重试");
         }
 
         TenantBudget budget = getByTenantId(tenantId);
@@ -101,7 +104,9 @@ public class BudgetAlertService extends ServiceImpl<TenantBudgetMapper, TenantBu
             alertUpdateWrapper.eq(TenantBudget::getTenantId, budget.getTenantId())
                 .set(TenantBudget::getAlertLevel, alertLevel)
                 .set(TenantBudget::getUpdatedAt, LocalDateTime.now());
-            this.update(alertUpdateWrapper);
+            if (!this.update(alertUpdateWrapper)) {
+                throw new IllegalStateException("预算告警状态更新失败，请重试");
+            }
         }
 
         return alertLevel >= 2;

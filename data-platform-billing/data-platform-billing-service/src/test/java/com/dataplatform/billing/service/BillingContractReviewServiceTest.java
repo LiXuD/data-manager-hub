@@ -37,6 +37,7 @@ class BillingContractReviewServiceTest {
         field.setParamType("string");
         contract.setResponseFields(List.of(field));
         when(client.getContract(2L)).thenReturn(Result.success(contract));
+        when(mapper.updateById(plan)).thenReturn(1);
         BillingContractReviewService service = new BillingContractReviewService(
                 mapper, client, new BillingConfigCodec(new ObjectMapper()));
 

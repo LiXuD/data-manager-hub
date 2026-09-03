@@ -32,6 +32,22 @@ class BillingEventQueryServiceTest {
         assertEquals(1L, stats.get("pendingReviewCount"));
     }
 
+    @Test
+    void statsTreatMissingAmountsAndQuantitiesAsZero() {
+        BillingEventMapper eventMapper = mock(BillingEventMapper.class);
+        BillingEvent event = event("USAGE", "POSTED", "0", "0");
+        event.setFinalAmount(null);
+        event.setQuantity(null);
+        when(eventMapper.selectList(any())).thenReturn(List.of(event));
+        BillingEventQueryService service = new BillingEventQueryService(eventMapper);
+
+        Map<String, Object> stats = service.stats(
+                7L, null, null, null, null, null);
+
+        assertEquals(0, BigDecimal.ZERO.compareTo((BigDecimal) stats.get("totalAmount")));
+        assertEquals(0, BigDecimal.ZERO.compareTo((BigDecimal) stats.get("totalQuantity")));
+    }
+
     private BillingEvent event(String type, String status, String amount, String quantity) {
         BillingEvent event = new BillingEvent();
         event.setEventType(type);

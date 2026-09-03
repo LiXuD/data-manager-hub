@@ -38,7 +38,9 @@ public class BillingReversalService {
         if (!StringUtils.hasText(command.getReason())) {
             throw new IllegalArgumentException("冲正原因不能为空");
         }
-        eventMapper.lockRequest(command.getRequestId());
+        if (eventMapper.lockRequest(command.getRequestId()) == null) {
+            throw new IllegalStateException("冲正请求锁不可用，请重试");
+        }
         BillingEvent byRequest = eventMapper.selectByRequestId(command.getRequestId());
         if (byRequest != null) {
             if (!"REVERSAL".equals(byRequest.getEventType())
@@ -57,7 +59,9 @@ public class BillingReversalService {
 
         restoreUsage(original);
         BillingEvent reversal = copyNegative(original, command);
-        eventMapper.insert(reversal);
+        if (eventMapper.insert(reversal) != 1) {
+            throw new IllegalStateException("冲正事件写入失败，请重试");
+        }
         return reversal;
     }
 
@@ -73,9 +77,13 @@ public class BillingReversalService {
             default -> "VENDOR_INTERFACE";
         };
         String lockKey = original.getPlanId() + ":" + original.getBillingPeriod() + ":" + scopeKey;
-        usageMapper.lockBalance(lockKey);
-        usageMapper.decrement(original.getPlanId(), original.getBillingPeriod(), scopeKey,
-                original.getQuantity());
+        if (usageMapper.lockBalance(lockKey) == null) {
+            throw new IllegalStateException("冲正累计用量锁不可用，请重试");
+        }
+        if (usageMapper.decrement(original.getPlanId(), original.getBillingPeriod(), scopeKey,
+                original.getQuantity()) != 1) {
+            throw new IllegalStateException("冲正累计用量写入失败，请重试");
+        }
     }
 
     private BillingEvent copyNegative(BillingEvent source, BillingReversalCommand command) {

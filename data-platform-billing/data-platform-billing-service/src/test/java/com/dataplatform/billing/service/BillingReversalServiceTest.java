@@ -31,6 +31,10 @@ class BillingReversalServiceTest {
         BillingPlanModel plan = new BillingPlanModel();
         plan.getMetering().setAggregationScope("CALLER");
         when(planService.get(3L)).thenReturn(plan);
+        when(eventMapper.lockRequest(any())).thenReturn(1);
+        when(eventMapper.insert(any(BillingEvent.class))).thenReturn(1);
+        when(usageMapper.lockBalance(any())).thenReturn(1);
+        when(usageMapper.decrement(any(), any(), any(), any())).thenReturn(1);
         BillingReversalService service = new BillingReversalService(
                 eventMapper, usageMapper, planService, new BillingConfigCodec(new ObjectMapper()));
 

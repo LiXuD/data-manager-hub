@@ -8,6 +8,7 @@ import com.dataplatform.access.call.api.feign.CallStatsInternalFeignClient;
 import com.dataplatform.api.Result;
 import com.dataplatform.billing.entity.BillingReconciliation;
 import com.dataplatform.billing.mapper.BillingReconciliationMapper;
+import com.dataplatform.billing.service.BillingReconciliationException;
 import com.dataplatform.billing.service.ReconciliationService;
 import com.dataplatform.governance.api.dto.AlertRecordCreateDTO;
 import com.dataplatform.governance.api.feign.GovernanceInternalFeignClient;
@@ -44,6 +45,14 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void reconcile(Long vendorId, LocalDate billingDate) {
+        if (billingDate == null) {
+            throw BillingReconciliationException.badRequest(
+                    "BILLING_RECONCILIATION_DATE_REQUIRED", "对账日期不能为空");
+        }
+        if (vendorId != null && vendorId <= 0) {
+            throw BillingReconciliationException.badRequest(
+                    "BILLING_RECONCILIATION_VENDOR_INVALID", "厂商ID无效");
+        }
         log.info("开始对账: vendorId={}, date={}", vendorId, billingDate);
 
         LambdaQueryWrapper<BillingReconciliation> wrapper = new LambdaQueryWrapper<>();
@@ -53,6 +62,10 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
         }
 
         List<BillingReconciliation> rows = list(wrapper);
+        if (rows == null) {
+            throw BillingReconciliationException.unavailable(
+                    "BILLING_RECONCILIATION_STORAGE_UNAVAILABLE", "对账记录查询失败");
+        }
 
         for (BillingReconciliation row : rows) {
             reconcileImportedRow(row);
@@ -64,8 +77,18 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int importVendorBills(String csvContent) {
-        List<VendorBillCsvParser.VendorBillRow> rows = VendorBillCsvParser.parse(csvContent);
+        final List<VendorBillCsvParser.VendorBillRow> rows;
+        try {
+            rows = VendorBillCsvParser.parse(csvContent);
+        } catch (RuntimeException exception) {
+            throw BillingReconciliationException.invalidCsv(exception);
+        }
+        if (rows.isEmpty()) {
+            throw BillingReconciliationException.badRequest(
+                    "BILLING_RECONCILIATION_EMPTY_CSV", "厂商账单文件不能为空");
+        }
         for (VendorBillCsvParser.VendorBillRow row : rows) {
+            validateVendorBillRow(row);
             BillingReconciliation reconciliation = findByVendorAndDate(row.vendorId(), row.billingDate());
             if (reconciliation == null) {
                 reconciliation = new BillingReconciliation();
@@ -82,10 +105,16 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     }
 
     private void reconcileImportedRow(BillingReconciliation reconciliation) {
+        if (reconciliation == null || reconciliation.getVendorId() == null
+                || reconciliation.getVendorId() <= 0 || reconciliation.getBillingDate() == null) {
+            throw BillingReconciliationException.badRequest(
+                    "BILLING_RECONCILIATION_ROW_INVALID", "对账记录缺少有效厂商或日期");
+        }
         Result<VendorCallSummaryDTO> response = callStatsClient.getVendorDailySummary(
                 reconciliation.getVendorId(), reconciliation.getBillingDate().toString());
         if (response == null || !Integer.valueOf(200).equals(response.getCode()) || response.getData() == null) {
-            throw new IllegalStateException("Access 调用汇总查询失败");
+            throw BillingReconciliationException.unavailable(
+                    "BILLING_RECONCILIATION_ACCESS_UNAVAILABLE", "Access调用汇总查询失败");
         }
         Long platformCount = Objects.requireNonNullElse(response.getData().getCallCount(), 0L);
         BigDecimal platformAmount = Objects.requireNonNullElse(response.getData().getTotalAmount(), BigDecimal.ZERO);
@@ -114,13 +143,27 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
         }
 
         if (reconciliation.getId() == null) {
-            save(reconciliation);
-        } else {
-            updateById(reconciliation);
+            if (!save(reconciliation)) {
+                throw BillingReconciliationException.conflict(
+                        "BILLING_RECONCILIATION_PERSIST_FAILED", "对账记录保存失败");
+            }
+        } else if (!updateById(reconciliation)) {
+            throw BillingReconciliationException.conflict(
+                    "BILLING_RECONCILIATION_PERSIST_FAILED", "对账记录更新失败");
         }
 
         if (shouldPublishDiffAlert(previousStatus, status)) {
             publishDiffAlert(reconciliation);
+        }
+    }
+
+    private void validateVendorBillRow(VendorBillCsvParser.VendorBillRow row) {
+        if (row == null || row.billingDate() == null || row.vendorId() == null || row.vendorId() <= 0
+                || row.vendorName() == null || row.vendorName().isBlank() || row.vendorName().length() > 200
+                || row.vendorCount() == null || row.vendorCount() < 0
+                || row.vendorAmount() == null || row.vendorAmount().signum() < 0) {
+            throw BillingReconciliationException.badRequest(
+                    "BILLING_RECONCILIATION_ROW_INVALID", "厂商账单包含无效记录");
         }
     }
 
@@ -206,7 +249,7 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
     }
 
     private boolean shouldPublishDiffAlert(String previousStatus, String status) {
-        return !"matched".equals(status) && !status.equals(previousStatus);
+        return !"matched".equals(status) && !Objects.equals(status, previousStatus);
     }
 
     private void publishDiffAlert(BillingReconciliation reconciliation) {
@@ -221,7 +264,8 @@ public class ReconciliationServiceImpl extends ServiceImpl<BillingReconciliation
         dto.setStatus("pending");
         Result<Void> result = governanceFeignClient.createAlertRecord(dto);
         if (result == null || !Integer.valueOf(200).equals(result.getCode())) {
-            throw new IllegalStateException("发送对账差异告警失败: reconciliationId=" + reconciliation.getId());
+            throw BillingReconciliationException.unavailable(
+                    "BILLING_RECONCILIATION_GOVERNANCE_UNAVAILABLE", "发送对账差异告警失败");
         }
     }
 }

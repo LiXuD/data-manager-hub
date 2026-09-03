@@ -13,6 +13,7 @@ import com.dataplatform.billing.entity.BillingEvent;
 import com.dataplatform.billing.mapper.BillingEventMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -57,5 +58,21 @@ class ConnectorBillingObservationServiceTest {
                 new ConnectorBillingObservationReqDTO(7L, 8L, 3, "bad", LocalDateTime.now(), null)));
         assertThrows(IllegalArgumentException.class, () -> service.observe(
                 new ConnectorBillingObservationReqDTO(7L, 8L, null, "b".repeat(64), LocalDateTime.now(), null)));
+        assertThrows(IllegalArgumentException.class, () -> service.observe(
+                new ConnectorBillingObservationReqDTO(7L, 8L, 3, "g".repeat(64), LocalDateTime.now(), null)));
+    }
+
+    @Test
+    void rejectsOverflowingAggregateFactsInsteadOfTruncatingThem() {
+        when(mapper.selectMaps(any())).thenReturn(List.of(Map.of(
+                "total_events", new BigDecimal("9223372036854775808"),
+                "posted_events", 0L,
+                "pending_review_events", 0L,
+                "reversed_events", 0L,
+                "billable_events", 0L,
+                "final_amount", BigDecimal.ZERO)));
+
+        assertThrows(IllegalStateException.class, () -> service.observe(new ConnectorBillingObservationReqDTO(
+                7L, 8L, 3, "b".repeat(64), LocalDateTime.now(), null)));
     }
 }
