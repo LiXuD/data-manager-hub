@@ -141,7 +141,9 @@ public class EncryptionService {
         key.setEncryptedKey(encryptWithKey(dataKey, requireMasterKey()));
         key.setActive(true);
         key.setCreatedAt(LocalDateTime.now());
-        keyMapper.insert(key);
+        if (keyMapper.insert(key) != 1 || key.getId() == null) {
+            throw new IllegalStateException("Encryption key persistence failed");
+        }
         return key;
     }
 

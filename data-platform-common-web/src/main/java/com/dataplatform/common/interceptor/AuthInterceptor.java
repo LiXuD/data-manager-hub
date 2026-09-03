@@ -1,6 +1,7 @@
 package com.dataplatform.common.interceptor;
 
 import com.dataplatform.common.security.InternalActorContext;
+import com.dataplatform.common.security.UserRoutePermissionPolicy;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.common.util.UserContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * 认证拦截器 - 验证请求的Authorization token
@@ -66,6 +68,20 @@ public class AuthInterceptor implements HandlerInterceptor {
             request.setAttribute("username", UserContext.getCurrentUsername());
             request.setAttribute(InternalActorContext.ACTOR_ID_ATTRIBUTE, userId);
             request.setAttribute(InternalActorContext.TENANT_ID_ATTRIBUTE, tenantId);
+            if (!UserRoutePermissionPolicy.isKnownRoute(request.getMethod(), path)) {
+                log.warn("请求路径: {} 未配置用户路由权限", path);
+                sendForbiddenResponse(response, "未配置该路由的访问权限");
+                return false;
+            }
+            List<String> requiredPermissions = UserRoutePermissionPolicy.requiredPermissions(
+                    request.getMethod(), path);
+            if (!requiredPermissions.isEmpty()
+                    && requiredPermissions.stream().noneMatch(UserContext::hasPermission)
+                    && !UserContext.hasPermission("system:admin")) {
+                log.warn("请求路径: {} 缺少权限: {}", path, requiredPermissions);
+                sendForbiddenResponse(response, "没有权限访问该功能");
+                return false;
+            }
             return true;
         } catch (Exception e) {
             log.warn("请求路径: {} token校验失败", path);
@@ -92,6 +108,15 @@ public class AuthInterceptor implements HandlerInterceptor {
         response.setCharacterEncoding("UTF-8");
 
         Result<?> errorResult = Result.error(401, "未授权: " + message);
+        response.getWriter().write(objectMapper.writeValueAsString(errorResult));
+    }
+
+    private void sendForbiddenResponse(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpStatus.FORBIDDEN.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+
+        Result<?> errorResult = Result.error(403, "禁止访问: " + message);
         response.getWriter().write(objectMapper.writeValueAsString(errorResult));
     }
 }

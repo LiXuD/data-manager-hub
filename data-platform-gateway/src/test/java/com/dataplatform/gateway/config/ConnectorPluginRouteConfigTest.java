@@ -1,6 +1,7 @@
 package com.dataplatform.gateway.config;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,5 +21,6 @@ class ConnectorPluginRouteConfigTest {
         assertTrue(yaml.contains("uri: lb://data-platform-masterdata"), config.toString());
         assertTrue(yaml.contains("Path=/api/v1/connector-plugin/**"), config.toString());
         assertTrue(yaml.contains("StripPrefix=2"), config.toString());
+        assertFalse(yaml.contains("/api/v1/data/**"), config.toString());
     }
 }

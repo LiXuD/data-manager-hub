@@ -2,6 +2,7 @@ package com.dataplatform.gateway.filter;
 
 import com.dataplatform.common.result.Result;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -51,12 +52,26 @@ public class AuthFilter implements GlobalFilter, Ordered {
             return writeError(exchange, 401, "API Key 无效或已过期");
         }
 
-        return redisTemplate.opsForValue().get(REDIS_KEY_PREFIX + apiKey)
+        Mono<Object> keyLookup;
+        try {
+            keyLookup = redisTemplate.opsForValue().get(REDIS_KEY_PREFIX + apiKey);
+        } catch (RuntimeException exception) {
+            return writeAuthCacheUnavailable(exchange, exception);
+        }
+
+        return keyLookup
+                .onErrorMap(exception -> new AuthCacheUnavailableException(exception))
                 .switchIfEmpty(Mono.defer(() -> writeError(exchange, 401, "API Key 无效或已过期")))
                 .flatMap(value -> {
                     Map<String, Object> keyInfo = parseKeyInfo(value);
+                    if (keyInfo.isEmpty()) {
+                        return writeError(exchange, 401, "API Key 无效或已过期");
+                    }
                     if (!isActive(keyInfo.get("status"))) {
                         return writeError(exchange, 403, "调用方已禁用");
+                    }
+                    if (isExpired(keyInfo.get("expireAtEpochMs"))) {
+                        return writeError(exchange, 401, "API Key 无效或已过期");
                     }
                     Long callerId = asLong(keyInfo.get("callerId"));
                     Long keyId = asLong(keyInfo.get("keyId"));
@@ -69,7 +84,9 @@ public class AuthFilter implements GlobalFilter, Ordered {
                     exchange.getAttributes().put("keyId", keyId);
                     exchange.getAttributes().put("callerName", keyInfo.get("callerName"));
                     return chain.filter(exchange);
-                });
+                })
+                .onErrorResume(AuthCacheUnavailableException.class,
+                        exception -> writeAuthCacheUnavailable(exchange, exception.getCause()));
     }
 
     private String extractApiKey(ServerWebExchange exchange) {
@@ -91,36 +108,56 @@ public class AuthFilter implements GlobalFilter, Ordered {
         }
         if (value instanceof String text) {
             try {
-                return objectMapper.readValue(text, Map.class);
+                Map<String, Object> parsed = objectMapper.readValue(text, Map.class);
+                return parsed != null ? parsed : Map.of();
             } catch (Exception e) {
                 log.warn("Invalid OpenAPI key cache payload: {}", e.getMessage());
             }
         }
-        return objectMapper.convertValue(value, Map.class);
+        try {
+            return objectMapper.convertValue(value, Map.class);
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid OpenAPI key cache value: {}", e.getMessage());
+            return Map.of();
+        }
     }
 
     private boolean isActive(Object status) {
         if (status instanceof Number number) {
-            return number.intValue() == 1;
+            return Long.valueOf(1L).equals(asLong(number));
         }
         return "1".equals(String.valueOf(status)) || "active".equalsIgnoreCase(String.valueOf(status));
     }
 
     private Long asLong(Object value) {
         if (value instanceof Number number) {
-            return number.longValue();
+            try {
+                BigDecimal decimal = new BigDecimal(number.toString());
+                return decimal.signum() > 0 ? decimal.longValueExact() : null;
+            } catch (NumberFormatException | ArithmeticException ignored) {
+                return null;
+            }
         }
         if (value instanceof List<?> list && list.size() >= 2) {
             return asLong(list.get(1));
         }
         if (value instanceof String text) {
             try {
-                return Long.parseLong(text);
+                long parsed = Long.parseLong(text);
+                return parsed > 0 ? parsed : null;
             } catch (NumberFormatException ignored) {
                 return null;
             }
         }
         return null;
+    }
+
+    private boolean isExpired(Object value) {
+        if (value == null) {
+            return false;
+        }
+        Long expireAtEpochMs = asLong(value);
+        return expireAtEpochMs == null || expireAtEpochMs <= System.currentTimeMillis();
     }
 
     private Mono<Void> writeError(ServerWebExchange exchange, int code, String message) {
@@ -134,6 +171,18 @@ public class AuthFilter implements GlobalFilter, Ordered {
             return exchange.getResponse().writeWith(Mono.just(buffer));
         } catch (Exception e) {
             return Mono.error(e);
+        }
+    }
+
+    private Mono<Void> writeAuthCacheUnavailable(ServerWebExchange exchange, Throwable cause) {
+        log.error("OpenAPI key cache lookup failed, rejecting request: {}",
+                cause == null ? "unknown error" : cause.getMessage());
+        return writeError(exchange, 503, "鉴权服务暂时不可用");
+    }
+
+    private static final class AuthCacheUnavailableException extends RuntimeException {
+        private AuthCacheUnavailableException(Throwable cause) {
+            super(cause);
         }
     }
 

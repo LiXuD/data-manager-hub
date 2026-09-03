@@ -75,6 +75,50 @@ class IamAuthorizationServiceTest {
     }
 
     @Test
+    void rejectsUserManagementWithoutTenantScope() {
+        User target = user(20L, 7L);
+        when(userService.getById(20L)).thenReturn(target);
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("system:admin"))
+                    .thenReturn(false);
+            userContext.when(UserContext::getCurrentTenantId).thenReturn(null);
+
+            assertThatThrownBy(() -> authorizationService.requireUserInScope(20L))
+                    .isInstanceOfSatisfying(
+                            IamAuthorizationException.class,
+                            exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo("USER_TENANT_DENIED"));
+        }
+    }
+
+    @Test
+    void tenantFilterFailsClosedWithoutTenantScope() {
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("system:admin"))
+                    .thenReturn(false);
+            userContext.when(UserContext::getCurrentTenantId).thenReturn(null);
+
+            assertThatThrownBy(authorizationService::tenantFilter)
+                    .isInstanceOfSatisfying(
+                            IamAuthorizationException.class,
+                            exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo("TENANT_SCOPE_REQUIRED"));
+        }
+    }
+
+    @Test
+    void platformAdminPermissionSatisfiesAnyPermissionCheck() {
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("user:delete"))
+                    .thenReturn(false);
+            userContext.when(() -> UserContext.hasPermission("system:admin"))
+                    .thenReturn(true);
+
+            authorizationService.requirePermission("user:delete");
+        }
+    }
+
+    @Test
     void rejectsRoleThatWouldEscalateActorPrivileges() {
         User target = user(20L, 7L);
         Role role = role(3L, CommonStatus.ACTIVE, false);
@@ -102,6 +146,67 @@ class IamAuthorizationServiceTest {
     }
 
     @Test
+    void failsClosedWhenRoleLookupReturnsNoResponse() {
+        when(userService.getById(20L)).thenReturn(user(20L, 7L));
+        when(roleService.listByIds(List.of(3L))).thenReturn(null);
+
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(UserContext::getCurrentUserId).thenReturn(10L);
+            userContext.when(() -> UserContext.hasPermission("system:admin"))
+                    .thenReturn(true);
+
+            assertThatThrownBy(() -> authorizationService.prepareRoleAssignment(20L, List.of(3L)))
+                    .isInstanceOfSatisfying(
+                            IamAuthorizationException.class,
+                            exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo("IAM_ROLE_LOOKUP_UNAVAILABLE"));
+        }
+    }
+
+    @Test
+    void failsClosedWhenRolePermissionsCannotBeLoaded() {
+        when(userService.getById(20L)).thenReturn(user(20L, 7L));
+        when(roleService.listByIds(List.of(3L))).thenReturn(List.of(role(3L, CommonStatus.ACTIVE, false)));
+        when(rolePermissionService.getPermissionsByRoleId(3L)).thenReturn(null);
+
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(UserContext::getCurrentUserId).thenReturn(10L);
+            userContext.when(() -> UserContext.hasPermission("system:admin"))
+                    .thenReturn(false);
+            userContext.when(UserContext::getCurrentTenantId).thenReturn(7L);
+            userContext.when(UserContext::getCurrentPermissions).thenReturn(List.of("user:edit"));
+
+            assertThatThrownBy(() -> authorizationService.prepareRoleAssignment(20L, List.of(3L)))
+                    .isInstanceOfSatisfying(
+                            IamAuthorizationException.class,
+                            exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo("IAM_PERMISSION_LOOKUP_UNAVAILABLE"));
+        }
+    }
+
+    @Test
+    void failsClosedWhenPermissionLookupReturnsNoResponse() {
+        when(permissionService.listByIds(List.of(8L))).thenReturn(null);
+
+        assertThatThrownBy(() -> authorizationService.preparePermissionAssignment(3L, List.of(8L)))
+                .isInstanceOfSatisfying(
+                        IamAuthorizationException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("IAM_PERMISSION_LOOKUP_UNAVAILABLE"));
+    }
+
+    @Test
+    void failsClosedWhenRoleUsageLookupReturnsNoResponse() {
+        when(userRoleService.getUserIdsByRoleId(3L)).thenReturn(null);
+
+        assertThatThrownBy(() -> authorizationService.requireRoleNotAssigned(3L))
+                .isInstanceOfSatisfying(
+                        IamAuthorizationException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("IAM_USER_ROLE_LOOKUP_UNAVAILABLE"));
+    }
+
+    @Test
     void logsOutTargetBeforeAuthorizedRoleAssignment() {
         User target = user(20L, 7L);
         Role role = role(3L, CommonStatus.ACTIVE, false);
@@ -125,6 +230,18 @@ class IamAuthorizationServiceTest {
         when(userRoleService.getUserIdsByRoleId(3L)).thenReturn(List.of(20L, 21L));
         try (var stpUtil = mockStatic(StpUtil.class)) {
             authorizationService.invalidateUsersWithRole(3L);
+
+            stpUtil.verify(() -> StpUtil.logout(20L));
+            stpUtil.verify(() -> StpUtil.logout(21L));
+        }
+    }
+
+    @Test
+    void invalidatesEverySessionInTenantWhenTenantIsDisabled() {
+        when(userService.listUserIdsByTenant(7L)).thenReturn(List.of(20L, 21L));
+
+        try (var stpUtil = mockStatic(StpUtil.class)) {
+            authorizationService.invalidateUsersInTenant(7L);
 
             stpUtil.verify(() -> StpUtil.logout(20L));
             stpUtil.verify(() -> StpUtil.logout(21L));

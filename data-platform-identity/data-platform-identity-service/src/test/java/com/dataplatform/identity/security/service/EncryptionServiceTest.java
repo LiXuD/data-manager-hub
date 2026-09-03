@@ -2,6 +2,7 @@ package com.dataplatform.identity.security.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -53,5 +54,17 @@ class EncryptionServiceTest {
         assertNotEquals(beforeRotation.split(":")[1], afterRotation.split(":")[1]);
         assertEquals("first", service.decrypt(beforeRotation, "user_info"));
         assertEquals("second", service.decrypt(afterRotation, "user_info"));
+    }
+
+    @Test
+    void failsClosedWhenKeyCannotBePersisted() {
+        EncryptionKeyMapper mapper = mock(EncryptionKeyMapper.class);
+        when(mapper.selectOne(any())).thenReturn(null);
+        when(mapper.insert(any(EncryptionKey.class))).thenReturn(0);
+
+        String masterKey = Base64.getEncoder().encodeToString(new byte[32]);
+        EncryptionService service = new EncryptionService(mapper, masterKey);
+
+        assertThrows(RuntimeException.class, () -> service.encrypt("secret", "user_info"));
     }
 }

@@ -6,6 +6,7 @@ import com.dataplatform.common.security.dto.InternalTokenRequest;
 import com.dataplatform.common.security.dto.InternalTokenResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
@@ -30,12 +31,17 @@ public class InternalTokenController {
 
     @PostMapping("/token")
     public InternalTokenResponse issue(@RequestBody InternalTokenRequest request) {
-        InternalSecurityProperties.ClientRegistration client =
-                properties.getClients().get(request.getServiceName());
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Token request is required");
+        }
+        Map<String, InternalSecurityProperties.ClientRegistration> clients = properties.getClients();
+        InternalSecurityProperties.ClientRegistration client = clients == null
+                ? null : clients.get(request.getServiceName());
         if (client == null || !secretMatches(client.getSecret(), request.getClientSecret())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid service credentials");
         }
-        Set<String> scopes = client.getGrants().get(request.getAudience());
+        Map<String, Set<String>> grants = client.getGrants();
+        Set<String> scopes = grants == null ? null : grants.get(request.getAudience());
         if (scopes == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Audience is not allowed");
         }

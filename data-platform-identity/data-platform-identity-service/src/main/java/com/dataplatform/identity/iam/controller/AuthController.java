@@ -54,6 +54,9 @@ public class AuthController {
     @OperationLog(module = "认证管理", operation = "用户登录")
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@RequestBody Map<String, String> credentials) {
+        if (credentials == null) {
+            return Result.error(400, "请求体不能为空");
+        }
         String username = credentials.get("username");
         String password = credentials.get("password");
 
@@ -63,9 +66,14 @@ public class AuthController {
 
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, username)
-                .eq(User::getStatus, "active"));
+                .eq(User::getStatus, "active")
+                .eq(User::getDeleted, false));
 
-        if (user == null || !passwordService.matches(password, user.getPassword())) {
+        if (user == null || Boolean.TRUE.equals(user.getDeleted())
+                || !passwordService.matches(password, user.getPassword())) {
+            return Result.error(401, "用户名或密码错误");
+        }
+        if (!isUsableTenant(user.getTenantId())) {
             return Result.error(401, "用户名或密码错误");
         }
 
@@ -73,18 +81,22 @@ public class AuthController {
             User passwordUpgrade = new User();
             passwordUpgrade.setId(user.getId());
             passwordUpgrade.setPassword(passwordService.encode(password));
-            userMapper.updateById(passwordUpgrade);
+            if (userMapper.updateById(passwordUpgrade) <= 0) {
+                return Result.error(409, "密码升级失败，请重试");
+            }
         }
 
         List<String> permissionCodes = getUserPermissions(user.getId());
         List<String> roleCodes = getUserRoles(user.getId());
 
-        UserContext.login(user.getId(), user.getUsername(), user.getTenantId(), permissionCodes);
-
         User loginUpdate = new User();
         loginUpdate.setId(user.getId());
         loginUpdate.setLastLoginTime(LocalDateTime.now());
-        userMapper.updateById(loginUpdate);
+        if (userMapper.updateById(loginUpdate) <= 0) {
+            return Result.error(409, "登录状态更新失败，请重试");
+        }
+
+        UserContext.login(user.getId(), user.getUsername(), user.getTenantId(), permissionCodes);
 
         Map<String, Object> data = new HashMap<>();
         data.put("token", StpUtil.getTokenValue());
@@ -110,10 +122,18 @@ public class AuthController {
             return Result.error(401, "未登录或会话已过期");
         }
 
+        Long userId = UserContext.getCurrentUserId();
+        User user = userId == null ? null : userMapper.selectById(userId);
+        if (user == null || !CommonStatus.ACTIVE.equals(user.getStatus())
+                || Boolean.TRUE.equals(user.getDeleted()) || !isUsableTenant(user.getTenantId())) {
+            UserContext.logout();
+            return Result.error(401, "未登录或会话已过期");
+        }
+
         Map<String, Object> data = new HashMap<>();
         data.put("valid", true);
-        data.put("userId", UserContext.getCurrentUserId());
-        data.put("username", UserContext.getCurrentUsername());
+        data.put("userId", user.getId());
+        data.put("username", user.getUsername());
 
         return Result.success(data);
     }
@@ -125,10 +145,16 @@ public class AuthController {
         }
 
         User user = userMapper.selectById(UserContext.getCurrentUserId());
-        if (user == null) {
-            return Result.error(404, "用户不存在");
+        if (user == null || !CommonStatus.ACTIVE.equals(user.getStatus())
+                || Boolean.TRUE.equals(user.getDeleted())) {
+            UserContext.logout();
+            return Result.error(401, "会话已失效");
         }
         TenantInfo tenant = user.getTenantId() == null ? null : tenantMapper.selectById(user.getTenantId());
+        if (user.getTenantId() != null && !isUsableTenant(tenant)) {
+            UserContext.logout();
+            return Result.error(401, "会话已失效");
+        }
 
         Map<String, Object> data = new HashMap<>();
         data.put("userId", user.getId());
@@ -150,18 +176,32 @@ public class AuthController {
         return Result.success(data);
     }
 
+    private boolean isUsableTenant(Long tenantId) {
+        return tenantId == null || isUsableTenant(tenantMapper.selectById(tenantId));
+    }
+
+    private boolean isUsableTenant(TenantInfo tenant) {
+        return tenant != null && !Boolean.TRUE.equals(tenant.getDeleted())
+                && "active".equalsIgnoreCase(tenant.getStatus());
+    }
+
     @OperationLog(module = "个人中心", operation = "更新个人信息")
     @PutMapping("/profile")
     public Result<Map<String, Object>> updateProfile(@RequestBody Map<String, String> body) {
         if (!UserContext.isLoggedIn()) {
             return Result.error(401, "未登录");
         }
+        if (body == null) {
+            return Result.error(400, "请求体不能为空");
+        }
         User update = new User();
         update.setId(UserContext.getCurrentUserId());
         update.setNickname(body.get("nickname"));
         update.setEmail(body.get("email"));
         update.setPhone(body.get("phone"));
-        userMapper.updateById(update);
+        if (userMapper.updateById(update) <= 0) {
+            return Result.error(409, "个人信息已被其他请求修改，请重试");
+        }
         return getUserInfo();
     }
 
@@ -170,6 +210,9 @@ public class AuthController {
     public Result<Void> changePassword(@RequestBody Map<String, String> body) {
         if (!UserContext.isLoggedIn()) {
             return Result.error(401, "未登录");
+        }
+        if (body == null) {
+            return Result.error(400, "请求体不能为空");
         }
         User user = userMapper.selectById(UserContext.getCurrentUserId());
         String oldPassword = body.get("oldPassword");
@@ -183,7 +226,9 @@ public class AuthController {
         User update = new User();
         update.setId(user.getId());
         update.setPassword(passwordService.encode(newPassword));
-        userMapper.updateById(update);
+        if (userMapper.updateById(update) <= 0) {
+            return Result.error(409, "密码已被其他请求修改，请重试");
+        }
         StpUtil.logout(user.getId());
         return Result.success(null);
     }

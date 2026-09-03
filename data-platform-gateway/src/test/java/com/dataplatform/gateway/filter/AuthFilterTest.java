@@ -80,6 +80,24 @@ class AuthFilterTest {
     }
 
     @Test
+    void shouldReturn503WhenRedisLookupFails() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:key:redis-down-key"))
+                .thenReturn(Mono.error(new RuntimeException("Redis down")));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test")
+                .header("X-Api-Key", "redis-down-key")
+                .build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(503, exchange.getResponse().getStatusCode().value());
+        verifyNoInteractions(chain);
+    }
+
+    @Test
     void shouldReturn403WhenCallerIsDisabled() {
         Map<String, Object> keyInfo = Map.of("callerId", 1, "keyId", 10, "callerName", "disabled-caller", "status", 0);
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
@@ -159,5 +177,92 @@ class AuthFilterTest {
         assertEquals(Long.valueOf(3), exchange.getAttribute("callerId"));
         assertEquals(Long.valueOf(30), exchange.getAttribute("keyId"));
         verify(chain).filter(exchange);
+    }
+
+    @Test
+    void shouldReturn401WhenCachePayloadIsMalformed() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:key:malformed-key")).thenReturn(Mono.just(new Object()));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test")
+                .header("X-Api-Key", "malformed-key")
+                .build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(401, exchange.getResponse().getStatusCode().value());
+        verifyNoInteractions(chain);
+    }
+
+    @Test
+    void shouldReturn401WhenCachedKeyIsExpired() {
+        Map<String, Object> keyInfo = Map.of(
+                "callerId", 1,
+                "keyId", 10,
+                "callerName", "expired-caller",
+                "status", 1,
+                "expireAtEpochMs", System.currentTimeMillis() - 1);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:key:expired-key")).thenReturn(Mono.just(keyInfo));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test")
+                .header("X-Api-Key", "expired-key")
+                .build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(401, exchange.getResponse().getStatusCode().value());
+        verifyNoInteractions(chain);
+    }
+
+    @Test
+    void shouldReturn401WhenCachedExpiryIsMalformed() {
+        Map<String, Object> keyInfo = Map.of(
+                "callerId", 1,
+                "keyId", 10,
+                "callerName", "invalid-expiry-caller",
+                "status", 1,
+                "expireAtEpochMs", "not-a-timestamp");
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get("openapi:key:invalid-expiry-key")).thenReturn(Mono.just(keyInfo));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test")
+                .header("X-Api-Key", "invalid-expiry-key")
+                .build();
+        ServerWebExchange exchange = MockServerWebExchange.from(request);
+        GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+        filter.filter(exchange, chain).block();
+
+        assertEquals(401, exchange.getResponse().getStatusCode().value());
+        verifyNoInteractions(chain);
+    }
+
+    @Test
+    void shouldRejectFractionalOrNonPositiveCachedNumericFields() {
+        for (var testCase : java.util.List.of(
+                Map.entry(Map.of("callerId", 1.5D, "keyId", 10, "status", 1), 401),
+                Map.entry(Map.of("callerId", 1, "keyId", 0, "status", 1), 401),
+                Map.entry(Map.of("callerId", 1, "keyId", 10, "status", 1.5D), 403))) {
+            when(redisTemplate.opsForValue()).thenReturn(valueOps);
+            when(valueOps.get("openapi:key:invalid-numeric-key"))
+                    .thenReturn(Mono.just(testCase.getKey()));
+
+            MockServerHttpRequest request = MockServerHttpRequest.get("/openapi/test")
+                    .header("X-Api-Key", "invalid-numeric-key")
+                    .build();
+            ServerWebExchange exchange = MockServerWebExchange.from(request);
+            GatewayFilterChain chain = mock(GatewayFilterChain.class);
+
+            filter.filter(exchange, chain).block();
+
+            assertEquals(testCase.getValue(), exchange.getResponse().getStatusCode().value());
+            verifyNoInteractions(chain);
+            clearInvocations(redisTemplate, valueOps);
+        }
     }
 }

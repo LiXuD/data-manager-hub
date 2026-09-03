@@ -21,11 +21,12 @@ import org.springframework.web.server.ResponseStatusException;
 class InternalTokenControllerTest {
 
     private InternalJwtService jwtService;
+    private InternalSecurityProperties properties;
     private InternalTokenController controller;
 
     @BeforeEach
     void setUp() {
-        InternalSecurityProperties properties = new InternalSecurityProperties();
+        properties = new InternalSecurityProperties();
         properties.setTokenTtl(Duration.ofMinutes(5));
         InternalSecurityProperties.ClientRegistration accessClient =
                 new InternalSecurityProperties.ClientRegistration();
@@ -114,6 +115,25 @@ class InternalTokenControllerTest {
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> controller.issue(request("data-platform-access", "access-secret",
                         "data-platform-governance")));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+    }
+
+    @Test
+    void rejectsMissingTokenRequestWithoutServerError() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> controller.issue(null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    }
+
+    @Test
+    void treatsMissingGrantConfigurationAsForbidden() {
+        properties.getClients().get("data-platform-access").setGrants(null);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> controller.issue(request("data-platform-access", "access-secret",
+                        "data-platform-billing")));
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
     }

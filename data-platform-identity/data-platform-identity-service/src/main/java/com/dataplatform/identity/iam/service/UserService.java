@@ -58,6 +58,19 @@ public class UserService extends ServiceImpl<UserMapper, User> {
                 .toList();
     }
 
+    public java.util.List<Long> listUserIdsByTenant(Long tenantId) {
+        if (tenantId == null) {
+            return java.util.List.of();
+        }
+        return this.list(new LambdaQueryWrapper<User>()
+                        .eq(User::getTenantId, tenantId)
+                        .eq(User::getDeleted, false)
+                        .select(User::getId))
+                .stream()
+                .map(User::getId)
+                .toList();
+    }
+
     public User getByUsername(String username) {
         return this.getOne(new LambdaQueryWrapper<User>()
             .eq(User::getUsername, username)

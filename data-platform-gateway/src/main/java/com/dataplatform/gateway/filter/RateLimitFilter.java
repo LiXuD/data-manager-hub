@@ -3,6 +3,7 @@ package com.dataplatform.gateway.filter;
 import com.dataplatform.common.result.Result;
 import com.dataplatform.common.ratelimit.SlidingWindowRateLimitAlgorithm;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -69,34 +70,44 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
         }
 
         return loadRateLimitConfig(keyId)
-                .flatMap(config -> {
-                    boolean enabled = !config.containsKey("enabled") || asBoolean(config.get("enabled"), true);
-                    if (!enabled) {
-                        return chain.filter(exchange);
-                    }
-                    int windowSec = config.containsKey("windowSec")
-                            ? asInt(config.get("windowSec"), defaultWindowSec) : defaultWindowSec;
-                    int maxReqs = config.containsKey("maxReqs")
-                            ? asInt(config.get("maxReqs"), defaultMaxRequests) : defaultMaxRequests;
-
-                    long now = System.currentTimeMillis();
-                    String windowKey = "openapi:window:" + keyId;
-                    String member = SlidingWindowRateLimitAlgorithm.uniqueMember(now);
-
-                    return redisTemplate.execute(rateLimitScript,
-                                    Collections.singletonList(windowKey),
-                                    windowSec * 1000L, now, member, (long) maxReqs)
-                            .next()
-                            .flatMap(count -> {
-                                if (count > maxReqs) {
-                                    return writeRateLimitError(exchange, windowSec);
-                                }
-                                return chain.filter(exchange);
-                            });
-                })
+                .flatMap(config -> evaluateRateLimit(keyId, config))
                 .onErrorResume(e -> {
                     log.error("Rate limit check failed, rejecting request: {}", e.getMessage());
-                    return writeError(exchange, 503, "限流服务暂时不可用");
+                    return Mono.just(RateLimitDecision.unavailableDecision());
+                })
+                .flatMap(decision -> {
+                    if (decision.unavailable()) {
+                        return writeError(exchange, 503, "限流服务暂时不可用");
+                    }
+                    if (!decision.allowed()) {
+                        return writeRateLimitError(exchange, decision.windowSec());
+                    }
+                    return chain.filter(exchange);
+                });
+    }
+
+    private Mono<RateLimitDecision> evaluateRateLimit(Long keyId, Map<String, Object> config) {
+        boolean enabled = !config.containsKey("enabled") || asBoolean(config.get("enabled"), true);
+        if (!enabled) {
+            return Mono.just(RateLimitDecision.allowed(defaultWindowSec));
+        }
+        int windowSec = configInt(config, "windowSec", defaultWindowSec);
+        int maxReqs = configInt(config, "maxReqs", defaultMaxRequests);
+
+        long now = System.currentTimeMillis();
+        String windowKey = "openapi:window:" + keyId;
+        String member = SlidingWindowRateLimitAlgorithm.uniqueMember(now);
+
+        return redisTemplate.execute(rateLimitScript,
+                        Collections.singletonList(windowKey),
+                        windowSec * 1000L, now, member, (long) maxReqs)
+                .next()
+                .switchIfEmpty(Mono.error(new IllegalStateException("限流脚本未返回结果")))
+                .map(count -> {
+                    if (count == null || count < 0) {
+                        throw new IllegalStateException("限流脚本返回结果无效");
+                    }
+                    return new RateLimitDecision(count <= maxReqs, windowSec, false);
                 });
     }
 
@@ -122,9 +133,13 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
                 .map(v -> (Map<String, Object>) v);
     }
 
-    private int asInt(Object value, int defaultValue) {
+    private int configInt(Map<String, Object> config, String field, int defaultValue) {
+        Object value = config.containsKey(field) ? config.get(field) : defaultValue;
         Long parsed = asLong(value);
-        return parsed != null ? parsed.intValue() : defaultValue;
+        if (parsed == null || parsed > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("限流配置字段无效: " + field);
+        }
+        return parsed.intValue();
     }
 
     private boolean asBoolean(Object value, boolean defaultValue) {
@@ -132,33 +147,47 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
             return bool;
         }
         if (value instanceof Number number) {
-            return number.intValue() != 0;
+            try {
+                BigDecimal decimal = new BigDecimal(number.toString());
+                if (decimal.compareTo(BigDecimal.ZERO) == 0) return false;
+                if (decimal.compareTo(BigDecimal.ONE) == 0) return true;
+                return defaultValue;
+            } catch (NumberFormatException ignored) {
+                return defaultValue;
+            }
         }
         if (value instanceof List<?> list && list.size() >= 2) {
             return asBoolean(list.get(1), defaultValue);
         }
         if (value instanceof String text) {
-            if ("1".equals(text)) {
+            String normalized = text.trim();
+            if ("1".equals(normalized) || "true".equalsIgnoreCase(normalized)) {
                 return true;
             }
-            if ("0".equals(text)) {
+            if ("0".equals(normalized) || "false".equalsIgnoreCase(normalized)) {
                 return false;
             }
-            return Boolean.parseBoolean(text);
+            return defaultValue;
         }
         return defaultValue;
     }
 
     private Long asLong(Object value) {
         if (value instanceof Number number) {
-            return number.longValue();
+            try {
+                BigDecimal decimal = new BigDecimal(number.toString());
+                return decimal.signum() > 0 ? decimal.longValueExact() : null;
+            } catch (NumberFormatException | ArithmeticException ignored) {
+                return null;
+            }
         }
         if (value instanceof List<?> list && list.size() >= 2) {
             return asLong(list.get(1));
         }
         if (value instanceof String text) {
             try {
-                return Long.parseLong(text);
+                long parsed = Long.parseLong(text.trim());
+                return parsed > 0 ? parsed : null;
             } catch (NumberFormatException ignored) {
                 return null;
             }
@@ -179,6 +208,16 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
             return exchange.getResponse().writeWith(Mono.just(buffer));
         } catch (Exception e) {
             return Mono.error(e);
+        }
+    }
+
+    private record RateLimitDecision(boolean allowed, int windowSec, boolean unavailable) {
+        private static RateLimitDecision allowed(int windowSec) {
+            return new RateLimitDecision(true, windowSec, false);
+        }
+
+        private static RateLimitDecision unavailableDecision() {
+            return new RateLimitDecision(false, 0, true);
         }
     }
 

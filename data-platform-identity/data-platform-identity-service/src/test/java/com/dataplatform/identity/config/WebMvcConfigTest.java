@@ -23,6 +23,7 @@ class WebMvcConfigTest {
         List<String> excludes = Arrays.asList(interceptor.getExcludePathPatterns());
         assertFalse(excludes.contains("/auth/**"));
         assertFalse(excludes.contains("/identity/auth/**"));
+        assertTrue(excludes.contains("/auth/logout"));
         assertTrue(Arrays.asList(interceptor.getIncludePathPatterns()).contains("/**"));
     }
 

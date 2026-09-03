@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.dataplatform.identity.iam.security.IamAuthorizationException;
+import com.dataplatform.access.caller.api.feign.CallerInternalFeignClient;
 import com.dataplatform.identity.iam.security.IamAuthorizationService;
 import com.dataplatform.identity.iam.service.PermissionService;
 import com.dataplatform.identity.iam.service.RolePermissionService;
@@ -14,6 +15,7 @@ import com.dataplatform.identity.iam.service.UserCallerService;
 import com.dataplatform.identity.iam.service.UserRoleService;
 import com.dataplatform.identity.iam.service.UserService;
 import com.dataplatform.identity.security.service.PasswordService;
+import com.dataplatform.identity.tenant.service.TenantService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -29,7 +31,9 @@ class IamManagementControllerSecurityTest {
                 mock(UserCallerService.class),
                 userRoleService,
                 mock(PasswordService.class),
-                authorizationService);
+                authorizationService,
+                mock(TenantService.class),
+                mock(CallerInternalFeignClient.class));
         IamAuthorizationException denied = forbidden();
         org.mockito.Mockito.doThrow(denied)
                 .when(authorizationService).requirePermission("user:edit");
@@ -62,7 +66,7 @@ class IamManagementControllerSecurityTest {
                 new PermissionController(permissionService, authorizationService);
         IamAuthorizationException denied = forbidden();
         org.mockito.Mockito.doThrow(denied)
-                .when(authorizationService).requirePermission("role:view");
+                .when(authorizationService).requirePermission("permission:view");
 
         assertThatThrownBy(controller::listAllActive).isSameAs(denied);
         verify(permissionService, never()).listAllActive();

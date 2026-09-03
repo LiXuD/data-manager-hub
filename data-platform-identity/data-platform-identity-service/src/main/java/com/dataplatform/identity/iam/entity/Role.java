@@ -3,6 +3,7 @@ package com.dataplatform.identity.iam.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.common.handler.CommonStatusTypeHandler;
@@ -26,6 +27,7 @@ public class Role {
     private LocalDateTime updatedAt;
     @TableField(exist = false)
     private Long updatedBy;
+    @TableLogic
     private Boolean deleted;
 
     public Long getId() { return id; }

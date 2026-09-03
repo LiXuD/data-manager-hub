@@ -21,6 +21,11 @@ public class TenantServiceImpl extends ServiceImpl<TenantMapper, TenantInfo> imp
 
     @Override
     public Page<TenantInfo> listPage(int page, int pageSize, String keyword, String status) {
+        return listPage(page, pageSize, keyword, status, null);
+    }
+
+    @Override
+    public Page<TenantInfo> listPage(int page, int pageSize, String keyword, String status, Long tenantId) {
         LambdaQueryWrapper<TenantInfo> wrapper = new LambdaQueryWrapper<>();
         
         if (StringUtils.hasText(keyword)) {
@@ -32,6 +37,10 @@ public class TenantServiceImpl extends ServiceImpl<TenantMapper, TenantInfo> imp
         
         if (StringUtils.hasText(status)) {
             wrapper.eq(TenantInfo::getStatus, status);
+        }
+
+        if (tenantId != null) {
+            wrapper.eq(TenantInfo::getId, tenantId);
         }
         
         wrapper.orderByDesc(TenantInfo::getCreatedAt);
