@@ -44,6 +44,13 @@ export const getInterfaceParams = async (interfaceId: number): Promise<Interface
   return contract.requestFields
 }
 
+export const getDataTestInterfaceContract = async (apiKeyId: number, interfaceId: number) => {
+  const response = await request.get<{ data: InterfaceContract }>('/data-test/contract', {
+    params: { apiKeyId, interfaceId }
+  })
+  return response.data
+}
+
 export const saveInterfaceContract = async (interfaceId: number, contract: Partial<InterfaceContract>) => {
   const response = await request.put<{ data: InterfaceContract }>(`/interface/${interfaceId}/contract`, contract)
   return response.data
