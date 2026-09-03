@@ -1,7 +1,8 @@
 -- Complete the authenticated management-route permission vocabulary.
 -- This migration is forward-only: previously executed permission facts are not
 -- deleted or rewritten. Built-in admin receives the new explicit capabilities;
--- custom roles require an intentional administrator assignment.
+-- custom roles require an intentional administrator assignment. Existing rows
+-- are immutable facts, so a rerun or upgrade must only add missing vocabulary.
 INSERT INTO permission (
     permission_code, permission_name, resource_type, resource_path,
     parent_id, sort_order, description, status, deleted
@@ -34,16 +35,7 @@ VALUES
     ('trace:view', '数据血缘-查看', 'page', '/trace/lineage', 0, 111, '查看数据血缘', 'active', FALSE),
     ('trace:manage', '数据血缘-管理', 'button', '/trace/lineage/manage', 0, 112, '写入和维护数据血缘', 'active', FALSE),
     ('security:manage', '安全加密-管理', 'system', '/security/encryption', 0, 113, '执行受控加密、解密和密钥轮换', 'active', FALSE)
-ON CONFLICT (permission_code) DO UPDATE
-SET permission_name = EXCLUDED.permission_name,
-    resource_type = EXCLUDED.resource_type,
-    resource_path = EXCLUDED.resource_path,
-    parent_id = EXCLUDED.parent_id,
-    sort_order = EXCLUDED.sort_order,
-    description = EXCLUDED.description,
-    status = 'active',
-    deleted = FALSE,
-    updated_at = CURRENT_TIMESTAMP;
+ON CONFLICT (permission_code) DO NOTHING;
 
 INSERT INTO role_permission (role_id, permission_id, created_at)
 SELECT role_info.id, permission.id, CURRENT_TIMESTAMP
