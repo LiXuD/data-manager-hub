@@ -47,6 +47,28 @@ class DataLineageControllerTest {
         assertEquals("SkyWalking traceId=trace-1", service.transformRule);
     }
 
+    @Test
+    void mapsLineagePersistenceFailureToConflict() throws Exception {
+        DataLineageController controller = new DataLineageController();
+        ReflectionTestUtils.setField(controller, "dataLineageService", new FailingDataLineageService());
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+
+        mockMvc.perform(post("/trace/lineage")
+                .contentType("application/json")
+                .content("""
+                    {
+                      "sourceType": "vendor",
+                      "sourceId": 1,
+                      "sourceName": "Vendor A",
+                      "targetType": "interface",
+                      "targetId": 2,
+                      "targetName": "Interface B"
+                    }
+                    """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value(409));
+    }
+
     private static final class CapturingDataLineageService extends DataLineageService {
         private String sourceType;
         private Long sourceId;
@@ -70,6 +92,15 @@ class DataLineageControllerTest {
             this.relationType = relationType;
             this.transformRule = transformRule;
             return true;
+        }
+    }
+
+    private static final class FailingDataLineageService extends DataLineageService {
+        @Override
+        public boolean recordLineage(String sourceType, Long sourceId, String sourceName,
+                                     String targetType, Long targetId, String targetName,
+                                     String relationType, String transformRule) {
+            throw new IllegalStateException("数据血缘保存失败，请重试");
         }
     }
 }

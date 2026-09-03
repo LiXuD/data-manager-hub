@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
  */
 public class OperationLogRecord {
     private Long userId;
+    private Long tenantId;
     private String username;
     private String module;
     private String operation;
@@ -24,6 +25,8 @@ public class OperationLogRecord {
 
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
     public String getModule() { return module; }

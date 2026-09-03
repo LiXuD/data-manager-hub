@@ -31,7 +31,10 @@ public class DataLineageService extends ServiceImpl<DataLineageMapper, DataLinea
         lineage.setRelationType(relationType);
         lineage.setTransformRule(transformRule);
         lineage.setCreatedAt(LocalDateTime.now());
-        return this.save(lineage);
+        if (!this.save(lineage)) {
+            throw new IllegalStateException("数据血缘保存失败，请重试");
+        }
+        return true;
     }
 
     public List<DataLineage> getUpstream(String type, Long id) {

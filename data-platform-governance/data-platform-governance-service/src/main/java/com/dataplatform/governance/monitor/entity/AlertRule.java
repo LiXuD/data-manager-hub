@@ -3,6 +3,7 @@ package com.dataplatform.governance.monitor.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.dataplatform.common.enums.AlertStatus;
 import com.dataplatform.common.handler.CodeEnumTypeHandler;
@@ -39,6 +40,7 @@ public class AlertRule {
     private Long createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    @TableLogic
     private Boolean deleted;
 
     public Long getId() { return id; }

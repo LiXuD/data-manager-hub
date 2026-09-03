@@ -70,12 +70,17 @@ public class DataLineageController {
                 .body(Result.error(400, "targetName不能为空"));
         }
 
-        boolean result = dataLineageService.recordLineage(
-            sourceType, sourceId, sourceName,
-            targetType, targetId, targetName,
-            relationType, transformRule
-        );
-        return ResponseEntity.ok(Result.success(result));
+        try {
+            boolean result = dataLineageService.recordLineage(
+                sourceType, sourceId, sourceName,
+                targetType, targetId, targetName,
+                relationType, transformRule
+            );
+            return ResponseEntity.ok(Result.success(result));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Result.error(409, e.getMessage()));
+        }
     }
 
     @GetMapping("/upstream")

@@ -16,33 +16,92 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/internal/v1/governance/logs")
-@InternalScope("governance:log")
+    @InternalScope("governance:log")
 public class InternalLogController {
 
     @Autowired
     private LogService logService;
 
     @PostMapping
-    public Result<Void> saveLog(@RequestBody Map<String, Object> logData) {
+    public Result<Void> saveLog(@RequestBody(required = false) Map<String, Object> logData) {
+        if (logData == null) {
+            return Result.error(400, "请求体不能为空");
+        }
         OperationLog log = new OperationLog();
-        if (logData.get("userId") != null) {
-            log.setUserId(Long.valueOf(logData.get("userId").toString()));
+        try {
+            log.setUserId(parseLong(logData.get("userId"), "userId"));
+            log.setTenantId(parseLong(logData.get("tenantId"), "tenantId"));
+            log.setUsername(asText(logData.get("username"), "username"));
+            log.setModule(asText(logData.get("module"), "module"));
+            log.setOperation(asText(logData.get("operation"), "operation"));
+            log.setMethod(asText(logData.get("method"), "method"));
+            log.setParams(asText(logData.get("params"), "params"));
+            log.setResult(asText(logData.get("result"), "result"));
+            log.setIp(asText(logData.get("ip"), "ip"));
+            log.setLocation(asText(logData.get("location"), "location"));
+            Integer duration = parseInteger(logData.get("duration"), "duration");
+            if (duration != null && duration < 0) {
+                return Result.error(400, "duration不能为负数");
+            }
+            log.setDuration(duration);
+            log.setStatus(asText(logData.get("status"), "status"));
+        } catch (IllegalArgumentException e) {
+            return Result.error(400, e.getMessage());
         }
-        log.setUsername((String) logData.get("username"));
-        log.setModule((String) logData.get("module"));
-        log.setOperation((String) logData.get("operation"));
-        log.setMethod((String) logData.get("method"));
-        log.setParams((String) logData.get("params"));
-        log.setResult((String) logData.get("result"));
-        log.setIp((String) logData.get("ip"));
-        log.setLocation((String) logData.get("location"));
-        if (logData.get("duration") != null) {
-            log.setDuration(Integer.valueOf(logData.get("duration").toString()));
-        }
-        log.setStatus((String) logData.get("status"));
         log.setCreatedAt(LocalDateTime.now());
 
         logService.saveLog(log);
         return Result.success(null);
+    }
+
+    private Long parseLong(Object value, String field) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text) {
+            try {
+                return Long.valueOf(text.trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(field + "必须是有效数字");
+            }
+        }
+        throw new IllegalArgumentException(field + "必须是数字");
+    }
+
+    private Integer parseInteger(Object value, String field) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            if (number.longValue() != number.doubleValue()) {
+                throw new IllegalArgumentException(field + "必须是整数");
+            }
+            try {
+                return Math.toIntExact(number.longValue());
+            } catch (ArithmeticException e) {
+                throw new IllegalArgumentException(field + "超出整数范围");
+            }
+        }
+        if (value instanceof String text) {
+            try {
+                return Integer.valueOf(text.trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(field + "必须是有效整数");
+            }
+        }
+        throw new IllegalArgumentException(field + "必须是整数");
+    }
+
+    private String asText(Object value, String field) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String || value instanceof Number || value instanceof Boolean) {
+            return String.valueOf(value);
+        }
+        throw new IllegalArgumentException(field + "必须是文本");
     }
 }

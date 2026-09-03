@@ -14,6 +14,7 @@ public class OperationLog {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long userId;
+    private Long tenantId;
     private String username;
     private String operationType;
     private String operationModule;
@@ -32,6 +33,8 @@ public class OperationLog {
     public void setId(Long id) { this.id = id; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
+    public Long getTenantId() { return tenantId; }
+    public void setTenantId(Long tenantId) { this.tenantId = tenantId; }
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
     public String getOperationType() { return operationType; }
