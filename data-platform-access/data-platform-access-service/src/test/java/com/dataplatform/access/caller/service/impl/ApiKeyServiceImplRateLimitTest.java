@@ -34,6 +34,6 @@ class ApiKeyServiceImplRateLimitTest {
         assertFalse(updated.getRateLimitEnabled());
         assertEquals(600, updated.getRateLimit());
         verify(mapper).updateById(apiKey);
-        verify(cacheService).sync(apiKey);
+        verify(cacheService).syncAfterCommit(apiKey);
     }
 }

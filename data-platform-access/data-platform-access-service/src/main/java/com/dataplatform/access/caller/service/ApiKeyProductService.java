@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.access.caller.entity.ApiKeyProduct;
 import com.dataplatform.access.caller.mapper.ApiKeyProductMapper;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,14 @@ public class ApiKeyProductService extends ServiceImpl<ApiKeyProductMapper, ApiKe
 
     @Transactional
     public void assignProducts(Long apiKeyId, List<Long> productIds) {
+        if (apiKeyId == null) {
+            throw ApiKeyProvisioningException.conflict(
+                    "API_KEY_ID_MISSING", "API Key标识不能为空");
+        }
+        if (productIds != null && productIds.stream().anyMatch(Objects::isNull)) {
+            throw ApiKeyProvisioningException.conflict(
+                    "API_KEY_PRODUCT_INVALID", "产品列表包含无效数据");
+        }
         LambdaQueryWrapper<ApiKeyProduct> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ApiKeyProduct::getApiKeyId, apiKeyId);
         remove(wrapper);
@@ -49,7 +58,10 @@ public class ApiKeyProductService extends ServiceImpl<ApiKeyProductMapper, ApiKe
                         return record;
                     })
                     .collect(Collectors.toList());
-            saveBatch(records);
+            if (!saveBatch(records)) {
+                throw ApiKeyProvisioningException.conflict(
+                        "API_KEY_PRODUCT_ASSIGNMENT_FAILED", "API Key产品授权写入失败，请重试");
+            }
         }
     }
 }

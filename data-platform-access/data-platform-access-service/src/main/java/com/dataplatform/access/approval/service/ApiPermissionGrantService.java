@@ -23,6 +23,7 @@ import com.dataplatform.access.caller.service.CallerService;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.enums.ApiKeyStatus;
 import com.dataplatform.common.enums.CommonStatus;
+import com.dataplatform.common.util.UserContext;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.feign.ApiInterfaceFeignClient;
 import org.slf4j.MDC;
@@ -71,21 +72,31 @@ public class ApiPermissionGrantService {
     }
 
     public List<GrantResponse> list(Long tenantId, String status) {
+        boolean platformAdmin = isPlatformAdmin();
+        requireTenantScope(tenantId);
         List<ApiKeyInterface> grants = grantService.list(
                 new LambdaQueryWrapper<ApiKeyInterface>()
-                        .orderByDesc(ApiKeyInterface::getUpdatedAt)
-                        .last("LIMIT 1000"));
-        Set<Long> interfaceIds = grants.stream()
+                        .orderByDesc(ApiKeyInterface::getUpdatedAt));
+        if (grants == null) {
+            throw serviceUnavailable("GRANT_LOOKUP_UNAVAILABLE", "接口授权查询失败");
+        }
+        List<ApiKeyInterface> safeGrants = grants.stream()
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        Set<Long> interfaceIds = safeGrants.stream()
                 .map(ApiKeyInterface::getInterfaceId)
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<Long, ApiInterfaceDTO> interfaces = interfaceIds.isEmpty()
                 ? Collections.emptyMap()
-                : requireData(interfaceClient.batchGet(List.copyOf(interfaceIds))).stream()
-                        .collect(Collectors.toMap(ApiInterfaceDTO::getId, Function.identity()));
+                : requireInterfaces(interfaceClient.batchGet(List.copyOf(interfaceIds))).stream()
+                        .collect(Collectors.toMap(ApiInterfaceDTO::getId, Function.identity(), (first, second) -> first));
         LocalDateTime now = LocalDateTime.now();
-        return grants.stream()
+        return safeGrants.stream()
                 .map(grant -> toResponse(grant, interfaces.get(grant.getInterfaceId()), now))
-                .filter(response -> response != null && tenantId.equals(response.tenantId()))
+                .filter(response -> response != null
+                        && (platformAdmin
+                        || (tenantId != null && tenantId.equals(response.tenantId()))))
                 .filter(response -> status == null
                         || status.isBlank()
                         || status.equalsIgnoreCase(response.status()))
@@ -138,6 +149,10 @@ public class ApiPermissionGrantService {
                             actorUserId,
                             false,
                             null);
+                    if (grant == null || grant.getId() == null) {
+                        throw serviceUnavailable(
+                                "GRANT_WRITE_UNAVAILABLE", "接口授权写入后未返回有效记录");
+                    }
                     appendDetachedAction(
                             "EMERGENCY_GRANT",
                             actorUserId,
@@ -151,7 +166,15 @@ public class ApiPermissionGrantService {
     }
 
     public List<CallerOptionResponse> emergencyCallers(Long tenantId) {
-        return callerService.listByTenant(tenantId).stream()
+        requireTenantScope(tenantId);
+        List<CallerInfo> callers = isPlatformAdmin() && tenantId == null
+                ? callerService.list()
+                : callerService.listByTenant(tenantId);
+        if (callers == null) {
+            throw serviceUnavailable("CALLER_LOOKUP_UNAVAILABLE", "Caller查询失败");
+        }
+        return callers.stream()
+                .filter(java.util.Objects::nonNull)
                 .filter(caller -> CommonStatus.ACTIVE.equals(caller.getStatus()))
                 .map(caller -> new CallerOptionResponse(
                         caller.getId(), caller.getCallerCode(), caller.getCallerName()))
@@ -161,7 +184,12 @@ public class ApiPermissionGrantService {
     public List<ApiKeyOptionResponse> emergencyApiKeys(Long callerId, Long tenantId) {
         CallerInfo caller = requireEmergencyCaller(callerId, tenantId);
         LocalDateTime now = LocalDateTime.now();
-        return apiKeyService.listByCaller(caller.getId()).stream()
+        List<ApiKey> keys = apiKeyService.listByCaller(caller.getId());
+        if (keys == null) {
+            throw serviceUnavailable("API_KEY_LOOKUP_UNAVAILABLE", "API Key查询失败");
+        }
+        return keys.stream()
+                .filter(java.util.Objects::nonNull)
                 .filter(key -> ApiKeyStatus.ACTIVE.equals(key.getStatus()))
                 .filter(key -> key.getExpireTime() == null || key.getExpireTime().isAfter(now))
                 .map(key -> new ApiKeyOptionResponse(
@@ -175,9 +203,14 @@ public class ApiPermissionGrantService {
             String keyword,
             Long tenantId) {
         ApiKey apiKey = requireEmergencyApiKey(apiKeyId, tenantId);
-        List<ApiInterfaceDTO> options = requireData(interfaceClient.getOptions(keyword));
-        Set<Long> granted = Set.copyOf(grantService.getInterfaceIdsByApiKeyId(apiKey.getId()));
+        List<ApiInterfaceDTO> options = requireInterfaces(interfaceClient.getOptions(keyword));
+        List<Long> grantedIds = grantService.getInterfaceIdsByApiKeyId(apiKey.getId());
+        if (grantedIds == null || grantedIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw serviceUnavailable("GRANT_LOOKUP_UNAVAILABLE", "接口授权查询失败");
+        }
+        Set<Long> granted = Set.copyOf(grantedIds);
         return options.stream()
+                .filter(java.util.Objects::nonNull)
                 .filter(option -> "active".equalsIgnoreCase(option.getStatus()))
                 .map(option -> new InterfaceOptionResponse(
                         option.getId(),
@@ -194,10 +227,13 @@ public class ApiPermissionGrantService {
             Long tenantId) {
         if (request == null
                 || request.callerId() == null
+                || request.callerId() <= 0
                 || request.apiKeyId() == null
+                || request.apiKeyId() <= 0
                 || request.interfaceIds() == null
                 || request.interfaceIds().isEmpty()
-                || request.interfaceIds().size() > 100) {
+                || request.interfaceIds().size() > 100
+                || request.interfaceIds().stream().anyMatch(id -> id == null || id <= 0)) {
             throw badRequest("INVALID_EMERGENCY_REQUEST", "Caller、API Key 和 1 到 100 个接口不能为空");
         }
         if (request.reason() == null
@@ -216,9 +252,11 @@ public class ApiPermissionGrantService {
                 || request.expireAt().isAfter(now.plusHours(24))) {
             throw badRequest("INVALID_EMERGENCY_EXPIRY", "紧急授权有效期必须在未来 24 小时内");
         }
+        requireTenantScope(tenantId);
         CallerInfo caller = callerService.getById(request.callerId());
         if (caller == null
-                || !tenantId.equals(caller.getTenantId())
+                || (!isPlatformAdmin()
+                && (tenantId == null || !tenantId.equals(caller.getTenantId())))
                 || !CommonStatus.ACTIVE.equals(caller.getStatus())) {
             throw forbidden("CALLER_TENANT_DENIED", "Caller 不属于当前租户或已停用");
         }
@@ -230,7 +268,7 @@ public class ApiPermissionGrantService {
             throw conflict("API_KEY_NOT_ACTIVE", "API Key 已停用、过期或不属于所选 Caller");
         }
         List<Long> ids = request.interfaceIds().stream().distinct().toList();
-        List<ApiInterfaceDTO> interfaces = requireData(interfaceClient.batchGet(ids));
+        List<ApiInterfaceDTO> interfaces = requireInterfaces(interfaceClient.batchGet(ids));
         Set<Long> returned = interfaces.stream().map(ApiInterfaceDTO::getId).collect(Collectors.toSet());
         if (!returned.containsAll(ids)
                 || interfaces.stream().anyMatch(item -> !"active".equalsIgnoreCase(item.getStatus()))) {
@@ -242,7 +280,8 @@ public class ApiPermissionGrantService {
     private CallerInfo requireEmergencyCaller(Long callerId, Long tenantId) {
         CallerInfo caller = callerId == null ? null : callerService.getById(callerId);
         if (caller == null
-                || !tenantId.equals(caller.getTenantId())
+                || (!isPlatformAdmin()
+                && (tenantId == null || !tenantId.equals(caller.getTenantId())))
                 || !CommonStatus.ACTIVE.equals(caller.getStatus())) {
             throw forbidden("CALLER_TENANT_DENIED", "Caller 不属于当前租户或已停用");
         }
@@ -270,7 +309,9 @@ public class ApiPermissionGrantService {
         }
         ApiKey apiKey = apiKeyService.getById(grant.getApiKeyId());
         CallerInfo caller = apiKey == null ? null : callerService.getById(apiKey.getCallerId());
-        if (caller == null || !tenantId.equals(caller.getTenantId())) {
+        if (caller == null
+                || (!isPlatformAdmin()
+                && (tenantId == null || !tenantId.equals(caller.getTenantId())))) {
             throw forbidden("GRANT_TENANT_DENIED", "无权操作其他租户授权");
         }
         return grant;
@@ -352,7 +393,9 @@ public class ApiPermissionGrantService {
         record.setEngineType(null);
         record.setTraceId(MDC.get("traceId"));
         record.setCreatedAt(LocalDateTime.now());
-        actionMapper.insert(record);
+        if (actionMapper.insert(record) != 1) {
+            throw serviceUnavailable("GRANT_AUDIT_WRITE_FAILED", "授权审计记录写入失败，请重试");
+        }
     }
 
     private <T> T requireData(Result<T> result) {
@@ -364,6 +407,17 @@ public class ApiPermissionGrantService {
                     "主数据服务返回异常");
         }
         return result.getData();
+    }
+
+    private List<ApiInterfaceDTO> requireInterfaces(Result<List<ApiInterfaceDTO>> result) {
+        List<ApiInterfaceDTO> interfaces = requireData(result);
+        if (interfaces.stream().anyMatch(apiInterface -> apiInterface == null || apiInterface.getId() == null)) {
+            throw new ApiPermissionException(
+                    HttpStatus.BAD_GATEWAY,
+                    "DEPENDENCY_INVALID",
+                    "主数据服务返回了无效接口数据");
+        }
+        return interfaces;
     }
 
     private ApiPermissionException badRequest(String code, String message) {
@@ -380,6 +434,24 @@ public class ApiPermissionGrantService {
 
     private ApiPermissionException conflict(String code, String message) {
         return new ApiPermissionException(HttpStatus.CONFLICT, code, message);
+    }
+
+    private ApiPermissionException serviceUnavailable(String code, String message) {
+        return new ApiPermissionException(HttpStatus.SERVICE_UNAVAILABLE, code, message);
+    }
+
+    private boolean isPlatformAdmin() {
+        try {
+            return UserContext.hasPermission("system:admin");
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private void requireTenantScope(Long tenantId) {
+        if (!isPlatformAdmin() && tenantId == null) {
+            throw forbidden("TENANT_SCOPE_REQUIRED", "当前用户没有租户作用域");
+        }
     }
 
     private record ValidatedEmergency(

@@ -2,10 +2,12 @@ package com.dataplatform.access.caller.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.dataplatform.access.approval.api.ApiPermissionException;
 import com.dataplatform.access.caller.entity.ApiKeyInterface;
 import com.dataplatform.access.caller.mapper.ApiKeyInterfaceMapper;
 import com.dataplatform.access.approval.domain.GrantSource;
 import com.dataplatform.access.approval.domain.GrantStatus;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +42,14 @@ public class ApiKeyInterfaceService extends ServiceImpl<ApiKeyInterfaceMapper, A
 
     @Transactional
     public void assignInterfaces(Long apiKeyId, List<Long> interfaceIds) {
+        if (apiKeyId == null) {
+            throw new ApiPermissionException(
+                    HttpStatus.BAD_REQUEST, "API_KEY_ID_MISSING", "API Key标识不能为空");
+        }
+        if (interfaceIds != null && interfaceIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new ApiPermissionException(
+                    HttpStatus.BAD_REQUEST, "API_KEY_INTERFACE_INVALID", "接口列表包含无效数据");
+        }
         // 删除旧的授权
         LambdaQueryWrapper<ApiKeyInterface> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ApiKeyInterface::getApiKeyId, apiKeyId);
@@ -62,7 +72,12 @@ public class ApiKeyInterfaceService extends ServiceImpl<ApiKeyInterfaceMapper, A
                         return record;
                     })
                     .collect(Collectors.toList());
-            saveBatch(records);
+            if (!saveBatch(records)) {
+                throw new ApiPermissionException(
+                        HttpStatus.CONFLICT,
+                        "API_KEY_INTERFACE_ASSIGNMENT_FAILED",
+                        "API Key接口授权写入失败，请重试");
+            }
         }
     }
 
@@ -76,6 +91,12 @@ public class ApiKeyInterfaceService extends ServiceImpl<ApiKeyInterfaceMapper, A
             Long actorUserId,
             boolean cacheEnabled,
             Integer approvedCacheDays) {
+        if (apiKeyId == null || interfaceId == null || source == null) {
+            throw new ApiPermissionException(
+                    HttpStatus.BAD_REQUEST,
+                    "API_KEY_INTERFACE_INVALID",
+                    "API Key、接口和授权来源不能为空");
+        }
         ApiKeyInterface grant = getOne(new LambdaQueryWrapper<ApiKeyInterface>()
                 .eq(ApiKeyInterface::getApiKeyId, apiKeyId)
                 .eq(ApiKeyInterface::getInterfaceId, interfaceId));
@@ -100,9 +121,19 @@ public class ApiKeyInterfaceService extends ServiceImpl<ApiKeyInterfaceMapper, A
         grant.setRevokeReason(null);
         grant.setUpdatedAt(now);
         if (grant.getId() == null) {
-            save(grant);
+            if (!save(grant)) {
+                throw new ApiPermissionException(
+                        HttpStatus.CONFLICT,
+                        "API_KEY_INTERFACE_GRANT_FAILED",
+                        "接口授权写入失败，请重试");
+            }
         } else {
-            updateById(grant);
+            if (!updateById(grant)) {
+                throw new ApiPermissionException(
+                        HttpStatus.CONFLICT,
+                        "API_KEY_INTERFACE_GRANT_FAILED",
+                        "接口授权更新失败，请刷新后重试");
+            }
         }
         return grant;
     }

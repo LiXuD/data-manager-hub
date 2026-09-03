@@ -141,6 +141,30 @@ class ConnectorPluginActivationServiceTest {
     }
 
     @Test
+    void refusesToReportActivationWhenTheActivationInsertDidNotPersist() {
+        when(mapper.insert(any(ConnectorPluginActivation.class))).thenReturn(0);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class, () -> service.requestStage("demo", "1.0.0"));
+
+        assertEquals("CONNECTOR_ACTIVATION_WRITE_FAILED", error.getMessage());
+        verify(runtime, never()).preload(any());
+    }
+
+    @Test
+    void refusesToReportActivationWhenTheActivationUpdateLostItsRace() {
+        ConnectorPluginActivation existing = pendingActivation();
+        stored.set(existing);
+        when(mapper.updateById(any(ConnectorPluginActivation.class))).thenReturn(0);
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class, () -> service.requestStage("demo", "1.0.0"));
+
+        assertEquals("CONNECTOR_ACTIVATION_UPDATE_CONFLICT", error.getMessage());
+        verify(runtime, never()).preload(any());
+    }
+
+    @Test
     void loadedReadyFastPathRevalidatesDescriptorBeforeTrustingReady() {
         ConnectorPluginActivation ready = pendingActivation();
         ready.setServiceInstanceId("10.0.0.1:8080");

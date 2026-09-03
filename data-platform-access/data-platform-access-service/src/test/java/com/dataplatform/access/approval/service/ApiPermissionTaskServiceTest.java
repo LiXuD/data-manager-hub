@@ -99,6 +99,83 @@ class ApiPermissionTaskServiceTest {
     }
 
     @Test
+    void shouldRequireUserAndTenantScopeBeforeListingTasks() {
+        assertThatThrownBy(() -> taskService.listTasks(22L, null))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("TENANT_SCOPE_REQUIRED"));
+
+        assertThatThrownBy(() -> taskService.listTasks(null, 7L))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("USER_SCOPE_REQUIRED"));
+    }
+
+    @Test
+    void shouldFailClosedWhenApprovalEngineReturnsNullTaskCollection() {
+        when(identityClient.getRoleCodes(22L)).thenReturn(Result.success(List.of()));
+        when(approvalEngine.findTasks("22", Set.of())).thenReturn(null);
+
+        assertThatThrownBy(() -> taskService.listTasks(22L, 7L))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("APPROVAL_ENGINE_UNAVAILABLE"));
+    }
+
+    @Test
+    void shouldFailClosedWhenApprovalEngineReturnsNullTaskLookup() {
+        when(approvalEngine.getTask("task-1")).thenReturn(null);
+
+        assertThatThrownBy(() -> taskService.claim("task-1", 22L, 7L))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("APPROVAL_ENGINE_UNAVAILABLE"));
+    }
+
+    @Test
+    void shouldRejectInvalidTaskPolicyInsteadOfReturningRawServerError() {
+        ApiPermissionApplication application = application(100L, 7L, 11L, 3);
+        when(approvalEngine.getTask("task-1")).thenReturn(Optional.of(task(null)));
+        when(applicationService.findByProcessInstance("process-1")).thenReturn(application);
+        when(identityClient.getRoleCodes(22L)).thenReturn(Result.success(List.of()));
+        when(approvalEngine.canClaim("task-1", Set.of())).thenReturn(true);
+        when(approvalEngine.getTaskPolicy("task-1")).thenReturn(new ApprovalEnginePort.TaskPolicy(
+                true,
+                true,
+                Set.of("APPROVE"),
+                List.of(new ApprovalEnginePort.FormField(
+                        null, "无效字段", "string", false, null, List.of()))));
+
+        assertThatThrownBy(() -> taskService.taskDetail("task-1", 22L, 7L))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("APPROVAL_CONFIG_INVALID"));
+    }
+
+    @Test
+    void shouldFailClosedWhenProcessDiagnosticsAreUnavailable() {
+        when(approvalEngine.processDiagnostics()).thenReturn(null);
+
+        assertThatThrownBy(() -> taskService.processDiagnostics())
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("APPROVAL_ENGINE_UNAVAILABLE"));
+    }
+
+    @Test
+    void shouldFailClosedWhenProcessHistoryIsUnavailable() {
+        ApiPermissionApplication application = application(100L, 7L, 22L, 3);
+        when(applicationService.requireVisibleApplication(100L, 22L, 7L, false))
+                .thenReturn(application);
+        when(approvalEngine.history("process-1")).thenReturn(null);
+
+        assertThatThrownBy(() -> taskService.processHistory(100L, 22L, 7L, false))
+                .isInstanceOfSatisfying(ApiPermissionException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo("APPROVAL_ENGINE_UNAVAILABLE"));
+    }
+
+    @Test
     void shouldRejectStaleApplicationVersionBeforeCompletingTask() {
         ApiPermissionApplication application = application(100L, 7L, 11L, 4);
         application.setRequestedExpireAt(LocalDateTime.now().plusDays(10));

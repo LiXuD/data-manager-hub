@@ -3,6 +3,7 @@ package com.dataplatform.access.caller.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import com.dataplatform.access.caller.handler.ApiKeyStatusTypeHandler;
 import com.dataplatform.common.enums.ApiKeyStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 
 
@@ -44,8 +45,10 @@ public class ApiKey {
     public void setCallerId(Long callerId) { this.callerId = callerId; }
     public String getKeyName() { return keyName; }
     public void setKeyName(String keyName) { this.keyName = keyName; }
+    @JsonIgnore
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+    @JsonIgnore
     public String getApiSecret() { return apiSecret; }
     public void setApiSecret(String apiSecret) { this.apiSecret = apiSecret; }
     public Boolean getRateLimitEnabled() { return rateLimitEnabled; }

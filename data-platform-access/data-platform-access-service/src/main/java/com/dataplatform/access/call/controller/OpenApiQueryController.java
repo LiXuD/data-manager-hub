@@ -2,6 +2,7 @@ package com.dataplatform.access.call.controller;
 
 import com.dataplatform.access.call.entity.CallScene;
 import com.dataplatform.access.call.service.CallSceneService;
+import com.dataplatform.access.call.service.OpenApiQueryException;
 import com.dataplatform.access.call.service.OpenApiQueryService;
 import com.dataplatform.access.call.service.OpenApiQueryService.OpenApiCallContext;
 import com.dataplatform.access.call.service.RateLimitService;
@@ -22,6 +23,7 @@ import com.dataplatform.access.caller.service.CallerService;
 import com.dataplatform.api.Result;
 import com.dataplatform.common.constant.StatusConstants;
 import com.dataplatform.common.enums.ApiKeyStatus;
+import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.masterdata.interface_.api.dto.ApiInterfaceDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceParamDTO;
 import com.dataplatform.masterdata.interface_.api.dto.InterfaceContractDTO;
@@ -38,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -101,6 +104,9 @@ public class OpenApiQueryController {
             @RequestBody OpenApiQueryReqVO request,
             HttpServletRequest httpRequest) {
 
+        if (request == null) {
+            return error(400, "请求体不能为空");
+        }
         String apiCode = normalize(request != null ? request.getApiCode() : null);
         if (apiCode == null) {
             return error(400, "apiCode不能为空");
@@ -121,28 +127,35 @@ public class OpenApiQueryController {
         if (apiKeyEntity == null) {
             return error(401, "无效的API Key");
         }
-        CallerInfo caller = callerService.getById(apiKeyEntity.getCallerId());
+        CallerInfo caller = loadCaller(apiKeyEntity.getCallerId());
         if (caller == null) {
             return error(403, "调用方不存在");
         }
-        CallerProduct product = callerProductService.getActiveProduct(apiKeyEntity.getCallerId(), productCode);
+        if (!CommonStatus.ACTIVE.equals(caller.getStatus())) {
+            return error(403, "调用方已停用");
+        }
+        CallerProduct product = loadActiveProduct(apiKeyEntity.getCallerId(), productCode);
         if (product == null) {
             return error(403, "调用方未配置该产品");
         }
-        if (!apiKeyProductService.hasProductPermission(apiKeyEntity.getId(), product.getId())) {
+        if (!hasProductPermission(apiKeyEntity.getId(), product.getId())) {
             return error(403, "API Key没有访问该产品的权限");
         }
-        CallScene scene = callSceneService.getActiveScene(sceneCode);
+        CallScene scene = loadActiveScene(sceneCode);
         if (scene == null) {
             return error(403, "调用场景不存在或未启用");
         }
 
-        ApiRoute route = resolveApiRoute(apiCode);
+        ApiRoute route;
+        try {
+            route = resolveApiRoute(apiCode);
+        } catch (OpenApiQueryException exception) {
+            return error(exception);
+        }
         if (route == null) {
             return error(404, "接口配置不存在");
         }
-        ApiKeyInterface interfaceGrant = apiKeyInterfaceService.findEffectiveGrant(
-                apiKeyEntity.getId(), route.interfaceId());
+        ApiKeyInterface interfaceGrant = loadEffectiveGrant(apiKeyEntity.getId(), route.interfaceId());
         if (interfaceGrant == null) {
             return error(403, "API Key没有访问该接口的权限");
         }
@@ -161,7 +174,7 @@ public class OpenApiQueryController {
         if (!checkRateLimit(apiKeyEntity)) {
             return error(429, "请求过于频繁，请稍后再试");
         }
-        if (!apiKeyService.validateAndConsumeQuota(apiKeyEntity.getApiKey(), 1)) {
+        if (!consumeQuota(apiKeyEntity.getApiKey(), 1)) {
             return error(429, "API Key配额不足");
         }
 
@@ -169,7 +182,11 @@ public class OpenApiQueryController {
                 requestParams);
         context.setInterfaceContract(route.contract());
         context.setTraceId(traceId);
-        return ResponseEntity.ok(Result.success(openApiQueryService.query(context)));
+        try {
+            return ResponseEntity.ok(Result.success(openApiQueryService.query(context)));
+        } catch (OpenApiQueryException exception) {
+            return error(exception);
+        }
     }
 
     @PostMapping("/batch-query")
@@ -180,6 +197,9 @@ public class OpenApiQueryController {
             @RequestBody OpenApiBatchQueryReqVO request,
             HttpServletRequest httpRequest) {
 
+        if (request == null) {
+            return error(400, "请求体不能为空");
+        }
         String apiCode = normalize(request != null ? request.getApiCode() : null);
         if (apiCode == null) {
             return error(400, "apiCode不能为空");
@@ -208,28 +228,35 @@ public class OpenApiQueryController {
         if (apiKeyEntity == null) {
             return error(401, "无效的API Key");
         }
-        CallerInfo caller = callerService.getById(apiKeyEntity.getCallerId());
+        CallerInfo caller = loadCaller(apiKeyEntity.getCallerId());
         if (caller == null) {
             return error(403, "调用方不存在");
         }
-        CallerProduct product = callerProductService.getActiveProduct(apiKeyEntity.getCallerId(), productCode);
+        if (!CommonStatus.ACTIVE.equals(caller.getStatus())) {
+            return error(403, "调用方已停用");
+        }
+        CallerProduct product = loadActiveProduct(apiKeyEntity.getCallerId(), productCode);
         if (product == null) {
             return error(403, "调用方未配置该产品");
         }
-        if (!apiKeyProductService.hasProductPermission(apiKeyEntity.getId(), product.getId())) {
+        if (!hasProductPermission(apiKeyEntity.getId(), product.getId())) {
             return error(403, "API Key没有访问该产品的权限");
         }
-        CallScene scene = callSceneService.getActiveScene(sceneCode);
+        CallScene scene = loadActiveScene(sceneCode);
         if (scene == null) {
             return error(403, "调用场景不存在或未启用");
         }
 
-        ApiRoute route = resolveApiRoute(apiCode);
+        ApiRoute route;
+        try {
+            route = resolveApiRoute(apiCode);
+        } catch (OpenApiQueryException exception) {
+            return error(exception);
+        }
         if (route == null) {
             return error(404, "接口配置不存在");
         }
-        ApiKeyInterface interfaceGrant = apiKeyInterfaceService.findEffectiveGrant(
-                apiKeyEntity.getId(), route.interfaceId());
+        ApiKeyInterface interfaceGrant = loadEffectiveGrant(apiKeyEntity.getId(), route.interfaceId());
         if (interfaceGrant == null) {
             return error(403, "API Key没有访问该接口的权限");
         }
@@ -251,16 +278,29 @@ public class OpenApiQueryController {
         if (!checkRateLimit(apiKeyEntity)) {
             return error(429, "请求过于频繁，请稍后再试");
         }
-        if (!apiKeyService.validateAndConsumeQuota(apiKeyEntity.getApiKey(), request.getItems().size())) {
+        if (!consumeQuota(apiKeyEntity.getApiKey(), request.getItems().size())) {
             return error(429, "API Key配额不足");
         }
 
-        return ResponseEntity.ok(Result.success(
-                buildBatchResp(request, apiKeyEntity, caller, product, scene, route, traceId)));
+        try {
+            return ResponseEntity.ok(Result.success(
+                    buildBatchResp(request, apiKeyEntity, caller, product, scene, route, traceId)));
+        } catch (OpenApiQueryException exception) {
+            return error(exception);
+        }
     }
 
     private <T> ResponseEntity<Result<T>> error(int code, String message) {
         return ResponseEntity.status(code).body(Result.error(code, message));
+    }
+
+    private <T> ResponseEntity<Result<T>> error(OpenApiQueryException exception) {
+        return error(exception.getStatus(), exception.getErrorCode() + ": " + exception.getMessage());
+    }
+
+    @ExceptionHandler(OpenApiQueryException.class)
+    public ResponseEntity<Result<Object>> handleOpenApiQueryException(OpenApiQueryException exception) {
+        return error(exception);
     }
 
     private boolean validateCacheRequest(Boolean useCache, Integer cacheDays) {
@@ -282,11 +322,18 @@ public class OpenApiQueryController {
         if (apiKey == null) {
             return null;
         }
-        ApiKey apiKeyEntity = apiKeyService.getByKey(apiKey);
+        ApiKey apiKeyEntity;
+        try {
+            apiKeyEntity = apiKeyService.getByKey(apiKey);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_API_KEY_UNAVAILABLE", "API Key服务暂不可用");
+        }
         if (apiKeyEntity == null || apiKeyEntity.getStatus() != ApiKeyStatus.ACTIVE) {
             return null;
         }
-        if (apiKeyEntity.getExpireTime() != null && apiKeyEntity.getExpireTime().isBefore(LocalDateTime.now())) {
+        if (apiKeyEntity.getExpireTime() != null
+                && !apiKeyEntity.getExpireTime().isAfter(LocalDateTime.now())) {
             return null;
         }
         return apiKeyEntity;
@@ -321,12 +368,82 @@ public class OpenApiQueryController {
             return true;
         }
         Integer rateLimit = apiKeyEntity.getRateLimit() != null ? apiKeyEntity.getRateLimit() : DEFAULT_RATE_LIMIT;
-        return rateLimitService.checkRateLimit(apiKeyEntity.getApiKey(), rateLimit);
+        try {
+            return rateLimitService.checkRateLimit(apiKeyEntity.getApiKey(), rateLimit);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_RATE_LIMIT_UNAVAILABLE", "限流服务暂不可用");
+        }
+    }
+
+    private CallerInfo loadCaller(Long callerId) {
+        try {
+            return callerService.getById(callerId);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_CALLER_UNAVAILABLE", "调用方服务暂不可用");
+        }
+    }
+
+    private CallerProduct loadActiveProduct(Long callerId, String productCode) {
+        try {
+            return callerProductService.getActiveProduct(callerId, productCode);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_PRODUCT_UNAVAILABLE", "产品服务暂不可用");
+        }
+    }
+
+    private boolean hasProductPermission(Long apiKeyId, Long productId) {
+        try {
+            return apiKeyProductService.hasProductPermission(apiKeyId, productId);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_PRODUCT_GRANT_UNAVAILABLE", "API Key产品授权服务暂不可用");
+        }
+    }
+
+    private CallScene loadActiveScene(String sceneCode) {
+        try {
+            return callSceneService.getActiveScene(sceneCode);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_SCENE_UNAVAILABLE", "调用场景服务暂不可用");
+        }
+    }
+
+    private ApiKeyInterface loadEffectiveGrant(Long apiKeyId, Long interfaceId) {
+        try {
+            return apiKeyInterfaceService.findEffectiveGrant(apiKeyId, interfaceId);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_INTERFACE_GRANT_UNAVAILABLE", "API Key接口授权服务暂不可用");
+        }
+    }
+
+    private boolean consumeQuota(String apiKey, int count) {
+        try {
+            return apiKeyService.validateAndConsumeQuota(apiKey, count);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.serviceUnavailable(
+                    "OPENAPI_QUOTA_UNAVAILABLE", "API Key配额服务暂不可用");
+        }
     }
 
     private ApiRoute resolveApiRoute(String apiCode) {
-        Result<ApiInterfaceDTO> interfaceResult = apiInterfaceFeignClient.getByInterfaceCode(apiCode);
-        ApiInterfaceDTO apiInterface = interfaceResult != null ? interfaceResult.getData() : null;
+        Result<ApiInterfaceDTO> interfaceResult;
+        try {
+            interfaceResult = apiInterfaceFeignClient.getByInterfaceCode(apiCode);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.badGateway(
+                    "OPENAPI_INTERFACE_UNAVAILABLE", "接口路由服务暂不可用");
+        }
+        if (isDependencyFailure(interfaceResult)) {
+            throw OpenApiQueryException.badGateway(
+                    "OPENAPI_INTERFACE_UNAVAILABLE", "接口路由服务暂不可用");
+        }
+        ApiInterfaceDTO apiInterface = interfaceResult != null && Integer.valueOf(200).equals(interfaceResult.getCode())
+                ? interfaceResult.getData() : null;
         if (apiInterface == null || apiInterface.getId() == null
                 || apiInterface.getPrimaryVendorConfigId() == null
                 || !(RoutingReadiness.READY.equals(apiInterface.getRoutingReadiness())
@@ -364,9 +481,17 @@ public class OpenApiQueryController {
     }
 
     private InterfaceContractDTO loadContract(Long interfaceId) {
-        Result<InterfaceContractDTO> contractResult = apiInterfaceFeignClient.getContract(interfaceId);
-        if (contractResult == null || contractResult.getData() == null) {
-            throw new IllegalStateException("接口契约加载失败: interfaceId=" + interfaceId);
+        Result<InterfaceContractDTO> contractResult;
+        try {
+            contractResult = apiInterfaceFeignClient.getContract(interfaceId);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.badGateway(
+                    "OPENAPI_CONTRACT_UNAVAILABLE", "接口契约服务暂不可用");
+        }
+        if (isDependencyFailure(contractResult) || !Integer.valueOf(200).equals(contractResult.getCode())
+                || contractResult.getData() == null) {
+            throw OpenApiQueryException.badGateway(
+                    "OPENAPI_CONTRACT_UNAVAILABLE", "接口契约服务暂不可用");
         }
         return contractResult.getData();
     }
@@ -375,13 +500,35 @@ public class OpenApiQueryController {
         if (vendorId == null) {
             return null;
         }
-        Result<VendorInfoDTO> vendorResult = vendorFeignClient.getById(vendorId);
-        return vendorResult != null ? vendorResult.getData() : null;
+        Result<VendorInfoDTO> vendorResult;
+        try {
+            vendorResult = vendorFeignClient.getById(vendorId);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.badGateway(
+                    "OPENAPI_VENDOR_UNAVAILABLE", "厂商路由服务暂不可用");
+        }
+        if (isDependencyFailure(vendorResult)) {
+            throw OpenApiQueryException.badGateway(
+                    "OPENAPI_VENDOR_UNAVAILABLE", "厂商路由服务暂不可用");
+        }
+        return vendorResult != null && Integer.valueOf(200).equals(vendorResult.getCode())
+                ? vendorResult.getData() : null;
     }
 
     private VendorConfigDTO getActiveConfig(Long configId, Long interfaceId) {
-        Result<VendorConfigDTO> result = vendorConfigFeignClient.getById(configId);
-        VendorConfigDTO config = result != null ? result.getData() : null;
+        Result<VendorConfigDTO> result;
+        try {
+            result = vendorConfigFeignClient.getById(configId);
+        } catch (RuntimeException exception) {
+            throw OpenApiQueryException.badGateway(
+                    "OPENAPI_VENDOR_CONFIG_UNAVAILABLE", "厂商配置服务暂不可用");
+        }
+        if (isDependencyFailure(result)) {
+            throw OpenApiQueryException.badGateway(
+                    "OPENAPI_VENDOR_CONFIG_UNAVAILABLE", "厂商配置服务暂不可用");
+        }
+        VendorConfigDTO config = result != null && Integer.valueOf(200).equals(result.getCode())
+                ? result.getData() : null;
         if (config == null || !configId.equals(config.getId())
                 || !interfaceId.equals(config.getInterfaceId())
                 || !StatusConstants.ACTIVE.equals(config.getStatus())) {
@@ -393,6 +540,12 @@ public class OpenApiQueryController {
     private VendorInfoDTO getActiveVendor(Long vendorId) {
         VendorInfoDTO vendor = getVendor(vendorId);
         return vendor != null && StatusConstants.ACTIVE.equals(vendor.getStatus()) ? vendor : null;
+    }
+
+    private boolean isDependencyFailure(Result<?> result) {
+        return result == null || result.getCode() == null
+                || (!Integer.valueOf(200).equals(result.getCode())
+                && !Integer.valueOf(404).equals(result.getCode()));
     }
 
     private OpenApiBatchQueryRespVO buildBatchResp(OpenApiBatchQueryReqVO request, ApiKey apiKey,
@@ -408,6 +561,10 @@ public class OpenApiQueryController {
             context.setTraceId(traceId);
             context.setInterfaceContract(route.contract());
             OpenApiQueryRespVO itemResp = openApiQueryService.query(context);
+            if (itemResp == null) {
+                throw OpenApiQueryException.serviceUnavailable(
+                        "OPENAPI_QUERY_UNAVAILABLE", "调用服务未返回有效结果");
+            }
             if (Boolean.TRUE.equals(itemResp.getSuccess())) {
                 success++;
             } else {

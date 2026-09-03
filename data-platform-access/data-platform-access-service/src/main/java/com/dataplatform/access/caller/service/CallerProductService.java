@@ -51,7 +51,10 @@ public class CallerProductService extends ServiceImpl<CallerProductMapper, Calle
         } else {
             product.setCacheScope(product.getCacheScope().trim().toUpperCase());
         }
-        save(product);
+        if (!save(product)) {
+            throw CallerProductException.conflict(
+                    "CALLER_PRODUCT_CREATE_CONFLICT", "产品创建失败，请刷新后重试");
+        }
         return product;
     }
 
@@ -70,7 +73,10 @@ public class CallerProductService extends ServiceImpl<CallerProductMapper, Calle
                 ? "CALLER" : changes.getCacheScope().trim().toUpperCase());
         existing.setStatus(changes.getStatus() == null || changes.getStatus().trim().isEmpty()
                 ? StatusConstants.ACTIVE : changes.getStatus().trim().toLowerCase());
-        updateById(existing);
+        if (!updateById(existing)) {
+            throw CallerProductException.conflict(
+                    "CALLER_PRODUCT_UPDATE_CONFLICT", "产品已被其他请求修改，请刷新后重试");
+        }
         return existing;
     }
 }

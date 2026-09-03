@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -371,6 +372,91 @@ class OpenApiQueryServiceTest {
         assertEquals("***MASKED***", items.get(0).get("token"));
         assertEquals("visible", items.get(0).get("safe"));
         assertEquals("***MASKED***", ((Map<String, Object>) items.get(1).get("nested")).get("password"));
+    }
+
+    @Test
+    void shouldTreatMalformedCachePayloadAsCacheMiss() {
+        CallRecord cachedRecord = new CallRecord();
+        cachedRecord.setId(104L);
+        cachedRecord.setResponseData("not-json");
+        when(callRecordService.findLatestReusableCache(eq("PERSONAL_QUERY"), anyString(), eq(1L), eq(20L),
+                any(LocalDateTime.class), eq("GLOBAL"))).thenReturn(cachedRecord);
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
+                .thenReturn(new java.util.LinkedHashMap<>(Map.of(
+                        "success", true,
+                        "data", Map.of("score", 77),
+                        "billingSignal", "UNKNOWN",
+                        "cacheSignal", "UNKNOWN")));
+
+        OpenApiQueryRespVO response = service.query(buildContext(true, 3));
+
+        assertTrue(response.getSuccess());
+        assertFalse(response.getCached());
+        assertEquals(77, response.getData().get("score"));
+        verify(vendorProxyService).callVendor(anyString(), anyString(), any(), any(), anyString());
+    }
+
+    @Test
+    void shouldAlwaysMaskSensitiveFieldsWhenCacheIsRequested() {
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
+                .thenReturn(new java.util.LinkedHashMap<>(Map.of(
+                        "success", true,
+                        "data", Map.of("token", "must-not-persist", "score", 88),
+                        "billingSignal", "UNKNOWN",
+                        "cacheSignal", "CACHEABLE")));
+
+        service.query(buildContext(true, 3));
+
+        ArgumentCaptor<CallRecord> recordCaptor = ArgumentCaptor.forClass(CallRecord.class);
+        verify(callRecordEventPublisher).publish(recordCaptor.capture());
+        assertTrue(recordCaptor.getValue().getResponseData().contains("***MASKED***"));
+        assertFalse(recordCaptor.getValue().getResponseData().contains("must-not-persist"));
+    }
+
+    @Test
+    void shouldMapMissingBillingPolicyToStructuredDependencyFailure() {
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
+                .thenReturn(new java.util.LinkedHashMap<>(Map.of(
+                        "success", true,
+                        "data", Map.of("score", 88),
+                        "billingSignal", "ELIGIBLE",
+                        "cacheSignal", "NOT_CACHEABLE")));
+        when(billingFeignClient.getMeteringPolicy(anyString(), anyString(), any(LocalDateTime.class)))
+                .thenReturn(Result.success(null));
+
+        OpenApiQueryException exception = assertThrows(OpenApiQueryException.class,
+                () -> service.query(buildContext(false, 3)));
+
+        assertEquals(503, exception.getStatus());
+        assertEquals("OPENAPI_BILLING_POLICY_UNAVAILABLE", exception.getErrorCode());
+        verify(callRecordEventPublisher, never()).publish(any());
+    }
+
+    @Test
+    void shouldMapNullVendorResultToStructuredDependencyFailure() {
+        when(vendorProxyService.callVendor(anyString(), anyString(), any(), any(), anyString()))
+                .thenReturn(null);
+
+        OpenApiQueryException exception = assertThrows(OpenApiQueryException.class,
+                () -> service.query(buildContext(false, null)));
+
+        assertEquals(503, exception.getStatus());
+        assertEquals("OPENAPI_VENDOR_UNAVAILABLE", exception.getErrorCode());
+        verify(callRecordEventPublisher, never()).publish(any());
+    }
+
+    @Test
+    void shouldRejectInvalidCacheContextBeforeReadingCache() {
+        OpenApiQueryException exception = assertThrows(OpenApiQueryException.class,
+                () -> service.query(buildContext(true, null)));
+
+        assertEquals(400, exception.getStatus());
+        assertEquals("OPENAPI_CACHE_POLICY_INVALID", exception.getErrorCode());
+        verifyNoCacheLookup();
+    }
+
+    private void verifyNoCacheLookup() {
+        org.mockito.Mockito.verifyNoInteractions(callRecordService);
     }
 
     private OpenApiCallContext buildContext(boolean useCache, Integer cacheDays) {

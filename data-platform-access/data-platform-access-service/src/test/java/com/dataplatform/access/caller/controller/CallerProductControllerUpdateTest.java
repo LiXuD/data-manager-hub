@@ -10,8 +10,11 @@ import com.dataplatform.access.caller.entity.CallerInfo;
 import com.dataplatform.access.caller.entity.CallerProduct;
 import com.dataplatform.access.caller.service.CallerProductService;
 import com.dataplatform.access.caller.service.CallerService;
+import com.dataplatform.common.util.UserContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import static org.mockito.Mockito.mockStatic;
 
 class CallerProductControllerUpdateTest {
 
@@ -37,7 +40,7 @@ class CallerProductControllerUpdateTest {
         when(callerService.getById(1L)).thenReturn(caller);
         when(callerProductService.updateProduct(1L, 11L, request)).thenReturn(updated);
 
-        var response = controller.update(1L, 11L, request);
+        var response = responseAsAdmin(() -> controller.update(1L, 11L, request));
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("GLOBAL", response.getBody().getData().getCacheScope());
@@ -51,7 +54,7 @@ class CallerProductControllerUpdateTest {
         when(callerService.getById(1L)).thenReturn(caller);
         CallerProduct request = product("信贷风控", "TENANT", "active");
 
-        var response = controller.update(1L, 11L, request);
+        var response = responseAsAdmin(() -> controller.update(1L, 11L, request));
 
         assertEquals(400, response.getStatusCode().value());
         verify(callerProductService, never()).updateProduct(1L, 11L, request);
@@ -65,7 +68,7 @@ class CallerProductControllerUpdateTest {
         CallerProduct request = product("信贷风控", "CALLER", "inactive");
         when(callerProductService.updateProduct(1L, 99L, request)).thenReturn(null);
 
-        var response = controller.update(1L, 99L, request);
+        var response = responseAsAdmin(() -> controller.update(1L, 99L, request));
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -76,5 +79,12 @@ class CallerProductControllerUpdateTest {
         product.setCacheScope(cacheScope);
         product.setStatus(status);
         return product;
+    }
+
+    private <T> T responseAsAdmin(java.util.function.Supplier<T> invocation) {
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("system:admin")).thenReturn(true);
+            return invocation.get();
+        }
     }
 }

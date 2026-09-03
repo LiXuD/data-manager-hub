@@ -59,6 +59,10 @@ public class ApiPermissionGrantController {
     public Result<List<ApiKeyInterface>> emergencyGrant(
             @RequestBody EmergencyGrantRequest request) {
         requirePermission("api-permission:emergency-grant");
+        if (request == null) {
+            throw new ApiPermissionException(
+                    HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "紧急授权请求不能为空");
+        }
         return Result.success(grantService.emergencyGrant(
                 request, userId(), username(), tenantId()));
     }
@@ -84,7 +88,8 @@ public class ApiPermissionGrantController {
     }
 
     private void requirePermission(String permission) {
-        if (!UserContext.hasPermission(permission)) {
+        if (!UserContext.hasPermission(permission)
+                && !UserContext.hasPermission("system:admin")) {
             throw new ApiPermissionException(
                     HttpStatus.FORBIDDEN,
                     "PERMISSION_DENIED",

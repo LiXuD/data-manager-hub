@@ -32,7 +32,8 @@ public class OpenApiDocumentController {
 
     @GetMapping("/{id}")
     public Result<Map<String, Object>> detail(@PathVariable("id") Long id) {
-        if (!UserContext.hasPermission("interface:view")) {
+        if (!UserContext.hasPermission("interface:view")
+                && !UserContext.hasPermission("system:admin")) {
             return Result.error(403, "没有接口文档查看权限");
         }
         InterfaceContractDTO contract = contract(id);
@@ -45,7 +46,8 @@ public class OpenApiDocumentController {
     @GetMapping("/{id}/openapi")
     public ResponseEntity<String> download(@PathVariable("id") Long id,
                                            @RequestParam(defaultValue = "json") String format) {
-        if (!UserContext.hasPermission("interface:view")) {
+        if (!UserContext.hasPermission("interface:view")
+                && !UserContext.hasPermission("system:admin")) {
             return ResponseEntity.status(403).body("没有接口文档查看权限");
         }
         InterfaceContractDTO contract = contract(id);

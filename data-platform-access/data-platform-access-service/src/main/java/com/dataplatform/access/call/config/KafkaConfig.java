@@ -1,10 +1,12 @@
 package com.dataplatform.access.call.config;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
@@ -39,8 +41,13 @@ public class KafkaConfig {
     }
 
     @Bean
-    public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> kafkaTemplate) {
+    public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<String, String> kafkaTemplate,
+                                                MeterRegistry meterRegistry) {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
-        return new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 3L));
+        ConsumerRecordRecoverer measuredRecoverer = (record, exception) -> {
+            meterRegistry.counter("call_record_consumer_dlt_published").increment();
+            recoverer.accept(record, exception);
+        };
+        return new DefaultErrorHandler(measuredRecoverer, new FixedBackOff(1000L, 3L));
     }
 }

@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.dataplatform.access.caller.entity.ApiKey;
 import com.dataplatform.access.caller.mapper.ApiKeyMapper;
 import com.dataplatform.access.caller.service.ApiKeyCacheService;
+import com.dataplatform.access.caller.service.ApiKeyProvisioningException;
 import com.dataplatform.access.caller.service.ApiKeyService;
 import java.io.Serializable;
 import org.slf4j.Logger;
@@ -50,8 +51,11 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         apiKey.setQuotaUsed(0L);
         apiKey.setStatus(ApiKeyStatus.ACTIVE);
         apiKey.setExpireTime(LocalDateTime.now().plusYears(1));
-        save(apiKey);
-        apiKeyCacheService.sync(apiKey);
+        if (!save(apiKey)) {
+            throw ApiKeyProvisioningException.conflict(
+                    "API_KEY_CREATE_FAILED", "API Key持久化失败，请重试");
+        }
+        apiKeyCacheService.syncAfterCommit(apiKey);
         return apiKey;
     }
 
@@ -60,7 +64,7 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         boolean updated = super.updateById(entity);
         if (updated && entity != null) {
             ApiKey latest = entity.getId() != null ? getById(entity.getId()) : entity;
-            apiKeyCacheService.sync(latest != null ? latest : entity);
+            apiKeyCacheService.syncAfterCommit(latest != null ? latest : entity);
         }
         return updated;
     }
@@ -70,7 +74,7 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
         ApiKey existing = id != null ? getById(id) : null;
         boolean removed = super.removeById(id);
         if (removed) {
-            apiKeyCacheService.evict(existing);
+            apiKeyCacheService.evictAfterCommit(existing);
         }
         return removed;
     }
@@ -93,9 +97,17 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
 
     @Override
     public ApiKey getByKey(String apiKey) {
-        return getOne(new LambdaQueryWrapper<ApiKey>()
+        if (apiKey == null || apiKey.isBlank()) {
+            return null;
+        }
+        ApiKey result = getOne(new LambdaQueryWrapper<ApiKey>()
             .eq(ApiKey::getApiKey, apiKey)
             .eq(ApiKey::getStatus, "active"));
+        if (result == null || (result.getExpireTime() != null
+                && !result.getExpireTime().isAfter(LocalDateTime.now()))) {
+            return null;
+        }
+        return result;
     }
 
     @Override
@@ -118,15 +130,21 @@ public class ApiKeyServiceImpl extends ServiceImpl<ApiKeyMapper, ApiKey>
     public boolean validateAndConsumeQuota(String apiKey, long count) {
         ApiKey key = getByKey(apiKey);
         if (key == null) return false;
-        if (key.getExpireTime() != null && key.getExpireTime().isBefore(LocalDateTime.now())) {
-            return false;
-        }
         long used = key.getQuotaUsed() != null ? key.getQuotaUsed() : 0L;
         long limit = key.getQuotaLimit() != null ? key.getQuotaLimit() : 0L;
-        if (count <= 0 || limit <= 0 || used + count > limit) {
+        if (count <= 0 || limit <= 0 || used < 0 || used > limit || count > limit - used) {
             return false;
         }
-        key.setQuotaUsed(used + count);
-        return updateById(key);
+        int updated = baseMapper.consumeQuota(key.getId(), count);
+        if (updated != 1) {
+            return false;
+        }
+        ApiKey latest = getById(key.getId());
+        if (latest == null) {
+            apiKeyCacheService.evictAfterCommit(key);
+        } else {
+            apiKeyCacheService.syncAfterCommit(latest);
+        }
+        return true;
     }
 }

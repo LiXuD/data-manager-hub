@@ -54,7 +54,8 @@ public class ApiPermissionApplicationController {
     @GetMapping("/applications/{id}")
     public Result<ApplicationDetailResponse> application(@PathVariable Long id) {
         requirePermission("api-permission:view");
-        boolean tenantScope = UserContext.hasPermission("api-permission:approve");
+        boolean tenantScope = UserContext.hasPermission("api-permission:approve")
+                || UserContext.hasPermission("system:admin");
         applicationService.requireVisibleApplication(
                 id, userId(), tenantId(), tenantScope);
         return Result.success(applicationService.detail(id));
@@ -65,6 +66,10 @@ public class ApiPermissionApplicationController {
     public Result<ApiPermissionApplication> create(
             @RequestBody ApplicationUpsertRequest request) {
         requirePermission("api-permission:apply");
+        if (request == null) {
+            throw new ApiPermissionException(
+                    HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "申请请求不能为空");
+        }
         return Result.success(applicationService.createDraft(
                 request, userId(), username(), tenantId(), tenantWideCallerAccess()));
     }
@@ -75,6 +80,10 @@ public class ApiPermissionApplicationController {
             @PathVariable Long id,
             @RequestBody ApplicationUpsertRequest request) {
         requirePermission("api-permission:apply");
+        if (request == null) {
+            throw new ApiPermissionException(
+                    HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "申请请求不能为空");
+        }
         return Result.success(applicationService.updateDraft(
                 id, request, userId(), username(), tenantId(), tenantWideCallerAccess()));
     }
@@ -93,7 +102,7 @@ public class ApiPermissionApplicationController {
     @PostMapping("/applications/{id}/cancel")
     public Result<ApiPermissionApplication> cancel(@PathVariable Long id) {
         requirePermission("api-permission:apply");
-        return Result.success(applicationService.cancel(id, userId(), username()));
+        return Result.success(applicationService.cancel(id, userId(), username(), tenantId()));
     }
 
     @OperationLog(module = "接口权限审批", operation = "复制接口权限申请")
@@ -132,7 +141,8 @@ public class ApiPermissionApplicationController {
     }
 
     private void requirePermission(String permission) {
-        if (!UserContext.hasPermission(permission)) {
+        if (!UserContext.hasPermission(permission)
+                && !UserContext.hasPermission("system:admin")) {
             throw new ApiPermissionException(
                     HttpStatus.FORBIDDEN,
                     "PERMISSION_DENIED",

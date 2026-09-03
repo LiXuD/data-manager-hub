@@ -1,6 +1,7 @@
 package com.dataplatform.access;
 
 import com.dataplatform.billing.api.feign.BillingInternalFeignClient;
+import com.dataplatform.access.caller.api.feign.CallerInternalFeignClient;
 import com.dataplatform.governance.log.api.LogClient;
 import com.dataplatform.identity.api.feign.IdentityAccessInternalFeignClient;
 import com.dataplatform.masterdata.graylog.api.feign.GraylogInternalFeignClient;
@@ -34,6 +35,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         VendorConnectorInternalFeignClient.class,
         GraylogInternalFeignClient.class,
         BillingInternalFeignClient.class,
+        CallerInternalFeignClient.class,
         IdentityAccessInternalFeignClient.class,
         LogClient.class
 })

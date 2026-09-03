@@ -211,6 +211,31 @@ class FlowableApprovalEngineAdapterTest {
         });
     }
 
+    @Test
+    void exposesReadOnlyDefinitionNodesRolesAndInstanceCounts() {
+        contextRunner.run(context -> {
+            assertThat(context).hasNotFailed();
+            context.getBean(RepositoryService.class).createDeployment()
+                    .addString("diagnostic-approval.bpmn20.xml", sequentialProcess())
+                    .deploy();
+            FlowableApprovalEngineAdapter adapter = adapter(context);
+            adapter.start("sequentialApproval", "APP-DIAGNOSTIC", 7L, Map.of());
+
+            ApprovalEnginePort.ProcessDefinitionSnapshot diagnostic = adapter.processDiagnostics().stream()
+                    .filter(item -> "sequentialApproval".equals(item.key()))
+                    .findFirst()
+                    .orElseThrow();
+
+            assertThat(diagnostic.version()).isPositive();
+            assertThat(diagnostic.suspended()).isFalse();
+            assertThat(diagnostic.boundRoles()).contains("business", "security");
+            assertThat(diagnostic.nodes()).extracting(ApprovalEnginePort.ProcessNodeSnapshot::id)
+                    .contains("businessReview", "securityReview");
+            assertThat(diagnostic.activeInstances()).isGreaterThanOrEqualTo(1);
+            assertThat(diagnostic.totalInstances()).isGreaterThanOrEqualTo(diagnostic.activeInstances());
+        });
+    }
+
     private FlowableApprovalEngineAdapter adapter(
             org.springframework.context.ApplicationContext context) {
         return new FlowableApprovalEngineAdapter(
