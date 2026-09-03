@@ -12,7 +12,13 @@ import com.dataplatform.common.enums.CommonStatus;
 import com.dataplatform.masterdata.connector.entity.VendorConnectorVersion;
 import com.dataplatform.masterdata.connector.mapper.VendorConnectorVersionMapper;
 import com.dataplatform.masterdata.vendor.entity.VendorConfig;
+import com.dataplatform.masterdata.vendor.entity.VendorInfo;
+import com.dataplatform.masterdata.vendor.entity.DataType;
+import com.dataplatform.masterdata.interface_.entity.ApiInterface;
+import com.dataplatform.masterdata.interface_.mapper.ApiInterfaceMapper;
+import com.dataplatform.masterdata.vendor.mapper.DataTypeMapper;
 import com.dataplatform.masterdata.vendor.mapper.VendorConfigMapper;
+import com.dataplatform.masterdata.vendor.mapper.VendorInfoMapper;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +29,9 @@ class VendorConfigServiceImplTest {
 
     private final VendorConfigMapper vendorConfigMapper = mock(VendorConfigMapper.class);
     private final VendorConnectorVersionMapper connectorVersionMapper = mock(VendorConnectorVersionMapper.class);
+    private final VendorInfoMapper vendorInfoMapper = mock(VendorInfoMapper.class);
+    private final DataTypeMapper dataTypeMapper = mock(DataTypeMapper.class);
+    private final ApiInterfaceMapper apiInterfaceMapper = mock(ApiInterfaceMapper.class);
     private VendorConfigServiceImpl service;
 
     @BeforeEach
@@ -30,6 +39,51 @@ class VendorConfigServiceImplTest {
         service = new VendorConfigServiceImpl();
         ReflectionTestUtils.setField(service, "baseMapper", vendorConfigMapper);
         ReflectionTestUtils.setField(service, "connectorVersionMapper", connectorVersionMapper);
+        ReflectionTestUtils.setField(service, "vendorInfoMapper", vendorInfoMapper);
+        ReflectionTestUtils.setField(service, "dataTypeMapper", dataTypeMapper);
+        ReflectionTestUtils.setField(service, "apiInterfaceMapper", apiInterfaceMapper);
+    }
+
+    @Test
+    void refusesToBindAnInactiveVendorBeforeWriting() {
+        VendorInfo vendor = new VendorInfo();
+        vendor.setId(7L);
+        vendor.setStatus(CommonStatus.INACTIVE);
+        when(vendorInfoMapper.selectById(7L)).thenReturn(vendor);
+
+        VendorConfig request = bindingRequest(7L, 11L, 21L);
+
+        var exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.createBinding(request));
+
+        assertEquals("厂商不存在或未启用", exception.getMessage());
+        verify(apiInterfaceMapper, never()).selectById(11L);
+        verify(vendorConfigMapper, never()).insert(org.mockito.ArgumentMatchers.any(VendorConfig.class));
+    }
+
+    @Test
+    void refusesToBindAnInactiveDataTypeBeforeWriting() {
+        VendorInfo vendor = new VendorInfo();
+        vendor.setId(7L);
+        vendor.setStatus(CommonStatus.ACTIVE);
+        when(vendorInfoMapper.selectById(7L)).thenReturn(vendor);
+
+        ApiInterface apiInterface = new ApiInterface();
+        apiInterface.setId(11L);
+        apiInterface.setDataTypeId(21L);
+        when(apiInterfaceMapper.selectById(11L)).thenReturn(apiInterface);
+
+        DataType dataType = new DataType();
+        dataType.setId(21L);
+        dataType.setStatus(CommonStatus.INACTIVE);
+        when(dataTypeMapper.selectById(21L)).thenReturn(dataType);
+
+        var exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createBinding(bindingRequest(7L, 11L, 21L)));
+
+        assertEquals("数据类型不存在或未启用", exception.getMessage());
+        verify(vendorConfigMapper, never()).insert(org.mockito.ArgumentMatchers.any(VendorConfig.class));
     }
 
     @Test
@@ -79,6 +133,14 @@ class VendorConfigServiceImplTest {
         config.setStatus(CommonStatus.ACTIVE);
         config.setRuntimeMode("PLUGIN");
         config.setActiveConnectorVersionId(null);
+        return config;
+    }
+
+    private VendorConfig bindingRequest(Long vendorId, Long interfaceId, Long dataTypeId) {
+        VendorConfig config = new VendorConfig();
+        config.setVendorId(vendorId);
+        config.setInterfaceId(interfaceId);
+        config.setDataTypeId(dataTypeId);
         return config;
     }
 

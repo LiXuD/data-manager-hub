@@ -13,6 +13,7 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.dataplatform.access.connector.api.feign.ConnectorPluginActivationInternalFeignClient;
 import com.dataplatform.common.plugin.artifact.PluginCompatibility;
 import com.dataplatform.masterdata.connector.api.dto.PluginImportRequestDTO;
+import com.dataplatform.masterdata.connector.entity.ConnectorPlugin;
 import com.dataplatform.masterdata.connector.entity.ConnectorPluginVersion;
 import com.dataplatform.masterdata.connector.mapper.ConnectorPluginMapper;
 import com.dataplatform.masterdata.connector.mapper.ConnectorPluginVersionMapper;
@@ -107,11 +108,14 @@ class ConnectorPluginManifestProjectionPersistenceTest {
     }
 
     private Fixture fixture(VerifiedPluginArtifact artifact) {
+        ConnectorPluginMapper pluginMapper = mock(ConnectorPluginMapper.class);
         ConnectorPluginVersionMapper versionMapper = mock(ConnectorPluginVersionMapper.class);
         PluginArtifactVerifier verifier = mock(PluginArtifactVerifier.class);
         when(verifier.verify(any())).thenReturn(artifact);
+        when(pluginMapper.insert(any(ConnectorPlugin.class))).thenReturn(1);
+        when(versionMapper.insert(any(ConnectorPluginVersion.class))).thenReturn(1);
         ConnectorPluginCatalogServiceImpl service = new ConnectorPluginCatalogServiceImpl(
-                mock(ConnectorPluginMapper.class), versionMapper,
+                pluginMapper, versionMapper,
                 mock(VendorConnectorVersionMapper.class), mock(VendorConfigMapper.class),
                 mock(VendorConnectorTestFactMapper.class), verifier,
                 mock(ConnectorPluginActivationInternalFeignClient.class),

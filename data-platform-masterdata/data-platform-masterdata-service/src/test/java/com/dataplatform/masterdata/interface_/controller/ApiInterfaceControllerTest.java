@@ -58,6 +58,17 @@ class ApiInterfaceControllerTest {
     }
 
     @Test
+    void rejectsNullContractBeforeLoadingOrReplacingTheExistingContract() {
+        try (var userContext = mockStatic(UserContext.class)) {
+            userContext.when(() -> UserContext.hasPermission("interface:edit")).thenReturn(true);
+            var result = controller.updateContract(1L, null);
+
+            assertThat(result.getCode()).isEqualTo(400);
+            verifyNoInteractions(apiInterfaceService, interfaceContractService);
+        }
+    }
+
+    @Test
     void mapsContractValidationExceptionToPhysicalBadRequest() {
         var response = controller.handleContractValidation(new IllegalArgumentException("字段名格式无效"));
 

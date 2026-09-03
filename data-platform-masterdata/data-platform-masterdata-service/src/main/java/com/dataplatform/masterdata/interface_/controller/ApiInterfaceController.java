@@ -19,6 +19,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -86,14 +87,20 @@ public class ApiInterfaceController {
     @OperationLog(module = "接口管理", operation = "新增接口")
     @PostMapping
     public Result<ApiInterfaceDTO> create(@RequestBody ApiInterfaceCreateReqDTO dto) {
+        if (dto == null) {
+            return Result.error(400, "接口请求不能为空");
+        }
         if (dto.getRequestSchema() != null || dto.getResponseSchema() != null) {
             return Result.error(400, "请在接口创建后通过契约接口配置请求和响应结构");
         }
+        if (hasInvalidStatus(dto.getStatus())) {
+            return Result.error(400, "无效的状态值，有效值: active, inactive");
+        }
         ApiInterface apiInterface = toEntity(dto);
-        if (apiInterface.getInterfaceCode() == null || apiInterface.getInterfaceCode().trim().isEmpty()) {
+        if (!StringUtils.hasText(apiInterface.getInterfaceCode())) {
             return Result.error(400, "接口编码不能为空");
         }
-        if (apiInterface.getInterfaceName() == null || apiInterface.getInterfaceName().trim().isEmpty()) {
+        if (!StringUtils.hasText(apiInterface.getInterfaceName())) {
             return Result.error(400, "接口名称不能为空");
         }
 
@@ -110,15 +117,26 @@ public class ApiInterfaceController {
         if (apiInterface.getSort() == null) {
             apiInterface.setSort(0);
         }
-        apiInterfaceService.save(apiInterface);
+        if (!apiInterfaceService.save(apiInterface)) {
+            return Result.error(409, "接口保存失败");
+        }
         return Result.success(dtoAssembler.toDTO(apiInterface));
     }
 
     @OperationLog(module = "接口管理", operation = "更新接口")
     @PutMapping("/{id}")
     public Result<ApiInterfaceDTO> update(@PathVariable("id") Long id, @RequestBody ApiInterfaceUpdateReqDTO dto) {
+        if (dto == null) {
+            return Result.error(400, "接口请求不能为空");
+        }
         if (dto.getRequestSchema() != null || dto.getResponseSchema() != null) {
             return Result.error(400, "Schema快照不可直接修改，请使用接口契约");
+        }
+        if (hasInvalidStatus(dto.getStatus())) {
+            return Result.error(400, "无效的状态值，有效值: active, inactive");
+        }
+        if (dto.getInterfaceName() != null && !StringUtils.hasText(dto.getInterfaceName())) {
+            return Result.error(400, "接口名称不能为空");
         }
         ApiInterface existing = apiInterfaceService.getById(id);
         if (existing == null) {
@@ -129,8 +147,14 @@ public class ApiInterfaceController {
         if (CommonStatus.ACTIVE.equals(apiInterface.getStatus()) && !apiInterfaceService.canActivate(id)) {
             return Result.error(409, "接口启用前必须配置可用的主厂商连接器");
         }
-        apiInterfaceService.updateById(apiInterface);
-        return Result.success(dtoAssembler.toDTO(apiInterfaceService.getById(id)));
+        if (!apiInterfaceService.updateById(apiInterface)) {
+            return Result.error(409, "接口更新失败");
+        }
+        ApiInterface updated = apiInterfaceService.getById(id);
+        if (updated == null) {
+            return Result.error(409, "接口更新后无法读取");
+        }
+        return Result.success(dtoAssembler.toDTO(updated));
     }
 
     @OperationLog(module = "接口管理", operation = "更新接口厂商路由")
@@ -147,13 +171,18 @@ public class ApiInterfaceController {
         if (existing == null) {
             return Result.error(404, "接口不存在");
         }
-        apiInterfaceService.removeById(id);
+        if (!apiInterfaceService.removeById(id)) {
+            return Result.error(409, "接口删除失败");
+        }
         return Result.success(null);
     }
 
     @OperationLog(module = "接口管理", operation = "更新接口状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
+        if (body == null) {
+            return Result.error(400, "状态请求不能为空");
+        }
         CommonStatus status = CommonStatus.fromCode(body.get("status"));
         if (status == null) {
             return Result.error(400, "无效的状态值，有效值: active, inactive");
@@ -171,13 +200,16 @@ public class ApiInterfaceController {
         ApiInterface apiInterface = new ApiInterface();
         apiInterface.setId(id);
         apiInterface.setStatus(status);
-        apiInterfaceService.updateById(apiInterface);
+        if (!apiInterfaceService.updateById(apiInterface)) {
+            return Result.error(409, "接口状态更新失败");
+        }
         return Result.success(null);
     }
 
     @GetMapping("/{id}/contract")
     public Result<InterfaceContractDTO> getContract(@PathVariable("id") Long id) {
-        if (!UserContext.hasPermission("interface:view")) {
+        if (!UserContext.hasPermission("interface:view")
+                && !UserContext.hasPermission("system:admin")) {
             return Result.error(403, "没有接口契约查看权限");
         }
         if (apiInterfaceService.getById(id) == null) {
@@ -190,8 +222,12 @@ public class ApiInterfaceController {
     @PutMapping("/{id}/contract")
     public Result<InterfaceContractDTO> updateContract(@PathVariable("id") Long id,
                                                        @RequestBody InterfaceContractDTO contract) {
-        if (!UserContext.hasPermission("interface:edit")) {
+        if (!UserContext.hasPermission("interface:edit")
+                && !UserContext.hasPermission("system:admin")) {
             return Result.error(403, "没有接口契约编辑权限");
+        }
+        if (contract == null) {
+            return Result.error(400, "接口契约请求不能为空");
         }
         if (apiInterfaceService.getById(id) == null) {
             return Result.error(404, "接口不存在");
@@ -227,8 +263,14 @@ public class ApiInterfaceController {
     private ApiInterface toEntity(ApiInterfaceCreateReqDTO dto) {
         ApiInterface entity = new ApiInterface();
         BeanUtils.copyProperties(dto, entity);
+        if (dto.getInterfaceCode() != null) {
+            entity.setInterfaceCode(dto.getInterfaceCode().trim());
+        }
+        if (dto.getInterfaceName() != null) {
+            entity.setInterfaceName(dto.getInterfaceName().trim());
+        }
         if (dto.getStatus() != null) {
-            entity.setStatus(CommonStatus.fromCode(dto.getStatus()));
+            entity.setStatus(CommonStatus.fromCode(dto.getStatus().trim()));
         }
         return entity;
     }
@@ -236,10 +278,17 @@ public class ApiInterfaceController {
     private ApiInterface toEntity(ApiInterfaceUpdateReqDTO dto) {
         ApiInterface entity = new ApiInterface();
         BeanUtils.copyProperties(dto, entity);
+        if (dto.getInterfaceName() != null) {
+            entity.setInterfaceName(dto.getInterfaceName().trim());
+        }
         if (dto.getStatus() != null) {
-            entity.setStatus(CommonStatus.fromCode(dto.getStatus()));
+            entity.setStatus(CommonStatus.fromCode(dto.getStatus().trim()));
         }
         return entity;
+    }
+
+    private boolean hasInvalidStatus(String status) {
+        return status != null && CommonStatus.fromCode(status.trim()) == null;
     }
 
 }

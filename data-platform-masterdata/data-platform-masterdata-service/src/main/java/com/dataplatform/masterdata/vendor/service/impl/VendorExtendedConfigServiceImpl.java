@@ -195,7 +195,11 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean updateConfig(String configKey, String configValue, Long updatedBy) {
+        if (!StringUtils.hasText(configKey)) {
+            throw new IllegalArgumentException("配置键不能为空");
+        }
         LambdaQueryWrapper<VendorExtendedConfig> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(VendorExtendedConfig::getConfigKey, configKey);
         VendorExtendedConfig oldConfig = this.getOne(wrapper);
@@ -205,13 +209,17 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
             oldConfig.setConfigValue(Boolean.TRUE.equals(oldConfig.getIsEncrypted())
                     ? encrypt(configValue) : configValue);
             oldConfig.setUpdatedBy(updatedBy);
-            this.updateById(oldConfig);
+            if (!this.updateById(oldConfig)) {
+                throw new IllegalStateException("厂商扩展配置更新失败");
+            }
         } else {
             VendorExtendedConfig newConfig = new VendorExtendedConfig();
             newConfig.setConfigKey(configKey);
             newConfig.setConfigValue(configValue);
             newConfig.setIsActive(true);
-            this.save(newConfig);
+            if (!this.save(newConfig)) {
+                throw new IllegalStateException("厂商扩展配置保存失败");
+            }
         }
 
         evict(oldConfig == null ? null : oldConfig.getVendorId(), configKey);
@@ -242,8 +250,11 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
 
     @Override
     public boolean rollback(String configKey, Long versionId) {
+        if (!StringUtils.hasText(configKey) || versionId == null) {
+            return false;
+        }
         ConfigVersion version = configVersionMapper.selectById(versionId);
-        if (version == null || !version.getConfigKey().equals(configKey)) {
+        if (version == null || !Objects.equals(version.getConfigKey(), configKey)) {
             return false;
         }
         VendorExtendedConfig current = getOne(new LambdaQueryWrapper<VendorExtendedConfig>()
@@ -253,8 +264,11 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
         }
         saveVersion(current);
         current.setConfigValue(version.getConfigValue());
+        current.setIsEncrypted(resolveVersionEncryption(version));
         current.setUpdatedBy(null);
-        updateById(current);
+        if (!updateById(current)) {
+            throw new IllegalStateException("厂商扩展配置回滚失败");
+        }
         evict(current.getVendorId(), current.getConfigKey());
         return true;
     }
@@ -267,9 +281,11 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
         List<ConfigVersion> versions = configVersionMapper.selectList(wrapper);
         VendorExtendedConfig current = getOne(new LambdaQueryWrapper<VendorExtendedConfig>()
                 .eq(VendorExtendedConfig::getConfigKey, configKey).last("LIMIT 1"));
-        if (current != null && Boolean.TRUE.equals(current.getIsEncrypted())) {
-            versions.forEach(version -> version.setConfigValue("••••••••"));
-        }
+        versions.forEach(version -> {
+            if (Boolean.TRUE.equals(resolveVersionEncryption(version))) {
+                version.setConfigValue("••••••••");
+            }
+        });
         return versions;
     }
 
@@ -282,6 +298,7 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
         ConfigVersion version = new ConfigVersion();
         version.setConfigKey(config.getConfigKey());
         version.setConfigValue(config.getConfigValue());
+        version.setIsEncrypted(config.getIsEncrypted());
         version.setVersionNum(getNextVersionNum(config.getConfigKey()));
         if (configVersionMapper.insert(version) != 1) {
             throw new IllegalStateException("厂商配置版本保存失败");
@@ -294,7 +311,7 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
         wrapper.orderByDesc(ConfigVersion::getVersionNum);
         wrapper.last("LIMIT 1");
         ConfigVersion latest = configVersionMapper.selectOne(wrapper);
-        return latest != null ? latest.getVersionNum() + 1 : 1L;
+        return latest != null && latest.getVersionNum() != null ? latest.getVersionNum() + 1 : 1L;
     }
 
     private void scanAndDelete(String pattern) {
@@ -349,6 +366,15 @@ public class VendorExtendedConfigServiceImpl extends ServiceImpl<VendorExtendedC
 
     private boolean isCiphertext(String value) {
         return value != null && value.matches("^v1:[1-9][0-9]*:.+$");
+    }
+
+    private Boolean resolveVersionEncryption(ConfigVersion version) {
+        if (version == null) {
+            return false;
+        }
+        return version.getIsEncrypted() != null
+                ? version.getIsEncrypted()
+                : isCiphertext(version.getConfigValue());
     }
 
     private VendorExtendedConfig maskForDisplay(VendorExtendedConfig source) {

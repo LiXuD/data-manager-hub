@@ -63,6 +63,7 @@ class ConnectorSpecMapperContractTest {
         assertTrue(sql.startsWith("select ref"));
         assertFalse(sql.contains("select config_value"));
         assertFalse(sql.contains("select secret_key"));
+        assertTrue(sql.contains("is_encrypted = true"));
         assertTrue(sql.contains("config_value is not null"));
         assertTrue(sql.contains("secret_key is not null"));
     }

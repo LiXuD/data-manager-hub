@@ -81,6 +81,9 @@ public class VendorSecurityServiceImpl implements VendorSecurityService {
     @Transactional
     public VendorSecurityStepListDTO replaceSteps(Long vendorConfigId, Integer expectedVersion,
                                                   List<VendorSecurityStepDTO> steps) {
+        if (vendorConfigId == null) {
+            throw new IllegalArgumentException("厂商接口配置不能为空");
+        }
         VendorConfig config = requireConfig(vendorConfigId);
         int nextVersion = incrementVersion(config, expectedVersion);
         List<VendorSecurityStepDTO> normalized = normalize(steps);
@@ -88,7 +91,9 @@ public class VendorSecurityServiceImpl implements VendorSecurityService {
         stepMapper.delete(new LambdaQueryWrapper<VendorSecurityStep>()
                 .eq(VendorSecurityStep::getVendorConfigId, vendorConfigId));
         for (VendorSecurityStepDTO step : normalized) {
-            stepMapper.insert(toEntity(vendorConfigId, step));
+            if (stepMapper.insert(toEntity(vendorConfigId, step)) != 1) {
+                throw new IllegalStateException("安全配置步骤写入失败，请重试");
+            }
         }
         List<VendorSecurityStepDTO> saved = loadEntities(vendorConfigId).stream().map(this::toDTO).toList();
         saveSnapshot(vendorConfigId, nextVersion, saved);
@@ -101,6 +106,10 @@ public class VendorSecurityServiceImpl implements VendorSecurityService {
     @Override
     @Transactional
     public VendorSecurityStepListDTO reorder(Long vendorConfigId, VendorSecurityOrderReqDTO request) {
+        if (vendorConfigId == null || request == null || request.getOrderedStepIds() == null
+                || request.getOrderedStepIds().stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("安全配置排序请求无效");
+        }
         VendorConfig config = requireConfig(vendorConfigId);
         SecurityDirection direction = parseDirection(request.getDirection());
         List<VendorSecurityStep> steps = loadEntities(vendorConfigId).stream()
@@ -117,7 +126,9 @@ public class VendorSecurityServiceImpl implements VendorSecurityService {
             VendorSecurityStep update = new VendorSecurityStep();
             update.setId(id);
             update.setSortNo(temporarySort);
-            stepMapper.updateById(update);
+            if (stepMapper.updateById(update) != 1) {
+                throw new SecurityConfigConflictException("安全配置步骤已发生变化，请刷新后重试");
+            }
             temporarySort -= 100;
         }
         int sortNo = 100;
@@ -125,7 +136,9 @@ public class VendorSecurityServiceImpl implements VendorSecurityService {
             VendorSecurityStep update = new VendorSecurityStep();
             update.setId(id);
             update.setSortNo(sortNo);
-            stepMapper.updateById(update);
+            if (stepMapper.updateById(update) != 1) {
+                throw new SecurityConfigConflictException("安全配置步骤已发生变化，请刷新后重试");
+            }
             sortNo += 100;
         }
         List<VendorSecurityStepDTO> saved = loadEntities(vendorConfigId).stream().map(this::toDTO).toList();
@@ -139,6 +152,9 @@ public class VendorSecurityServiceImpl implements VendorSecurityService {
 
     @Override
     public VendorSecurityPreviewDTO preview(Long vendorConfigId, VendorSecurityPreviewReqDTO request) {
+        if (vendorConfigId == null || request == null) {
+            throw new IllegalArgumentException("安全配置预览请求无效");
+        }
         SecurityDirection direction = parseDirection(request.getDirection());
         List<SecurityStepConfig> runtimeSteps;
         if (request.getSteps() != null) {
@@ -408,7 +424,9 @@ public class VendorSecurityServiceImpl implements VendorSecurityService {
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("安全配置版本无法序列化", e);
         }
-        versionMapper.insert(snapshot);
+        if (versionMapper.insert(snapshot) != 1) {
+            throw new IllegalStateException("安全配置版本写入失败，请重试");
+        }
     }
 
     private VendorSecurityCapabilityDTO capability(String type, String name, List<String> directions,

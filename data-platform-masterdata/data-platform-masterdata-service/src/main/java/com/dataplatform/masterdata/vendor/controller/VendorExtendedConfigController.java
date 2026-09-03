@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -54,15 +55,24 @@ public class VendorExtendedConfigController {
     @OperationLog(module = "厂商扩展配置管理", operation = "新增扩展配置")
     @PostMapping
     public ResponseEntity<Result<VendorExtendedConfig>> create(@RequestBody VendorExtendedConfig config) {
-        if (!canEdit()) {
+        if (!canAdd()) {
             return forbidden();
         }
-        if (config.getConfigKey() == null || config.getConfigKey().isEmpty()) {
+        if (config == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "配置请求不能为空"));
+        }
+        if (config.getConfigKey() == null || config.getConfigKey().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Result.error(400, "configKey不能为空"));
         }
         config.setId(null);
+        config.setConfigKey(config.getConfigKey().trim());
         config.setStatus("active");
+        config.setIsActive(true);
+        config.setUpdatedBy(null);
+        config.setCreatedAt(null);
+        config.setUpdatedAt(null);
         return ResponseEntity.ok(Result.success(extendedConfigService.saveSecure(config)));
     }
 
@@ -72,18 +82,27 @@ public class VendorExtendedConfigController {
         if (!canEdit()) {
             return forbidden();
         }
+        if (config == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "配置请求不能为空"));
+        }
         VendorExtendedConfig existing = extendedConfigService.getById(id);
         if (existing == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "配置不存在"));
         }
-        return ResponseEntity.ok(Result.success(extendedConfigService.updateSecure(id, config)));
+        VendorExtendedConfig updated = extendedConfigService.updateSecure(id, config);
+        if (updated == null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Result.error(409, "配置更新失败"));
+        }
+        return ResponseEntity.ok(Result.success(updated));
     }
 
     @OperationLog(module = "厂商扩展配置管理", operation = "删除扩展配置")
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> delete(@PathVariable Long id) {
-        if (!canEdit()) {
+        if (!canDelete()) {
             return forbidden();
         }
         VendorExtendedConfig existing = extendedConfigService.getById(id);
@@ -91,7 +110,10 @@ public class VendorExtendedConfigController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Result.error(404, "配置不存在"));
         }
-        extendedConfigService.removeSecure(id);
+        if (!extendedConfigService.removeSecure(id)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Result.error(409, "配置删除失败"));
+        }
         return ResponseEntity.ok(Result.success(null));
     }
 
@@ -109,7 +131,12 @@ public class VendorExtendedConfigController {
         if (!canEdit()) {
             return forbidden();
         }
+        if (body == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.error(400, "状态请求不能为空"));
+        }
         String status = body.get("status");
+        status = status == null ? null : status.trim().toLowerCase(Locale.ROOT);
 
         if (status == null || !VALID_STATUSES.contains(status)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -122,16 +149,31 @@ public class VendorExtendedConfigController {
                     .body(Result.error(404, "配置不存在"));
         }
 
-        extendedConfigService.updateStatusSecure(id, status);
+        if (!extendedConfigService.updateStatusSecure(id, status)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Result.error(409, "配置状态更新失败"));
+        }
         return ResponseEntity.ok(Result.success(null));
     }
 
     private boolean canView() {
-        return UserContext.hasPermission("vendor:view");
+        return UserContext.hasPermission("vendor:view")
+                || UserContext.hasPermission("system:admin");
     }
 
     private boolean canEdit() {
-        return UserContext.hasPermission("vendor:edit");
+        return UserContext.hasPermission("vendor:edit")
+                || UserContext.hasPermission("system:admin");
+    }
+
+    private boolean canAdd() {
+        return UserContext.hasPermission("vendor:add")
+                || UserContext.hasPermission("system:admin");
+    }
+
+    private boolean canDelete() {
+        return UserContext.hasPermission("vendor:delete")
+                || UserContext.hasPermission("system:admin");
     }
 
     private <T> ResponseEntity<Result<T>> forbidden() {

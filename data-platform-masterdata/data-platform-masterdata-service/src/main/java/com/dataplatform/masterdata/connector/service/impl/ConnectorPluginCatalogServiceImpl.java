@@ -123,12 +123,16 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
             plugin.setStatus(ACTIVE);
             plugin.setCreatedBy(actorId);
             plugin.setUpdatedBy(actorId);
-            pluginMapper.insert(plugin);
+            if (pluginMapper.insert(plugin) != 1) {
+                throw new ConnectorConflictException("插件目录写入失败，请重试");
+            }
         } else if (!Objects.equals(plugin.getProvider(), verified.provider())) {
             throw new ConnectorConflictException("相同pluginId不能变更provider");
         }
         ConnectorPluginVersion version = fromVerified(verified, actorId);
-        versionMapper.insert(version);
+        if (versionMapper.insert(version) != 1) {
+            throw new ConnectorConflictException("插件版本写入失败，请重试");
+        }
         return toVersionDto(version);
     }
 
@@ -152,7 +156,7 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
             current.setSafeErrorCode("STATIC_VERIFICATION_FAILED");
             current.setSafeErrorDigest(safeDigest(exception.getMessage()));
             current.setUpdatedBy(actorId);
-            versionMapper.updateById(current);
+            persistFailureState(current, exception);
             throw exception;
         }
     }
@@ -171,23 +175,24 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
         ConnectorPluginStageReqDTO request = new ConnectorPluginStageReqDTO();
         request.setPluginId(pluginId);
         request.setPluginVersion(version);
+        ConnectorPluginActivationSummaryDTO summary;
         try {
-            ConnectorPluginActivationSummaryDTO summary = requireSuccess(activationClient.stage(request));
-            if (Boolean.FALSE.equals(summary.getReady()) && summary.getInstances().stream()
-                    .anyMatch(instance -> "FAILED".equals(instance.getState()))) {
-                current.setStatus(active ? ACTIVE : STAGING_FAILED);
-                current.setSafeErrorCode("ACCESS_PRELOAD_FAILED");
-                current.setSafeErrorDigest("至少一个Access实例预加载失败");
-                versionMapper.updateById(current);
-            }
-            return summary;
+            summary = requireSuccess(activationClient.stage(request));
         } catch (RuntimeException exception) {
             current.setStatus(active ? ACTIVE : STAGING_FAILED);
             current.setSafeErrorCode("ACCESS_PRELOAD_UNAVAILABLE");
             current.setSafeErrorDigest(safeDigest(exception.getMessage()));
-            versionMapper.updateById(current);
+            persistFailureState(current, exception);
             throw exception;
         }
+        if (Boolean.FALSE.equals(summary.getReady()) && summary.getInstances().stream()
+                .anyMatch(instance -> "FAILED".equals(instance.getState()))) {
+            current.setStatus(active ? ACTIVE : STAGING_FAILED);
+            current.setSafeErrorCode("ACCESS_PRELOAD_FAILED");
+            current.setSafeErrorDigest("至少一个Access实例预加载失败");
+            persistFailureState(current, new IllegalStateException("ACCESS_PRELOAD_FAILED"));
+        }
+        return summary;
     }
 
     @Override
@@ -233,7 +238,9 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
         }
         current.setStatus(DISABLED);
         current.setUpdatedBy(actorId);
-        versionMapper.updateById(current);
+        if (versionMapper.updateById(current) != 1) {
+            throw new ConnectorConflictException("插件版本状态更新失败，请重试");
+        }
         releaseCoordinator.reconcileAfterCommit();
         return toVersionDto(current);
     }
@@ -515,14 +522,30 @@ public class ConnectorPluginCatalogServiceImpl implements ConnectorPluginCatalog
         if (verifiedAt != null) {
             current.setVerifiedAt(verifiedAt);
         }
-        versionMapper.update(null, new LambdaUpdateWrapper<ConnectorPluginVersion>()
+        if (versionMapper.update(null, new LambdaUpdateWrapper<ConnectorPluginVersion>()
                 .eq(ConnectorPluginVersion::getId, current.getId())
                 .set(ConnectorPluginVersion::getStatus, status)
                 .set(ConnectorPluginVersion::getSafeErrorCode, null)
                 .set(ConnectorPluginVersion::getSafeErrorDigest, null)
                 .set(ConnectorPluginVersion::getUpdatedAt, updatedAt)
                 .set(actorId != null, ConnectorPluginVersion::getUpdatedBy, actorId)
-                .set(verifiedAt != null, ConnectorPluginVersion::getVerifiedAt, verifiedAt));
+                .set(verifiedAt != null, ConnectorPluginVersion::getVerifiedAt, verifiedAt)) != 1) {
+            throw new IllegalStateException("插件版本状态写入失败，请重试");
+        }
+    }
+
+    private void persistFailureState(ConnectorPluginVersion current, RuntimeException cause) {
+        try {
+            if (versionMapper.updateById(current) != 1) {
+                throw new IllegalStateException("插件失败状态写入失败，请重试");
+            }
+        } catch (RuntimeException persistenceFailure) {
+            if ("插件失败状态写入失败，请重试".equals(persistenceFailure.getMessage())) {
+                persistenceFailure.addSuppressed(cause);
+                throw persistenceFailure;
+            }
+            throw new IllegalStateException("插件失败状态写入失败，请重试", cause);
+        }
     }
 
     private String safeDigest(String message) {

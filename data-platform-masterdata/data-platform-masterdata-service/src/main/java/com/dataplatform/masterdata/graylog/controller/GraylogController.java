@@ -10,6 +10,7 @@ import com.dataplatform.masterdata.graylog.api.dto.GrayRuleUpdateReqDTO;
 import com.dataplatform.masterdata.graylog.entity.GrayRule;
 import com.dataplatform.masterdata.graylog.service.GraylogService;
 import org.springframework.beans.BeanUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -55,29 +56,56 @@ public class GraylogController {
     @OperationLog(module = "灰度规则管理", operation = "新增灰度规则")
     @PostMapping
     public Result<GrayRuleDTO> create(@RequestBody GrayRuleCreateReqDTO dto) {
+        if (dto == null) {
+            return Result.error(400, "灰度规则请求不能为空");
+        }
+        if (hasInvalidStatus(dto.getStatus())) {
+            return Result.error(400, "无效的状态值，有效值: active, inactive, expired, pending");
+        }
         GrayRule rule = toEntity(dto);
-        if (rule.getRuleName() == null || rule.getRuleName().isEmpty()) {
+        if (!StringUtils.hasText(rule.getRuleName())) {
             return Result.error(400, "ruleName不能为空");
         }
+        rule.setRuleName(rule.getRuleName().trim());
         rule.setId(null);
         if (rule.getStatus() == null) {
             rule.setStatus(GrayRuleStatus.ACTIVE);
         }
-        graylogService.save(rule);
+        if (!graylogService.save(rule)) {
+            return Result.error(409, "灰度规则保存失败");
+        }
         return Result.success(toDTO(rule));
     }
 
     @OperationLog(module = "灰度规则管理", operation = "更新灰度规则")
     @PutMapping("/{id}")
     public Result<GrayRuleDTO> update(@PathVariable("id") Long id, @RequestBody GrayRuleUpdateReqDTO dto) {
+        if (dto == null) {
+            return Result.error(400, "灰度规则请求不能为空");
+        }
+        if (hasInvalidStatus(dto.getStatus())) {
+            return Result.error(400, "无效的状态值，有效值: active, inactive, expired, pending");
+        }
+        if (dto.getRuleName() != null && !StringUtils.hasText(dto.getRuleName())) {
+            return Result.error(400, "ruleName不能为空");
+        }
         GrayRule existing = graylogService.getById(id);
         if (existing == null) {
             return Result.error(404, "灰度规则不存在");
         }
         GrayRule rule = toEntity(dto);
         rule.setId(id);
-        graylogService.updateById(rule);
-        return Result.success(toDTO(graylogService.getById(id)));
+        if (rule.getRuleName() != null) {
+            rule.setRuleName(rule.getRuleName().trim());
+        }
+        if (!graylogService.updateById(rule)) {
+            return Result.error(409, "灰度规则更新失败");
+        }
+        GrayRule updated = graylogService.getById(id);
+        if (updated == null) {
+            return Result.error(409, "灰度规则更新后无法读取");
+        }
+        return Result.success(toDTO(updated));
     }
 
     @OperationLog(module = "灰度规则管理", operation = "删除灰度规则")
@@ -87,7 +115,9 @@ public class GraylogController {
         if (existing == null) {
             return Result.error(404, "灰度规则不存在");
         }
-        graylogService.removeById(id);
+        if (!graylogService.removeById(id)) {
+            return Result.error(409, "灰度规则删除失败");
+        }
         return Result.success(null);
     }
 
@@ -103,6 +133,9 @@ public class GraylogController {
     @OperationLog(module = "灰度规则管理", operation = "更新灰度规则状态")
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable("id") Long id, @RequestBody Map<String, String> body) {
+        if (body == null) {
+            return Result.error(400, "状态请求不能为空");
+        }
         GrayRuleStatus status = GrayRuleStatus.fromCode(body.get("status"));
         if (status == null) {
             return Result.error(400, "无效的状态值，有效值: active, inactive, expired, pending");
@@ -116,7 +149,9 @@ public class GraylogController {
         GrayRule rule = new GrayRule();
         rule.setId(id);
         rule.setStatus(status);
-        graylogService.updateById(rule);
+        if (!graylogService.updateById(rule)) {
+            return Result.error(409, "灰度规则状态更新失败");
+        }
         return Result.success(null);
     }
 
@@ -136,7 +171,7 @@ public class GraylogController {
         GrayRule entity = new GrayRule();
         BeanUtils.copyProperties(dto, entity);
         if (dto.getStatus() != null) {
-            entity.setStatus(GrayRuleStatus.fromCode(dto.getStatus()));
+            entity.setStatus(GrayRuleStatus.fromCode(dto.getStatus().trim()));
         }
         return entity;
     }
@@ -145,8 +180,12 @@ public class GraylogController {
         GrayRule entity = new GrayRule();
         BeanUtils.copyProperties(dto, entity);
         if (dto.getStatus() != null) {
-            entity.setStatus(GrayRuleStatus.fromCode(dto.getStatus()));
+            entity.setStatus(GrayRuleStatus.fromCode(dto.getStatus().trim()));
         }
         return entity;
+    }
+
+    private boolean hasInvalidStatus(String status) {
+        return status != null && GrayRuleStatus.fromCode(status.trim()) == null;
     }
 }

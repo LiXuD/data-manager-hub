@@ -160,7 +160,9 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
             draft.setStatus("DRAFT");
             draft.setCreatedBy(actorId);
             draft.setUpdatedBy(actorId);
-            connectorMapper.insert(draft);
+            if (connectorMapper.insert(draft) != 1) {
+                throw new ConnectorConflictException("连接器草稿写入失败，请重试");
+            }
         } else {
             if (!request.expectedDraftVersion().equals(draft.getDraftVersion())) {
                 throw new ConnectorConflictException("连接器草稿版本冲突");
@@ -256,11 +258,15 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         VendorConnectorVersion published = immutableVersion(vendorConfigId, nextVersion, pipeline,
                 validation.snapshotHash(), validation.hashAlgorithm(), validation.integrityHash(),
                 draft.getSecurityVersion(), current == null ? null : current.getId(), actorId);
-        connectorMapper.insert(published);
+        if (connectorMapper.insert(published) != 1) {
+            throw new ConnectorConflictException("连接器发布版本写入失败，请重试");
+        }
         if (current != null) {
             current.setStatus("SUPERSEDED");
             current.setUpdatedBy(actorId);
-            connectorMapper.updateById(current);
+            if (connectorMapper.updateById(current) != 1) {
+                throw new ConnectorConflictException("连接器当前版本更新失败，请重试");
+            }
         }
         updateActivePointer(config, published, actorId);
         releaseCoordinator.reconcileAfterCommit();
@@ -303,11 +309,15 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
         VendorConnectorVersion rollback = immutableVersion(vendorConfigId, nextVersion(vendorConfigId), pipeline,
                 validation.snapshotHash(), validation.hashAlgorithm(), validation.integrityHash(),
                 target.getSecurityVersion(), current == null ? null : current.getId(), actorId);
-        connectorMapper.insert(rollback);
+        if (connectorMapper.insert(rollback) != 1) {
+            throw new ConnectorConflictException("连接器回滚版本写入失败，请重试");
+        }
         if (current != null) {
             current.setStatus("SUPERSEDED");
             current.setUpdatedBy(actorId);
-            connectorMapper.updateById(current);
+            if (connectorMapper.updateById(current) != 1) {
+                throw new ConnectorConflictException("连接器当前版本更新失败，请重试");
+            }
         }
         updateActivePointer(config, rollback, actorId);
         releaseCoordinator.reconcileAfterCommit();
@@ -664,7 +674,9 @@ public class VendorConnectorServiceImpl implements VendorConnectorService {
                 "stageTimings", result.stageTimings()))));
         fact.setTestedBy(actorId);
         fact.setTestedAt(LocalDateTime.now());
-        testFactMapper.insert(fact);
+        if (testFactMapper.insert(fact) != 1) {
+            throw new IllegalStateException("连接器受控测试事实写入失败，请重试");
+        }
     }
 
     private void requireSuccessfulTestFact(Long vendorConfigId, Integer draftVersion, String snapshotHash) {

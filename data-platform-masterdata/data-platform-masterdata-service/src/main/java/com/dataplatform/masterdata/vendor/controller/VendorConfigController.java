@@ -84,7 +84,11 @@ public class VendorConfigController {
     @GetMapping("/{id}")
     public Result<VendorConfigDTO> getById(@PathVariable("id") Long id) {
         if (!canView()) return Result.error(403, "没有厂商配置查看权限");
-        return Result.success(dtoAssembler.toDTO(vendorConfigService.getById(id)));
+        VendorConfig config = vendorConfigService.getById(id);
+        if (config == null) {
+            return Result.error(404, "配置不存在");
+        }
+        return Result.success(dtoAssembler.toDTO(config));
     }
 
     @GetMapping("/vendor/{vendorId}")
@@ -108,7 +112,10 @@ public class VendorConfigController {
     @OperationLog(module = "厂商配置管理", operation = "新增厂商配置")
     @PostMapping
     public Result<VendorConfigDTO> create(@RequestBody VendorConfigCreateReqDTO dto) {
-        if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
+        if (!canAdd()) return Result.error(403, "没有厂商配置新增权限");
+        if (dto == null) return Result.error(400, "厂商配置请求不能为空");
+        String validationError = validatePolicy(dto);
+        if (validationError != null) return Result.error(400, validationError);
         VendorConfig config = toEntity(dto);
         if (config.getVendorId() == null) {
             return Result.error(400, "厂商ID不能为空");
@@ -124,7 +131,7 @@ public class VendorConfigController {
             return Result.error(400, "数据类型ID必须与接口数据类型一致");
         }
         if (dto.getDataTypeCode() != null && !dto.getDataTypeCode().isBlank()) {
-            Long requestedDataTypeId = vendorConfigService.getDataTypeIdByCode(dto.getDataTypeCode());
+            Long requestedDataTypeId = vendorConfigService.getDataTypeIdByCode(dto.getDataTypeCode().trim());
             if (requestedDataTypeId == null) {
                 return Result.error(400, "数据类型不存在或未启用");
             }
@@ -146,20 +153,30 @@ public class VendorConfigController {
     public Result<VendorConfigDTO> update(@PathVariable("id") Long id,
                                           @RequestBody VendorConfigUpdateReqDTO dto) {
         if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
+        if (dto == null) return Result.error(400, "厂商配置请求不能为空");
+        String validationError = validatePolicy(dto);
+        if (validationError != null) return Result.error(400, validationError);
+        if (vendorConfigService.getById(id) == null) {
+            return Result.error(404, "配置不存在");
+        }
         VendorConfig config = toEntity(dto);
         config.setId(id);
         config.setStatus(null);
         boolean success = vendorConfigService.updateById(config);
         if (!success) {
-            return Result.error(404, "配置不存在");
+            return Result.error(409, "配置更新失败");
         }
-        return Result.success(dtoAssembler.toDTO(vendorConfigService.getById(id)));
+        VendorConfig updated = vendorConfigService.getById(id);
+        if (updated == null) {
+            return Result.error(409, "配置更新后无法读取");
+        }
+        return Result.success(dtoAssembler.toDTO(updated));
     }
 
     @OperationLog(module = "厂商配置管理", operation = "删除厂商配置")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable("id") Long id) {
-        if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
+        if (!canDelete()) return Result.error(403, "没有厂商配置删除权限");
         if (vendorConfigService.getById(id) == null) {
             return Result.error(404, "配置不存在");
         }
@@ -177,6 +194,7 @@ public class VendorConfigController {
     @PatchMapping("/{id}/status")
     public Result<Void> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         if (!canEdit()) return Result.error(403, "没有厂商配置编辑权限");
+        if (body == null) return Result.error(400, "状态请求不能为空");
         String status = body.get("status");
         CommonStatus statusEnum = CommonStatus.fromCode(status);
         if (statusEnum == null) {
@@ -190,7 +208,7 @@ public class VendorConfigController {
         wrapper.eq(VendorConfig::getId, id).set(VendorConfig::getStatus, statusEnum.getCode());
         boolean success = vendorConfigService.update(wrapper);
         if (!success) {
-            return Result.error(404, "配置不存在");
+            return Result.error(409, "配置状态更新失败");
         }
         return Result.success(null);
     }
@@ -219,11 +237,23 @@ public class VendorConfigController {
     }
 
     private boolean canView() {
-        return UserContext.hasPermission("vendor:view");
+        return UserContext.hasPermission("vendor:view")
+                || UserContext.hasPermission("system:admin");
     }
 
     private boolean canEdit() {
-        return UserContext.hasPermission("vendor:edit");
+        return UserContext.hasPermission("vendor:edit")
+                || UserContext.hasPermission("system:admin");
+    }
+
+    private boolean canAdd() {
+        return UserContext.hasPermission("vendor:add")
+                || UserContext.hasPermission("system:admin");
+    }
+
+    private boolean canDelete() {
+        return UserContext.hasPermission("vendor:delete")
+                || UserContext.hasPermission("system:admin");
     }
 
     private PageResult<VendorConfigDTO> forbiddenPage() {
@@ -249,6 +279,31 @@ public class VendorConfigController {
         if (config.getCircuitTimeout() == null) {
             config.setCircuitTimeout(60);
         }
+    }
+
+    private String validatePolicy(VendorConfigUpdateReqDTO dto) {
+        return validatePolicy(dto.getTimeout(), dto.getRetryCount(), dto.getCircuitThreshold(), dto.getCircuitTimeout());
+    }
+
+    private String validatePolicy(VendorConfigCreateReqDTO dto) {
+        return validatePolicy(dto.getTimeout(), dto.getRetryCount(), dto.getCircuitThreshold(), dto.getCircuitTimeout());
+    }
+
+    private String validatePolicy(Integer timeout, Integer retryCount,
+                                  Integer circuitThreshold, Integer circuitTimeout) {
+        if (timeout != null && timeout <= 0) {
+            return "超时时间必须大于0";
+        }
+        if (retryCount != null && retryCount < 0) {
+            return "重试次数不能小于0";
+        }
+        if (circuitThreshold != null && circuitThreshold <= 0) {
+            return "熔断阈值必须大于0";
+        }
+        if (circuitTimeout != null && circuitTimeout <= 0) {
+            return "熔断恢复时间必须大于0";
+        }
+        return null;
     }
 
     private VendorConfig toEntity(VendorConfigCreateReqDTO dto) {

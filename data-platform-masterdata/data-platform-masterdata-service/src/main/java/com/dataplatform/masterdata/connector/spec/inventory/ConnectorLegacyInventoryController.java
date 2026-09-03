@@ -24,7 +24,8 @@ public class ConnectorLegacyInventoryController {
     public Result<ConnectorLegacyInventoryDTO> inventory(
             @RequestParam(value = "page", defaultValue = "1") Integer page,
             @RequestParam(value = "pageSize", defaultValue = "50") Integer pageSize) {
-        if (!UserContext.hasPermission("connector-plugin:view")) {
+        if (!UserContext.hasPermission("connector-plugin:view")
+                && !UserContext.hasPermission("system:admin")) {
             return Result.error(403, "没有厂商连接器查看权限");
         }
         return Result.success(service.inventory(page, pageSize));

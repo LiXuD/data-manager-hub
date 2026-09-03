@@ -6,6 +6,7 @@ import com.dataplatform.common.util.UserContext;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationActionRequestDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationObserveRequestDTO;
+import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationRepairCandidateDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationStartRequestDTO;
 import com.dataplatform.masterdata.connector.service.ConnectorConflictException;
 import com.dataplatform.masterdata.connector.service.VendorConnectorMigrationService;
@@ -35,10 +36,28 @@ public class VendorConnectorMigrationController {
     @GetMapping
     public Result<List<VendorConnectorMigrationDTO>> list(
             @RequestParam(required = false) String state) {
-        if (!UserContext.hasPermission("connector-plugin:view")) {
+        if (!UserContext.hasPermission("connector-plugin:view")
+                && !UserContext.hasPermission("system:admin")) {
             return Result.error(403, "没有厂商连接器迁移记录查看权限");
         }
         return Result.success(service.list(state));
+    }
+
+    @GetMapping("/prepared-audit")
+    public Result<List<VendorConnectorMigrationRepairCandidateDTO>> preparedAudit() {
+        if (!UserContext.hasPermission("connector-plugin:view")
+                && !UserContext.hasPermission("system:admin")) {
+            return Result.error(403, "没有厂商连接器迁移记录查看权限");
+        }
+        return Result.success(service.auditInvalidPrepared());
+    }
+
+    @PostMapping("/repair-invalid-prepared")
+    @OperationLog(module = "厂商连接器迁移", operation = "修复无效迁移准备记录",
+            saveParams = false, saveResult = false)
+    public Result<Integer> repairInvalidPrepared() {
+        if (!allowed()) return forbidden();
+        return Result.success(service.repairInvalidPrepared(UserContext.getCurrentUserId()));
     }
 
     @PostMapping("/{vendorConfigId}/prepare")
@@ -105,7 +124,10 @@ public class VendorConnectorMigrationController {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Result.error(400, exception.getMessage()));
     }
 
-    private boolean allowed() { return UserContext.hasPermission("connector-plugin:migrate"); }
+    private boolean allowed() {
+        return UserContext.hasPermission("connector-plugin:migrate")
+                || UserContext.hasPermission("system:admin");
+    }
 
     private <T> Result<T> forbidden() { return Result.error(403, "没有厂商连接器迁移操作权限"); }
 }

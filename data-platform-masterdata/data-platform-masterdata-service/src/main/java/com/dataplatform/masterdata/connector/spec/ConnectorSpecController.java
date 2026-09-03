@@ -19,6 +19,8 @@ import com.dataplatform.masterdata.connector.api.dto.ConnectorSpecValidationDTO;
 import com.dataplatform.masterdata.connector.api.dto.ConnectorSpecVersionDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorTestResultDTO;
 import com.dataplatform.masterdata.connector.service.ConnectorConflictException;
+import com.dataplatform.masterdata.connector.service.ConnectorSecretReferenceService;
+import com.dataplatform.masterdata.vendor.api.dto.ConnectorSecretReferenceOptionDTO;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,8 +38,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/vendor/config/{configId}/connector-spec")
 public class ConnectorSpecController {
     private final ConnectorSpecService service;
+    private final ConnectorSecretReferenceService secretReferenceService;
 
-    public ConnectorSpecController(ConnectorSpecService service) { this.service = service; }
+    public ConnectorSpecController(ConnectorSpecService service,
+                                   ConnectorSecretReferenceService secretReferenceService) {
+        this.service = service;
+        this.secretReferenceService = secretReferenceService;
+    }
 
     @GetMapping("/catalog")
     @OperationLog(module = "厂商连接器产品配置", operation = "查看连接器插件目录",
@@ -64,12 +71,21 @@ public class ConnectorSpecController {
         return Result.success(service.draft(configId));
     }
 
+    @GetMapping("/secret-options")
+    @OperationLog(module = "厂商连接器产品配置", operation = "查看可用密钥引用名称",
+            saveParams = false, saveResult = false)
+    public Result<List<ConnectorSecretReferenceOptionDTO>> secretOptions(@PathVariable Long configId) {
+        if (!allowed("connector-plugin:view")) return forbidden();
+        return Result.success(secretReferenceService.listAvailableReferences(configId));
+    }
+
     @PutMapping("/draft")
     @OperationLog(module = "厂商连接器产品配置", operation = "保存简化连接器草稿",
             saveParams = false, saveResult = false)
     public Result<ConnectorSpecDraftViewDTO> saveDraft(
             @PathVariable Long configId, @RequestBody ConnectorSpecSaveRequestDTO request) {
         if (!allowed("connector-plugin:bind")) return forbidden();
+        if (request == null) return Result.error(400, "连接器草稿请求不能为空");
         return Result.success(service.saveDraft(configId, request, UserContext.getCurrentUserId()));
     }
 
@@ -97,6 +113,7 @@ public class ConnectorSpecController {
     public Result<VendorConnectorTestResultDTO> test(
             @PathVariable Long configId, @RequestBody ConnectorSpecTestRequestDTO request) {
         if (!allowed("connector-plugin:test")) return forbidden();
+        if (request == null) return Result.error(400, "连接器测试请求不能为空");
         return Result.success(service.test(configId, request, UserContext.getCurrentUserId()));
     }
 
@@ -106,6 +123,7 @@ public class ConnectorSpecController {
     public Result<ConnectorSpecVersionDTO> publish(
             @PathVariable Long configId, @RequestBody ConnectorSpecPublishRequestDTO request) {
         if (!allowed("connector-plugin:publish")) return forbidden();
+        if (request == null) return Result.error(400, "连接器发布请求不能为空");
         return Result.success(service.publish(configId, request, UserContext.getCurrentUserId()));
     }
 
@@ -124,6 +142,7 @@ public class ConnectorSpecController {
             @PathVariable Long configId, @PathVariable Integer version,
             @RequestBody ConnectorSpecRollbackRequestDTO request) {
         if (!allowed("connector-plugin:rollback")) return forbidden();
+        if (request == null) return Result.error(400, "连接器回滚请求不能为空");
         return Result.success(service.rollback(
                 configId, version, request, UserContext.getCurrentUserId()));
     }
@@ -135,6 +154,7 @@ public class ConnectorSpecController {
             @PathVariable Long configId,
             @RequestBody ConnectorSpecUpgradePreviewRequestDTO request) {
         if (!allowed("connector-plugin:bind")) return forbidden();
+        if (request == null) return Result.error(400, "连接器升级请求不能为空");
         return Result.success(service.upgradePreview(configId, request));
     }
 
@@ -152,6 +172,7 @@ public class ConnectorSpecController {
     public Result<ConnectorSpecDraftViewDTO> convert(
             @PathVariable Long configId, @RequestBody ConnectorSpecConvertRequestDTO request) {
         if (!allowed("connector-plugin:bind")) return forbidden();
+        if (request == null) return Result.error(400, "连接器转换请求不能为空");
         return Result.success(service.convert(configId, request, UserContext.getCurrentUserId()));
     }
 
@@ -179,6 +200,9 @@ public class ConnectorSpecController {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Result.error(400, exception.getMessage()));
     }
 
-    private boolean allowed(String permission) { return UserContext.hasPermission(permission); }
+    private boolean allowed(String permission) {
+        return UserContext.hasPermission(permission)
+                || UserContext.hasPermission("system:admin");
+    }
     private <T> Result<T> forbidden() { return Result.error(403, "没有厂商连接器操作权限"); }
 }

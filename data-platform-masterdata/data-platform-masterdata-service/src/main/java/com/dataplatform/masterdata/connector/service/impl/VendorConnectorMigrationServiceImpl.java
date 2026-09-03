@@ -17,10 +17,14 @@ import com.dataplatform.masterdata.connector.api.dto.ConnectorSpecDraftViewDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationActionRequestDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationObserveRequestDTO;
+import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationRepairCandidateDTO;
 import com.dataplatform.masterdata.connector.api.dto.VendorConnectorMigrationStartRequestDTO;
 import com.dataplatform.masterdata.connector.entity.VendorConnectorMigration;
 import com.dataplatform.masterdata.connector.mapper.VendorConnectorMigrationMapper;
 import com.dataplatform.masterdata.connector.service.ConnectorConflictException;
+import com.dataplatform.masterdata.connector.service.LegacyHttpConversionClassification;
+import com.dataplatform.masterdata.connector.service.LegacyHttpConversionPreflightResult;
+import com.dataplatform.masterdata.connector.service.LegacyHttpSpecConverter;
 import com.dataplatform.masterdata.connector.service.VendorConnectorMigrationService;
 import com.dataplatform.masterdata.connector.spec.ConnectorSpecService;
 import java.math.BigDecimal;
@@ -28,8 +32,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,34 +54,88 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
     private static final long DEFAULT_MAXIMUM_P95_DURATION_MS = 5000L;
     private static final double DEFAULT_MINIMUM_BILLING_COVERAGE_RATE = 1D;
     private static final int REQUIRED_ACCESS_INSTANCES = 2;
-
     private final VendorConnectorMigrationMapper migrationMapper;
     private final ConnectorMigrationObservationInternalFeignClient accessObservationClient;
     private final ConnectorBillingObservationInternalFeignClient billingObservationClient;
     private final ConnectorPluginActivationInternalFeignClient activationClient;
     private final ConnectorSpecService connectorSpecService;
+    private final LegacyHttpSpecConverter legacyHttpSpecConverter;
 
     public VendorConnectorMigrationServiceImpl(
             VendorConnectorMigrationMapper migrationMapper,
             ConnectorMigrationObservationInternalFeignClient accessObservationClient,
             ConnectorBillingObservationInternalFeignClient billingObservationClient,
             ConnectorPluginActivationInternalFeignClient activationClient,
-            ConnectorSpecService connectorSpecService) {
+            ConnectorSpecService connectorSpecService,
+            LegacyHttpSpecConverter legacyHttpSpecConverter) {
         this.migrationMapper = migrationMapper;
         this.accessObservationClient = accessObservationClient;
         this.billingObservationClient = billingObservationClient;
         this.activationClient = activationClient;
         this.connectorSpecService = connectorSpecService;
+        this.legacyHttpSpecConverter = legacyHttpSpecConverter;
     }
 
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<VendorConnectorMigrationDTO> list(String state) {
-        return migrationMapper.selectList(new LambdaQueryWrapper<VendorConnectorMigration>()
+        List<VendorConnectorMigration> migrations = migrationMapper.selectList(
+                new LambdaQueryWrapper<VendorConnectorMigration>()
                         .eq(StringUtils.hasText(state), VendorConnectorMigration::getState,
                                 StringUtils.hasText(state) ? state.toUpperCase(Locale.ROOT) : null)
-                        .orderByAsc(VendorConnectorMigration::getVendorConfigId))
-                .stream().map(this::toDto).toList();
+                        .orderByAsc(VendorConnectorMigration::getVendorConfigId));
+        if (migrations == null || migrations.isEmpty()) return List.of();
+        return migrations.stream().filter(Objects::nonNull).map(this::toDto).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public List<VendorConnectorMigrationRepairCandidateDTO> auditInvalidPrepared() {
+        List<VendorConnectorMigration> migrations = migrationMapper.selectList(
+                new LambdaQueryWrapper<VendorConnectorMigration>()
+                        .eq(VendorConnectorMigration::getState, "PREPARED")
+                        .orderByAsc(VendorConnectorMigration::getVendorConfigId));
+        if (migrations == null || migrations.isEmpty()) return List.of();
+        return migrations.stream()
+                .map(this::repairCandidate)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    @Override
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public int repairInvalidPrepared(Long actorId) {
+        validateActor(actorId);
+        int repaired = 0;
+        List<VendorConnectorMigration> prepared = migrationMapper.selectList(
+                new LambdaQueryWrapper<VendorConnectorMigration>()
+                        .eq(VendorConnectorMigration::getState, "PREPARED")
+                        .orderByAsc(VendorConnectorMigration::getVendorConfigId));
+        if (prepared == null || prepared.isEmpty()) return 0;
+        for (VendorConnectorMigration candidate : prepared) {
+            if (candidate == null || candidate.getId() == null) continue;
+            VendorConnectorMigrationMapper.MigrationRuntimeFacts facts = candidate.getVendorConfigId() == null
+                    ? null : lockRuntimeFactsOrNull(candidate.getVendorConfigId());
+            VendorConnectorMigration current = candidate.getVendorConfigId() == null
+                    ? lockMigrationById(candidate.getId()) : lockMigration(candidate.getVendorConfigId());
+            if (current == null || !"PREPARED".equals(current.getState())) continue;
+            String errorCode = invalidPreparedCode(current, facts);
+            if (errorCode == null) continue;
+            int updated = migrationMapper.update(null, new LambdaUpdateWrapper<VendorConnectorMigration>()
+                    .eq(VendorConnectorMigration::getId, current.getId())
+                    .eq(VendorConnectorMigration::getRecordVersion, current.getRecordVersion())
+                    .eq(VendorConnectorMigration::getState, "PREPARED")
+                    .set(VendorConnectorMigration::getState, "BLOCKED")
+                    .set(VendorConnectorMigration::getRecordVersion, nextRecordVersion(current.getRecordVersion()))
+                    .set(VendorConnectorMigration::getObservationGatePassed, false)
+                    .set(VendorConnectorMigration::getSafeErrorCode, errorCode)
+                    .set(VendorConnectorMigration::getSafeErrorDigest, digest(errorCode))
+                    .set(VendorConnectorMigration::getUpdatedBy, actorId)
+                    .set(VendorConnectorMigration::getUpdatedAt, LocalDateTime.now()));
+            if (updated != 1) throw new ConnectorConflictException("CONNECTOR_MIGRATION_RECORD_CONFLICT");
+            repaired++;
+        }
+        return repaired;
     }
 
     @Override
@@ -82,11 +143,12 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
     public VendorConnectorMigrationDTO prepare(Long vendorConfigId, Long actorId) {
         validateIds(vendorConfigId, actorId);
         VendorConnectorMigrationMapper.MigrationRuntimeFacts facts = lockRuntimeFacts(vendorConfigId);
-        requireLegacySource(facts);
         VendorConnectorMigration current = lockMigration(vendorConfigId);
         if (current != null && "STABLE".equals(current.getState())) {
             return toDto(current);
         }
+        requireLegacySource(facts);
+        requireConvertibleSource(facts);
         if (current != null && !reusable(current.getState())) {
             verifySourceUnchanged(current, facts);
             return toDto(current);
@@ -229,6 +291,7 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
         if (!"OBSERVING".equals(migration.getState())) {
             throw new ConnectorConflictException("CONNECTOR_MIGRATION_STATE_NOT_OBSERVABLE");
         }
+        requireObservationConfiguration(migration);
         verifyObservationTarget(migration, facts);
         requireActivationReady(facts);
         LocalDateTime endedAt = request.getEndedAt() == null ? LocalDateTime.now() : request.getEndedAt();
@@ -392,14 +455,30 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
 
     private void validateObservationFacts(ConnectorMigrationObservationDTO access,
                                           ConnectorBillingObservationDTO billing) {
-        if (access.totalCalls() < 0 || access.successfulCalls() < 0 || access.failedCalls() < 0
-                || access.successfulCalls() + access.failedCalls() != access.totalCalls()
+        if (access == null || billing == null || !Double.isFinite(access.errorRate())
+                || access.totalCalls() < 0 || access.successfulCalls() < 0 || access.failedCalls() < 0
                 || access.errorRate() < 0D || access.errorRate() > 1D || access.p95DurationMs() < 0
                 || access.cacheHitCalls() < 0 || access.realtimeCalls() < 0
                 || billing.totalEvents() < 0 || billing.postedEvents() < 0
                 || billing.postedEvents() > billing.totalEvents() || billing.pendingReviewEvents() < 0
                 || billing.reversedEvents() < 0 || billing.billableEvents() < 0
+                || billing.billableEvents() > billing.totalEvents()
                 || billing.finalAmount() == null || billing.finalAmount().signum() < 0) {
+            throw new ObservationDataException("OBSERVATION_FACTS_INVALID");
+        }
+        try {
+            if (Math.addExact(access.successfulCalls(), access.failedCalls()) != access.totalCalls()
+                    || Math.addExact(access.cacheHitCalls(), access.realtimeCalls()) != access.totalCalls()
+                    || Math.addExact(Math.addExact(billing.postedEvents(), billing.pendingReviewEvents()),
+                            billing.reversedEvents()) != billing.totalEvents()) {
+                throw new ObservationDataException("OBSERVATION_FACTS_INVALID");
+            }
+        } catch (ArithmeticException exception) {
+            throw new ObservationDataException("OBSERVATION_FACTS_INVALID");
+        }
+        double expectedErrorRate = access.totalCalls() == 0
+                ? 0D : (double) access.failedCalls() / access.totalCalls();
+        if (Math.abs(access.errorRate() - expectedErrorRate) > 1.0E-9D) {
             throw new ObservationDataException("OBSERVATION_FACTS_INVALID");
         }
     }
@@ -447,13 +526,27 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
         if (summary == null || !Boolean.TRUE.equals(summary.getReady())) {
             throw new ConnectorConflictException("CONNECTOR_PLUGIN_NOT_READY");
         }
+        if (!Objects.equals(facts.getPluginId(), summary.getPluginId())
+                || !Objects.equals(facts.getPluginVersion(), summary.getPluginVersion())) {
+            throw new ConnectorConflictException("CONNECTOR_PLUGIN_ACTIVATION_MISMATCH");
+        }
         List<ConnectorPluginActivationDTO> instances = summary.getInstances();
         if (instances == null || instances.size() < REQUIRED_ACCESS_INSTANCES) {
             throw new ConnectorConflictException("CONNECTOR_ACCESS_INSTANCES_INSUFFICIENT");
         }
-        if (instances.stream().anyMatch(instance -> instance == null
-                || !"READY".equals(instance.getState()))) {
-            throw new ConnectorConflictException("CONNECTOR_ACCESS_INSTANCE_NOT_READY");
+        Set<String> instanceIds = new HashSet<>();
+        for (ConnectorPluginActivationDTO instance : instances) {
+            if (instance == null || !StringUtils.hasText(instance.getServiceInstanceId())
+                    || !instanceIds.add(instance.getServiceInstanceId().trim())) {
+                throw new ConnectorConflictException("CONNECTOR_ACCESS_INSTANCE_INVALID");
+            }
+            if (!Objects.equals(facts.getPluginId(), instance.getPluginId())
+                    || !Objects.equals(facts.getPluginVersion(), instance.getPluginVersion())) {
+                throw new ConnectorConflictException("CONNECTOR_PLUGIN_ACTIVATION_MISMATCH");
+            }
+            if (!"READY".equals(instance.getState())) {
+                throw new ConnectorConflictException("CONNECTOR_ACCESS_INSTANCE_NOT_READY");
+            }
         }
     }
 
@@ -501,6 +594,88 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
         requireHash(facts.getActiveSnapshotHash());
     }
 
+    private void requireConvertibleSource(VendorConnectorMigrationMapper.MigrationRuntimeFacts facts) {
+        LegacyHttpConversionPreflightResult result = assessMigrationEligibility(facts);
+        if (result == null || result.classification() == null) {
+            throw new ConnectorConflictException("CONNECTOR_MIGRATION_PREFLIGHT_UNAVAILABLE");
+        }
+        if (result.classification() == LegacyHttpConversionClassification.LOSSLESS_CONVERTIBLE) return;
+        if (result.classification() == LegacyHttpConversionClassification.REQUIRES_DEDICATED_PLUGIN) {
+            throw new ConnectorConflictException("CONNECTOR_MIGRATION_REQUIRES_DEDICATED_PLUGIN");
+        }
+        throw new ConnectorConflictException("CONNECTOR_MIGRATION_NOT_CONVERTIBLE");
+    }
+
+    private VendorConnectorMigrationRepairCandidateDTO repairCandidate(VendorConnectorMigration migration) {
+        if (migration == null) return null;
+        VendorConnectorMigrationMapper.MigrationRuntimeFacts facts =
+                migration.getVendorConfigId() == null ? null
+                        : migrationMapper.readRuntimeFacts(migration.getVendorConfigId());
+        String errorCode = invalidPreparedCode(migration, facts);
+        if (errorCode == null) return null;
+        LegacyHttpConversionPreflightResult result = null;
+        try {
+            requireLegacySource(facts);
+            result = assessMigrationEligibility(facts);
+        } catch (RuntimeException ignored) {
+            // The stable error code below is intentionally the only diagnostic exposed by this report.
+        }
+        List<String> reasonCodes = safeReasonCodes(result, errorCode);
+        String classification = result == null || result.classification() == null
+                ? "UNKNOWN" : result.classification().name();
+        return new VendorConnectorMigrationRepairCandidateDTO(
+                migration.getId(), migration.getVendorConfigId(), migration.getRecordVersion(),
+                classification, reasonCodes);
+    }
+
+    private String invalidPreparedCode(VendorConnectorMigration migration,
+                                       VendorConnectorMigrationMapper.MigrationRuntimeFacts facts) {
+        if (migration == null || !"PREPARED".equals(migration.getState())) {
+            return null;
+        }
+        if (migration.getVendorConfigId() == null || facts == null
+                || !Objects.equals(migration.getVendorConfigId(), facts.getVendorConfigId())) {
+            return "CONNECTOR_MIGRATION_RUNTIME_FACTS_INVALID";
+        }
+        try {
+            requireLegacySource(facts);
+            LegacyHttpConversionPreflightResult result = assessMigrationEligibility(facts);
+            if (result == null || result.classification() == null) {
+                return "CONNECTOR_MIGRATION_PREFLIGHT_UNAVAILABLE";
+            }
+            return result.classification() == LegacyHttpConversionClassification.LOSSLESS_CONVERTIBLE
+                    ? null : migrationErrorCode(result.classification());
+        } catch (ConnectorConflictException exception) {
+            return exception.getMessage();
+        } catch (RuntimeException exception) {
+            return "CONNECTOR_MIGRATION_PREFLIGHT_UNAVAILABLE";
+        }
+    }
+
+    private List<String> safeReasonCodes(LegacyHttpConversionPreflightResult result, String fallback) {
+        if (result == null || result.reasons() == null) return List.of(fallback);
+        List<String> codes = result.reasons().stream()
+                .filter(Objects::nonNull)
+                .map(reason -> reason.code())
+                .filter(Objects::nonNull)
+                .map(Enum::name)
+                .distinct()
+                .toList();
+        return codes.isEmpty() ? List.of(fallback) : codes;
+    }
+
+    private String migrationErrorCode(LegacyHttpConversionClassification classification) {
+        return classification == LegacyHttpConversionClassification.REQUIRES_DEDICATED_PLUGIN
+                ? "CONNECTOR_MIGRATION_REQUIRES_DEDICATED_PLUGIN"
+                : "CONNECTOR_MIGRATION_NOT_CONVERTIBLE";
+    }
+
+    private LegacyHttpConversionPreflightResult assessMigrationEligibility(
+            VendorConnectorMigrationMapper.MigrationRuntimeFacts facts) {
+        return legacyHttpSpecConverter.assessMigrationEligibility(
+                facts.getActivePipelineSnapshot(), facts.getTimeout());
+    }
+
     private void requireSimpleTarget(VendorConnectorMigrationMapper.MigrationRuntimeFacts facts) {
         if (facts == null || !PLUGIN_RUNTIME.equals(facts.getRuntimeMode())
                 || !SIMPLE.equals(facts.getActiveAuthoringMode())
@@ -519,9 +694,31 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
                 || !migration.getDraftSnapshotHash().equalsIgnoreCase(facts.getActiveSnapshotHash())) {
             throw new ConnectorConflictException("CONNECTOR_MIGRATION_TARGET_BINDING_MISSING");
         }
-        if (!migration.getPublishedConnectorVersionId().equals(facts.getActiveConnectorVersionId())
-                || !migration.getPublishedVersionNo().equals(facts.getActiveVersionNo())) {
+        if (!Objects.equals(migration.getPublishedConnectorVersionId(), facts.getActiveConnectorVersionId())
+                || !Objects.equals(migration.getPublishedVersionNo(), facts.getActiveVersionNo())) {
             throw new ConnectorConflictException("CONNECTOR_MIGRATION_TARGET_CHANGED");
+        }
+    }
+
+    private void requireObservationConfiguration(VendorConnectorMigration migration) {
+        if (migration.getObservationStartedAt() == null || migration.getObservationEligibleAt() == null
+                || migration.getObservationEligibleAt().isBefore(migration.getObservationStartedAt())
+                || migration.getMinimumObservationMinutes() == null
+                || migration.getMinimumObservationMinutes() < 0
+                || migration.getMinimumObservationMinutes() > 10080
+                || migration.getMinimumCalls() == null || migration.getMinimumCalls() < 1
+                || migration.getMinimumCalls() > 1_000_000
+                || migration.getMaximumErrorRate() == null
+                || !Double.isFinite(migration.getMaximumErrorRate())
+                || migration.getMaximumErrorRate() < 0D || migration.getMaximumErrorRate() > 1D
+                || migration.getMaximumP95DurationMs() == null
+                || migration.getMaximumP95DurationMs() < 1
+                || migration.getMaximumP95DurationMs() > 600_000
+                || migration.getMinimumBillingCoverageRate() == null
+                || !Double.isFinite(migration.getMinimumBillingCoverageRate())
+                || migration.getMinimumBillingCoverageRate() < 0D
+                || migration.getMinimumBillingCoverageRate() > 1D) {
+            throw new ConnectorConflictException("CONNECTOR_MIGRATION_OBSERVATION_STATE_INVALID");
         }
     }
 
@@ -553,17 +750,30 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
     }
 
     private VendorConnectorMigrationMapper.MigrationRuntimeFacts lockRuntimeFacts(Long vendorConfigId) {
-        VendorConnectorMigrationMapper.MigrationRuntimeFacts facts =
-                migrationMapper.lockRuntimeFacts(vendorConfigId);
+        VendorConnectorMigrationMapper.MigrationRuntimeFacts facts = lockRuntimeFactsOrNull(vendorConfigId);
         if (facts == null || !vendorConfigId.equals(facts.getVendorConfigId())) {
             throw new IllegalArgumentException("厂商接口配置不存在");
         }
         return facts;
     }
 
+    private VendorConnectorMigrationMapper.MigrationRuntimeFacts lockRuntimeFactsOrNull(Long vendorConfigId) {
+        try {
+            return migrationMapper.lockRuntimeFacts(vendorConfigId);
+        } catch (RuntimeException exception) {
+            throw new ConnectorConflictException("CONNECTOR_MIGRATION_RUNTIME_FACTS_UNAVAILABLE");
+        }
+    }
+
     private VendorConnectorMigration lockMigration(Long vendorConfigId) {
         return migrationMapper.selectOne(new LambdaQueryWrapper<VendorConnectorMigration>()
                 .eq(VendorConnectorMigration::getVendorConfigId, vendorConfigId)
+                .last("FOR UPDATE"));
+    }
+
+    private VendorConnectorMigration lockMigrationById(Long migrationId) {
+        return migrationMapper.selectOne(new LambdaQueryWrapper<VendorConnectorMigration>()
+                .eq(VendorConnectorMigration::getId, migrationId)
                 .last("FOR UPDATE"));
     }
 
@@ -583,6 +793,10 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
         if (vendorConfigId == null || vendorConfigId <= 0) {
             throw new IllegalArgumentException("vendorConfigId is required");
         }
+        validateActor(actorId);
+    }
+
+    private void validateActor(Long actorId) {
         if (actorId == null || actorId <= 0) throw new IllegalArgumentException("ACTOR_ID_INVALID");
     }
 
@@ -599,6 +813,7 @@ public class VendorConnectorMigrationServiceImpl implements VendorConnectorMigra
         double billing = defaultValue(request.getMinimumBillingCoverageRate(),
                 DEFAULT_MINIMUM_BILLING_COVERAGE_RATE);
         if (minutes < 0 || minutes > 10080 || calls < 1 || calls > 1_000_000
+                || !Double.isFinite(errorRate) || !Double.isFinite(billing)
                 || errorRate < 0D || errorRate > 1D || p95 < 1 || p95 > 600_000
                 || billing < 0D || billing > 1D) {
             throw new IllegalArgumentException("CONNECTOR_MIGRATION_THRESHOLDS_INVALID");

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -156,6 +157,35 @@ class VendorSecurityServiceImplTest {
 
         assertTrue(String.valueOf(preview.getStepResults().get("preview-hmac")).matches("[0-9a-f]{64}"));
         verify(extendedConfigService).getConfig(9L, "vendor.preview.key");
+    }
+
+    @Test
+    void shouldStopWhenAReplacementStepWasNotPersisted() {
+        when(stepMapper.insert(any(VendorSecurityStep.class))).thenReturn(0);
+
+        assertThrows(IllegalStateException.class,
+                () -> service.replaceSteps(1L, 0, List.of(step("digest", "DIGEST", Map.of(
+                        "algorithm", "SHA256")))));
+
+        verify(versionMapper, never()).insert(any(VendorSecurityVersion.class));
+    }
+
+    @Test
+    void shouldStopWhenReorderLosesAnExistingStep() throws Exception {
+        stored.add(entity("digest", "DIGEST", Map.of("algorithm", "SHA256"), 100));
+        VendorSecurityOrderReqDTO request = new VendorSecurityOrderReqDTO();
+        request.setVersion(0);
+        request.setDirection("REQUEST");
+        request.setOrderedStepIds(List.of(100L));
+        when(stepMapper.updateById(any(VendorSecurityStep.class))).thenReturn(0);
+
+        assertThrows(SecurityConfigConflictException.class, () -> service.reorder(1L, request));
+        verify(versionMapper, never()).insert(any(VendorSecurityVersion.class));
+    }
+
+    @Test
+    void shouldRejectNullPreviewRequestBeforeReadingConfiguration() {
+        assertThrows(IllegalArgumentException.class, () -> service.preview(1L, null));
     }
 
     private VendorSecurityStepDTO step(String key, String type, Map<String, Object> stepConfig) {

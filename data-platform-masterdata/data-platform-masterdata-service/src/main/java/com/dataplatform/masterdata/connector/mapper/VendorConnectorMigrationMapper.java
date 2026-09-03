@@ -20,6 +20,8 @@ public interface VendorConnectorMigrationMapper extends BaseMapper<VendorConnect
                    active.version_no AS active_version_no,
                    active.authoring_mode AS active_authoring_mode,
                    active.snapshot_hash AS active_snapshot_hash,
+                   active.pipeline_snapshot::text AS active_pipeline_snapshot,
+                   vc.timeout,
                    active.connector_spec -> 'plugin' ->> 'pluginId' AS plugin_id,
                    active.connector_spec -> 'plugin' ->> 'pluginVersion' AS plugin_version
             FROM vendor_config vc
@@ -33,6 +35,31 @@ public interface VendorConnectorMigrationMapper extends BaseMapper<VendorConnect
             """)
     MigrationRuntimeFacts lockRuntimeFacts(@Param("vendorConfigId") Long vendorConfigId);
 
+    /** Same facts for dry-run reporting; deliberately does not acquire a row lock. */
+    @Select("""
+            SELECT vc.id AS vendor_config_id,
+                   vc.vendor_id,
+                   vc.interface_id,
+                   vc.runtime_mode,
+                   vc.connector_version,
+                   vc.active_connector_version_id,
+                   active.version_no AS active_version_no,
+                   active.authoring_mode AS active_authoring_mode,
+                   active.snapshot_hash AS active_snapshot_hash,
+                   active.pipeline_snapshot::text AS active_pipeline_snapshot,
+                   vc.timeout,
+                   active.connector_spec -> 'plugin' ->> 'pluginId' AS plugin_id,
+                   active.connector_spec -> 'plugin' ->> 'pluginVersion' AS plugin_version
+            FROM vendor_config vc
+            LEFT JOIN vendor_connector_version active
+              ON active.id = vc.active_connector_version_id
+             AND active.vendor_config_id = vc.id
+             AND active.status = 'ACTIVE'
+            WHERE vc.id = #{vendorConfigId}
+              AND COALESCE(vc.deleted, FALSE) = FALSE
+            """)
+    MigrationRuntimeFacts readRuntimeFacts(@Param("vendorConfigId") Long vendorConfigId);
+
     class MigrationRuntimeFacts {
         private Long vendorConfigId;
         private Long vendorId;
@@ -43,6 +70,8 @@ public interface VendorConnectorMigrationMapper extends BaseMapper<VendorConnect
         private Integer activeVersionNo;
         private String activeAuthoringMode;
         private String activeSnapshotHash;
+        private String activePipelineSnapshot;
+        private Integer timeout;
         private String pluginId;
         private String pluginVersion;
 
@@ -64,6 +93,10 @@ public interface VendorConnectorMigrationMapper extends BaseMapper<VendorConnect
         public void setActiveAuthoringMode(String value) { this.activeAuthoringMode = value; }
         public String getActiveSnapshotHash() { return activeSnapshotHash; }
         public void setActiveSnapshotHash(String value) { this.activeSnapshotHash = value; }
+        public String getActivePipelineSnapshot() { return activePipelineSnapshot; }
+        public void setActivePipelineSnapshot(String value) { this.activePipelineSnapshot = value; }
+        public Integer getTimeout() { return timeout; }
+        public void setTimeout(Integer value) { this.timeout = value; }
         public String getPluginId() { return pluginId; }
         public void setPluginId(String value) { this.pluginId = value; }
         public String getPluginVersion() { return pluginVersion; }

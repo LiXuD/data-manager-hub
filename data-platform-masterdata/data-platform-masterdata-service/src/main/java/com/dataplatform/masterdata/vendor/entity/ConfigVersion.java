@@ -15,6 +15,7 @@ public class ConfigVersion {
 
     private String configKey;
     private String configValue;
+    private Boolean isEncrypted;
     private Long versionNum;
     private String createdBy;
 
@@ -27,6 +28,8 @@ public class ConfigVersion {
     public void setConfigKey(String configKey) { this.configKey = configKey; }
     public String getConfigValue() { return configValue; }
     public void setConfigValue(String configValue) { this.configValue = configValue; }
+    public Boolean getIsEncrypted() { return isEncrypted; }
+    public void setIsEncrypted(Boolean isEncrypted) { this.isEncrypted = isEncrypted; }
     public Long getVersionNum() { return versionNum; }
     public void setVersionNum(Long versionNum) { this.versionNum = versionNum; }
     public String getCreatedBy() { return createdBy; }
