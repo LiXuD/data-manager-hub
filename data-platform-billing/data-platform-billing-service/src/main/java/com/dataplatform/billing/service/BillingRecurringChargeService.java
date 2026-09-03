@@ -58,7 +58,9 @@ public class BillingRecurringChargeService {
         if (!"PACKAGE_COUNT".equals(plan.getTemplateCode())
                 && !"FLAT_PERIOD".equals(plan.getTemplateCode())) return null;
         String requestId = "RECURRING:" + plan.getId() + ":" + period;
-        eventMapper.lockRequest(requestId);
+        if (eventMapper.lockRequest(requestId) == null) {
+            throw new IllegalStateException("周期计费请求锁不可用，请重试");
+        }
         BillingEvent existing = eventMapper.selectByRequestId(requestId);
         if (existing != null) return null;
 
@@ -90,7 +92,9 @@ public class BillingRecurringChargeService {
         event.setBillingPeriod(period);
         event.setCallTime(at);
         event.setCreatedAt(LocalDateTime.now());
-        eventMapper.insert(event);
+        if (eventMapper.insert(event) != 1) {
+            throw new IllegalStateException("周期计费事件写入失败，请重试");
+        }
         return event;
     }
 }

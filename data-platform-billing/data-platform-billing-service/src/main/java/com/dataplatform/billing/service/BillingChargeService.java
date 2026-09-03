@@ -71,7 +71,9 @@ public class BillingChargeService {
     }
 
     private BillingChargeRespDTO chargeOne(BillingChargeReqDTO request) {
-        eventMapper.lockRequest(request.getRequestId());
+        if (eventMapper.lockRequest(request.getRequestId()) == null) {
+            throw new IllegalStateException("计费请求锁不可用，请重试");
+        }
         BillingEvent existing = eventMapper.selectByRequestId(request.getRequestId());
         if (existing != null) return toResponse(existing);
 
@@ -88,10 +90,14 @@ public class BillingChargeService {
         if (evaluation.billable() && evaluation.quantity().signum() > 0) {
             String scopeKey = scopeKey(model, request);
             String lockKey = plan.getId() + ":" + period + ":" + scopeKey;
-            usageMapper.lockBalance(lockKey);
+            if (usageMapper.lockBalance(lockKey) == null) {
+                throw new IllegalStateException("计费累计用量锁不可用，请重试");
+            }
             BigDecimal current = usageMapper.selectUsedQuantity(plan.getId(), period, scopeKey);
             usageBefore = current != null ? current : BigDecimal.ZERO;
-            usageMapper.increment(plan.getId(), period, scopeKey, evaluation.quantity());
+            if (usageMapper.increment(plan.getId(), period, scopeKey, evaluation.quantity()) != 1) {
+                throw new IllegalStateException("计费累计用量写入失败，请重试");
+            }
         }
 
         BillingPricingEngine.PricingResult pricing = evaluation.billable() && !evaluation.pendingReview()
@@ -99,7 +105,9 @@ public class BillingChargeService {
                 : new BillingPricingEngine.PricingResult(BigDecimal.ZERO, BigDecimal.ZERO,
                     BigDecimal.ZERO, BigDecimal.ZERO);
         BillingEvent event = buildEvent(plan, model, request, evaluation, pricing, usageBefore, period, callTime);
-        eventMapper.insert(event);
+        if (eventMapper.insert(event) != 1) {
+            throw new IllegalStateException("计费事件写入失败，请重试");
+        }
         aggregateDaily(event, request);
         return toResponse(event);
     }
@@ -271,14 +279,16 @@ public class BillingChargeService {
     private void aggregateDaily(BillingEvent event, BillingChargeReqDTO request) {
         if (!"VENDOR_PAYABLE".equals(event.getAccountingPurpose())) return;
         if (event.getTenantId() == null || event.getCallerId() == null || event.getVendorId() == null) return;
-        dailyMapper.upsertDailyFromCallRecord(
+        if (dailyMapper.upsertDailyFromCallRecord(
                 event.getRequestId(), event.getTenantId(), event.getCallerId(), event.getVendorId(),
                 StringUtils.hasText(event.getDataType()) ? event.getDataType() : "unknown",
                 event.getCallTime().toLocalDate(),
                 Boolean.TRUE.equals(request.getSuccess()) ? 1L : 0L,
                 Boolean.TRUE.equals(request.getSuccess()) ? 0L : 1L,
                 event.getFinalAmount(),
-                request.getLatencyMs() != null ? request.getLatencyMs().intValue() : null);
+                request.getLatencyMs() != null ? request.getLatencyMs().intValue() : null) != 1) {
+            throw new IllegalStateException("计费日聚合写入失败，请重试");
+        }
     }
 
     private BillingChargeRespDTO toResponse(BillingEvent event) {

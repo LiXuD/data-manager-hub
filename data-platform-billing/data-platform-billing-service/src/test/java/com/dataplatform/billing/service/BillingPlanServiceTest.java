@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.dataplatform.api.Result;
@@ -76,10 +79,11 @@ class BillingPlanServiceTest {
         when(planMapper.selectEffective(any(), any(), any(), any()))
                 .thenReturn(List.of(first, second));
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
+        BillingPlanException exception = assertThrows(BillingPlanException.class,
                 () -> service.getEffective("VENDOR", "INTERFACE", LocalDateTime.now()));
 
         assertTrue(exception.getMessage().contains("匹配到多个生效版本"));
+        assertEquals("BILLING_PLAN_DATA_CONFLICT", exception.getErrorCode());
     }
 
     @ParameterizedTest
@@ -104,10 +108,11 @@ class BillingPlanServiceTest {
         when(vendorConfigClient.list(eq(7L), eq(null), eq(11L), eq(null)))
                 .thenReturn(Result.success(List.of()));
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        BillingPlanException exception = assertThrows(BillingPlanException.class,
                 () -> ReflectionTestUtils.invokeMethod(service, "enrich", command));
 
-        assertEquals("所选厂商未绑定到该接口", exception.getMessage());
+        assertEquals(400, exception.getStatus());
+        assertEquals("BILLING_PLAN_INVALID", exception.getErrorCode());
     }
 
     @Test
@@ -116,10 +121,11 @@ class BillingPlanServiceTest {
         stubEnrichment(null);
         when(vendorConfigClient.list(eq(7L), eq(null), eq(11L), eq(null))).thenReturn(null);
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        BillingPlanException exception = assertThrows(BillingPlanException.class,
                 () -> ReflectionTestUtils.invokeMethod(service, "enrich", command));
 
-        assertEquals("所选厂商未绑定到该接口", exception.getMessage());
+        assertEquals(503, exception.getStatus());
+        assertEquals("BILLING_DEPENDENCY_UNAVAILABLE", exception.getErrorCode());
     }
 
     @Test
@@ -129,10 +135,157 @@ class BillingPlanServiceTest {
         when(vendorConfigClient.list(eq(7L), eq(null), eq(11L), eq(null)))
                 .thenReturn(Result.error("masterdata unavailable"));
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        BillingPlanException exception = assertThrows(BillingPlanException.class,
                 () -> ReflectionTestUtils.invokeMethod(service, "enrich", command));
 
-        assertEquals("所选厂商未绑定到该接口", exception.getMessage());
+        assertEquals(503, exception.getStatus());
+        assertEquals("BILLING_DEPENDENCY_UNAVAILABLE", exception.getErrorCode());
+    }
+
+    @Test
+    void rejectsMissingEnrichmentReferencesBeforeCallingDependencies() {
+        BillingPlanModel command = new BillingPlanModel();
+
+        BillingPlanException exception = assertThrows(BillingPlanException.class,
+                () -> service.createDraft(command));
+
+        assertEquals(400, exception.getStatus());
+        assertEquals("BILLING_PLAN_VALIDATION_FAILED", exception.getErrorCode());
+        verifyNoInteractions(templateMapper, vendorClient, interfaceClient, vendorConfigClient, planMapper);
+    }
+
+    @Test
+    void mapsContractDependencyFailureToServiceUnavailableDuringValidation() {
+        BillingPlan candidate = storedPlan(2L, "PLAN-B", "DRAFT", "2026-09-10T00:00:00");
+        when(planMapper.selectById(2L)).thenReturn(candidate);
+        when(interfaceClient.getContract(11L)).thenThrow(new IllegalStateException("dependency down"));
+
+        BillingPlanException exception = assertThrows(BillingPlanException.class,
+                () -> service.validate(2L));
+
+        assertEquals(503, exception.getStatus());
+        assertEquals("BILLING_DEPENDENCY_UNAVAILABLE", exception.getErrorCode());
+    }
+
+    @Test
+    void doesNotCallContractDependencyWhenPublishKeyIsIncomplete() {
+        BillingPlan candidate = storedPlan(2L, "PLAN-B", "DRAFT", "2026-09-10T00:00:00");
+        candidate.setVendorId(null);
+        when(planMapper.selectById(2L)).thenReturn(candidate);
+
+        List<String> errors = service.validate(2L);
+
+        assertTrue(errors.stream().anyMatch(error -> error.contains("厂商不能为空")));
+        verify(interfaceClient, never()).getContract(any());
+    }
+
+    @Test
+    void missingPlanIsReportedAsNotFoundBeforePublishLocking() {
+        when(planMapper.selectByIdForUpdate(404L)).thenReturn(null);
+
+        BillingPlanException exception = assertThrows(BillingPlanException.class,
+                () -> service.publish(404L));
+
+        assertEquals(404, exception.getStatus());
+        assertEquals("BILLING_PLAN_NOT_FOUND", exception.getErrorCode());
+        verify(planMapper, never()).ensurePublishLock(any(), any(), any());
+    }
+
+    @Test
+    void overlappingDifferentPlanIsConflictAndDoesNotCloseExistingVersion() {
+        BillingPlan candidate = storedPlan(2L, "PLAN-B", "DRAFT", "2026-09-10T00:00:00");
+        BillingPlan existing = storedPlan(1L, "PLAN-A", "ACTIVE", "2026-09-01T00:00:00");
+        existing.setEffectiveTo(LocalDateTime.parse("2026-10-01T00:00:00"));
+        when(planMapper.selectByIdForUpdate(2L)).thenReturn(candidate);
+        when(planMapper.selectPublishableForUpdate(7L, 11L, "VENDOR_PAYABLE"))
+                .thenReturn(List.of(existing));
+        stubPublishModel(candidate);
+
+        BillingPlanException exception = assertThrows(BillingPlanException.class,
+                () -> service.publish(2L));
+
+        assertEquals(409, exception.getStatus());
+        assertEquals("BILLING_PLAN_EFFECTIVE_OVERLAP", exception.getErrorCode());
+        verify(planMapper, never()).updateById(any(BillingPlan.class));
+    }
+
+    @Test
+    void publishSucceedsOnlyAfterSerializedPreflight() {
+        BillingPlan candidate = storedPlan(2L, "PLAN-B", "DRAFT", "2026-09-10T00:00:00");
+        when(planMapper.selectByIdForUpdate(2L)).thenReturn(candidate);
+        when(planMapper.selectPublishableForUpdate(7L, 11L, "VENDOR_PAYABLE"))
+                .thenReturn(List.of());
+        stubPublishModel(candidate);
+        when(planMapper.selectById(2L)).thenReturn(candidate);
+        when(planMapper.updateById(candidate)).thenReturn(1);
+
+        BillingPlanModel result = service.publish(2L);
+
+        assertEquals(2L, result.getId());
+        verify(planMapper).ensurePublishLock(7L, 11L, "VENDOR_PAYABLE");
+        verify(planMapper).lockPublishKey(7L, 11L, "VENDOR_PAYABLE");
+        verify(planMapper).updateById(candidate);
+    }
+
+    @Test
+    void validateReportsPublishConflictBeforeSubmit() {
+        BillingPlan candidate = storedPlan(2L, "PLAN-B", "DRAFT", "2026-09-10T00:00:00");
+        BillingPlan existing = storedPlan(1L, "PLAN-A", "ACTIVE", "2026-09-01T00:00:00");
+        existing.setEffectiveTo(LocalDateTime.parse("2026-10-01T00:00:00"));
+        when(planMapper.selectById(2L)).thenReturn(candidate);
+        when(planMapper.selectPublishable(7L, 11L, "VENDOR_PAYABLE")).thenReturn(List.of(existing));
+        stubPublishModel(candidate);
+
+        List<String> errors = service.validate(2L);
+
+        assertTrue(errors.stream().anyMatch(error -> error.contains("生效区间重叠")));
+        verify(planMapper, never()).selectPublishableForUpdate(any(), any(), any());
+    }
+
+    private BillingPlan storedPlan(Long id, String planCode, String status, String effectiveFrom) {
+        BillingPlan plan = new BillingPlan();
+        plan.setId(id);
+        plan.setPlanCode(planCode);
+        plan.setVersion(1);
+        plan.setPlanName(planCode);
+        plan.setVendorId(7L);
+        plan.setInterfaceId(11L);
+        plan.setTemplateCode("PER_CALL");
+        plan.setAccountingPurpose("VENDOR_PAYABLE");
+        plan.setCurrency("CNY");
+        plan.setTimezone("Asia/Shanghai");
+        plan.setSettlementCycle("MONTH");
+        plan.setStatus(status);
+        plan.setEffectiveFrom(LocalDateTime.parse(effectiveFrom));
+        plan.setPricingConfig("{}");
+        plan.setMeteringConfig("{}");
+        plan.setAdjustmentConfig("{}");
+        return plan;
+    }
+
+    private void stubPublishModel(BillingPlan candidate) {
+        BillingPlanModel model = new BillingPlanModel();
+        model.setId(candidate.getId());
+        model.setPlanCode(candidate.getPlanCode());
+        model.setPlanName(candidate.getPlanName());
+        model.setVendorId(candidate.getVendorId());
+        model.setInterfaceId(candidate.getInterfaceId());
+        model.setTemplateCode(candidate.getTemplateCode());
+        model.setAccountingPurpose(candidate.getAccountingPurpose());
+        model.setCurrency(candidate.getCurrency());
+        model.setTimezone(candidate.getTimezone());
+        model.setSettlementCycle(candidate.getSettlementCycle());
+        model.setEffectiveFrom(candidate.getEffectiveFrom());
+        model.setEffectiveTo(candidate.getEffectiveTo());
+        when(codec.toModel(eq(candidate), any())).thenReturn(model);
+        when(codec.sha256(any())).thenReturn("fingerprint");
+        when(planMapper.lockPublishKey(7L, 11L, "VENDOR_PAYABLE")).thenReturn(7L);
+        when(interfaceClient.getContract(11L)).thenReturn(Result.success(new InterfaceContractDTO()));
+        when(mockValidator().validate(any(), any())).thenReturn(List.of());
+    }
+
+    private BillingPlanValidator mockValidator() {
+        return (BillingPlanValidator) ReflectionTestUtils.getField(service, "validator");
     }
 
     private BillingPlanModel enrichmentCommand() {

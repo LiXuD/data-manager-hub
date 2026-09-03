@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Locale;
 import org.springframework.stereotype.Component;
 
 /** 发布前完整校验，防止无法执行或存在财务歧义的方案进入生产。 */
@@ -96,6 +97,10 @@ public class BillingPlanValidator {
             errors.add("阶梯计费至少需要一个阶梯");
             return;
         }
+        if (source.stream().anyMatch(tier -> tier == null)) {
+            errors.add("阶梯配置不能为空");
+            return;
+        }
         List<BillingPlanModel.TierConfig> tiers = source.stream()
                 .sorted(Comparator.comparing(BillingPlanModel.TierConfig::getTierMin,
                         Comparator.nullsLast(BigDecimal::compareTo))).toList();
@@ -144,12 +149,16 @@ public class BillingPlanValidator {
         }
         Map<Long, FieldInfo> byId = new HashMap<>();
         Map<String, FieldInfo> byPath = new HashMap<>();
-        if (contract != null) flatten(contract.getResponseFields(), "$.data", byId, byPath);
+        if (contract != null) flatten(contract.getResponseFields(), "$.data", byId, byPath, errors);
         Set<String> aliases = new HashSet<>();
         List<BillingPlanModel.ConditionConfig> conditions = metering.getConditions() != null
                 ? metering.getConditions() : List.of();
         for (int index = 0; index < conditions.size(); index++) {
             BillingPlanModel.ConditionConfig condition = conditions.get(index);
+            if (condition == null) {
+                errors.add("计量条件不能为空");
+                continue;
+            }
             String alias = condition.getAlias() == null || condition.getAlias().isBlank()
                     ? "condition-" + index : condition.getAlias();
             if (!aliases.add(alias)) errors.add("计量字段别名重复: " + alias);
@@ -237,14 +246,19 @@ public class BillingPlanValidator {
     }
 
     private void flatten(List<InterfaceParamDTO> fields, String parent,
-                         Map<Long, FieldInfo> byId, Map<String, FieldInfo> byPath) {
+                         Map<Long, FieldInfo> byId, Map<String, FieldInfo> byPath,
+                         List<String> errors) {
         if (fields == null) return;
         for (InterfaceParamDTO field : fields) {
+            if (field == null || field.getParamName() == null || field.getParamName().isBlank()) {
+                errors.add("接口响应契约包含无效字段");
+                continue;
+            }
             String path = parent + "." + field.getParamName();
             FieldInfo info = new FieldInfo(path, field.getParamType());
             if (field.getId() != null) byId.put(field.getId(), info);
             byPath.put(path, info);
-            flatten(field.getChildren(), path, byId, byPath);
+            flatten(field.getChildren(), path, byId, byPath, errors);
         }
     }
 
@@ -261,7 +275,7 @@ public class BillingPlanValidator {
     }
 
     private String upper(String value) {
-        return value == null ? "" : value.toUpperCase();
+        return value == null ? "" : value.toUpperCase(Locale.ROOT);
     }
 
     private record FieldInfo(String path, String type) {

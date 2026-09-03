@@ -90,6 +90,32 @@ class BillingPlanValidatorTest {
                 .anyMatch(error -> error.contains("必须固定为1次")));
     }
 
+    @Test
+    void reportsNullConditionsAndTiersAsValidationErrors() {
+        BillingPlanModel conditionPlan = basePlan();
+        conditionPlan.getMetering().setConditions(java.util.Arrays.asList((BillingPlanModel.ConditionConfig) null));
+        assertTrue(validator.validate(conditionPlan, contract()).stream()
+                .anyMatch(error -> error.contains("计量条件不能为空")));
+
+        BillingPlanModel tierPlan = basePlan();
+        tierPlan.setTemplateCode("TIERED");
+        tierPlan.getPricing().setUnitPrice(BigDecimal.ONE);
+        tierPlan.setTiers(java.util.Arrays.asList((BillingPlanModel.TierConfig) null));
+        assertTrue(validator.validate(tierPlan, contract()).stream()
+                .anyMatch(error -> error.contains("阶梯配置不能为空")));
+    }
+
+    @Test
+    void reportsMalformedContractFieldInsteadOfThrowing() {
+        BillingPlanModel plan = basePlan();
+        InterfaceParamDTO malformed = new InterfaceParamDTO();
+        malformed.setParamType("string");
+
+        List<String> errors = validator.validate(plan, contract(malformed));
+
+        assertTrue(errors.stream().anyMatch(error -> error.contains("契约包含无效字段")));
+    }
+
     private BillingPlanModel basePlan() {
         BillingPlanModel plan = new BillingPlanModel();
         plan.setPlanName("test");

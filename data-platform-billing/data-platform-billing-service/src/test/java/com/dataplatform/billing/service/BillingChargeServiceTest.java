@@ -166,6 +166,12 @@ class BillingChargeServiceTest {
                                          BillingUsageBalanceMapper usageMapper,
                                          BillingDailyMapper dailyMapper,
                                          BillingRecurringChargeService recurring) {
+        when(eventMapper.lockRequest(any())).thenReturn(1);
+        when(eventMapper.insert(any(BillingEvent.class))).thenReturn(1);
+        when(usageMapper.lockBalance(any())).thenReturn(1);
+        when(usageMapper.increment(any(), any(), any(), any())).thenReturn(1);
+        when(dailyMapper.upsertDailyFromCallRecord(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
         return new BillingChargeService(planService, new BillingMeteringEvaluator(),
                 new BillingPricingEngine(), new BillingPeriodResolver(), recurring,
                 eventMapper, usageMapper, dailyMapper,

@@ -37,15 +37,20 @@ public class ConnectorBillingObservationService {
                 .le(request.endedAt() != null, "call_time", request.endedAt());
         List<Map<String, Object>> rows = billingEventMapper.selectMaps(query);
         Map<String, Object> row = rows.isEmpty() ? Map.of() : rows.get(0);
-        return new ConnectorBillingObservationDTO(value(row, "total_events"), value(row, "posted_events"),
-                value(row, "pending_review_events"), value(row, "reversed_events"),
-                value(row, "billable_events"), decimal(row, "final_amount"));
+        long total = value(row, "total_events");
+        long posted = value(row, "posted_events");
+        long pendingReview = value(row, "pending_review_events");
+        long reversed = value(row, "reversed_events");
+        long billable = value(row, "billable_events");
+        BigDecimal finalAmount = decimal(row, "final_amount");
+        validateAggregates(total, posted, pendingReview, reversed, billable, finalAmount);
+        return new ConnectorBillingObservationDTO(total, posted, pendingReview, reversed, billable, finalAmount);
     }
 
     private void validate(ConnectorBillingObservationReqDTO request) {
         if (request == null || request.vendorId() == null || request.interfaceId() == null
                 || request.pipelineVersion() == null || request.snapshotHash() == null
-                || request.snapshotHash().length() != 64 || request.startedAt() == null) {
+                || !request.snapshotHash().matches("(?i)[0-9a-f]{64}") || request.startedAt() == null) {
             throw new IllegalArgumentException(
                     "vendorId, interfaceId, pipelineVersion, snapshotHash and startedAt are required");
         }
@@ -57,12 +62,35 @@ public class ConnectorBillingObservationService {
     private long value(Map<String, Object> row, String key) {
         Object value = row.get(key);
         if (value == null) return 0L;
-        return value instanceof Number number ? number.longValue() : Long.parseLong(value.toString());
+        try {
+            return new BigDecimal(value.toString().trim()).longValueExact();
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw new IllegalStateException("Invalid billing observation aggregate: " + key, exception);
+        }
     }
 
     private BigDecimal decimal(Map<String, Object> row, String key) {
         Object value = row.get(key);
         if (value == null) return BigDecimal.ZERO;
-        return value instanceof BigDecimal decimal ? decimal : new BigDecimal(value.toString());
+        try {
+            return new BigDecimal(value.toString().trim());
+        } catch (NumberFormatException exception) {
+            throw new IllegalStateException("Invalid billing observation amount", exception);
+        }
+    }
+
+    private void validateAggregates(long total, long posted, long pendingReview, long reversed,
+                                    long billable, BigDecimal finalAmount) {
+        if (total < 0 || posted < 0 || pendingReview < 0 || reversed < 0 || billable < 0
+                || posted > total || billable > total || finalAmount == null || finalAmount.signum() < 0) {
+            throw new IllegalStateException("Billing observation aggregates are invalid");
+        }
+        try {
+            if (Math.addExact(Math.addExact(posted, pendingReview), reversed) != total) {
+                throw new IllegalStateException("Billing observation status counts are inconsistent");
+            }
+        } catch (ArithmeticException exception) {
+            throw new IllegalStateException("Billing observation counts overflow", exception);
+        }
     }
 }

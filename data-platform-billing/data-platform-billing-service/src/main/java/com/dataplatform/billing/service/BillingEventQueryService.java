@@ -20,6 +20,10 @@ public class BillingEventQueryService {
         this.eventMapper = eventMapper;
     }
 
+    public BillingEvent getById(Long eventId) {
+        return eventId == null ? null : eventMapper.selectById(eventId);
+    }
+
     public Page<BillingEvent> page(Long tenantId, Long vendorId, Long interfaceId,
                                    String accountingPurpose, String status,
                                    LocalDateTime startTime, LocalDateTime endTime,
@@ -35,11 +39,13 @@ public class BillingEventQueryService {
                                      LocalDateTime startTime, LocalDateTime endTime) {
         List<BillingEvent> events = eventMapper.selectList(query(
                 tenantId, vendorId, interfaceId, accountingPurpose, null, startTime, endTime));
-        BigDecimal totalAmount = events.stream().map(BillingEvent::getFinalAmount)
+        BigDecimal totalAmount = events.stream().map(item -> item.getFinalAmount() == null
+                        ? BigDecimal.ZERO : item.getFinalAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal totalQuantity = events.stream()
                 .filter(item -> "USAGE".equals(item.getEventType()) || "REVERSAL".equals(item.getEventType()))
-                .map(BillingEvent::getQuantity).reduce(BigDecimal.ZERO, BigDecimal::add);
+                .map(item -> item.getQuantity() == null ? BigDecimal.ZERO : item.getQuantity())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         long pending = events.stream().filter(item -> "PENDING_REVIEW".equals(item.getStatus())).count();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("eventCount", events.size());

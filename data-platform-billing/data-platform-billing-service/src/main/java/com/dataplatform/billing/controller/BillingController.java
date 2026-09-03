@@ -6,6 +6,7 @@ import com.dataplatform.common.result.PageResult;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.dataplatform.billing.entity.BillingDaily;
 import com.dataplatform.billing.entity.BillingReconciliation;
+import com.dataplatform.billing.service.BillingReconciliationException;
 import com.dataplatform.billing.service.BillingService;
 import com.dataplatform.billing.service.ReconciliationService;
 import com.dataplatform.common.util.UserContext;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -113,11 +115,19 @@ public class BillingController {
 
     @OperationLog(module = "自动对账", operation = "导入厂商账单")
     @PostMapping(value = "/reconciliation/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Result<Map<String, Object>> importVendorBill(@RequestPart("file") MultipartFile file) throws Exception {
-        if (!UserContext.hasPermission("billing:reconcile")) {
+    public Result<Map<String, Object>> importVendorBill(@RequestPart("file") MultipartFile file) {
+        if (!allowed("billing:reconcile")) {
             return Result.error(403, "没有计费对账权限");
         }
-        int imported = reconciliationService.importVendorBills(new String(file.getBytes()));
+        if (file == null || file.isEmpty()) {
+            return Result.error(400, "账单文件不能为空");
+        }
+        final int imported;
+        try {
+            imported = reconciliationService.importVendorBills(new String(file.getBytes()));
+        } catch (IOException exception) {
+            return Result.error(400, "账单文件读取失败");
+        }
         return Result.success(Map.of("imported", imported));
     }
 
@@ -126,7 +136,7 @@ public class BillingController {
     public Result<Void> runReconciliation(
             @RequestParam(required = false) Long vendorId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate billingDate) {
-        if (!UserContext.hasPermission("billing:reconcile")) {
+        if (!allowed("billing:reconcile")) {
             return Result.error(403, "没有计费对账权限");
         }
         reconciliationService.reconcile(vendorId, billingDate);
@@ -140,7 +150,7 @@ public class BillingController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "1") Integer page,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        if (!UserContext.hasPermission("billing:reconcile")) {
+        if (!allowed("billing:reconcile")) {
             return Result.error(403, "没有计费对账权限");
         }
         return Result.success(reconciliationService.list(vendorId, startDate, endDate, page, pageSize).getRecords());
@@ -151,18 +161,26 @@ public class BillingController {
             @RequestParam(required = false) Long vendorId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        if (!UserContext.hasPermission("billing:reconcile")) {
+        if (!allowed("billing:reconcile")) {
             return Result.error(403, "没有计费对账权限");
         }
         return Result.success(reconciliationService.listDiffs(vendorId, startDate, endDate));
     }
 
+    @ExceptionHandler(BillingReconciliationException.class)
+    public ResponseEntity<Result<Void>> handleReconciliationException(
+            BillingReconciliationException exception) {
+        return ResponseEntity.status(exception.getStatus())
+                .body(Result.error(exception.getStatus(),
+                        exception.getErrorCode() + ": " + exception.getMessage()));
+    }
+
     private boolean canViewBilling() {
-        return UserContext.hasPermission("billing:view");
+        return allowed("billing:view");
     }
 
     private boolean canAccessTenant(Long requestedTenantId) {
-        if (UserContext.hasPermission("billing:view-all")) {
+        if (allowed("billing:view-all")) {
             return true;
         }
         Long currentTenantId = UserContext.getCurrentTenantId();
@@ -171,9 +189,14 @@ public class BillingController {
     }
 
     private Long scopedTenantId(Long requestedTenantId) {
-        return UserContext.hasPermission("billing:view-all")
+        return allowed("billing:view-all")
                 ? requestedTenantId
                 : UserContext.getCurrentTenantId();
+    }
+
+    private boolean allowed(String permission) {
+        return UserContext.hasPermission(permission)
+                || UserContext.hasPermission("system:admin");
     }
 
     private PageResult<BillingDaily> forbiddenPage() {

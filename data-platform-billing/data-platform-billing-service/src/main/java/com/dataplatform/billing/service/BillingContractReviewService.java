@@ -44,6 +44,10 @@ public class BillingContractReviewService {
         int changed = 0;
         int unavailable = 0;
         for (BillingPlan plan : plans) {
+            if (plan == null || plan.getInterfaceId() == null) {
+                unavailable++;
+                continue;
+            }
             Result<InterfaceContractDTO> result;
             try {
                 result = interfaceClient.getContract(plan.getInterfaceId());
@@ -51,7 +55,8 @@ public class BillingContractReviewService {
                 unavailable++;
                 continue;
             }
-            InterfaceContractDTO contract = result != null ? result.getData() : null;
+            InterfaceContractDTO contract = result != null && Integer.valueOf(200).equals(result.getCode())
+                    ? result.getData() : null;
             if (contract == null) {
                 unavailable++;
                 continue;
@@ -60,13 +65,13 @@ public class BillingContractReviewService {
             if (plan.getContractFingerprint() == null || plan.getContractFingerprint().isBlank()) {
                 plan.setContractFingerprint(current);
                 plan.setUpdatedAt(LocalDateTime.now());
-                planMapper.updateById(plan);
+                persistPlan(plan);
                 initialized++;
             } else if (!current.equals(plan.getContractFingerprint())
                     && !"NEEDS_REVIEW".equals(plan.getStatus())) {
                 plan.setStatus("NEEDS_REVIEW");
                 plan.setUpdatedAt(LocalDateTime.now());
-                planMapper.updateById(plan);
+                persistPlan(plan);
                 changed++;
             }
         }
@@ -76,5 +81,11 @@ public class BillingContractReviewService {
         summary.put("needsReview", changed);
         summary.put("unavailable", unavailable);
         return summary;
+    }
+
+    private void persistPlan(BillingPlan plan) {
+        if (planMapper.updateById(plan) <= 0) {
+            throw new IllegalStateException("计费方案契约状态更新失败，请重试");
+        }
     }
 }
