@@ -420,7 +420,7 @@ CREATE TABLE IF NOT EXISTS alert_record (
     id BIGSERIAL PRIMARY KEY,
     rule_id BIGINT NOT NULL,
     tenant_id BIGINT,
-    alert_type VARCHAR(20) NOT NULL,
+    alert_type VARCHAR(50) NOT NULL,
     alert_title VARCHAR(200) NOT NULL,
     alert_content TEXT,
     metric_value DECIMAL(10, 2),
