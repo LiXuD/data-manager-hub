@@ -619,4 +619,120 @@
         </rollback>
     </changeSet>
 
+    <changeSet id="management-permission-matrix-2026-09-01"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="permission"/>
+            <tableExists schemaName="public" tableName="role_permission"/>
+        </preConditions>
+        <sqlFile path="../migrations/V053__complete_management_permission_matrix.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U053__refuse_management_permission_matrix_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="serialize-billing-plan-publish-2026-09-01"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="billing_plan"/>
+        </preConditions>
+        <sqlFile path="../migrations/V054__serialize_billing_plan_publish.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U054__refuse_billing_plan_publish_lock_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="complete-operation-log-tenant-scope-2026-09-02"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="operation_log"/>
+        </preConditions>
+        <sqlFile path="../migrations/V055__complete_operation_log_tenant_scope.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U055__refuse_operation_log_tenant_scope_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="preserve-config-version-encryption-2026-09-02"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="config_version"/>
+        </preConditions>
+        <sqlFile path="../migrations/V056__preserve_config_version_encryption.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U056__refuse_config_version_encryption_rollback.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="widen-alert-record-type-2026-09-02"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="alert_record"/>
+            <columnExists schemaName="public" tableName="alert_record" columnName="alert_type"/>
+        </preConditions>
+        <sqlFile path="../migrations/V057__widen_alert_record_type.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U057__refuse_alert_record_type_narrowing.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="repair-api-key-permission-parent-links-2026-09-02"
+               author="data-platform"
+               runInTransaction="true">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists schemaName="public" tableName="permission"/>
+        </preConditions>
+        <sqlFile path="../migrations/V058__repair_api_key_permission_parent_links.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+        <rollback>
+            <sqlFile path="../rollbacks/U058__refuse_api_key_permission_parent_repair.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="false"
+                     stripComments="false"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>
